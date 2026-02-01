@@ -1,0 +1,702 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    z-index: 2000;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.drawer {
+    background: #FFFFFF;
+    width: 100%;
+    height: 100vh;
+    box-shadow: -10px 0 30px rgba(14, 165, 233, 0.15);
+    animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+    }
+
+    to {
+        transform: translateX(0);
+    }
+}
+
+/* Header Azul Cielo */
+.header {
+    background: linear-gradient(135deg, #0EA5E9, #38BDF8);
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 20px rgba(14, 165, 233, 0.2);
+}
+
+.title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.subtitle {
+    margin: 0.3rem 0 0 0;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.8rem;
+}
+
+.closeBtn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 0.6rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.closeBtn:hover {
+    background: rgba(239, 68, 68, 0.9);
+    border-color: #EF4444;
+    transform: rotate(90deg);
+}
+
+/* Stepper Luminoso - Compacto */
+.stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem;
+    background: #F8FAFC;
+    border-bottom: 2px solid #E2E8F0;
+    gap: 0.5rem;
+}
+
+.stepperItem {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stepCircle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94A3B8;
+    transition: all 0.3s;
+}
+
+.stepActive {
+    background: linear-gradient(135deg, #0EA5E9, #38BDF8);
+    border-color: #0EA5E9;
+    color: white;
+    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);
+    transform: scale(1.05);
+}
+
+.stepCompleted {
+    background: #22C55E;
+    border-color: #22C55E;
+    color: white;
+}
+
+.stepLabel {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748B;
+    transition: color 0.3s;
+}
+
+.stepLabelActive {
+    color: #0EA5E9;
+    font-weight: 700;
+}
+
+.stepArrow {
+    color: #CBD5E1;
+    margin: 0 0.25rem;
+}
+
+/* Form Content */
+.form {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+    background: #F8FAFC;
+}
+
+.stepContent {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.stepTitle {
+    color: #1E293B;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 3px solid #0EA5E9;
+}
+
+/* Document Selector Integrado - Motivador */
+.docSelectorIntegrated {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.docCardIntegrated {
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, #F8FAFC, #FFFFFF);
+    border: 2px solid #E2E8F0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.docCardIntegrated::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, currentColor, transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.docCardIntegrated:hover {
+    border-color: #0EA5E9;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(14, 165, 233, 0.15);
+}
+
+.docCardIntegrated:hover::before {
+    opacity: 1;
+}
+
+.docCardActive {
+    border-color: #0EA5E9 !important;
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(56, 189, 248, 0.02)) !important;
+    box-shadow: 0 8px 25px rgba(14, 165, 233, 0.2) !important;
+}
+
+.docCardActive::before {
+    opacity: 1 !important;
+    background: linear-gradient(90deg, #0EA5E9, #38BDF8, #0EA5E9) !important;
+}
+
+.docCardHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0;
+}
+
+.docCardTitle {
+    color: #1E293B;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.3px;
+}
+
+.docCardSubtitle {
+    color: #64748B;
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+}
+
+.docInput {
+    width: 100%;
+    background: white;
+    border: 2px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    color: #1E293B;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-top: 0.5rem;
+    transition: all 0.3s;
+    outline: none;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.docInput:focus {
+    border-color: #0EA5E9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.docInput::placeholder {
+    color: #94A3B8;
+    font-weight: 500;
+}
+
+/* Form Grid - Optimizado */
+.formGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.formGroup label {
+    color: #64748B;
+    font-weight: 800;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.formGroup input,
+.formGroup select {
+    background: white;
+    border: 2px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 0.6rem 0.75rem;
+    color: #1E293B;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    outline: none;
+}
+
+.formGroup input:focus,
+.formGroup select:focus {
+    border-color: #0EA5E9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.formGroup input::placeholder {
+    color: #CBD5E1;
+}
+
+.formGroup select {
+    cursor: pointer;
+}
+
+.formGroup select option {
+    background: white;
+}
+
+/* Skills Grid - Optimizado */
+.sectionLabel {
+    color: #475569;
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.skillsGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.skillsGridCompact {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+}
+
+.skillCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 0.75rem;
+    background: white;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.skillCard:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.skillCardCompact {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.25rem;
+    background: white;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.skillCardCompact:hover {
+    border-color: #0EA5E9;
+    background: #F8FAFC !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.skillCardCompact span {
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    line-height: 1.1;
+}
+
+.skillSelected {
+    transform: scale(1.02);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+}
+
+.zoneSelect {
+    background: white !important;
+    border: 2px solid #0EA5E9 !important;
+    color: #0EA5E9 !important;
+    font-weight: 700 !important;
+}
+
+/* Zone Grid Selector */
+.zoneGrid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.5rem;
+}
+
+.zoneCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.75rem 0.4rem;
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.zoneCard:hover {
+    border-color: #0EA5E9;
+    transform: translateY(-2px);
+}
+
+.zoneSelected {
+    transform: scale(1.05);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.zoneIconWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: #F1F5F9;
+    border-radius: 10px;
+    transition: all 0.3s;
+}
+
+.zoneSelected .zoneIconWrapper {
+    background: transparent;
+}
+
+.zoneEmojiOverlay {
+    position: absolute;
+    bottom: -2px;
+    right: -4px;
+    font-size: 0.9rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.zoneLabel {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+/* Bank Card Preview - Premium */
+.bankCard {
+    background: linear-gradient(135deg, #1E293B, #334155);
+    border-radius: 20px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    position: relative;
+    overflow: hidden;
+    height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bankChip {
+    width: 45px;
+    height: 35px;
+    background: linear-gradient(135deg, #FFD700, #DAA520);
+    border-radius: 6px;
+    position: relative;
+}
+
+.bankChip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.bankLogo {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    font-size: 2.2rem;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.2));
+}
+
+.bankInfoPreview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.bankName {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.accountNumber {
+    color: white;
+    font-size: 1.3rem;
+    font-weight: 800;
+    font-family: 'Courier New', Courier, monospace;
+    letter-spacing: 3px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.cardFooter {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.accountType {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.contactPoint {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Bank Selector Grid */
+.bankSelectorGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.bankOption {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.75rem 0.5rem;
+    background: white;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.bankOption:hover {
+    border-color: #0EA5E9;
+    transform: translateY(-2px);
+    background: #F8FAFC !important;
+}
+
+.bankSelected {
+    border-width: 2px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.bankOptionLogo {
+    font-size: 1.5rem;
+}
+
+.bankOptionName {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.checkIcon {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #22C55E;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 900;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Footer Navigation - Compacto */
+.footer {
+    padding: 0.75rem 1.25rem;
+    background: white;
+    border-top: 2px solid #E2E8F0;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.prevBtn {
+    background: white;
+    border: 2px solid #E2E8F0;
+    color: #475569;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.prevBtn:hover {
+    background: #F8FAFC;
+    border-color: #0EA5E9;
+    color: #0EA5E9;
+    transform: translateY(-2px);
+}
+
+.nextBtn {
+    flex: 1;
+    background: linear-gradient(135deg, #0EA5E9, #38BDF8);
+    border: none;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);
+}
+
+.nextBtn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(14, 165, 233, 0.5);
+}
+
+.submitBtn {
+    flex: 1;
+    background: linear-gradient(135deg, #FF6600, #FF8533);
+    border: none;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(255, 102, 0, 0.4);
+}
+
+.submitBtn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(255, 102, 0, 0.6);
+}
+
+@media (max-width: 1200px) {
+    .drawer {
+        width: 70%;
+    }
+}
+
+@media (max-width: 768px) {
+    .drawer {
+        width: 100%;
+    }
+
+    .skillsGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

@@ -1,0 +1,526 @@
+/* ========================================
+   📊 MÓDULO DE REPORTES DE EFICIENCIA
+   ======================================== */
+
+.container {
+    padding: 2rem;
+    background: #F8FAFC;
+    min-height: 100vh;
+}
+
+/* ========================================
+   HEADER
+   ======================================== */
+
+.pageHeader {
+    margin-bottom: 2rem;
+    background: linear-gradient(135deg, #002A8F 0%, #003BA8 100%);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(0, 42, 143, 0.25);
+}
+
+.headerContent {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+}
+
+.titleGroup {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.headerIcon {
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.pageTitle {
+    font-size: 2rem;
+    font-weight: 800;
+    color: white;
+    margin: 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.pageSubtitle {
+    color: rgba(255, 255, 255, 0.95);
+    margin: 0.5rem 0 0 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.headerActions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.periodSelector {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 0.85rem 1.5rem;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.3s;
+}
+
+.periodSelector:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.periodSelector option {
+    background: #002A8F;
+    color: white;
+}
+
+.exportButton {
+    background: white;
+    color: #002A8F;
+    border: none;
+    padding: 0.85rem 1.75rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+}
+
+.exportButton:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(255, 255, 255, 0.5);
+}
+
+/* ========================================
+   KPIs GLOBALES
+   ======================================== */
+
+.kpisGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.kpiCard {
+    background: white;
+    border-radius: 16px;
+    padding: 1.75rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    transition: all 0.3s;
+}
+
+.kpiCard:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.kpiIcon {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.kpiContent {
+    flex: 1;
+}
+
+.kpiValue {
+    font-size: 2.25rem;
+    font-weight: 800;
+    color: #1E293B;
+    line-height: 1;
+}
+
+.kpiLabel {
+    color: #64748B;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ========================================
+   TABS DE MÉTRICAS
+   ======================================== */
+
+.metricsTab {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    background: white;
+    padding: 0.75rem;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.metricBtn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 1rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #64748B;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.metricBtn:hover {
+    background: #F8FAFC;
+    color: #FF6600;
+}
+
+.metricBtnActive {
+    background: linear-gradient(135deg, #FF6600, #FF8533);
+    color: white;
+}
+
+/* ========================================
+   GRID DE CONTENIDO
+   ======================================== */
+
+.contentGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.section {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.sectionHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #F1F5F9;
+}
+
+.sectionHeader h2 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #1E293B;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* ========================================
+   RANKING LIST
+   ======================================== */
+
+.rankingList {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.rankingItem {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    background: #F8FAFC;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: all 0.3s;
+}
+
+.rankingItem:hover {
+    border-color: #FF6600;
+    transform: translateX(5px);
+    box-shadow: 0 5px 20px rgba(255, 102, 0, 0.1);
+}
+
+.rankingPosition {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.positionNumber {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #94A3B8;
+    font-family: 'Courier New', monospace;
+}
+
+.rankingInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.rankingName {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #1E293B;
+    margin-bottom: 0.5rem;
+}
+
+.rankingStats {
+    font-size: 0.85rem;
+    color: #64748B;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.rankingBar {
+    height: 8px;
+    background: #E2E8F0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.rankingFill {
+    height: 100%;
+    transition: all 0.5s ease;
+    border-radius: 4px;
+}
+
+.rankingScore {
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.scoreValue {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    font-family: 'Courier New', monospace;
+}
+
+.scoreLabel {
+    font-size: 0.75rem;
+    color: #64748B;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-top: 0.25rem;
+}
+
+.rankingMetrics {
+    display: flex;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+.miniMetric {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: white;
+    padding: 0.5rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+/* ========================================
+   SECCIÓN DE ALERTAS
+   ======================================== */
+
+.alertSection {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    border-left: 6px solid #DC2626;
+}
+
+.alertBadge {
+    background: #DC2626;
+    color: white;
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-weight: 800;
+    font-size: 0.9rem;
+}
+
+.noAlerts {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #64748B;
+}
+
+.noAlerts p {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 1.5rem 0 0 0;
+    color: #10B981;
+}
+
+.alertsList {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.25rem;
+}
+
+.alertItem {
+    background: #FEF2F2;
+    border: 2px solid #FEE2E2;
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: all 0.3s;
+}
+
+.alertItem:hover {
+    border-color: #DC2626;
+    box-shadow: 0 5px 20px rgba(220, 38, 38, 0.2);
+}
+
+.alertHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.alertId {
+    font-weight: 800;
+    font-size: 1rem;
+    color: #DC2626;
+    font-family: 'Courier New', monospace;
+}
+
+.alertTime {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 800;
+    font-size: 0.9rem;
+    font-family: 'Courier New', monospace;
+}
+
+.alertContent {
+    color: #475569;
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+
+.alertContent strong {
+    color: #1E293B;
+}
+
+.alertFooter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.alertEstado {
+    padding: 0.4rem 0.85rem;
+    border-radius: 12px;
+    color: white;
+    font-weight: 700;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.alertGestora {
+    font-size: 0.85rem;
+    color: #64748B;
+    font-weight: 700;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 1400px) {
+    .contentGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 1024px) {
+    .kpisGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .alertsList {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .kpisGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .headerContent {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .headerActions {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .periodSelector,
+    .exportButton {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .metricsTab {
+        flex-direction: column;
+    }
+
+    .rankingItem {
+        flex-wrap: wrap;
+    }
+
+    .rankingMetrics {
+        width: 100%;
+        justify-content: space-around;
+    }
+}

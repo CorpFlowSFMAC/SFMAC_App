@@ -1,0 +1,156 @@
+"use client";
+
+import { useState } from "react";
+import { Plus, Search, Edit, Trash2, MapPin, Building2, Store, Filter, Eye } from "lucide-react";
+import styles from "./branchesTab.module.css";
+import BranchModal from "./BranchModal";
+
+interface BranchesTabProps {
+    branches: any[];
+    setBranches: (branches: any[]) => void;
+    clientColor: string;
+}
+
+export default function BranchesTab({ branches, setBranches, clientColor }: BranchesTabProps) {
+    const [searchTerm, setSearchTerm] = useState("");
+    const [filterZone, setFilterZone] = useState("");
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingBranch, setEditingBranch] = useState<any>(null);
+    const [isViewOnly, setIsViewOnly] = useState(false);
+
+    const zones = Array.from(new Set(branches.map(b => b.zona)));
+    const filteredBranches = branches.filter(branch => {
+        const matchesSearch =
+            branch.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            branch.codigoTopaz.includes(searchTerm);
+        const matchesZone = !filterZone || branch.zona === filterZone;
+        return matchesSearch && matchesZone;
+    });
+
+    const branchesByZone = zones.reduce<{ [key: string]: any[] }>((acc, zone) => {
+        acc[zone] = filteredBranches.filter(b => b.zona === zone);
+        return acc;
+    }, {});
+
+    const handleCreate = () => {
+        setEditingBranch(null);
+        setIsViewOnly(false);
+        setIsModalOpen(true);
+    };
+
+    const handleView = (branch: any) => {
+        setEditingBranch(branch);
+        setIsViewOnly(true);
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (branch: any) => {
+        setEditingBranch(branch);
+        setIsViewOnly(false);
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = (id: number) => {
+        if (confirm("¿Está seguro de eliminar esta sede?")) {
+            setBranches(branches.filter(b => b.id !== id));
+        }
+    };
+
+    const handleSave = (branchData: any) => {
+        if (editingBranch) {
+            setBranches(branches.map(b => (b.id === editingBranch.id ? { ...branchData, id: editingBranch.id } : b)));
+        } else {
+            setBranches([...branches, { ...branchData, id: Date.now() }]);
+        }
+        setIsModalOpen(false);
+    };
+
+    return (
+        <div className={styles.container} style={{ '--client-color': clientColor } as any}>
+            <BranchModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleSave}
+                branch={editingBranch}
+                clientColor={clientColor}
+                isViewOnly={isViewOnly}
+            />
+
+            {/* Toolbar */}
+            <div className={styles.toolbar}>
+                <div className={styles.searchBox}>
+                    <Search size={20} />
+                    <input type="text" placeholder="Buscar sede por nombre o código..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+
+                <div className={styles.filterBox}>
+                    <Filter size={18} />
+                    <select value={filterZone} onChange={(e) => setFilterZone(e.target.value)}>
+                        <option value="">Todas las Zonas</option>
+                        {zones.map(z => <option key={z} value={z}>{z}</option>)}
+                    </select>
+                </div>
+
+                <button className={styles.createBtn} onClick={handleCreate}>
+                    <Plus size={20} />
+                    Nueva Sede
+                </button>
+            </div>
+
+            {/* Branches by Zone */}
+            <div className={styles.zonesGrid}>
+                {Object.entries(branchesByZone).map(([zone, zoneBranches]) => (
+                    <div key={zone} className={styles.zoneCard}>
+                        <div className={styles.zoneHeader}>
+                            <MapPin size={20} />
+                            <h3>{zone}</h3>
+                            <span className={styles.zoneBadge}>{zoneBranches.length}</span>
+                        </div>
+
+                        <div className={styles.branchList}>
+                            {zoneBranches.map((branch: any) => (
+                                <div key={branch.id} className={styles.branchCard}>
+                                    <div className={styles.branchIcon}>
+                                        {branch.tipo === "Matriz" ? <Building2 size={22} /> : <Store size={22} />}
+                                    </div>
+                                    <div className={styles.branchInfo}>
+                                        <div className={styles.branchName}>{branch.nombre}</div>
+                                        <div className={styles.branchAddress}>{branch.direccion}</div>
+                                        <div className={styles.branchMeta}>
+                                            <span className={styles.codeBadge}>{branch.codigoTopaz}</span>
+                                            <span className={`${styles.typeBadge} ${branch.tipo === "Matriz" ? styles.typeMatriz : styles.typeAgencia}`}>
+                                                {branch.tipo}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className={styles.branchActions}>
+                                        <button onClick={() => handleView(branch)} title="Visualizar" className={styles.viewBtn}>
+                                            <Eye size={16} />
+                                        </button>
+                                        <button onClick={() => handleEdit(branch)} title="Editar" className={styles.editBtn}>
+                                            <Edit size={16} />
+                                        </button>
+                                        <button onClick={() => handleDelete(branch.id)} title="Eliminar" className={styles.deleteBtn}>
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {filteredBranches.length === 0 && (
+                <div className={styles.emptyState}>
+                    <div className={styles.emptyIcon}>🏢</div>
+                    <p>No hay sedes registradas</p>
+                    <button onClick={handleCreate} className={styles.createBtn}>
+                        <Plus size={18} />
+                        Crear Primera Sede
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}

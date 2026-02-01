@@ -1,0 +1,402 @@
+/* ========================================
+   🏢 GESTIÓN DE CLIENTES - ULTRA COMPACTO
+   ======================================== */
+
+.container {
+    padding: 0;
+    max-width: 100%;
+    /* Ocupa toda la pantalla */
+    margin: 0;
+}
+
+/* 🎨 HEADER OPTIMIZADO */
+.pageHeader {
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #FF6600, #FF8C42);
+    border-radius: 12px;
+    padding: 0.8rem 1.2rem;
+    box-shadow: 0 4px 15px rgba(255, 102, 0, 0.2);
+}
+
+.headerContent {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.titleGroup {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.sparkleIcon {
+    color: white;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.pageTitle {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: white;
+    margin: 0;
+    line-height: 1;
+}
+
+.pageSubtitle {
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0.2rem 0 0 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.createButton {
+    background: white;
+    color: #FF6600;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.createButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 🔍 SEARCH SECTION COMPACTA */
+.searchSection {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.searchBar {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: white;
+    border: 2px solid #F3F4F6;
+    border-radius: 10px;
+    padding: 0 1rem;
+    transition: all 0.2s;
+}
+
+.searchBar:focus-within {
+    border-color: #FF6600;
+    box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.08);
+}
+
+.searchBar svg {
+    color: #FF6600;
+}
+
+.searchBar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 0.6rem 0;
+    color: #1F2937;
+    font-size: 0.85rem;
+    outline: none;
+    font-weight: 600;
+}
+
+.searchBar input::placeholder {
+    color: #9CA3AF;
+}
+
+.resultCount {
+    background: #FFF7ED;
+    border: 2px solid #FFEDD5;
+    padding: 0.55rem 1rem;
+    border-radius: 10px;
+    color: #C2410C;
+    font-weight: 800;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+/* 🎫 GRID DE TARJETAS OPTIMIZADO */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.85rem;
+}
+
+.clientCard {
+    position: relative;
+    background: white;
+    border: 2px solid #F3F4F6;
+    border-radius: 20px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.clientCard:hover {
+    transform: translateY(-8px) scale(1.02);
+    border-color: var(--card-color);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.clientCard::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--card-color);
+    opacity: 0.8;
+}
+
+.cardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1;
+}
+
+.clientLogo {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    background: #F9FAFB;
+    border: 2px solid #E5E7EB;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.clientCard:hover .clientLogo {
+    border-color: var(--card-color);
+    transform: scale(1.05);
+}
+
+.clientLogo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 4px;
+}
+
+.clientEmoji {
+    font-size: 1.8rem;
+}
+
+.glowOrb {
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    width: 80px;
+    height: 80px;
+    filter: blur(40px);
+    opacity: 0.4;
+    border-radius: 50%;
+    pointer-events: none;
+    transition: all 0.5s ease;
+}
+
+.clientCard:hover .glowOrb {
+    opacity: 0.7;
+    transform: scale(1.5);
+}
+
+.cardActions {
+    display: flex;
+    gap: 0.5rem;
+    z-index: 2;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform: translateX(10px);
+}
+
+.clientCard:hover .cardActions {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.editCardBtn,
+.deleteCardBtn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.editCardBtn {
+    background: #FFEDD5;
+    color: #F97316;
+}
+
+.editCardBtn:hover {
+    background: #F97316;
+    color: white;
+    transform: scale(1.1);
+}
+
+.deleteCardBtn {
+    background: #FEE2E2;
+    color: #EF4444;
+}
+
+.deleteCardBtn:hover {
+    background: #EF4444;
+    color: white;
+    transform: scale(1.1);
+}
+
+.cardBody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.clientName {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #111827;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.clientRuc {
+    color: #6B7280;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.infoRow {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #4B5563;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.4rem;
+}
+
+.infoRow svg {
+    color: var(--card-color);
+    flex-shrink: 0;
+}
+
+.cardFooter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #E5E7EB;
+}
+
+.statBadge {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #1F2937;
+    font-weight: 800;
+    font-size: 0.75rem;
+}
+
+.statBadge svg {
+    color: #6B7280;
+}
+
+.zoneBadge {
+    background: #F3F4F6;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    color: #4B5563;
+    font-weight: 800;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+}
+
+/* Efecto de Hover sutil */
+.hoverOverlay {
+    position: absolute;
+    inset: 0;
+    background: var(--card-color);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+
+.clientCard:hover .hoverOverlay {
+    opacity: 0.05;
+}
+
+.viewDetails {
+    display: none;
+    /* Eliminado para limpieza visual */
+}
+
+/* 🏗️ EMPTY & LOADING STATES */
+.emptyState,
+.loadingState {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: #F9FAFB;
+    border-radius: 16px;
+    border: 2px dashed #E5E7EB;
+}
+
+.emptyIcon,
+.loadingIcon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    display: inline-block;
+}
+
+.loadingIcon {
+    animation: spin 2s linear infinite;
+    color: #FF6600;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .pageTitle {
+        font-size: 1.2rem;
+    }
+}

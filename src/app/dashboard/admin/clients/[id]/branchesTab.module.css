@@ -1,0 +1,331 @@
+/* Toolbar */
+.toolbar {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    align-items: center;
+}
+
+.searchBox {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0 1rem;
+    transition: all 0.3s;
+}
+
+.searchBox:focus-within {
+    border-color: var(--client-color);
+    box-shadow: 0 0 15px var(--client-color)20;
+}
+
+.searchBox svg {
+    color: var(--client-color);
+}
+
+.searchBox input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 0.6rem 0;
+    color: white;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+.searchBox input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.filterBox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0 0.75rem;
+}
+
+.filterBox svg {
+    color: var(--client-color);
+}
+
+.filterBox select {
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 0.6rem 0.25rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    outline: none;
+}
+
+.filterBox select option {
+    background: #1a1a1a;
+}
+
+.createBtn {
+    background: linear-gradient(135deg, var(--client-color), transparent);
+    border: 2px solid var(--client-color);
+    color: white;
+    padding: 0.6rem 1.25rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px var(--client-color)30;
+    white-space: nowrap;
+}
+
+.createBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--client-color)50;
+}
+
+/* Zones Grid */
+.zonesGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.zoneCard {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(20, 20, 20, 0.4));
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: all 0.3s;
+}
+
+.zoneCard:hover {
+    border-color: var(--client-color);
+    box-shadow: 0 8px 30px var(--client-color)15;
+    transform: translateY(-3px);
+}
+
+.zoneHeader {
+    background: linear-gradient(135deg, var(--client-color)25, var(--client-color)05);
+    border-bottom: 1.5px solid var(--client-color);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.zoneHeader svg {
+    color: var(--client-color);
+}
+
+.zoneHeader h3 {
+    flex: 1;
+    margin: 0;
+    color: white;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.zoneBadge {
+    background: var(--client-color);
+    color: white;
+    padding: 0.25rem 0.6rem;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 10px var(--client-color)40;
+}
+
+.branchList {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.branchCard {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s;
+}
+
+.branchCard:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--client-color);
+    transform: translateX(5px);
+}
+
+.branchIcon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--client-color)30, var(--client-color)10);
+    border: 1.5px solid var(--client-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.branchIcon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.branchInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.branchName {
+    color: white;
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-bottom: 0.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.branchAddress {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.7rem;
+    margin-bottom: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.branchMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.codeBadge {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-family: monospace;
+    font-weight: 700;
+}
+
+.typeBadge {
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.typeAgencia {
+    background: rgba(0, 255, 0, 0.15);
+    border: 1px solid #00FF0080;
+    color: #00FF00;
+}
+
+.typeMatriz {
+    background: rgba(238, 130, 238, 0.15);
+    border: 1px solid #EE82EE80;
+    color: #EE82EE;
+}
+
+.branchActions {
+    display: flex;
+    gap: 0.35rem;
+    margin-left: 0.5rem;
+}
+
+.branchActions button {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.viewBtn {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.viewBtn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: white;
+    transform: scale(1.1);
+}
+
+.editBtn {
+    background: rgba(33, 150, 243, 0.1);
+    border-color: #2196F360;
+    color: #2196F3;
+}
+
+.editBtn:hover {
+    background: rgba(33, 150, 243, 0.2);
+    transform: scale(1.1);
+}
+
+.deleteBtn {
+    background: rgba(244, 67, 54, 0.1);
+    border-color: #F4433660;
+    color: #F44336;
+}
+
+.deleteBtn:hover {
+    background: rgba(244, 67, 54, 0.2);
+    transform: scale(1.1);
+}
+
+/* Empty State */
+.emptyState {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.emptyIcon {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+    animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-15px);
+    }
+}
+
+.emptyState p {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 1.5rem 0;
+}

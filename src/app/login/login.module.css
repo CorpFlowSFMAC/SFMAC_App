@@ -1,0 +1,311 @@
+/* Main Container */
+.loginContainer {
+    height: 100vh;
+    /* Forced height */
+    width: 100vw;
+    background: var(--background);
+    overflow: hidden;
+    /* No scroll */
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ... background orbs remain ... */
+
+/* Content Layout */
+.contentWrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    max-width: 1600px;
+    height: 100%;
+    max-height: 900px;
+    /* Constrain vertical height */
+    margin: 0 auto;
+    z-index: 1;
+}
+
+/* ... visualSide and formSide logic ... */
+
+.visualSide {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    position: relative;
+}
+
+.formSide {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+}
+
+/* Logo Styles */
+.logoWrapper {
+    position: relative;
+    width: 100%;
+    max-width: 650px;
+    /* Big logo */
+    height: auto;
+    margin-bottom: 2rem;
+    transition: transform 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.logoImage {
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+    /* Prevent logo from being too tall */
+    object-fit: contain;
+    /* Strong white/blue glow for visibility */
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.4)) drop-shadow(0 0 30px rgba(0, 100, 255, 0.3));
+    transition: all 0.3s ease;
+}
+
+.logoWrapper:hover .logoImage {
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 40px rgba(0, 100, 255, 0.5));
+    transform: scale(1.02);
+}
+
+
+/* Background Effects */
+.bgOrb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    z-index: 0;
+    opacity: 0.4;
+    animation: float 20s infinite ease-in-out;
+}
+
+.bgOrb1 {
+    top: -10%;
+    left: -10%;
+    width: 600px;
+    height: 600px;
+    background: var(--color-navy);
+}
+
+.bgOrb2 {
+    bottom: -10%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: var(--color-orange);
+    animation-delay: -5s;
+}
+
+.bgOrb3 {
+    top: 40%;
+    left: 40%;
+    width: 300px;
+    height: 300px;
+    background: var(--color-green);
+    opacity: 0.2;
+    filter: blur(100px);
+    animation-delay: -10s;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translate(0, 0);
+    }
+
+    50% {
+        transform: translate(30px, -50px);
+    }
+}
+
+
+
+/* Glass Card with Glow */
+.loginCard {
+    width: 100%;
+    max-width: 480px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 3rem;
+    /* Deep shadow + Blue/White Glow matching the logo */
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(0, 100, 255, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    animation: slideIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.loginCard:hover {
+    /* Intensified Glow on Hover */
+    box-shadow:
+        0 30px 60px rgba(0, 0, 0, 0.5),
+        0 0 40px rgba(0, 100, 255, 0.4),
+        0 0 20px rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-5px);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+/* Typography */
+.welcomeTitle {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.7) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.welcomeSubtitle {
+    color: #8899A6;
+    font-size: 1rem;
+}
+
+/* Form Elements */
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    position: relative;
+}
+
+.inputWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.icon {
+    position: absolute;
+    left: 1rem;
+    color: rgba(255, 255, 255, 0.4);
+    width: 20px;
+    height: 20px;
+    transition: color 0.3s ease;
+}
+
+.input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1rem 1rem 1rem 3rem;
+    color: white;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--color-orange);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 4px rgba(255, 102, 0, 0.1);
+}
+
+.input:focus+.icon {
+    color: var(--color-orange);
+}
+
+.submitBtn {
+    width: 100%;
+    padding: 1rem;
+    background: linear-gradient(135deg, var(--color-orange) 0%, #FF8C00 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 102, 0, 0.3);
+}
+
+.submitBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 102, 0, 0.5);
+}
+
+.submitBtn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Motivational Quote */
+.quoteContainer {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: rgba(0, 255, 0, 0.05);
+    border-left: 4px solid var(--color-green);
+    border-radius: 8px;
+    position: relative;
+    animation: fadeIn 1s ease;
+}
+
+.quoteText {
+    color: #fff;
+    font-style: italic;
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+.quoteAuthor {
+    display: block;
+    margin-top: 0.5rem;
+    color: var(--color-green);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .contentWrapper {
+        grid-template-columns: 1fr;
+    }
+
+    .visualSide {
+        display: none;
+    }
+}

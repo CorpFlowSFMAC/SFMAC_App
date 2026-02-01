@@ -1,0 +1,443 @@
+/* ========================================
+   👤 FASE 2: ASIGNACIÓN DE TÉCNICO
+   ======================================== */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 3px solid #E0E7FF;
+}
+
+.headerIcon {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, #8B5CF6, #A78BFA);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.3);
+}
+
+.title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 900;
+    color: #1F2937;
+}
+
+.subtitle {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: #6B7280;
+    font-weight: 600;
+}
+
+/* Información del Ticket */
+.ticketInfo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, #F0F9FF, #E0F2FE);
+    border-radius: 12px;
+    border: 2px solid #BAE6FD;
+}
+
+.infoItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #0C4A6E;
+    font-weight: 700;
+}
+
+.infoItem svg {
+    color: #0EA5E9;
+    flex-shrink: 0;
+}
+
+/* Técnico Asignado Actual */
+.currentTech {
+    background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+    border: 3px solid #6EE7B7;
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.currentTechHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.currentTechHeader h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #065F46;
+}
+
+.techCard {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.techAvatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8B5CF6, #A78BFA);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+    overflow: hidden;
+    border: 3px solid white;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.techAvatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.techInfo {
+    flex: 1;
+}
+
+.techInfo h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: #1F2937;
+}
+
+.techMeta {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #6B7280;
+    font-weight: 600;
+}
+
+.techSkills {
+    display: flex;
+    gap: 8px;
+    color: #8B5CF6;
+}
+
+.reassignBtn {
+    background: linear-gradient(135deg, #F59E0B, #FBBF24);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.reassignBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+}
+
+/* Alerta de Reasignación */
+.reassignAlert {
+    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+    border: 3px solid #FCD34D;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    color: #92400E;
+}
+
+.reassignAlert svg {
+    color: #F59E0B;
+    flex-shrink: 0;
+}
+
+.reassignAlert strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+
+.reassignAlert p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Form Groups */
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.label {
+    font-size: 14px;
+    font-weight: 800;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.required {
+    color: #EF4444;
+}
+
+.textarea {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #E5E7EB;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    transition: all 0.3s;
+}
+
+.textarea:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+}
+
+/* Grid de Técnicos */
+.techGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.techOption {
+    background: white;
+    border: 3px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.techOption:hover {
+    border-color: #A78BFA;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.15);
+}
+
+.techOption.selected {
+    border-color: #10B981;
+    background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.2);
+}
+
+.techDetails {
+    flex: 1;
+}
+
+.techDetails h4 {
+    margin: 0 0 6px 0;
+    font-size: 14px;
+    font-weight: 800;
+    color: #1F2937;
+}
+
+.techContact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #6B7280;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.techBadges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.skillBadge {
+    background: #E0E7FF;
+    color: #4C1D95;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.checkMark {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
+
+/* No Técnicos */
+.noTechs {
+    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+    border: 3px dashed #FCD34D;
+    border-radius: 12px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+}
+
+.noTechs p {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #92400E;
+}
+
+/* Input de Dinero */
+.moneyInput {
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 2px solid #E5E7EB;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.3s;
+}
+
+.moneyInput:focus-within {
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+}
+
+.currency {
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #F9FAFB, #F3F4F6);
+    border-right: 2px solid #E5E7EB;
+    font-weight: 800;
+    color: #6B7280;
+}
+
+.moneyInput input {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    outline: none;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1F2937;
+}
+
+.hint {
+    font-size: 12px;
+    color: #6B7280;
+    font-weight: 600;
+}
+
+/* Acciones */
+.actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 2px solid #E5E7EB;
+}
+
+.cancelBtn {
+    background: white;
+    border: 2px solid #E5E7EB;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-weight: 800;
+    color: #6B7280;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.cancelBtn:hover {
+    background: #F9FAFB;
+    border-color: #D1D5DB;
+}
+
+.assignBtn {
+    background: linear-gradient(135deg, #8B5CF6, #A78BFA);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.3);
+}
+
+.assignBtn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+}
+
+.assignBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .techGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .ticketInfo {
+        grid-template-columns: 1fr;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+
+    .cancelBtn,
+    .assignBtn {
+        width: 100%;
+        justify-content: center;
+    }
+}

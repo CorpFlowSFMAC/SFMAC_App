@@ -1,0 +1,244 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.modal {
+    background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+    border: 3px solid var(--client-color);
+    border-radius: 20px;
+    width: 98%;
+    max-width: 1200px;
+    max-height: 98vh;
+    overflow: hidden;
+    animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 20px 60px var(--client-color)60;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px) scale(0.98);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.header {
+    padding: 0.75rem 1.5rem;
+    border-bottom: 2px solid var(--client-color);
+    background: linear-gradient(135deg, var(--client-color)20, transparent);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: white;
+    text-shadow: 0 0 15px var(--client-color);
+}
+
+.header p {
+    margin: 0.2rem 0 0 0;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.75rem;
+}
+
+.closeBtn {
+    background: rgba(255, 0, 0, 0.2);
+    border: 1.5px solid #F44336;
+    color: #F44336;
+    padding: 0.4rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.closeBtn:hover {
+    background: rgba(255, 0, 0, 0.4);
+    transform: rotate(90deg) scale(1.05);
+    box-shadow: 0 0 15px #F44336;
+}
+
+.form {
+    padding: 1.25rem 1.5rem;
+    overflow-y: auto;
+    max-height: calc(98vh - 140px);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.formGroup label {
+    color: white;
+    font-weight: 700;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.formGroup input,
+.formGroup select {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 0.6rem 0.8rem;
+    color: white;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    outline: none;
+}
+
+.formGroup input:focus,
+.formGroup select:focus {
+    border-color: var(--client-color);
+    box-shadow: 0 0 15px var(--client-color)30;
+}
+
+.formGroup input::placeholder {
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.formGroup select {
+    cursor: pointer;
+}
+
+.formGroup select:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.formGroup select option {
+    background: #1a1a1a;
+}
+
+.typeSelector {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.typeOption {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 0.6rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.typeOption:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateY(-2px);
+}
+
+.typeSelected {
+    transform: scale(1.02);
+    box-shadow: 0 4px 15px currentColor;
+}
+
+.typeIcon {
+    font-size: 1.25rem;
+}
+
+.typeLabel {
+    color: white;
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.readonlyField {
+    cursor: not-allowed !important;
+    font-weight: 700 !important;
+    color: white !important;
+}
+
+.footer {
+    padding: 1rem 1.5rem;
+    border-top: 2px solid var(--client-color);
+    background: linear-gradient(to top, var(--client-color)20, transparent);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.cancelBtn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    color: white;
+    padding: 0.6rem 1.25rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.cancelBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.saveBtn {
+    background: linear-gradient(135deg, var(--client-color), transparent);
+    border: 2px solid var(--client-color);
+    color: white;
+    padding: 0.6rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px var(--client-color)40;
+}
+
+.saveBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px var(--client-color)60;
+}
