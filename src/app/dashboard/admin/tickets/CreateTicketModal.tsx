@@ -1,4 +1,4 @@
-OPCION "use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { X, MapPin, Building2, Upload, FileImage, Unlock, Lock } from "lucide-react";
