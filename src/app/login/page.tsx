@@ -39,10 +39,12 @@ export default function LoginPage() {
             if (formData.username && formData.password) {
                 if (formData.username === "admin") {
                     // Admin privileges
+                    document.cookie = "userRole=admin; path=/; max-age=86400"; // 24h
                     localStorage.setItem("userRole", "admin");
                     router.push("/dashboard/admin");
                 } else if (formData.username.startsWith("gestor")) {
                     // Gestor privileges
+                    document.cookie = "userRole=gestor; path=/; max-age=86400"; // 24h
                     localStorage.setItem("userRole", "gestor");
                     router.push("/dashboard/gestor");
                 } else {

@@ -53,7 +53,15 @@ export default function AdminLayout({
                 </nav>
 
                 <div style={{ marginTop: "auto" }}>
-                    <Link href="/login" className={styles.navItem} style={{ color: "#ff4444" }}>
+                    <Link
+                        href="/login"
+                        className={styles.navItem}
+                        style={{ color: "#ff4444" }}
+                        onClick={() => {
+                            document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+                            localStorage.removeItem("userRole");
+                        }}
+                    >
                         <LogOut size={20} />
                         Cerrar Sesión
                     </Link>
