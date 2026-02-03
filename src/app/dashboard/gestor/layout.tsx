@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LogOut, Ticket, Sparkles, UserCog, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign } from 'lucide-react';
 import styles from "../admin/admin.module.css";
 import Image from "next/image";
 
@@ -14,16 +14,22 @@ export default function GestorLayout({
 }) {
     const pathname = usePathname();
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            setUserRole(localStorage.getItem("userRole"));
-        }
+        setIsMounted(true);
+        const role = localStorage.getItem("userRole");
+        setUserRole(role);
     }, []);
+
+    // Prevent hydration mismatch by returning a consistent shell until mounted
+    const avatarLetter = isMounted && userRole === 'admin' ? 'A' : 'G';
+    const userName = isMounted && userRole === 'admin' ? 'Administrador' : 'Gestora Operativa';
+    const dashboardHref = isMounted && userRole === 'admin' ? "/dashboard/admin" : "/dashboard/gestor";
 
     return (
         <div className={styles.adminContainer}>
-            {/* Sidebar Reutilizada pero adaptada a Gestora */}
+            {/* Sidebar */}
             <aside className={styles.sidebar}>
                 <div className={styles.sidebarHeader}>
                     <Image
@@ -37,18 +43,31 @@ export default function GestorLayout({
                 </div>
 
                 <div className={styles.userProfileMini}>
-                    <div className={styles.avatarCircle} style={{ background: '#FF6600' }}>G</div>
+                    <div className={styles.avatarCircle}>
+                        {avatarLetter}
+                    </div>
                     <div className={styles.userMeta}>
-                        <span className={styles.userName}>Gestora Operativa</span>
+                        <span className={styles.userName}>{userName}</span>
                         <span className={styles.userStatus}>En Línea</span>
                     </div>
                 </div>
 
                 <nav className={styles.nav}>
-                    <Link href="/dashboard/gestor" className={`${styles.navItem} ${pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}>
+                    {/* Dashboard Link for both roles, pointing to their respective home */}
+                    <Link
+                        href={dashboardHref}
+                        className={`${styles.navItem} ${pathname === '/dashboard/admin' || pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}
+                    >
                         <LayoutDashboard size={20} />
                         Inicio / Métricas
                     </Link>
+
+                    {isMounted && userRole === 'admin' && (
+                        <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
+                            <Users size={20} />
+                            Gestión Clientes
+                        </Link>
+                    )}
 
                     <Link href="/dashboard/admin/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
                         <UserCog size={20} />
@@ -62,13 +81,15 @@ export default function GestorLayout({
 
                     <Link href="/dashboard/admin/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
                         <DollarSign size={20} />
-                        Control de Pagos
+                        Pagos y Tesorería
                     </Link>
 
-                    <div className={styles.navItem} style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                        <Sparkles size={20} />
-                        Config. Bloqueada
-                    </div>
+                    {isMounted && userRole === 'admin' && (
+                        <div className={styles.navItem}>
+                            <Settings size={20} />
+                            Configuración
+                        </div>
+                    )}
                 </nav>
 
                 <div style={{ marginTop: "auto" }}>
