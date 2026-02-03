@@ -1,22 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign } from 'lucide-react';
-import styles from "./admin.module.css";
+import { LayoutDashboard, LogOut, Ticket, Sparkles, UserCog, DollarSign } from 'lucide-react';
+import styles from "../admin/admin.module.css";
 import Image from "next/image";
 
-export default function AdminLayout({
+export default function GestorLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setUserRole(localStorage.getItem("userRole"));
+        }
+    }, []);
 
     return (
         <div className={styles.adminContainer}>
-            {/* Sidebar */}
+            {/* Sidebar Reutilizada pero adaptada a Gestora */}
             <aside className={styles.sidebar}>
                 <div className={styles.sidebarHeader}>
                     <Image
@@ -30,33 +37,18 @@ export default function AdminLayout({
                 </div>
 
                 <div className={styles.userProfileMini}>
-                    <div className={styles.avatarCircle}>
-                        {typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' ? 'A' : 'G'}
-                    </div>
+                    <div className={styles.avatarCircle} style={{ background: '#FF6600' }}>G</div>
                     <div className={styles.userMeta}>
-                        <span className={styles.userName}>{typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' ? 'Administrador' : 'Gestora Operativa'}</span>
+                        <span className={styles.userName}>Gestora Operativa</span>
                         <span className={styles.userStatus}>En Línea</span>
                     </div>
                 </div>
 
                 <nav className={styles.nav}>
-                    {/* Dashboard Link for both roles, pointing to their respective home */}
-                    {typeof window !== 'undefined' && (
-                        <Link
-                            href={localStorage.getItem("userRole") === 'admin' ? "/dashboard/admin" : "/dashboard/gestor"}
-                            className={`${styles.navItem} ${pathname === '/dashboard/admin' || pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}
-                        >
-                            <LayoutDashboard size={20} />
-                            Inicio / Métricas
-                        </Link>
-                    )}
-
-                    {typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' && (
-                        <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
-                            <Users size={20} />
-                            Gestión Clientes
-                        </Link>
-                    )}
+                    <Link href="/dashboard/gestor" className={`${styles.navItem} ${pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}>
+                        <LayoutDashboard size={20} />
+                        Inicio / Métricas
+                    </Link>
 
                     <Link href="/dashboard/admin/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
                         <UserCog size={20} />
@@ -70,15 +62,13 @@ export default function AdminLayout({
 
                     <Link href="/dashboard/admin/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
                         <DollarSign size={20} />
-                        Pagos y Tesorería
+                        Control de Pagos
                     </Link>
 
-                    {typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' && (
-                        <div className={styles.navItem}>
-                            <Settings size={20} />
-                            Configuración
-                        </div>
-                    )}
+                    <div className={styles.navItem} style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                        <Sparkles size={20} />
+                        Config. Bloqueada
+                    </div>
                 </nav>
 
                 <div style={{ marginTop: "auto" }}>

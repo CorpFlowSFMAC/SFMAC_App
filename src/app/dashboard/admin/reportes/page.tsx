@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import {
     TrendingUp, TrendingDown, Users, Award, AlertTriangle,
     Clock, CheckCircle, XCircle, BarChart3, PieChart, Calendar,
-    Download, Filter, User
+    Download, Filter, User, DollarSign
 } from "lucide-react";
 import styles from "./reportes.module.css";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -146,6 +146,35 @@ export default function ReportesPage() {
         };
     }, [tickets, ticketsRiesgo]);
 
+    // 🎯 Métricas Financieras (Rentabilidad)
+    const finanzas = useMemo(() => {
+        let ingresosTotales = 0;
+        let costosTotales = 0;
+        let ticketsCerradosCount = 0;
+
+        tickets.forEach((t: any) => {
+            if (normalizeStateId(t.estadoId) === "ticket_cerrado") {
+                ticketsCerradosCount++;
+                const ingreso = (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0));
+                const costo = (t.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+                ingresosTotales += ingreso;
+                costosTotales += costo;
+            }
+        });
+
+        const utilidad = ingresosTotales - costosTotales;
+        const margen = ingresosTotales > 0 ? (utilidad / ingresosTotales) * 100 : 0;
+
+        return { ingresosTotales, costosTotales, utilidad, margen, ticketsCerradosCount };
+    }, [tickets]);
+
+    const [userRole, setUserRole] = useState<string | null>(null);
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            setUserRole(localStorage.getItem("userRole"));
+        }
+    }, []);
+
     function calcularHorasTranscurridas(ticket: any): number {
         const ahora = new Date().getTime();
         const inicio = new Date(ticket.fechaInicioSLA).getTime();
@@ -262,129 +291,175 @@ export default function ReportesPage() {
                     <TrendingUp size={18} />
                     Rendimiento Global
                 </button>
+                {userRole === 'admin' && (
+                    <button
+                        className={`${styles.metricBtn} ${selectedMetric === 'finance' ? styles.metricBtnActive : ''}`}
+                        onClick={() => setSelectedMetric('finance')}
+                    >
+                        <DollarSign size={18} />
+                        Rentabilidad
+                    </button>
+                )}
             </div>
 
             {/* Contenido Principal */}
             <div className={styles.contentGrid}>
-                {/* Ranking de Gestoras */}
-                <div className={styles.section}>
-                    <div className={styles.sectionHeader}>
-                        <h2>
-                            <Users size={20} />
-                            Ranking de Gestoras
-                        </h2>
-                    </div>
-
-                    <div className={styles.rankingList}>
-                        {gestoras.map((gestora: any, index: number) => (
-                            <div key={gestora.nombre} className={styles.rankingItem}>
-                                <div className={styles.rankingPosition}>
-                                    {index === 0 && <Award size={24} color="#FFD700" />}
-                                    {index === 1 && <Award size={24} color="#C0C0C0" />}
-                                    {index === 2 && <Award size={24} color="#CD7F32" />}
-                                    {index > 2 && <span className={styles.positionNumber}>#{index + 1}</span>}
-                                </div>
-
-                                <div className={styles.rankingInfo}>
-                                    <div className={styles.rankingName}>{gestora.nombre}</div>
-                                    <div className={styles.rankingStats}>
-                                        {gestora.totalTickets} tickets • {gestora.cerrados} cerrados • {gestora.enRiesgo} en riesgo
-                                    </div>
-                                    <div className={styles.rankingBar}>
-                                        <div
-                                            className={styles.rankingFill}
-                                            style={{
-                                                width: `${gestora.eficiencia}%`,
-                                                background: getEficienciaColor(gestora.eficiencia)
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className={styles.rankingScore}>
-                                    <div
-                                        className={styles.scoreValue}
-                                        style={{ color: getEficienciaColor(gestora.eficiencia) }}
-                                    >
-                                        {gestora.eficiencia}%
-                                    </div>
-                                    <div className={styles.scoreLabel}>Eficiencia</div>
-                                </div>
-
-                                <div className={styles.rankingMetrics}>
-                                    <div className={styles.miniMetric}>
-                                        <Clock size={14} />
-                                        {Math.round(gestora.promedioHoras)}h
-                                    </div>
-                                    <div className={styles.miniMetric}>
-                                        <CheckCircle size={14} />
-                                        {Math.round(gestora.tasaCierre)}%
-                                    </div>
-                                </div>
+                {selectedMetric === 'finance' ? (
+                    <div className={styles.financeFullSection}>
+                        <div className={styles.financeSummaryGrid}>
+                            <div className={styles.financeCard}>
+                                <div className={styles.finLabel}>INGRESOS (CERRADOS)</div>
+                                <div className={styles.finValue}>S/ {finanzas.ingresosTotales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+                                <div className={styles.finSub}>{finanzas.ticketsCerradosCount} Tickets liquidados</div>
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Ranking de Técnicos */}
-                <div className={styles.section}>
-                    <div className={styles.sectionHeader}>
-                        <h2>
-                            <User size={20} />
-                            Ranking de Técnicos
-                        </h2>
-                    </div>
-
-                    <div className={styles.rankingList}>
-                        {tecnicos.slice(0, 10).map((tecnico: any, index: number) => (
-                            <div key={tecnico.nombre} className={styles.rankingItem}>
-                                <div className={styles.rankingPosition}>
-                                    {index === 0 && <Award size={24} color="#FFD700" />}
-                                    {index === 1 && <Award size={24} color="#C0C0C0" />}
-                                    {index === 2 && <Award size={24} color="#CD7F32" />}
-                                    {index > 2 && <span className={styles.positionNumber}>#{index + 1}</span>}
-                                </div>
-
-                                <div className={styles.rankingInfo}>
-                                    <div className={styles.rankingName}>{tecnico.nombre}</div>
-                                    <div className={styles.rankingStats}>
-                                        {tecnico.totalTickets} tickets • {tecnico.completados} completados
-                                    </div>
-                                    <div className={styles.rankingBar}>
-                                        <div
-                                            className={styles.rankingFill}
-                                            style={{
-                                                width: `${tecnico.eficiencia}%`,
-                                                background: getEficienciaColor(tecnico.eficiencia)
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className={styles.rankingScore}>
-                                    <div
-                                        className={styles.scoreValue}
-                                        style={{ color: getEficienciaColor(tecnico.eficiencia) }}
-                                    >
-                                        {tecnico.eficiencia}%
-                                    </div>
-                                    <div className={styles.scoreLabel}>Eficiencia</div>
-                                </div>
-
-                                <div className={styles.rankingMetrics}>
-                                    <div className={styles.miniMetric}>
-                                        <Clock size={14} />
-                                        {Math.round(tecnico.promedioHoras)}h
-                                    </div>
-                                    <div className={styles.miniMetric}>
-                                        <CheckCircle size={14} />
-                                        {Math.round(tecnico.tasaComplecion)}%
-                                    </div>
-                                </div>
+                            <div className={styles.financeCard}>
+                                <div className={styles.finLabel}>COSTOS OPERATIVOS (DEPOSITADOS)</div>
+                                <div className={styles.finValue} style={{ color: '#DC2626' }}>- S/ {finanzas.costosTotales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+                                <div className={styles.finSub}>Pagos a técnicos</div>
                             </div>
-                        ))}
+                            <div className={styles.financeCard} style={{ background: '#F0FDFA', borderColor: '#10B981' }}>
+                                <div className={styles.finLabel} style={{ color: '#0F766E' }}>UTILIDAD NETA (ROI)</div>
+                                <div className={styles.finValue} style={{ color: '#059669' }}>S/ {finanzas.utilidad.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+                                <div className={styles.finMarginBadge}>Margen: {Math.round(finanzas.margen)}%</div>
+                            </div>
+                        </div>
+
+                        <div className={styles.section} style={{ marginTop: '2rem' }}>
+                            <div className={styles.sectionHeader}>
+                                <h2>
+                                    <BarChart3 size={20} />
+                                    Distribución de Rentabilidad
+                                </h2>
+                            </div>
+                            <p style={{ color: '#64748B', fontWeight: 600 }}>
+                                El margen promedio del {Math.round(finanzas.margen)}% se encuentra dentro de los parámetros de SINFIMAC.
+                                Se recomienda mantener la eficiencia SLA para reducir costos indirectos.
+                            </p>
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <>
+                        {/* Ranking de Gestoras */}
+                        <div className={styles.section}>
+                            <div className={styles.sectionHeader}>
+                                <h2>
+                                    <Users size={20} />
+                                    Ranking de Gestoras
+                                </h2>
+                            </div>
+
+                            <div className={styles.rankingList}>
+                                {gestoras.map((gestora: any, index: number) => (
+                                    <div key={gestora.nombre} className={styles.rankingItem}>
+                                        <div className={styles.rankingPosition}>
+                                            {index === 0 && <Award size={24} color="#FFD700" />}
+                                            {index === 1 && <Award size={24} color="#C0C0C0" />}
+                                            {index === 2 && <Award size={24} color="#CD7F32" />}
+                                            {index > 2 && <span className={styles.positionNumber}>#{index + 1}</span>}
+                                        </div>
+
+                                        <div className={styles.rankingInfo}>
+                                            <div className={styles.rankingName}>{gestora.nombre}</div>
+                                            <div className={styles.rankingStats}>
+                                                {gestora.totalTickets} tickets • {gestora.cerrados} cerrados • {gestora.enRiesgo} en riesgo
+                                            </div>
+                                            <div className={styles.rankingBar}>
+                                                <div
+                                                    className={styles.rankingFill}
+                                                    style={{
+                                                        width: `${gestora.eficiencia}%`,
+                                                        background: getEficienciaColor(gestora.eficiencia)
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className={styles.rankingScore}>
+                                            <div
+                                                className={styles.scoreValue}
+                                                style={{ color: getEficienciaColor(gestora.eficiencia) }}
+                                            >
+                                                {gestora.eficiencia}%
+                                            </div>
+                                            <div className={styles.scoreLabel}>Eficiencia</div>
+                                        </div>
+
+                                        <div className={styles.rankingMetrics}>
+                                            <div className={styles.miniMetric}>
+                                                <Clock size={14} />
+                                                {Math.round(gestora.promedioHoras)}h
+                                            </div>
+                                            <div className={styles.miniMetric}>
+                                                <CheckCircle size={14} />
+                                                {Math.round(gestora.tasaCierre)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Ranking de Técnicos */}
+                        <div className={styles.section}>
+                            <div className={styles.sectionHeader}>
+                                <h2>
+                                    <User size={20} />
+                                    Ranking de Técnicos
+                                </h2>
+                            </div>
+
+                            <div className={styles.rankingList}>
+                                {tecnicos.slice(0, 10).map((tecnico: any, index: number) => (
+                                    <div key={tecnico.nombre} className={styles.rankingItem}>
+                                        <div className={styles.rankingPosition}>
+                                            {index === 0 && <Award size={24} color="#FFD700" />}
+                                            {index === 1 && <Award size={24} color="#C0C0C0" />}
+                                            {index === 2 && <Award size={24} color="#CD7F32" />}
+                                            {index > 2 && <span className={styles.positionNumber}>#{index + 1}</span>}
+                                        </div>
+
+                                        <div className={styles.rankingInfo}>
+                                            <div className={styles.rankingName}>{tecnico.nombre}</div>
+                                            <div className={styles.rankingStats}>
+                                                {tecnico.totalTickets} tickets • {tecnico.completados} completados
+                                            </div>
+                                            <div className={styles.rankingBar}>
+                                                <div
+                                                    className={styles.rankingFill}
+                                                    style={{
+                                                        width: `${tecnico.eficiencia}%`,
+                                                        background: getEficienciaColor(tecnico.eficiencia)
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className={styles.rankingScore}>
+                                            <div
+                                                className={styles.scoreValue}
+                                                style={{ color: getEficienciaColor(tecnico.eficiencia) }}
+                                            >
+                                                {tecnico.eficiencia}%
+                                            </div>
+                                            <div className={styles.scoreLabel}>Eficiencia</div>
+                                        </div>
+
+                                        <div className={styles.rankingMetrics}>
+                                            <div className={styles.miniMetric}>
+                                                <Clock size={14} />
+                                                {Math.round(tecnico.promedioHoras)}h
+                                            </div>
+                                            <div className={styles.miniMetric}>
+                                                <CheckCircle size={14} />
+                                                {Math.round(tecnico.tasaComplecion)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Tickets en Riesgo Crítico */}

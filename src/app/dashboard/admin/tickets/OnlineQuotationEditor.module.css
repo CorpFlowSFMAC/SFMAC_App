@@ -224,19 +224,20 @@
 }
 
 .colSmall {
-    width: 40px;
+    width: 60px;
 }
 
 .colMid {
-    width: 120px;
+    width: 110px;
 }
 
 .colLarge {
-    width: auto;
+    width: 100%;
+    /* Toma el resto del espacio */
 }
 
 .colAction {
-    width: 40px;
+    width: 35px;
 }
 
 .gridRow:hover {
@@ -276,37 +277,56 @@
 }
 
 .currencyCell {
-    display: flex;
-    align-items: center;
-    padding: 0 10px !important;
+    padding: 0 !important;
     background: transparent;
     position: relative;
 }
 
 .currencyPrefix {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 700;
-    color: #6B7280;
-    margin-right: 4px;
+    color: #111827;
+    margin-right: 2px;
 }
 
 .cellInputRight {
     flex: 1;
     text-align: right;
     border: none;
-    padding: 10px 0;
+    padding: 10px;
     font-family: inherit;
     font-size: 13px;
+    font-weight: 700;
+    color: #111827;
     background: transparent;
     outline: none;
     display: block;
     box-sizing: border-box;
 }
 
-.cellTextarea {
+.cellTextarea,
+.cellTextStatic {
+    width: 100%;
+    border: none;
+    padding: 12px 10px;
+    font-family: inherit;
+    font-size: 13px;
+    background: transparent;
+    outline: none;
+    display: block;
+    box-sizing: border-box;
     resize: none;
-    min-height: 38px;
-    line-height: 1.4;
+    min-height: 42px;
+    line-height: 1.5;
+    text-align: justify;
+    overflow: hidden;
+    word-break: break-word;
+    white-space: pre-wrap;
+    /* Crucial para respetar saltos de línea en el PDF */
+}
+
+.cellTextStatic {
+    cursor: default;
 }
 
 .cellInputCenter:focus,

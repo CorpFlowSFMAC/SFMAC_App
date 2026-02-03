@@ -1,0 +1,347 @@
+.paymentsContainer {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.titleSection h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #1E293B;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.titleSection p {
+    color: #64748B;
+    margin: 4px 0 0 0;
+}
+
+/* Stats Row */
+.statsRow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.statCard {
+    background: white;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid #F1F5F9;
+}
+
+.statIcon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.statInfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.statLabel {
+    font-size: 0.8rem;
+    color: #64748B;
+    font-weight: 600;
+}
+
+.statValue {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #1F2937;
+}
+
+/* Table Area */
+.tableCard {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #E2E8F0;
+    overflow: hidden;
+}
+
+.tableHeader {
+    padding: 20px;
+    border-bottom: 1px solid #E2E8F0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #F8FAFC;
+}
+
+.tableHeader h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pills {
+    display: flex;
+    gap: 8px;
+}
+
+.pill {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: #EDF2F7;
+    color: #4A5568;
+    transition: all 0.2s;
+}
+
+.pillActive {
+    background: #3B82F6;
+    color: white;
+}
+
+.paymentsTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.paymentsTable th {
+    text-align: left;
+    padding: 16px 20px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #64748B;
+    background: #F8FAFC;
+    border-bottom: 1px solid #EDF2F7;
+    font-weight: 700;
+}
+
+.paymentsTable td {
+    padding: 16px 20px;
+    border-bottom: 1px solid #F1F5F9;
+    font-size: 0.9rem;
+    vertical-align: middle;
+}
+
+.ticketId {
+    font-family: monospace;
+    font-weight: 700;
+    color: #3B82F6;
+    background: #EFF6FF;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.techInfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.techName {
+    font-weight: 700;
+    color: #1F2937;
+}
+
+.techAccount {
+    font-size: 0.75rem;
+    color: #64748B;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.amountBox {
+    display: flex;
+    flex-direction: column;
+}
+
+.approvedAmount {
+    font-weight: 800;
+    color: #059669;
+}
+
+.expectedProfit {
+    font-size: 0.75rem;
+    color: #7C3AED;
+    background: #F5F3FF;
+    padding: 1px 4px;
+    border-radius: 4px;
+    display: inline-block;
+    width: fit-content;
+    margin-top: 2px;
+}
+
+.typeBadge {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.typeAdvance {
+    background: #DBEAFE;
+    color: #1E40AF;
+}
+
+.typeReinforcement {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.typeFinal {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.typeMobility {
+    background: #F3E8FF;
+    color: #6B21A8;
+}
+
+.historyBtn {
+    background: none;
+    border: 1px solid #E2E8F0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    color: #64748B;
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.historyBtn:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+    color: #1F2937;
+}
+
+.actionBtn {
+    background: #10B981;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.actionBtn:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.historyDrawer {
+    margin-top: 10px;
+    background: #F8FAFC;
+    border-radius: 12px;
+    padding: 15px;
+    border: 1px dashed #CBD5E1;
+}
+
+.historyTitle {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #475569;
+    margin-bottom: 10px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.historyLine {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #E2E8F0;
+    font-size: 0.8rem;
+}
+
+.historyLine:last-child {
+    border-bottom: none;
+}
+
+.emptyState {
+    padding: 60px;
+    text-align: center;
+    color: #94A3B8;
+}
+
+.emptyState svg {
+    margin-bottom: 20px;
+}
+
+/* Monthly Accumulation Styles */
+.monthlyBreakdown {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.monthCard {
+    background: white;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all 0.2s;
+}
+
+.monthCard:hover {
+    border-color: #3B82F6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+}
+
+.monthName {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.monthValue {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #1E293B;
+}
+
+.sectionTitle {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #475569;
+    margin: 40px 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

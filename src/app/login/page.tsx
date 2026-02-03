@@ -35,24 +35,23 @@ export default function LoginPage() {
 
         // Simulate API call
         setTimeout(() => {
-            // Mock validation
-            if (formData.username && formData.password) {
-                if (formData.username === "admin") {
-                    // Admin privileges
-                    document.cookie = "userRole=admin; path=/; max-age=86400"; // 24h
-                    localStorage.setItem("userRole", "admin");
-                    router.push("/dashboard/admin");
-                } else if (formData.username.startsWith("gestor")) {
-                    // Gestor privileges
-                    document.cookie = "userRole=gestor; path=/; max-age=86400"; // 24h
-                    localStorage.setItem("userRole", "gestor");
-                    router.push("/dashboard/gestor");
-                } else {
-                    setError("Credenciales inválidas. Intente nuevamente.");
-                    setIsLoading(false);
-                }
+            const { username, password } = formData;
+
+            // Credenciales maestras
+            const isValidPassword = password === "123456";
+
+            if (username.toLowerCase() === "admin" && isValidPassword) {
+                // Admin privileges
+                document.cookie = "userRole=admin; path=/; max-age=86400"; // 24h
+                localStorage.setItem("userRole", "admin");
+                router.push("/dashboard/admin");
+            } else if (username.toLowerCase() === "gestora" && isValidPassword) {
+                // Gestora privileges
+                document.cookie = "userRole=gestor; path=/; max-age=86400"; // 24h
+                localStorage.setItem("userRole", "gestor");
+                router.push("/dashboard/gestor");
             } else {
-                setError("Por favor ingrese usuario y contraseña.");
+                setError("Credenciales inválidas. Usuario o contraseña incorrectos.");
                 setIsLoading(false);
             }
         }, 1500);

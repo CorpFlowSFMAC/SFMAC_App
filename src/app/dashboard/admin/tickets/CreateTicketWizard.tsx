@@ -28,7 +28,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         tieneNumeroCliente: false,
         numeroTicketCliente: "",
         evidencias: [] as File[],
-        creadoPor: "Gestora Actual",
+        creadoPor: typeof window !== 'undefined' ? (localStorage.getItem("userRole") === 'admin' ? "Administrador" : "Gestora Operativa") : "Sistema",
         fechaCreacion: new Date().toISOString(),
     });
 

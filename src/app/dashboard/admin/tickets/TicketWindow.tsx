@@ -59,6 +59,13 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     const [currentTime, setCurrentTime] = useState(new Date());
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si está aprobada
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState(0.5); // 40%, 50% o 60%
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setUserRole(localStorage.getItem("userRole"));
+        }
+    }, []);
 
     // Estados para Ejecución (Paso 11)
     const [gastos, setGastos] = useState<any[]>(ticketData.gastos || []);
@@ -142,7 +149,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
         setTicketData(updatedTicket);
         setShowAssignmentDrawer(false); // Cerrar el drawer
 
-        console.log("Técnico asignado (Reasignación preservando estado):", assignmentData);
+
     };
 
     const handleProceedToAssignment = () => {
@@ -626,13 +633,20 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                     </div>
                                                 </div>
 
-                                                <button className={styles.confirmAdvanceBtn} onClick={handleConfirmVisitPayment}>
-                                                    <CheckCircle size={18} />
-                                                    CONFIRMAR QUE GERENCIA YA PAGÓ LA VISITA
-                                                </button>
+                                                {userRole === 'admin' ? (
+                                                    <button className={styles.confirmAdvanceBtn} onClick={handleConfirmVisitPayment}>
+                                                        <CheckCircle size={18} />
+                                                        CONFIRMAR QUE GERENCIA YA PAGÓ LA VISITA
+                                                    </button>
+                                                ) : (
+                                                    <div className={styles.adminOnlyMessage}>
+                                                        <Clock size={18} />
+                                                        <span>Esperando que el Administrador confirme el depósito</span>
+                                                    </div>
+                                                )}
 
                                                 <div className={styles.bankNote}>
-                                                    * El técnico no podrá agendar la visita hasta que se confirme este pago.
+                                                    * Solo el Administrador puede confirmar depósitos bancarios.
                                                 </div>
                                             </div>
                                         </div>
@@ -853,6 +867,12 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                             <label>Materiales:</label>
                                                                             <span>S/ {parseFloat(ticketData.costoMateriales || 0).toFixed(2)}</span>
                                                                         </div>
+                                                                        {parseFloat(ticketData.costoVisita || 0) > 0 && (
+                                                                            <div className={styles.techRow}>
+                                                                                <label>Gasto de Visita:</label>
+                                                                                <span>S/ {parseFloat(ticketData.costoVisita || 0).toFixed(2)}</span>
+                                                                            </div>
+                                                                        )}
                                                                         <div className={styles.techRowTotal}>
                                                                             <label>Costo Directo Total:</label>
                                                                             <strong>S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)).toFixed(2)}</strong>
@@ -1090,11 +1110,18 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                             </div>
                                                                         </div>
 
-                                                                        <button className={styles.confirmAdvanceBtn} onClick={handleConfirmAdvance}>
-                                                                            <Wallet size={18} />
-                                                                            <span>CONFIRMAR DEPÓSITO S/ {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}</span>
-                                                                        </button>
-                                                                        <p className={styles.bankNote}>⚠️ Asegúrese de haber realizado la transferencia antes de confirmar.</p>
+                                                                        {userRole === 'admin' ? (
+                                                                            <button className={styles.confirmAdvanceBtn} onClick={handleConfirmAdvance}>
+                                                                                <Wallet size={18} />
+                                                                                <span>CONFIRMAR DEPÓSITO S/ {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}</span>
+                                                                            </button>
+                                                                        ) : (
+                                                                            <div className={styles.adminOnlyMessage}>
+                                                                                <Clock size={18} />
+                                                                                <span>Esperando confirmación de Gerencia</span>
+                                                                            </div>
+                                                                        )}
+                                                                        <p className={styles.bankNote}>⚠️ Solo el Administrador puede confirmar transferencias.</p>
 
                                                                         {ticketData.costoAjustadoPostAprobacion && (
                                                                             <button className={styles.resetNegotiationBtn} onClick={() => setTicketData({ ...ticketData, costoAjustadoPostAprobacion: false, costoManoObra: ticketData.costoAnteriorTecnico, costoMateriales: 0 })}>
@@ -1407,16 +1434,23 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                     </div>
                                                 </div>
 
-                                                <button
-                                                    className={styles.confirmFinalPaymentBtn}
-                                                    onClick={handleFinalLiquidationPay}
-                                                >
-                                                    <DollarSign size={20} />
-                                                    CONFIRMAR DEPÓSITO DE SALDO FINAL
-                                                </button>
+                                                {userRole === 'admin' ? (
+                                                    <button
+                                                        className={styles.confirmFinalPaymentBtn}
+                                                        onClick={handleFinalLiquidationPay}
+                                                    >
+                                                        <DollarSign size={20} />
+                                                        CONFIRMAR DEPÓSITO DE SALDO FINAL
+                                                    </button>
+                                                ) : (
+                                                    <div className={styles.adminOnlyMessage} style={{ marginBottom: '20px' }}>
+                                                        <Clock size={18} />
+                                                        <span>Esperando que el Administrador liquide el saldo</span>
+                                                    </div>
+                                                )}
 
                                                 <p className={styles.liquidationNote}>
-                                                    * Al confirmar, el ticket pasará al estado de "Ticket Cerrado" y se consolidará el historial financiero final.
+                                                    * Solo el Administrador puede cerrar financieramente el ticket mediante el depósito final.
                                                 </p>
                                             </div>
                                         </div>

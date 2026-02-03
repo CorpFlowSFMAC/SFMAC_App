@@ -66,15 +66,6 @@ export default function CreateTicketModal({ isOpen, onClose, onSave }: CreateTic
         )
     ).sort();
 
-    // Debug: Log para verificar datos
-    useEffect(() => {
-        if (isOpen) {
-            console.log('🔍 DEBUG CreateTicketModal:');
-            console.log('  - Técnicos cargados:', technicians.length);
-            console.log('  - Técnicos data:', technicians);
-            console.log('  - Servicios disponibles:', availableServices);
-        }
-    }, [isOpen, technicians, availableServices]);
 
     useEffect(() => {
         if (!isOpen) {

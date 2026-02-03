@@ -29,6 +29,60 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.userProfileMini {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1rem;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.avatarCircle {
+    width: 40px;
+    height: 40px;
+    background: var(--color-orange);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 900;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 10px rgba(255, 102, 0, 0.3);
+}
+
+.userMeta {
+    display: flex;
+    flex-direction: column;
+}
+
+.userName {
+    font-weight: 800;
+    font-size: 0.9rem;
+    color: white;
+}
+
+.userStatus {
+    font-size: 0.7rem;
+    color: #10B981;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.userStatus::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: #10B981;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 8px #10B981;
+}
+
 .nav {
     display: flex;
     flex-direction: column;

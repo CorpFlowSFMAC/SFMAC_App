@@ -30,6 +30,7 @@ interface OnlineQuotationEditorProps {
 
 const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onUpdate, suggestedTotal, initialItems, clientInfo, sedeInfo, servicioId, ticketId, isLocked }, ref) => {
     const [focusedField, setFocusedField] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
     const [items, setItems] = useState<Partida[]>(() => {
         if (initialItems && initialItems.length > 0) {
             return initialItems.map((it, idx) => ({
@@ -87,23 +88,30 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
 
     const handleDownloadPDF = async () => {
         if (!quoteRef.current) return;
+        setIsExporting(true);
 
-        const element = quoteRef.current;
-        const canvas = await html2canvas(element, {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            backgroundColor: "#ffffff"
-        });
+        // Esperar un frame a que se rendericen los DIVs estáticos
+        setTimeout(async () => {
+            const element = quoteRef.current;
+            if (!element) return;
 
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const imgProps = pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: "#ffffff"
+            });
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`Cotizacion_${ticketId || 'SINFIMAC'}.pdf`);
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const imgProps = pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`Cotizacion_${ticketId || 'SINFIMAC'}.pdf`);
+            setIsExporting(false);
+        }, 300); // Un poco más de tiempo para estar seguros
     };
 
     // Exponer la función de descarga al padre
@@ -185,7 +193,7 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                     <table className={styles.vantageTable}>
                         <thead>
                             <tr>
-                                <th className={styles.colMid}>Item</th>
+                                <th className={styles.colSmall}>N°</th>
                                 <th className={styles.colLarge}>Descripción</th>
                                 <th className={styles.colSmall}>Und.</th>
                                 <th className={styles.colSmall}>Cant.</th>
@@ -207,14 +215,24 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                                         />
                                     </td>
                                     <td>
-                                        <textarea
-                                            value={item.descripcion}
-                                            className={styles.cellTextarea}
-                                            rows={1}
-                                            disabled={isLocked}
-                                            onChange={(e) => updateItem(item.id, 'descripcion', e.target.value)}
-                                            placeholder="Descripción del requerimiento..."
-                                        />
+                                        {(isLocked || isExporting) ? (
+                                            <div className={styles.cellTextStatic}>
+                                                {item.descripcion}
+                                            </div>
+                                        ) : (
+                                            <textarea
+                                                value={item.descripcion}
+                                                className={styles.cellTextarea}
+                                                disabled={isLocked}
+                                                onChange={(e) => updateItem(item.id, 'descripcion', e.target.value)}
+                                                onInput={(e) => {
+                                                    const target = e.target as HTMLTextAreaElement;
+                                                    target.style.height = 'auto';
+                                                    target.style.height = target.scrollHeight + 'px';
+                                                }}
+                                                placeholder="Descripción del requerimiento..."
+                                            />
+                                        )}
                                     </td>
                                     <td>
                                         <input
@@ -235,10 +253,11 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                                         />
                                     </td>
                                     <td className={styles.currencyCell}>
-                                        <span className={styles.currencyPrefix}>S/</span>
                                         <input
-                                            type="number"
-                                            value={focusedField === `${item.id}-price` ? item.precioUnitario : item.precioUnitario.toFixed(2)}
+                                            type={focusedField === `${item.id}-price` ? "number" : "text"}
+                                            value={focusedField === `${item.id}-price`
+                                                ? (item.precioUnitario || "")
+                                                : item.precioUnitario.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             step="0.01"
                                             className={styles.cellInputRight}
                                             disabled={isLocked}
@@ -248,7 +267,7 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                                         />
                                     </td>
                                     <td className={styles.totalCell}>
-                                        S/ {item.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                        {item.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td className={styles.actionCell}>
                                         {!isLocked && (
