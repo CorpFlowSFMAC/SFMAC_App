@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign } from 'lucide-react';
-import styles from "../admin/admin.module.css";
+import styles from "@/app/dashboard/admin/admin.module.css";
 import Image from "next/image";
 
 export default function GestorLayout({
@@ -38,6 +38,7 @@ export default function GestorLayout({
                         width={40}
                         height={40}
                         style={{ objectFit: "contain" }}
+                        unoptimized
                     />
                     <span style={{ fontWeight: "bold", fontSize: "1.2rem" }}>SINFIMAC</span>
                 </div>
@@ -53,7 +54,6 @@ export default function GestorLayout({
                 </div>
 
                 <nav className={styles.nav}>
-                    {/* Dashboard Link for both roles, pointing to their respective home */}
                     <Link
                         href={dashboardHref}
                         className={`${styles.navItem} ${pathname === '/dashboard/admin' || pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}
@@ -62,13 +62,7 @@ export default function GestorLayout({
                         Inicio / Métricas
                     </Link>
 
-                    {isMounted && userRole === 'admin' && (
-                        <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
-                            <Users size={20} />
-                            Gestión Clientes
-                        </Link>
-                    )}
-
+                    {/* Links always visible for Gestora (Admin sees more in admin layout) */}
                     <Link href="/dashboard/admin/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
                         <UserCog size={20} />
                         Gestión Técnicos
@@ -83,6 +77,13 @@ export default function GestorLayout({
                         <DollarSign size={20} />
                         Pagos y Tesorería
                     </Link>
+
+                    {isMounted && userRole === 'admin' && (
+                        <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
+                            <Users size={20} />
+                            Gestión Clientes
+                        </Link>
+                    )}
 
                     {isMounted && userRole === 'admin' && (
                         <div className={styles.navItem}>
