@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle } from "lucide-react";
-import CreateTicketWizard from "../../admin/tickets/CreateTicketWizard";
-import TicketWindow from "../../admin/tickets/TicketWindow";
-import styles from "../../admin/tickets/page.module.css";
+import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
+import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
+import styles from "@/app/dashboard/admin/tickets/page.module.css";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
