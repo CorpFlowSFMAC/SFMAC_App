@@ -68,7 +68,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
         tipoCuenta: "Ahorros",
         numeroCuenta: "",
         cci: "",
-        yape: ""
+        yape: "",
+        plin: ""
     });
 
     useEffect(() => {
@@ -89,7 +90,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                 tipoCuenta: technician.tipoCuenta || "Ahorros",
                 numeroCuenta: technician.numeroCuenta || "",
                 cci: technician.cci || "",
-                yape: technician.yape || ""
+                yape: technician.yape || "",
+                plin: technician.plin || ""
             });
             setCurrentStep(1);
         } else {
@@ -109,7 +111,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                 tipoCuenta: "Ahorros",
                 numeroCuenta: "",
                 cci: "",
-                yape: ""
+                yape: "",
+                plin: ""
             });
             setCurrentStep(1);
         }
@@ -390,17 +393,6 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
                             <div className={styles.formGrid}>
                                 <div className={styles.formGroup}>
-                                    <label><Landmark size={14} /> Entidad de Depósito</label>
-                                    <input
-                                        type="text"
-                                        value={BANKS.find(b => b.id === formData.banco)?.name}
-                                        readOnly
-                                        className={styles.readonlyField}
-                                        style={{ background: '#f8fafc', fontWeight: 700 }}
-                                    />
-                                </div>
-
-                                <div className={styles.formGroup}>
                                     <label><MapPin size={14} /> Tipo de Cuenta *</label>
                                     <select value={formData.tipoCuenta} onChange={(e) => setFormData({ ...formData, tipoCuenta: e.target.value })} required>
                                         <option value="Ahorros">Ahorros</option>
@@ -418,9 +410,41 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                     <input type="text" value={formData.cci} onChange={(e) => setFormData({ ...formData, cci: e.target.value })} placeholder="Ej: 00219100123456780112" maxLength={20} />
                                 </div>
 
-                                <div className={styles.formGroup}>
-                                    <label>🟣 Yape / Plin</label>
-                                    <input type="tel" value={formData.yape} onChange={(e) => { const value = e.target.value.replace(/\D/g, '').slice(0, 9); setFormData({ ...formData, yape: value }); }} placeholder="987654321" maxLength={9} />
+                                <div className={styles.walletsContainer} style={{ gridColumn: '1 / -1' }}>
+                                    <div className={styles.sectionLabelMini}>Billeteras Digitales</div>
+                                    <div className={styles.walletsSelector}>
+                                        <div className={`${styles.walletCard} ${formData.yape ? styles.walletActiveYape : ''}`}>
+                                            <div className={styles.walletBrandIcon} style={{ background: '#7C3AED' }}>
+                                                Y
+                                            </div>
+                                            <div className={styles.walletInfo}>
+                                                <label>YAPE</label>
+                                                <input
+                                                    type="tel"
+                                                    value={formData.yape}
+                                                    onChange={(e) => { const value = e.target.value.replace(/\D/g, '').slice(0, 9); setFormData({ ...formData, yape: value }); }}
+                                                    placeholder="987..."
+                                                    maxLength={9}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className={`${styles.walletCard} ${formData.plin ? styles.walletActivePlin : ''}`}>
+                                            <div className={styles.walletBrandIcon} style={{ background: '#00D1FF' }}>
+                                                P
+                                            </div>
+                                            <div className={styles.walletInfo}>
+                                                <label>PLIN</label>
+                                                <input
+                                                    type="tel"
+                                                    value={formData.plin}
+                                                    onChange={(e) => { const value = e.target.value.replace(/\D/g, '').slice(0, 9); setFormData({ ...formData, plin: value }); }}
+                                                    placeholder="912..."
+                                                    maxLength={9}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

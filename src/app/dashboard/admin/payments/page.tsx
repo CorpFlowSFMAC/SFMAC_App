@@ -145,12 +145,24 @@ export default function PaymentsPage() {
                     }
 
                     // 3. Verificar Liquidación Final
-                    if (ticket.estadoId === 'por_liquidar' || ticket.estadoId === 'completado') {
+                    if (ticket.estadoId === 'por_liquidar' || ticket.estadoId === 'ticket_cerrado') {
                         const montoPactado = (parseFloat(ticket.costoManoObra || 0) + parseFloat(ticket.costoMateriales || 0));
-                        const pagado = (ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-                        const saldo = Math.max(0, montoPactado - pagado);
+                        const pagos = ticket.historialPagosTecnico || [];
+                        const totalPagado = pagos.reduce((sum: number, p: any) => sum + p.monto, 0);
 
-                        if (saldo > 0 || ticket.estadoId === 'completado') {
+                        // Si está cerrado, mostramos el último pago como el monto solicitado del registro histórico
+                        // Si está por liquidar, mostramos el saldo pendiente
+                        const saldoPendiente = Math.max(0, montoPactado - totalPagado);
+                        const isFinalPaid = ticket.estadoId === 'ticket_cerrado';
+
+                        // Si está cerrado, recuperamos el monto de la liquidación del historial
+                        let montoMostrado = saldoPendiente;
+                        if (isFinalPaid) {
+                            const lastPay = [...pagos].reverse().find(p => p.referencia?.includes("Liquidación") || p.tipo === "Liquidación Final");
+                            montoMostrado = lastPay ? lastPay.monto : (montoPactado * 0.5); // Fallback al 50% si no se encuentra
+                        }
+
+                        if (montoMostrado > 0 || isFinalPaid) {
                             allRequests.push({
                                 id: `${ticket.id}_final`,
                                 ticketId: ticket.id,
@@ -165,11 +177,11 @@ export default function PaymentsPage() {
                                     cci: ticket.tecnico?.cci || '---'
                                 },
                                 montoPactado: montoPactado,
-                                montoSolicitado: saldo,
+                                montoSolicitado: montoMostrado,
                                 montoGanadoEsperado: (ticket.montoFinal || 0) - (montoPactado + (parseFloat(ticket.costoVisita || 0))),
                                 fechaSolicitud: ticket.fechaValidacionDocumental || ticket.fechaCreacion,
-                                estado: ticket.estadoId === 'completado' ? 'pagado' : 'pendiente',
-                                historialDepositos: ticket.historialPagosTecnico || []
+                                estado: isFinalPaid ? 'pagado' : 'pendiente',
+                                historialDepositos: pagos
                             });
                         }
                     }
@@ -222,8 +234,8 @@ export default function PaymentsPage() {
             } else if (req.tipo === 'Refuerzo') {
                 updatedTicket.solicitudAdelantoExtra = { ...ticket.solicitudAdelantoExtra, pagado: true };
             } else if (req.tipo === 'Liquidación Final') {
-                updatedTicket.estadoId = 'completado';
-                updatedTicket.fechaLiquidacionFinal = new Date().toISOString();
+                updatedTicket.estadoId = 'ticket_cerrado';
+                updatedTicket.fechaPagoFinal = new Date().toISOString();
             } else if (req.tipo === 'Movilidad / Visita') {
                 updatedTicket.estadoId = 'en_inspeccion';
                 updatedTicket.visitPaymentConfirmed = true;
@@ -376,9 +388,9 @@ export default function PaymentsPage() {
                                             </td>
                                             <td>
                                                 <span className={`${styles.typeBadge} ${req.tipo === 'Adelanto' ? styles.typeAdvance :
-                                                        req.tipo === 'Refuerzo' ? styles.typeReinforcement :
-                                                            req.tipo === 'Movilidad / Visita' ? styles.typeMobility :
-                                                                styles.typeFinal
+                                                    req.tipo === 'Refuerzo' ? styles.typeReinforcement :
+                                                        req.tipo === 'Movilidad / Visita' ? styles.typeMobility :
+                                                            styles.typeFinal
                                                     }`}>
                                                     {req.tipo}
                                                 </span>

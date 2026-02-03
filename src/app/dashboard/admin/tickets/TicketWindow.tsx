@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar } from "./TicketSummary";
@@ -56,7 +56,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     const [montoTotalCotizado, setMontoTotalCotizado] = useState(ticketData.montoFinal || 0);
     const quotationEditorRef = useRef<any>(null);
     const [partidasCotizacion, setPartidasCotizacion] = useState<any[]>(ticketData.partidas || []);
-    const [currentTime, setCurrentTime] = useState(new Date());
+    const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si está aprobada
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState(0.5); // 40%, 50% o 60%
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -84,14 +84,41 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
         const interval = setInterval(() => {
             setCurrentTime(new Date());
         }, 1000);
+
+        // Auto-reparar datos del técnico si faltan
+        if (ticketData.tecnico?.id && (!ticketData.tecnico.banco || !ticketData.tecnico.cuentaBancaria)) {
+            const storedTechs = localStorage.getItem('technicians');
+            if (storedTechs) {
+                try {
+                    const allTechs = JSON.parse(storedTechs);
+                    const fullTech = allTechs.find((t: any) => t.id === ticketData.tecnico.id);
+                    if (fullTech) {
+                        setTicketData((prev: any) => ({
+                            ...prev,
+                            tecnico: {
+                                ...prev.tecnico,
+                                banco: fullTech.banco,
+                                cuentaBancaria: fullTech.cuentaBancaria,
+                                cci: fullTech.cci,
+                                yape: fullTech.yape || fullTech.numeroDoc, // Fallback si no tiene yape pero el número de doc es usualmente el id
+                                plin: fullTech.plin
+                            }
+                        }));
+                    }
+                } catch (e) {
+                    console.error("Error repairing tech data:", e);
+                }
+            }
+        }
+
         return () => clearInterval(interval);
-    }, []);
+    }, [ticketData.tecnico?.id]);
 
     const formatElapsedTime = () => {
         const start = new Date(ticketData.fechaCreacion);
-        const end = ticketData.pausadoSLA && ticketData.fechaPausa
+        const end = (ticketData.pausadoSLA && ticketData.fechaPausa)
             ? new Date(ticketData.fechaPausa)
-            : currentTime;
+            : (currentTime || new Date());
 
         const diffMs = Math.max(0, end.getTime() - start.getTime());
         const hrs = Math.floor(diffMs / 3600000);
@@ -1348,11 +1375,57 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                             <span>Reporte de condiciones de seguridad</span>
                                                         </div>
                                                     </div>
+
+                                                    {/* Nuevo Item: Número de Ticket del Cliente */}
+                                                    <div
+                                                        className={`${styles.checkItem} ${ticketData.numeroTicketCliente ? styles.checkItemActive : styles.checkItemAlert}`}
+                                                        style={{ cursor: 'default' }}
+                                                    >
+                                                        <div className={styles.checkSquare}>
+                                                            {ticketData.numeroTicketCliente ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} color="#EF4444" />}
+                                                        </div>
+                                                        <div className={styles.checkText}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <strong>5. NÚMERO DE TICKET DEL CLIENTE</strong>
+                                                                {ticketData.numeroTicketCliente && (
+                                                                    <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
+                                                                )}
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                className={styles.inlineTicketInput}
+                                                                placeholder={`EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`}
+                                                                value={ticketData.numeroTicketCliente || ""}
+                                                                autoFocus={!ticketData.numeroTicketCliente}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.]/g, '');
+                                                                    setTicketData({ ...ticketData, numeroTicketCliente: val });
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                            {!ticketData.numeroTicketCliente && (
+                                                                <span style={{ color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
+                                                                    ¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
+                                                                </span>
+                                                            )}
+                                                            {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
+                                                                <span style={{ color: '#F59E0B', fontSize: '0.65rem', fontWeight: 700, marginTop: '4px', lineHeight: '1.2' }}>
+                                                                    FORMATO REQUERIDO: MB + 6 DÍGITOS + PUNTO + AÑO (26)<br />
+                                                                    Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
+                                                                </span>
+                                                            )}
+                                                            {ticketData.numeroTicketCliente && (/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
+                                                                <span style={{ color: '#059669', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
+                                                                    ✓ FORMATO VÁLIDO
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
 
                                                 <button
                                                     className={styles.proceedToLiquidationBtn}
-                                                    disabled={!Object.values(documentosChecklist).every(v => v)}
+                                                    disabled={!Object.values(documentosChecklist).every(v => v) || !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente || ""))}
                                                     onClick={() => {
                                                         const updated = {
                                                             ...ticketData,
@@ -1368,25 +1441,29 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                     <ArrowRight size={20} />
                                                 </button>
 
-                                                {!Object.values(documentosChecklist).every(v => v) && (
+                                                {(!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente) && (
                                                     <p className={styles.checklistAlert}>
-                                                        * Todos los documentos son obligatorios para continuar.
+                                                        * Todos los documentos y el número de ticket del cliente son obligatorios para continuar.
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "por_liquidar" && (
+                                    {["por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId) && (
                                         <div className={styles.liquidationContainer}>
                                             <div className={styles.liquidationCard}>
-                                                <div className={styles.liquidationHeader}>
-                                                    <div className={styles.liquidationIconBox}>
+                                                <div className={styles.liquidationHeader} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'linear-gradient(135deg, #065F46, #059669)', color: 'white' } : {}}>
+                                                    <div className={styles.liquidationIconBox} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)', color: 'white' } : {}}>
                                                         <Calculator size={32} />
                                                     </div>
                                                     <div className={styles.liquidationTitles}>
-                                                        <h3>Liquidación Final de Servicio</h3>
-                                                        <span>Cálculo automático del saldo pendiente para el técnico</span>
+                                                        <h3 style={ticketData.estadoId === "ticket_cerrado" ? { color: 'white' } : {}}>
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidación Final de Servicio"}
+                                                        </h3>
+                                                        <span style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la información financiera ha sido auditada y cerrada." : "Cálculo automático del saldo pendiente para el técnico"}
+                                                        </span>
                                                     </div>
                                                     <div className={styles.liquidationTotalBadge}>
                                                         S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
@@ -1410,14 +1487,19 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
 
                                                     <div className={styles.liquidationSummary}>
                                                         <div className={styles.summaryRow}>
-                                                            <span>SALDO A DEPOSITAR:</span>
-                                                            <strong>S/ {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+                                                            <span>{ticketData.estadoId === "ticket_cerrado" ? "TOTAL TRANSFERIDO:" : "SALDO A DEPOSITAR:"}</span>
+                                                            <strong>
+                                                                S/ {ticketData.estadoId === "ticket_cerrado"
+                                                                    ? (ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                    : ((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                }
+                                                            </strong>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <div className={styles.techBankDetailsLiquidation}>
-                                                    <h4>Datos de Pago del Técnico</h4>
+                                                    <h4>Datos de Pago del Técnico: {ticketData.tecnico?.nombre || 'No asignado'}</h4>
                                                     <div className={styles.bankGrid}>
                                                         <div className={styles.bankField}>
                                                             <strong>BANCO:</strong>
@@ -1431,87 +1513,99 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                             <strong>CCI:</strong>
                                                             <span>{ticketData.tecnico?.cci || '---'}</span>
                                                         </div>
+                                                        <div className={styles.bankField} style={{ display: 'flex', flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
+                                                            {ticketData.tecnico?.yape && (
+                                                                <div className={styles.miniWalletBadge} style={{ background: '#7C3AED' }}>
+                                                                    <span>Y</span>
+                                                                    <strong>{ticketData.tecnico.yape}</strong>
+                                                                </div>
+                                                            )}
+                                                            {ticketData.tecnico?.plin && (
+                                                                <div className={styles.miniWalletBadge} style={{ background: '#00D1FF' }}>
+                                                                    <span>P</span>
+                                                                    <strong>{ticketData.tecnico.plin}</strong>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                {userRole === 'admin' ? (
-                                                    <button
-                                                        className={styles.confirmFinalPaymentBtn}
-                                                        onClick={handleFinalLiquidationPay}
-                                                    >
-                                                        <DollarSign size={20} />
-                                                        CONFIRMAR DEPÓSITO DE SALDO FINAL
-                                                    </button>
+                                                <div className={styles.profitabilityLiquidationCard}>
+                                                    <div className={styles.profitHeader}>
+                                                        <Sparkles size={20} color="#F59E0B" />
+                                                        <h4>Resumen de Rentabilidad Final</h4>
+                                                    </div>
+
+                                                    <div className={styles.profitMainGrid}>
+                                                        <div className={styles.profitStat}>
+                                                            <span className={styles.statLabel}>INGRESO (CLIENTE)</span>
+                                                            <span className={styles.statValue}>S/ {(parseFloat(ticketData.montoFinal || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
+
+                                                        <div className={styles.profitStat}>
+                                                            <span className={styles.statLabel}>COSTO OPERATIVO</span>
+                                                            <span className={styles.statValue} style={{ color: '#EF4444' }}>
+                                                                - S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className={`${styles.profitStat} ${styles.highlightedStat}`}>
+                                                            <span className={styles.statLabel}>UTILIDAD BRUTA</span>
+                                                            <span className={styles.statValue} style={{ color: (parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) >= 0 ? '#10B981' : '#EF4444' }}>
+                                                                S/ {(parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className={styles.profitStat}>
+                                                            <span className={styles.statLabel}>MARGEN %</span>
+                                                            <span className={styles.percentBadge} style={{
+                                                                background: (parseFloat(ticketData.montoFinal || 0) > 0 && (((parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) / parseFloat(ticketData.montoFinal)) * 100) >= 55) ? '#DCFCE7' : '#FEE2E2',
+                                                                color: (parseFloat(ticketData.montoFinal || 0) > 0 && (((parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) / parseFloat(ticketData.montoFinal)) * 100) >= 55) ? '#166534' : '#991B1B'
+                                                            }}>
+                                                                {parseFloat(ticketData.montoFinal || 0) > 0
+                                                                    ? (((parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) / parseFloat(ticketData.montoFinal)) * 100).toFixed(1)
+                                                                    : '0.0'}%
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {ticketData.estadoId === "por_liquidar" ? (
+                                                    <>
+                                                        {userRole === 'admin' ? (
+                                                            <button
+                                                                className={styles.confirmFinalPaymentBtn}
+                                                                onClick={handleFinalLiquidationPay}
+                                                            >
+                                                                <DollarSign size={20} />
+                                                                CONFIRMAR DEPÓSITO DE SALDO FINAL
+                                                            </button>
+                                                        ) : (
+                                                            <div className={styles.adminOnlyMessage} style={{ marginBottom: '20px' }}>
+                                                                <Clock size={18} />
+                                                                <span>Esperando que el Administrador liquide el saldo</span>
+                                                            </div>
+                                                        )}
+
+                                                        <p className={styles.liquidationNote}>
+                                                            * Solo el Administrador puede cerrar financieramente el ticket mediante el depósito final.
+                                                        </p>
+                                                    </>
                                                 ) : (
-                                                    <div className={styles.adminOnlyMessage} style={{ marginBottom: '20px' }}>
-                                                        <Clock size={18} />
-                                                        <span>Esperando que el Administrador liquide el saldo</span>
+                                                    <div className={styles.closedFooterActions}>
+                                                        <div className={styles.closedStatusBanner}>
+                                                            <CheckCircle size={20} />
+                                                            TICKET CERRADO Y ARCHIVADO
+                                                        </div>
+                                                        <button
+                                                            onClick={onClose}
+                                                            className={styles.backToDashboardBtn}
+                                                        >
+                                                            <ArrowRight size={20} />
+                                                            VOLVER AL DASHBOARD
+                                                        </button>
                                                     </div>
                                                 )}
-
-                                                <p className={styles.liquidationNote}>
-                                                    * Solo el Administrador puede cerrar financieramente el ticket mediante el depósito final.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {ticketData.estadoId === "ticket_cerrado" && (
-                                        <div className={styles.stepPlaceholder}>
-                                            <div className={styles.closedTicketCard} style={{
-                                                background: 'linear-gradient(135deg, #F0FDF4, #DCFCE7)',
-                                                border: '2px solid #16A34A',
-                                                padding: '40px',
-                                                borderRadius: '24px',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                gap: '20px',
-                                                textAlign: 'center',
-                                                width: '100%',
-                                                boxShadow: '0 10px 30px rgba(22, 163, 74, 0.1)'
-                                            }}>
-                                                <div style={{
-                                                    width: '80px',
-                                                    height: '80px',
-                                                    borderRadius: '50%',
-                                                    background: '#16A34A',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: 'white',
-                                                    boxShadow: '0 8px 20px rgba(22, 163, 74, 0.3)'
-                                                }}>
-                                                    <CheckCircle size={40} />
-                                                </div>
-                                                <div>
-                                                    <h2 style={{ margin: 0, color: '#15803D', fontSize: '24px', fontWeight: 900 }}>TICKET CERRADO EXITOSAMENTE</h2>
-                                                    <p style={{ margin: '8px 0 0 0', color: '#166534', fontWeight: 600, opacity: 0.8 }}>
-                                                        Este proceso ha concluido. Toda la información financiera y operativa ha sido consolidada.
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={onClose}
-                                                    style={{
-                                                        marginTop: '10px',
-                                                        background: '#16A34A',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        padding: '16px 32px',
-                                                        borderRadius: '14px',
-                                                        fontWeight: 800,
-                                                        fontSize: '16px',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '12px',
-                                                        boxShadow: '0 6px 15px rgba(22, 163, 74, 0.2)',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                >
-                                                    <ArrowRight size={20} />
-                                                    FINALIZAR Y VOLVER AL DASHBOARD
-                                                </button>
                                             </div>
                                         </div>
                                     )}

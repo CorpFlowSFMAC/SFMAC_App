@@ -86,32 +86,47 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
 
     const quoteRef = useRef<HTMLDivElement>(null);
 
-    const handleDownloadPDF = async () => {
-        if (!quoteRef.current) return;
-        setIsExporting(true);
+    const handleDownloadPDF = () => {
+        return new Promise<void>((resolve) => {
+            if (!quoteRef.current) {
+                resolve();
+                return;
+            }
+            setIsExporting(true);
 
-        // Esperar un frame a que se rendericen los DIVs estáticos
-        setTimeout(async () => {
-            const element = quoteRef.current;
-            if (!element) return;
+            // Esperar un frame a que se rendericen los DIVs estáticos
+            setTimeout(async () => {
+                const element = quoteRef.current;
+                if (!element) {
+                    setIsExporting(false);
+                    resolve();
+                    return;
+                }
 
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                backgroundColor: "#ffffff"
-            });
+                try {
+                    const canvas = await html2canvas(element, {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: "#ffffff"
+                    });
 
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const imgProps = pdf.getImageProperties(imgData);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`Cotizacion_${ticketId || 'SINFIMAC'}.pdf`);
-            setIsExporting(false);
-        }, 300); // Un poco más de tiempo para estar seguros
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    pdf.save(`Cotizacion_${ticketId || 'SINFIMAC'}.pdf`);
+                } catch (err) {
+                    console.error("Error generating PDF:", err);
+                } finally {
+                    setIsExporting(false);
+                    resolve();
+                }
+            }, 300);
+        });
     };
 
     // Exponer la función de descarga al padre

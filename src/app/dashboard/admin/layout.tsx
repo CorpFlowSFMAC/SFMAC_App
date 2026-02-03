@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign } from 'lucide-react';
@@ -13,6 +13,19 @@ export default function AdminLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+        const role = localStorage.getItem("userRole");
+        setUserRole(role);
+    }, []);
+
+    // Prevent hydration mismatch by returning a consistent shell until mounted
+    const avatarLetter = isMounted && userRole === 'admin' ? 'A' : 'G';
+    const userName = isMounted && userRole === 'admin' ? 'Administrador' : 'Gestora Operativa';
+    const dashboardHref = isMounted && userRole === 'admin' ? "/dashboard/admin" : "/dashboard/gestor";
 
     return (
         <div className={styles.adminContainer}>
@@ -31,27 +44,25 @@ export default function AdminLayout({
 
                 <div className={styles.userProfileMini}>
                     <div className={styles.avatarCircle}>
-                        {typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' ? 'A' : 'G'}
+                        {avatarLetter}
                     </div>
                     <div className={styles.userMeta}>
-                        <span className={styles.userName}>{typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' ? 'Administrador' : 'Gestora Operativa'}</span>
+                        <span className={styles.userName}>{userName}</span>
                         <span className={styles.userStatus}>En Línea</span>
                     </div>
                 </div>
 
                 <nav className={styles.nav}>
                     {/* Dashboard Link for both roles, pointing to their respective home */}
-                    {typeof window !== 'undefined' && (
-                        <Link
-                            href={localStorage.getItem("userRole") === 'admin' ? "/dashboard/admin" : "/dashboard/gestor"}
-                            className={`${styles.navItem} ${pathname === '/dashboard/admin' || pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}
-                        >
-                            <LayoutDashboard size={20} />
-                            Inicio / Métricas
-                        </Link>
-                    )}
+                    <Link
+                        href={dashboardHref}
+                        className={`${styles.navItem} ${pathname === '/dashboard/admin' || pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}
+                    >
+                        <LayoutDashboard size={20} />
+                        Inicio / Métricas
+                    </Link>
 
-                    {typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' && (
+                    {isMounted && userRole === 'admin' && (
                         <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
                             <Users size={20} />
                             Gestión Clientes
@@ -73,7 +84,7 @@ export default function AdminLayout({
                         Pagos y Tesorería
                     </Link>
 
-                    {typeof window !== 'undefined' && localStorage.getItem("userRole") === 'admin' && (
+                    {isMounted && userRole === 'admin' && (
                         <div className={styles.navItem}>
                             <Settings size={20} />
                             Configuración

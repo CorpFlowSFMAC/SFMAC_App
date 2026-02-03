@@ -685,6 +685,96 @@
     box-shadow: 0 8px 30px rgba(255, 102, 0, 0.6);
 }
 
+/* Digital Wallets Selector */
+.walletsContainer {
+    margin-top: 1rem;
+}
+
+.sectionLabelMini {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.walletsSelector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.walletCard {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: white;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    transition: all 0.3s;
+}
+
+.walletBrandIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: white;
+    font-weight: 900;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.walletInfo {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.walletInfo label {
+    font-size: 0.6rem;
+    font-weight: 900;
+    color: #94A3B8;
+    margin-bottom: 2px;
+}
+
+.walletInfo input {
+    border: none !important;
+    padding: 0 !important;
+    font-size: 0.85rem !important;
+    font-weight: 800 !important;
+    background: transparent !important;
+    width: 100%;
+    outline: none;
+}
+
+.walletInfo input:focus {
+    box-shadow: none !important;
+}
+
+.walletActiveYape {
+    border-color: #7C3AED;
+    background: rgba(124, 58, 237, 0.05);
+}
+
+.walletActiveYape label {
+    color: #7C3AED;
+}
+
+.walletActivePlin {
+    border-color: #00D1FF;
+    background: rgba(0, 209, 255, 0.05);
+}
+
+.walletActivePlin label {
+    color: #00D1FF;
+}
+
 @media (max-width: 1200px) {
     .drawer {
         width: 70%;

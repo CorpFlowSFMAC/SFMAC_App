@@ -92,7 +92,12 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign }: 
                 celular: selectedTechnician.celular,
                 zona: selectedTechnician.zona,
                 especialidades: selectedTechnician.especialidades,
-                foto: selectedTechnician.foto
+                foto: selectedTechnician.foto,
+                banco: selectedTechnician.banco,
+                cuentaBancaria: selectedTechnician.cuentaBancaria,
+                cci: selectedTechnician.cci,
+                yape: selectedTechnician.yape,
+                plin: selectedTechnician.plin
             },
             costoVisita: visita,
             fechaAsignacion: new Date().toISOString()
