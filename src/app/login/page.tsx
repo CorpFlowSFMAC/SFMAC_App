@@ -5,6 +5,7 @@ import Image from "next/image";
 import { User, Lock, ArrowRight, Loader } from "lucide-react";
 import styles from "./login.module.css";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 // Mock Motivational Quotes
 const QUOTES = [
@@ -33,28 +34,30 @@ export default function LoginPage() {
         setIsLoading(true);
         setError("");
 
-        // Simulate API call
-        setTimeout(() => {
+        try {
             const { username, password } = formData;
+            const email = username.includes("@") ? username : `${username}@sinfimac.com`;
 
-            // Credenciales maestras
-            const isValidPassword = password === "123456";
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
 
-            if (username.toLowerCase() === "admin" && isValidPassword) {
-                // Admin privileges
-                document.cookie = "userRole=admin; path=/; max-age=86400"; // 24h
-                localStorage.setItem("userRole", "admin");
-                router.push("/dashboard/admin");
-            } else if (username.toLowerCase() === "gestora" && isValidPassword) {
-                // Gestora privileges
-                document.cookie = "userRole=gestor; path=/; max-age=86400"; // 24h
-                localStorage.setItem("userRole", "gestor");
-                router.push("/dashboard/gestor");
-            } else {
-                setError("Credenciales inválidas. Usuario o contraseña incorrectos.");
-                setIsLoading(false);
+            if (authError) throw authError;
+
+            if (data.user) {
+                // Get role from user metadata (provided during sign up or admin managed)
+                const role = data.user.user_metadata?.role || (username.toLowerCase() === 'admin' ? 'admin' : 'gestor');
+
+                document.cookie = `userRole=${role}; path=/; max-age=86400`;
+                localStorage.setItem("userRole", role);
+
+                router.push(role === 'admin' ? "/dashboard/admin" : "/dashboard/gestor");
             }
-        }, 1500);
+        } catch (err: any) {
+            setError(err.message || "Error al iniciar sesión.");
+            setIsLoading(false);
+        }
     };
 
     return (
