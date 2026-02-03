@@ -1,211 +1,458 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import {
-    Ticket, Clock, CheckCircle, Star, Timer,
-    TrendingUp, TrendingDown, Users, BarChart3,
-    PieChart, Sparkles, MapPin, Zap
-} from "lucide-react";
-import styles from "./gestor.module.css";
+import { useState, useEffect } from "react";
+import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle } from "lucide-react";
+import CreateTicketWizard from "../../admin/tickets/CreateTicketWizard";
+import TicketWindow from "../../admin/tickets/TicketWindow";
+import styles from "../../admin/tickets/page.module.css";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { normalizeStateId, TICKET_STATES } from "@/lib/ticketStates";
-import { SERVICE_TYPES } from "@/lib/serviceTypes";
+import { getServiceById } from "@/lib/serviceTypes";
+import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 
-export default function GestorDashboard() {
-    const [tickets] = useLocalStorage<any[]>("tickets", []);
-    const [mounted, setMounted] = useState(false);
+// Hook para calcular tiempo transcurrido
+const useTicketAge = (createdAt: string) => {
+    const [timeRemaining, setTimeRemaining] = useState("");
+    const [slaStatus, setSlaStatus] = useState<"ok" | "warning" | "critical" | "expired">("ok");
+    const SLA_HOURS = 72;
 
     useEffect(() => {
-        setMounted(true);
-    }, []);
+        const updateTime = () => {
+            const created = new Date(createdAt);
+            const now = new Date();
+            const slaLimit = new Date(created.getTime() + (SLA_HOURS * 60 * 60 * 1000));
+            const diff = slaLimit.getTime() - now.getTime();
 
-    // 🎯 CÁLCULO DE MÉTRICAS SOLICITADAS
-    const metrics = useMemo(() => {
-        const total = tickets.length;
-        if (total === 0) return {
-            nuevos: 0,
-            avgResolution: 0,
-            firstContactRate: 0,
-            satisfaction: 0,
-            avgWait: 0
+            const hours = Math.floor(Math.abs(diff) / (1000 * 60 * 60));
+            const minutes = Math.floor((Math.abs(diff) % (1000 * 60 * 60)) / (1000 * 60));
+
+            if (diff > 0) {
+                setTimeRemaining(`${hours}h ${minutes}m`);
+
+                // Alertas de proximidad
+                const hoursPassed = SLA_HOURS - hours;
+                if (hoursPassed >= 60) {
+                    setSlaStatus("critical"); // Faltan < 12h
+                } else if (hoursPassed >= 48) {
+                    setSlaStatus("warning"); // Faltan < 24h
+                } else {
+                    setSlaStatus("ok");
+                }
+            } else {
+                setTimeRemaining(`Expirado (${hours}h ${minutes}m)`);
+                setSlaStatus("expired");
+            }
         };
 
-        const nuevos = tickets.filter(t => normalizeStateId(t.estadoId) === "nuevo").length;
+        updateTime();
+        const interval = setInterval(updateTime, 60000);
 
-        // Tiempo promedio de resolución (en horas)
-        const closedTickets = tickets.filter(t => normalizeStateId(t.estadoId) === "ticket_cerrado");
-        const resolutionTimes = closedTickets.map(t => {
-            const start = new Date(t.createdAt || t.fechaCreacion).getTime();
-            const end = new Date(t.fechaPagoFinal || t.historial?.find((h: any) => normalizeStateId(h.estadoId) === "ticket_cerrado")?.fecha || Date.now()).getTime();
-            return (end - start) / (1000 * 60 * 60);
-        });
-        const avgResolution = resolutionTimes.length > 0 ? resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length : 0;
+        return () => clearInterval(interval);
+    }, [createdAt]);
 
-        // Tiempo promedio de espera (primer contacto/asignación)
-        const assignedTickets = tickets.filter(t => t.historial?.some((h: any) => normalizeStateId(h.estadoId) === "asignado"));
-        const waitTimes = assignedTickets.map(t => {
-            const start = new Date(t.createdAt || t.fechaCreacion).getTime();
-            const asignadoStep = t.historial?.find((h: any) => normalizeStateId(h.estadoId) === "asignado");
-            const end = new Date(asignadoStep?.fecha || Date.now()).getTime();
-            return (end - start) / (1000 * 60 * 60);
-        });
-        const avgWait = waitTimes.length > 0 ? waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length : 0;
+    return { timeRemaining, slaStatus };
+};
 
-        // Tasa de resolución al primer contacto (simulado: tickets que no tuvieron ajustes)
-        const firstContactCount = closedTickets.filter(t => !t.historial?.some((h: any) => h.accion?.toLowerCase().includes("ajuste") || h.accion?.toLowerCase().includes("corregir"))).length;
-        const firstContactRate = closedTickets.length > 0 ? (firstContactCount / closedTickets.length) * 100 : 0;
+export default function GestorDashboard() {
+    const [tickets, setTickets] = useLocalStorage<any[]>("tickets", []);
+    const [showWizard, setShowWizard] = useState(false);
+    const [openTickets, setOpenTickets] = useState<any[]>([]);
+    const [viewMode, setViewMode] = useState<"active" | "closed">("active");
 
-        // Satisfacción del cliente (Simulado 4.2 - 5.0)
-        const satisfaction = total > 0 ? 4.8 : 0;
 
-        return { nuevos, avgResolution, firstContactRate, satisfaction, avgWait, total };
-    }, [tickets]);
+    const handleCreateTicket = (newTicket: any) => {
+        setTickets([{ ...newTicket, createdAt: new Date().toISOString() }, ...tickets]);
+    };
 
-    // Data para el gráfico de barras: Tickets por Tipo de Servicio
-    const serviceDistribution = useMemo(() => {
-        const dist: any = {};
-        SERVICE_TYPES.forEach(s => dist[s.id] = { nombre: s.nombreCorto, count: 0, color: s.color });
-        tickets.forEach(t => {
-            if (dist[t.tipoServicio]) dist[t.tipoServicio].count++;
-        });
-        const values = Object.values(dist);
-        const max = Math.max(...values.map((v: any) => v.count), 1);
-        return values.map((v: any) => ({ ...v, height: (v.count / max) * 100 }));
-    }, [tickets]);
+    const [searchTerm, setSearchTerm] = useState("");
 
-    // Distribución por Estados (Top 4)
-    const statusStats = useMemo(() => {
-        const stats = TICKET_STATES.slice(0, 5).map(s => ({
-            id: s.id,
-            nombre: s.nombreCorto,
-            count: tickets.filter(t => normalizeStateId(t.estadoId) === s.id).length,
-            color: s.color
-        })).sort((a, b) => b.count - a.count);
-        return stats;
-    }, [tickets]);
+    // 🛠️ REPARACIÓN/SINCRONIZACIÓN AUTOMÁTICA
+    useEffect(() => {
+        if (tickets.length > 0) {
+            let hasChanges = false;
+            const updatedTickets = tickets.map((t: any) => {
+                const savedState = localStorage.getItem(`ticket_state_${t.id}`);
+                if (savedState) {
+                    try {
+                        const parsed = JSON.parse(savedState);
+                        const normalizedMaster = normalizeStateId(t.estadoId);
+                        const normalizedSaved = normalizeStateId(parsed.estadoId);
 
-    if (!mounted) return null;
+                        if (normalizedMaster !== normalizedSaved) {
+                            hasChanges = true;
+                            return { ...t, ...parsed, estadoId: normalizedSaved };
+                        }
+                    } catch (e) {
+                        console.error("Error parsing saved ticket state for sync:", e);
+                    }
+                }
+                const normId = normalizeStateId(t.estadoId);
+                if (t.estadoId !== normId) {
+                    hasChanges = true;
+                    return { ...t, estadoId: normId };
+                }
+                return t;
+            });
+
+            if (hasChanges) {
+                setTickets(updatedTickets);
+            }
+        }
+    }, [tickets.length]);
+
+    const stats = {
+        total: tickets.length,
+        nuevos: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "nuevo").length,
+        enProceso: tickets.filter((t: any) => {
+            const sid = normalizeStateId(t.estadoId);
+            return !["nuevo", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+        }).length,
+        completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
+    };
+
+    const filteredTickets = tickets.filter((t: any) => {
+        const isClosed = normalizeStateId(t.estadoId) === "ticket_cerrado";
+        const matchesSearch =
+            t.cliente?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            t.descripcionProblema?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            t.numeroTicketCliente?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        if (viewMode === "active") return !isClosed && matchesSearch;
+        return isClosed && matchesSearch;
+    });
 
     return (
-        <div className={styles.container}>
-            {/* ✨ HEADER MOTIVACIONAL SINFIMAC */}
-            <header className={styles.header}>
-                <div className={styles.welcomeText}>
-                    <span>BIENVENIDO AL CENTRO DE CONTROL</span>
-                    <h1>Hola, Gestora Operativa 👋</h1>
+        <div className={styles.page}>
+            <div className={styles.pageHeader}>
+                <div className={styles.headerLeft}>
+                    <Sparkles className={styles.sparkleIcon} size={22} />
+                    <div>
+                        <h1 className={styles.pageTitle}>Panel de Control Operativo</h1>
+                        <p className={styles.pageSubtitle}>
+                            Gestora: {viewMode === "active" ? `${stats.total - stats.completados} activos` : `${stats.completados} cerrados`} • {stats.nuevos} nuevos
+                        </p>
+                    </div>
                 </div>
-                <div className={styles.quote}>
-                    "La eficiencia en un ticket es el alivio de un cliente. ¡Hagamos que hoy todo fluya!"
-                </div>
-            </header>
-
-            {/* 📊 GRID DE MÉTRICAS CLAVE (KPIs SOLICITADOS) */}
-            <div className={styles.metricsGrid}>
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon}><Ticket size={20} /></div>
-                    <span className={styles.metricTitle}>Tickets Nuevos</span>
-                    <div className={styles.metricValue}>{metrics.nuevos}</div>
-                    <span className={`${styles.metricTrend} ${styles.trendUp}`}><TrendingUp size={12} /> +12% vol.</span>
-                </div>
-
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#EEF2FF', color: '#6366F1' }}><Timer size={20} /></div>
-                    <span className={styles.metricTitle}>Promedio Resolución</span>
-                    <div className={styles.metricValue}>{metrics.avgResolution.toFixed(1)}h</div>
-                    <span className={`${styles.metricTrend} ${styles.trendDown}`}><TrendingDown size={12} /> -2h vs ayer</span>
+                <div className={styles.viewToggle}>
+                    <button
+                        className={`${styles.toggleBtn} ${viewMode === "active" ? styles.toggleBtnActive : ""}`}
+                        onClick={() => setViewMode("active")}
+                    >
+                        En Proceso
+                    </button>
+                    <button
+                        className={`${styles.toggleBtn} ${viewMode === "closed" ? styles.toggleBtnActive : ""}`}
+                        onClick={() => setViewMode("closed")}
+                    >
+                        Cerrados
+                    </button>
                 </div>
 
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#ECFDF5', color: '#10B981' }}><CheckCircle size={20} /></div>
-                    <span className={styles.metricTitle}>Resolución 1er Contacto</span>
-                    <div className={styles.metricValue}>{metrics.firstContactRate.toFixed(0)}%</div>
-                    <span className={`${styles.metricTrend} ${styles.trendUp}`}><TrendingUp size={12} /> Alta Eficiencia</span>
-                </div>
-
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#FEF3C7', color: '#D97706' }}><Star size={20} /></div>
-                    <span className={styles.metricTitle}>Satisfacción Cliente</span>
-                    <div className={styles.metricValue}>{metrics.satisfaction.toFixed(1)} / 5</div>
-                    <span className={`${styles.metricTrend} ${styles.trendUp}`}><TrendingUp size={12} /> NPS: 92</span>
-                </div>
-
-                <div className={styles.metricCard}>
-                    <div className={styles.metricIcon} style={{ background: '#FFF1F2', color: '#E11D48' }}><Timer size={20} /></div>
-                    <span className={styles.metricTitle}>T. Promedio Espera</span>
-                    <div className={styles.metricValue}>{metrics.avgWait.toFixed(1)}h</div>
-                    <span className={`${styles.metricTrend} ${styles.trendDown}`}><TrendingDown size={12} /> Objetivo: {"<"}3h</span>
-                </div>
+                <button
+                    className={styles.createBtn}
+                    onClick={() => setShowWizard(true)}
+                >
+                    <Plus size={16} />
+                    Nuevo Ticket
+                </button>
             </div>
 
-            {/* 📈 SECCIÓN DE GRÁFICOS (ESTILO MODELO ADJUNTO) */}
-            <div className={styles.chartsGrid}>
-                {/* Distribución por Categoría de Servicio */}
-                <div className={styles.chartCard}>
-                    <div className={styles.chartTitle}>
-                        <BarChart3 size={20} color="#FF6600" />
-                        Tickets por Tipo de Servicio
+            <div className={styles.statsGrid}>
+                <div className={styles.statCard} style={{ '--card-color': '#8B5CF6' } as any}>
+                    <div className={styles.statIcon}>
+                        <Clock size={16} />
                     </div>
-                    <div className={styles.barChart}>
-                        {serviceDistribution.map((s: any) => (
-                            <div key={s.nombre} className={styles.barWrapper}>
-                                <div
-                                    className={styles.bar}
-                                    style={{
-                                        height: `${s.height}%`,
-                                        background: `linear-gradient(180deg, ${s.color}, ${s.color}80)`
-                                    }}
-                                >
-                                    <span className={styles.barValue}>{s.count}</span>
-                                </div>
-                                <span className={styles.barLabel}>{s.nombre}</span>
-                            </div>
-                        ))}
+                    <div className={styles.statContent}>
+                        <span className={styles.statValue}>{stats.nuevos}</span>
+                        <span className={styles.statLabel}>Nuevos</span>
                     </div>
                 </div>
 
-                {/* Estado Actual de la Gestión */}
-                <div className={styles.chartCard}>
-                    <div className={styles.chartTitle}>
-                        <PieChart size={20} color="#FF6600" />
-                        Estado de la Gestión
+                <div className={styles.statCard} style={{ '--card-color': '#F59E0B' } as any}>
+                    <div className={styles.statIcon}>
+                        <Zap size={16} />
                     </div>
-                    <div className={styles.donutContainer}>
-                        {/* Donut Legend (Simplified Visual) */}
-                        <div className={styles.donutLegend}>
-                            {statusStats.map(s => (
-                                <div key={s.id} className={styles.legendItem}>
-                                    <div>
-                                        <span className={styles.legendColor} style={{ background: s.color }}></span>
-                                        <strong>{s.nombre}</strong>
-                                    </div>
-                                    <span>{s.count} tickets</span>
-                                </div>
-                            ))}
-                        </div>
+                    <div className={styles.statContent}>
+                        <span className={styles.statValue}>{stats.enProceso}</span>
+                        <span className={styles.statLabel}>En proceso</span>
+                    </div>
+                </div>
+
+                <div className={styles.statCard} style={{ '--card-color': '#10B981' } as any}>
+                    <div className={styles.statIcon}>
+                        <CheckCircle2 size={16} />
+                    </div>
+                    <div className={styles.statContent}>
+                        <span className={styles.statValue}>{stats.completados}</span>
+                        <span className={styles.statLabel}>Completados</span>
                     </div>
                 </div>
             </div>
 
-            {/* 📋 ACTIVIDAD RECIENTE */}
-            <div className={styles.activityCard}>
-                <div className={styles.chartTitle}>
-                    <Sparkles size={20} color="#FF6600" />
-                    Últimas Acciones Operativas
-                </div>
-                <div className={styles.activityList}>
-                    {tickets.slice(0, 4).map((t: any) => (
-                        <div key={t.id} className={styles.activityItem}>
-                            <div className={styles.activityIcon}>
-                                <Zap size={14} />
+            <div className={styles.kanbanFlow}>
+                {TICKET_STATES.filter(s => s.order <= 13).map((estado, index, array) => {
+                    const IconComponent = estado.icon;
+                    const ticketsEnEstado = tickets.filter((t: any) => normalizeStateId(t.estadoId) === estado.id).length;
+
+                    return (
+                        <div key={estado.id} className={styles.flowContainer}>
+                            <div
+                                className={styles.flowStep}
+                                style={{ '--step-color': estado.color } as any}
+                            >
+                                <div className={styles.flowIcon}>
+                                    <IconComponent size={14} />
+                                </div>
+                                <div className={styles.flowInfo}>
+                                    <span className={styles.flowName}>{estado.nombreCorto}</span>
+                                    <span className={styles.flowCount}>{ticketsEnEstado}</span>
+                                </div>
                             </div>
-                            <div className={styles.activityContent}>
-                                <strong>{t.cliente?.nombre} - {t.sede?.nombre}</strong>
-                                <span>Ticket {t.numeroTicketCliente || t.id.slice(-6)}: {t.descripcionProblema?.substring(0, 100)}...</span>
-                            </div>
+                            {index < array.length - 1 && (
+                                <ArrowRight size={12} className={styles.flowArrow} />
+                            )}
                         </div>
-                    ))}
+                    );
+                })}
+            </div>
+
+            <div className={styles.toolbar}>
+                <div className={styles.searchBox}>
+                    <Search size={16} />
+                    <input
+                        type="text"
+                        placeholder="Buscar tickets..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </div>
+                <button className={styles.filterBtn}>
+                    <Filter size={16} />
+                    Filtros
+                </button>
+            </div>
+
+            <div className={styles.ticketsList}>
+                {filteredTickets.length === 0 ? (
+                    <div className={styles.emptyState}>
+                        <div className={styles.emptyIcon}>
+                            <Sparkles size={40} />
+                        </div>
+                        <h3>¡Comienza tu gestión operativa!</h3>
+                        <p>No hay tickets para mostrar en este momento.</p>
+                        {viewMode === 'active' && (
+                            <button
+                                className={styles.createBtnEmpty}
+                                onClick={() => setShowWizard(true)}
+                            >
+                                <Plus size={18} />
+                                Crear Ticket
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        {viewMode === "active" ? (
+                            <div className={styles.ticketsGrid}>
+                                {filteredTickets.map((ticket: any) => {
+                                    const service = getServiceById(ticket.tipoServicio);
+                                    return (
+                                        <TicketCard
+                                            key={ticket.id}
+                                            ticket={ticket}
+                                            service={service}
+                                            ServiceIcon={service?.icon}
+                                            onTicketClick={() => {
+                                                if (!openTickets.find(t => t.id === ticket.id)) {
+                                                    setOpenTickets([...openTickets, ticket]);
+                                                }
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className={styles.historyTableContainer}>
+                                <table className={styles.historyTable}>
+                                    <thead>
+                                        <tr>
+                                            <th>ID / FECHA</th>
+                                            <th>CLIENTE / SEDE</th>
+                                            <th>SERVICIO</th>
+                                            <th>LIQUIDACIÓN</th>
+                                            <th>GESTORA</th>
+                                            <th>ACCIONES</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredTickets.map((ticket: any) => (
+                                            <TicketRow
+                                                key={ticket.id}
+                                                ticket={ticket}
+                                                onTicketClick={() => {
+                                                    if (!openTickets.find(t => t.id === ticket.id)) {
+                                                        setOpenTickets([...openTickets, ticket]);
+                                                    }
+                                                }}
+                                            />
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {
+                showWizard && (
+                    <CreateTicketWizard
+                        onClose={() => setShowWizard(false)}
+                        onCreateTicket={handleCreateTicket}
+                    />
+                )
+            }
+
+            {
+                openTickets.map((ticket, index) => (
+                    <TicketWindow
+                        key={ticket.id}
+                        ticket={ticket}
+                        index={index}
+                        onClose={() => setOpenTickets(openTickets.filter(t => t.id !== ticket.id))}
+                    />
+                ))
+            }
+        </div >
+    );
+}
+
+function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
+    const slaColors = {
+        ok: "#10B981",
+        warning: "#F59E0B",
+        critical: "#EF4444",
+        expired: "#b91c1c"
+    };
+
+    const { timeRemaining, slaStatus } = useTicketAge(ticket.createdAt || new Date().toISOString());
+
+    return (
+        <div className={styles.ticketCard} onClick={onTicketClick} style={{ cursor: 'pointer' }}>
+            <div className={styles.ticketHeader}>
+                <span className={styles.ticketId}>
+                    {ticket.numeroTicketCliente ? ticket.numeroTicketCliente : `#${ticket.id.slice(-6)}`}
+                </span>
+                {slaStatus === "expired" && (
+                    <div className={styles.expiredBadge}>SLA VENCIDO</div>
+                )}
+            </div>
+
+            <div className={styles.ticketBody}>
+                <div className={styles.clienteInfo}>
+                    <div
+                        className={styles.clienteLogo}
+                        style={{ background: ticket.cliente?.color || '#8B5CF6' }}
+                    >
+                        {ticket.cliente?.nombre?.substring(0, 2) || 'TK'}
+                    </div>
+                    <div className={styles.clienteText}>
+                        <h4>{ticket.cliente?.nombre || 'Sin cliente'}</h4>
+                        <p>{ticket.sede?.nombre || 'Sin sede'}</p>
+                    </div>
+                </div>
+
+                {ticket.sede?.direccion && (
+                    <div className={styles.direccionInfo}>
+                        <MapPin size={12} />
+                        <span>{ticket.sede.direccion}</span>
+                    </div>
+                )}
+
+                {ServiceIcon && (
+                    <div
+                        className={styles.serviceTag}
+                        style={{
+                            background: `${service.color}15`,
+                            borderColor: service.color
+                        }}
+                    >
+                        <ServiceIcon size={12} color={service.color} />
+                        <span style={{ color: service.color }}>
+                            {service.nombre}
+                        </span>
+                    </div>
+                )}
+
+                <p className={styles.descripcion}>
+                    {ticket.descripcionProblema?.substring(0, 70)}
+                    {ticket.descripcionProblema?.length > 70 && '...'}
+                </p>
+            </div>
+
+            <div
+                className={styles.ticketFooter}
+                style={{
+                    borderTopColor: slaColors[slaStatus],
+                    background: slaStatus === "expired" ? "#fef2f2" : "transparent"
+                }}
+            >
+                <div className={styles.slaInfo}>
+                    <Clock size={12} style={{ color: slaColors[slaStatus] }} />
+                    <div className={styles.slaTextContainer}>
+                        <span className={styles.slaLabel}>Tiempo Restante:</span>
+                        <span className={styles.slaValue} style={{ color: slaColors[slaStatus] }}>
+                            {timeRemaining}
+                        </span>
+                    </div>
+                </div>
+                {slaStatus !== "ok" && (
+                    <AlertCircle size={14} style={{ color: slaColors[slaStatus] }} />
+                )}
             </div>
         </div>
+    );
+}
+
+function TicketRow({ ticket, onTicketClick }: any) {
+    const service = getServiceById(ticket.tipoServicio);
+    const ServiceIcon = service?.icon;
+    const fechaCierre = ticket.fechaPagoFinal ? new Date(ticket.fechaPagoFinal).toLocaleDateString() : '---';
+    const montoTotal = (parseFloat(ticket.costoManoObra || 0) + parseFloat(ticket.costoMateriales || 0));
+
+    return (
+        <tr className={styles.historyRow} onClick={onTicketClick}>
+            <td>
+                <div className={styles.rowIdCol}>
+                    <span className={styles.rowTicketId}>{ticket.numeroTicketCliente || `#${ticket.id.slice(-6)}`}</span>
+                    <span className={styles.rowDate}>{fechaCierre}</span>
+                </div>
+            </td>
+            <td>
+                <div className={styles.rowClientCol}>
+                    <strong className={styles.rowClientName}>{ticket.cliente?.nombre}</strong>
+                    <span className={styles.rowSedeName}>{ticket.sede?.nombre}</span>
+                </div>
+            </td>
+            <td>
+                <div className={styles.rowServiceTag} style={{ background: `${service?.color}15`, color: service?.color }}>
+                    {ServiceIcon && <ServiceIcon size={12} />}
+                    <span>{service?.nombre}</span>
+                </div>
+            </td>
+            <td>
+                <div className={styles.rowLiquidationCol}>
+                    <span className={styles.rowAmount}>S/ {montoTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                    <span className={styles.rowStatusLabel}>Liquidado</span>
+                </div>
+            </td>
+            <td>
+                <span className={styles.rowGestora}>{ticket.historial?.[0]?.usuario || '---'}</span>
+            </td>
+            <td>
+                <button className={styles.rowActionBtn}>
+                    <ArrowRight size={16} />
+                </button>
+            </td>
+        </tr>
     );
 }
