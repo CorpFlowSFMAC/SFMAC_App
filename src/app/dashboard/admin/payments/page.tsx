@@ -31,8 +31,10 @@ interface PaymentRequest {
     tecnico: {
         nombre: string;
         banco: string;
-        cuentaBancaria: string;
+        numeroCuenta: string;
         cci: string;
+        yape?: string;
+        plin?: string;
     };
     montoPactado: number;
     montoSolicitado: number;
@@ -78,10 +80,12 @@ export default function PaymentsPage() {
                             cliente: ticket.cliente?.nombre || 'MiBanco',
                             sede: ticket.sede?.nombre || 'Sede Central',
                             tecnico: {
-                                nombre: ticket.tecnico?.nombre || 'Sin asignar',
+                                nombre: `${ticket.tecnico?.nombre || ''} ${ticket.tecnico?.apellido || ''}`.trim() || 'Sin asignar',
                                 banco: ticket.tecnico?.banco || 'BCP',
-                                cuentaBancaria: ticket.tecnico?.cuentaBancaria || '---',
-                                cci: ticket.tecnico?.cci || '---'
+                                numeroCuenta: ticket.tecnico?.numeroCuenta || '---',
+                                cci: ticket.tecnico?.cci || '---',
+                                yape: ticket.tecnico?.yape,
+                                plin: ticket.tecnico?.plin
                             },
                             montoPactado: costoVisita,
                             montoSolicitado: costoVisita,
@@ -105,10 +109,12 @@ export default function PaymentsPage() {
                             cliente: ticket.cliente?.nombre || 'MiBanco',
                             sede: ticket.sede?.nombre || 'Sede Central',
                             tecnico: {
-                                nombre: ticket.tecnico?.nombre || 'Sin asignar',
+                                nombre: `${ticket.tecnico?.nombre || ''} ${ticket.tecnico?.apellido || ''}`.trim() || 'Sin asignar',
                                 banco: ticket.tecnico?.banco || 'BCP',
-                                cuentaBancaria: ticket.tecnico?.cuentaBancaria || '---',
-                                cci: ticket.tecnico?.cci || '---'
+                                numeroCuenta: ticket.tecnico?.numeroCuenta || '---',
+                                cci: ticket.tecnico?.cci || '---',
+                                yape: ticket.tecnico?.yape,
+                                plin: ticket.tecnico?.plin
                             },
                             montoPactado: montoPactado,
                             montoSolicitado: adelanto,
@@ -130,10 +136,12 @@ export default function PaymentsPage() {
                             cliente: ticket.cliente?.nombre || 'MiBanco',
                             sede: ticket.sede?.nombre || 'Sede Central',
                             tecnico: {
-                                nombre: ticket.tecnico?.nombre || 'Sin asignar',
+                                nombre: `${ticket.tecnico?.nombre || ''} ${ticket.tecnico?.apellido || ''}`.trim() || 'Sin asignar',
                                 banco: ticket.tecnico?.banco || 'BCP',
-                                cuentaBancaria: ticket.tecnico?.cuentaBancaria || '---',
-                                cci: ticket.tecnico?.cci || '---'
+                                numeroCuenta: ticket.tecnico?.numeroCuenta || '---',
+                                cci: ticket.tecnico?.cci || '---',
+                                yape: ticket.tecnico?.yape,
+                                plin: ticket.tecnico?.plin
                             },
                             montoPactado: montoPactado,
                             montoSolicitado: ticket.solicitudAdelantoExtra.monto,
@@ -171,10 +179,12 @@ export default function PaymentsPage() {
                                 cliente: ticket.cliente?.nombre || 'MiBanco',
                                 sede: ticket.sede?.nombre || 'Sede Central',
                                 tecnico: {
-                                    nombre: ticket.tecnico?.nombre || 'Sin asignar',
+                                    nombre: `${ticket.tecnico?.nombre || ''} ${ticket.tecnico?.apellido || ''}`.trim() || 'Sin asignar',
                                     banco: ticket.tecnico?.banco || 'BCP',
-                                    cuentaBancaria: ticket.tecnico?.cuentaBancaria || '---',
-                                    cci: ticket.tecnico?.cci || '---'
+                                    numeroCuenta: ticket.tecnico?.numeroCuenta || '---',
+                                    cci: ticket.tecnico?.cci || '---',
+                                    yape: ticket.tecnico?.yape,
+                                    plin: ticket.tecnico?.plin
                                 },
                                 montoPactado: montoPactado,
                                 montoSolicitado: montoMostrado,
@@ -381,9 +391,15 @@ export default function PaymentsPage() {
                                                     <span className={styles.techName}>{req.tecnico.nombre}</span>
                                                     <div className={styles.techAccount}>
                                                         <CreditCard size={12} />
-                                                        <span>{req.tecnico.banco}: {req.tecnico.cuentaBancaria}</span>
+                                                        <span>{req.tecnico.banco}: {req.tecnico.numeroCuenta}</span>
                                                     </div>
-                                                    <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>CCI: {req.tecnico.cci}</span>
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>CCI: {req.tecnico.cci}</span>
+                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                            {req.tecnico.yape && <span title={`Yape: ${req.tecnico.yape}`} style={{ fontSize: '0.65rem', color: '#7C3AED', fontWeight: 800 }}>[Y]</span>}
+                                                            {req.tecnico.plin && <span title={`Plin: ${req.tecnico.plin}`} style={{ fontSize: '0.65rem', color: '#00D1FF', fontWeight: 800 }}>[P]</span>}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td>
