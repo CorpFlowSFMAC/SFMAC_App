@@ -16,7 +16,8 @@ export function middleware(request: NextRequest) {
             // Permitir a la gestora entrar a Tickets, Técnicos y Pagos
             const isAllowedPath = pathname.startsWith('/dashboard/admin/tickets') ||
                 pathname.startsWith('/dashboard/admin/technicians') ||
-                pathname.startsWith('/dashboard/admin/payments');
+                pathname.startsWith('/dashboard/admin/payments') ||
+                pathname.startsWith('/dashboard/admin/reportes');
 
             if (!isAllowedPath) {
                 return NextResponse.redirect(new URL('/dashboard/gestor', request.url));

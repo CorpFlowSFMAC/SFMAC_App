@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3 } from 'lucide-react';
 import styles from "./admin.module.css";
 import Image from "next/image";
 
@@ -38,6 +38,8 @@ export default function AdminLayout({
                         width={40}
                         height={40}
                         style={{ objectFit: "contain" }}
+                        unoptimized
+                        priority
                     />
                     <span style={{ fontWeight: "bold", fontSize: "1.2rem" }}>SINFIMAC</span>
                 </div>
@@ -82,6 +84,11 @@ export default function AdminLayout({
                     <Link href="/dashboard/admin/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
                         <DollarSign size={20} />
                         Pagos y Tesorería
+                    </Link>
+
+                    <Link href="/dashboard/admin/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
+                        <BarChart3 size={20} />
+                        Reportes de Eficiencia
                     </Link>
 
                     {isMounted && userRole === 'admin' && (

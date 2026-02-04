@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
     TrendingUp, TrendingDown, Users, Award, AlertTriangle,
     Clock, CheckCircle, XCircle, BarChart3, PieChart, Calendar,
@@ -14,7 +14,7 @@ export default function ReportesPage() {
     const [tickets] = useLocalStorage("tickets", []);
     const [technicians] = useLocalStorage("technicians", []);
     const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month" | "all">("month");
-    const [selectedMetric, setSelectedMetric] = useState<"sla" | "volume" | "efficiency">("sla");
+    const [selectedMetric, setSelectedMetric] = useState<"sla" | "volume" | "efficiency" | "finance">("sla");
 
     // 🎯 Calcular Eficiencia por Gestora
     const gestoras = useMemo(() => {
