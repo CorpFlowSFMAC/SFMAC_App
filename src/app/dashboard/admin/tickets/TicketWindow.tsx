@@ -86,7 +86,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
         }, 1000);
 
         // Auto-reparar datos del técnico si faltan
-        if (ticketData.tecnico?.id && (!ticketData.tecnico.banco || !ticketData.tecnico.cuentaBancaria)) {
+        if (ticketData.tecnico?.id && (!ticketData.tecnico.banco || !ticketData.tecnico.numeroCuenta || !ticketData.tecnico.cci)) {
             const storedTechs = localStorage.getItem('technicians');
             if (storedTechs) {
                 try {
@@ -98,9 +98,9 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                             tecnico: {
                                 ...prev.tecnico,
                                 banco: fullTech.banco,
-                                cuentaBancaria: fullTech.cuentaBancaria,
+                                numeroCuenta: fullTech.numeroCuenta,
                                 cci: fullTech.cci,
-                                yape: fullTech.yape || fullTech.numeroDoc, // Fallback si no tiene yape pero el número de doc es usualmente el id
+                                yape: fullTech.yape,
                                 plin: fullTech.plin
                             }
                         }));
@@ -654,16 +654,29 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                 <div className={styles.techBankDetails}>
                                                     <div className={styles.bankRow}>
                                                         <strong>Técnico:</strong>
-                                                        <span>{ticketData.tecnico?.nombre}</span>
+                                                        <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
                                                     </div>
                                                     <div className={styles.bankRow}>
                                                         <strong>Banco:</strong>
                                                         <span>{ticketData.tecnico?.banco || '---'}</span>
                                                     </div>
                                                     <div className={styles.bankRow}>
-                                                        <strong>Cuenta:</strong>
-                                                        <span>{ticketData.tecnico?.cuentaBancaria || '---'}</span>
+                                                        <strong>Nº Cuenta:</strong>
+                                                        <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                     </div>
+                                                    <div className={styles.bankRow}>
+                                                        <strong>CCI:</strong>
+                                                        <span>{ticketData.tecnico?.cci || '---'}</span>
+                                                    </div>
+                                                    {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
+                                                        <div className={styles.bankRow} style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
+                                                            <strong>Billeteras:</strong>
+                                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                                {ticketData.tecnico?.yape && <span style={{ color: '#7C3AED' }}>Yape: {ticketData.tecnico.yape}</span>}
+                                                                {ticketData.tecnico?.plin && <span style={{ color: '#00D1FF' }}>Plin: {ticketData.tecnico.plin}</span>}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {userRole === 'admin' ? (
@@ -1127,16 +1140,29 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                         <div className={styles.techBankDetails}>
                                                                             <div className={styles.bankRow}>
                                                                                 <strong>Técnico:</strong>
-                                                                                <span>{ticketData.tecnico?.nombre || '---'}</span>
+                                                                                <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
                                                                             </div>
                                                                             <div className={styles.bankRow}>
                                                                                 <strong>Banco:</strong>
-                                                                                <span>{ticketData.tecnico?.banco || 'BCP'}</span>
+                                                                                <span>{ticketData.tecnico?.banco || '---'}</span>
                                                                             </div>
                                                                             <div className={styles.bankRow}>
-                                                                                <strong>Cuenta:</strong>
-                                                                                <span>{ticketData.tecnico?.cuentaBancaria || '---'}</span>
+                                                                                <strong>Nº Cuenta:</strong>
+                                                                                <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                                             </div>
+                                                                            <div className={styles.bankRow}>
+                                                                                <strong>CCI:</strong>
+                                                                                <span>{ticketData.tecnico?.cci || '---'}</span>
+                                                                            </div>
+                                                                            {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
+                                                                                <div className={styles.bankRow} style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
+                                                                                    <strong>Billeteras:</strong>
+                                                                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                                                                        {ticketData.tecnico?.yape && <span style={{ color: '#7C3AED' }}>Yape: {ticketData.tecnico.yape}</span>}
+                                                                                        {ticketData.tecnico?.plin && <span style={{ color: '#00D1FF' }}>Plin: {ticketData.tecnico.plin}</span>}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
                                                                             <div className={styles.bankRow}>
                                                                                 <strong>Monto Base Re-pactado:</strong>
                                                                                 <span style={{ color: '#10B981', fontWeight: 800 }}>S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toFixed(2)}</span>
@@ -1505,7 +1531,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                 </div>
 
                                                 <div className={styles.techBankDetailsLiquidation}>
-                                                    <h4>Datos de Pago del Técnico: {ticketData.tecnico?.nombre || 'No asignado'}</h4>
+                                                    <h4>Datos de Pago del Técnico: {ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</h4>
                                                     <div className={styles.bankGrid}>
                                                         <div className={styles.bankField}>
                                                             <strong>BANCO:</strong>
@@ -1513,7 +1539,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                         </div>
                                                         <div className={styles.bankField}>
                                                             <strong>NRO. CUENTA:</strong>
-                                                            <span>{ticketData.tecnico?.cuentaBancaria || '---'}</span>
+                                                            <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                         </div>
                                                         <div className={styles.bankField}>
                                                             <strong>CCI:</strong>
