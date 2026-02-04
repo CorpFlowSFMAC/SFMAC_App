@@ -79,6 +79,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     const [evidenciasEjecucion, setEvidenciasEjecucion] = useState<any[]>(ticketData.evidenciasEjecucion || []);
     const [newExpense, setNewExpense] = useState({ concepto: "", monto: "", tipo: "Gasto Operativo" });
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const fieldEvidenceRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -181,6 +182,29 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
 
     const handleProceedToAssignment = () => {
         setShowAssignmentDrawer(true);
+    };
+
+    const handleFieldEvidenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const newfiles = Array.from(e.target.files);
+            const promises = newfiles.map(file => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = () => resolve({
+                        name: file.name,
+                        url: reader.result as string,
+                        type: file.type,
+                        fecha: new Date().toISOString()
+                    });
+                    reader.onerror = error => reject(error);
+                });
+            });
+
+            Promise.all(promises).then(results => {
+                setEvidenciasCampo(prev => [...prev, ...results]);
+            }).catch(err => console.error("Error reading files:", err));
+        }
     };
 
     const handleSendFieldReport = () => {
@@ -801,9 +825,21 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
 
                                                     <div className={styles.formGroupCompact}>
                                                         <label>Adjuntos</label>
-                                                        <div className={styles.uploadBoxMini}>
+                                                        <div
+                                                            className={styles.uploadBoxMini}
+                                                            onClick={() => fieldEvidenceRef.current?.click()}
+                                                            style={{ cursor: 'pointer' }}
+                                                        >
                                                             <Camera size={16} />
                                                             <span>{evidenciasCampo.length > 0 ? `${evidenciasCampo.length} Fotos` : 'Fotos'}</span>
+                                                            <input
+                                                                type="file"
+                                                                multiple
+                                                                accept="image/*"
+                                                                ref={fieldEvidenceRef}
+                                                                style={{ display: 'none' }}
+                                                                onChange={handleFieldEvidenceUpload}
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
