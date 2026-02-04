@@ -206,15 +206,31 @@ export default function PaymentsPage() {
         allRequests.sort((a, b) => new Date(b.fechaSolicitud).getTime() - new Date(a.fechaSolicitud).getTime());
         setPaymentRequests(allRequests);
 
-        // Calcular acumulados mensuales
+        // Calcular acumulados mensuales REALES basados en historial de pagos
         const totals: { [key: string]: number } = {};
-        allRequests.forEach(req => {
-            if (req.estado === 'pagado' || req.tipo === 'Liquidación Final') {
-                const date = new Date(req.fechaSolicitud);
-                const monthYear = date.toLocaleString('es-PE', { month: 'long', year: 'numeric' });
-                totals[monthYear] = (totals[monthYear] || 0) + req.montoSolicitado;
+
+        // Recorrer de nuevo los tickets para sumar historial directo (más preciso que requests)
+        ticketKeys.forEach(key => {
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                try {
+                    const ticket = JSON.parse(saved);
+                    const pagos = ticket.historialPagosTecnico || [];
+                    pagos.forEach((p: any) => {
+                        if (p.monto && p.fecha) {
+                            const date = new Date(p.fecha);
+                            const monthYear = date.toLocaleString('es-PE', { month: 'long', year: 'numeric' });
+                            // Capitalizar primera letra
+                            const formattedKey = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
+                            totals[formattedKey] = (totals[formattedKey] || 0) + p.monto;
+                        }
+                    });
+                } catch (e) {
+                    console.error("Error summing payments:", e);
+                }
             }
         });
+
         setMonthlyTotals(totals);
     };
 
