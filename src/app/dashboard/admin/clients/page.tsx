@@ -17,6 +17,13 @@ export default function ClientsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editClient, setEditClient] = useState<any>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setUserRole(localStorage.getItem("userRole"));
+        }
+    }, []);
 
     // Derivar contador real de sedes de clientsData si existe
     const clientsWithUpdatedCounts = clients.map(client => {
@@ -141,13 +148,15 @@ export default function ClientsPage() {
                             </p>
                         </div>
                     </div>
-                    <button className={styles.createButton} onClick={() => {
-                        setEditClient(null);
-                        setIsDrawerOpen(true);
-                    }}>
-                        <Plus size={16} />
-                        Nuevo Cliente
-                    </button>
+                    {userRole === 'admin' && (
+                        <button className={styles.createButton} onClick={() => {
+                            setEditClient(null);
+                            setIsDrawerOpen(true);
+                        }}>
+                            <Plus size={16} />
+                            Nuevo Cliente
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -193,22 +202,24 @@ export default function ClientsPage() {
                                 )}
                             </div>
                             <div className={styles.glowOrb} style={{ background: client.colorAura }}></div>
-                            <div className={styles.cardActions}>
-                                <button
-                                    className={styles.editCardBtn}
-                                    onClick={(e) => handleEditClient(client, e)}
-                                    title="Editar cliente"
-                                >
-                                    <Pencil size={16} />
-                                </button>
-                                <button
-                                    className={styles.deleteCardBtn}
-                                    onClick={(e) => handleDeleteClient(client.id, e)}
-                                    title="Eliminar cliente"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
+                            {userRole === 'admin' && (
+                                <div className={styles.cardActions}>
+                                    <button
+                                        className={styles.editCardBtn}
+                                        onClick={(e) => handleEditClient(client, e)}
+                                        title="Editar cliente"
+                                    >
+                                        <Pencil size={16} />
+                                    </button>
+                                    <button
+                                        className={styles.deleteCardBtn}
+                                        onClick={(e) => handleDeleteClient(client.id, e)}
+                                        title="Eliminar cliente"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className={styles.cardBody}>

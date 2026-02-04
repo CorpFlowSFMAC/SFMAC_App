@@ -391,9 +391,20 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                 <div className={styles.clienteInfo}>
                     <div
                         className={styles.clienteLogo}
-                        style={{ background: ticket.cliente?.color || '#8B5CF6' }}
+                        style={{
+                            background: ticket.cliente?.color || '#8B5CF6',
+                            padding: ticket.cliente?.logo ? '0' : 'inherit'
+                        }}
                     >
-                        {ticket.cliente?.nombre?.substring(0, 2) || 'TK'}
+                        {ticket.cliente?.logo ? (
+                            <img
+                                src={ticket.cliente.logo}
+                                alt={ticket.cliente.nombre}
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            />
+                        ) : (
+                            ticket.cliente?.nombre?.substring(0, 2) || 'TK'
+                        )}
                     </div>
                     <div className={styles.clienteText}>
                         <h4>{ticket.cliente?.nombre || 'Sin cliente'}</h4>

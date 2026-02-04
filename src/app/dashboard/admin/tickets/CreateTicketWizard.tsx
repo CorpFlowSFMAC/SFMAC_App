@@ -42,7 +42,8 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         nombre: c.name || "Sin Nombre",
         ruc: c.ruc || "---",
         prioridad: "Alta",
-        color: c.colorAura || "#8B5CF6"
+        color: c.colorAura || "#8B5CF6",
+        logo: c.logo || null
     }));
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -243,8 +244,12 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                             className={`${styles.clienteCard} ${formData.clienteId === cliente.id ? styles.clienteCardSelected : ''}`}
                                             onClick={() => handleSelectCliente(cliente)}
                                         >
-                                            <div className={styles.clienteLogo} style={{ background: cliente.color }}>
-                                                {cliente.nombre.substring(0, 2)}
+                                            <div className={styles.clienteLogo} style={{ background: cliente.color, padding: cliente.logo ? '0' : 'inherit' }}>
+                                                {cliente.logo ? (
+                                                    <img src={cliente.logo} alt={cliente.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                                ) : (
+                                                    cliente.nombre.substring(0, 2)
+                                                )}
                                             </div>
                                             <div className={styles.clienteInfo}>
                                                 <h4>{cliente.nombre}</h4>
@@ -270,8 +275,12 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
 
                             {formData.cliente && (
                                 <div className={styles.fichaCliente}>
-                                    <div className={styles.clienteLogo} style={{ background: formData.cliente.color }}>
-                                        {formData.cliente.nombre.substring(0, 2)}
+                                    <div className={styles.clienteLogo} style={{ background: formData.cliente.color, padding: formData.cliente.logo ? '0' : 'inherit' }}>
+                                        {formData.cliente.logo ? (
+                                            <img src={formData.cliente.logo} alt={formData.cliente.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                        ) : (
+                                            formData.cliente.nombre.substring(0, 2)
+                                        )}
                                     </div>
                                     <div className={styles.clienteMainInfo}>
                                         <h4>{formData.cliente.nombre}</h4>
@@ -529,8 +538,12 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                             <span>Cliente</span>
                                         </div>
                                         <div className={styles.resumenValueCard}>
-                                            <div className={styles.miniLogo} style={{ background: formData.cliente?.color }}>
-                                                {formData.cliente?.nombre.substring(0, 2)}
+                                            <div className={styles.miniLogo} style={{ background: formData.cliente?.color, padding: formData.cliente?.logo ? '0' : 'inherit' }}>
+                                                {formData.cliente?.logo ? (
+                                                    <img src={formData.cliente.logo} alt={formData.cliente.nombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                                ) : (
+                                                    formData.cliente?.nombre.substring(0, 2)
+                                                )}
                                             </div>
                                             <div className={styles.miniInfo}>
                                                 <strong>{formData.cliente?.nombre}</strong>

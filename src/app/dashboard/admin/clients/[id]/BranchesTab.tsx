@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Search, Edit, Trash2, MapPin, Building2, Store, Filter, Eye } from "lucide-react";
 import styles from "./branchesTab.module.css";
 import BranchModal from "./BranchModal";
@@ -12,6 +12,14 @@ interface BranchesTabProps {
 }
 
 export default function BranchesTab({ branches, setBranches, clientColor }: BranchesTabProps) {
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setUserRole(localStorage.getItem("userRole"));
+        }
+    }, []);
+
     const [searchTerm, setSearchTerm] = useState("");
     const [filterZone, setFilterZone] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -91,10 +99,12 @@ export default function BranchesTab({ branches, setBranches, clientColor }: Bran
                     </select>
                 </div>
 
-                <button className={styles.createBtn} onClick={handleCreate}>
-                    <Plus size={20} />
-                    Nueva Sede
-                </button>
+                {userRole === 'admin' && (
+                    <button className={styles.createBtn} onClick={handleCreate}>
+                        <Plus size={20} />
+                        Nueva Sede
+                    </button>
+                )}
             </div>
 
             {/* Branches by Zone */}
@@ -127,12 +137,16 @@ export default function BranchesTab({ branches, setBranches, clientColor }: Bran
                                         <button onClick={() => handleView(branch)} title="Visualizar" className={styles.viewBtn}>
                                             <Eye size={16} />
                                         </button>
-                                        <button onClick={() => handleEdit(branch)} title="Editar" className={styles.editBtn}>
-                                            <Edit size={16} />
-                                        </button>
-                                        <button onClick={() => handleDelete(branch.id)} title="Eliminar" className={styles.deleteBtn}>
-                                            <Trash2 size={16} />
-                                        </button>
+                                        {userRole === 'admin' && (
+                                            <>
+                                                <button onClick={() => handleEdit(branch)} title="Editar" className={styles.editBtn}>
+                                                    <Edit size={16} />
+                                                </button>
+                                                <button onClick={() => handleDelete(branch.id)} title="Eliminar" className={styles.deleteBtn}>
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -145,10 +159,12 @@ export default function BranchesTab({ branches, setBranches, clientColor }: Bran
                 <div className={styles.emptyState}>
                     <div className={styles.emptyIcon}>🏢</div>
                     <p>No hay sedes registradas</p>
-                    <button onClick={handleCreate} className={styles.createBtn}>
-                        <Plus size={18} />
-                        Crear Primera Sede
-                    </button>
+                    {userRole === 'admin' && (
+                        <button onClick={handleCreate} className={styles.createBtn}>
+                            <Plus size={18} />
+                            Crear Primera Sede
+                        </button>
+                    )}
                 </div>
             )}
         </div>

@@ -57,6 +57,22 @@ export default function ClientDrawer({ isOpen, onClose, onClientCreated, onClien
 
     if (!isOpen) return null;
 
+    const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                alert("❌ El logo no debe exceder los 2MB");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setFormData({ ...formData, logo: event.target?.result as string });
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -199,9 +215,40 @@ export default function ClientDrawer({ isOpen, onClose, onClientCreated, onClien
                         </div>
 
                         <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                            <label><Upload size={16} /> Logo del Cliente (Opcional)</label>
-                            <div className={styles.uploadNote}>
-                                <p>Nota: Por ahora, la funcionalidad de carga de logo requiere un servidor. El sistema usará el icono predeterminado 🏢</p>
+                            <label><Upload size={16} /> Logo del Cliente (Alta Definición)</label>
+                            <div className={styles.logoUploadArea}>
+                                <div className={styles.logoPreview}>
+                                    {formData.logo ? (
+                                        <img src={formData.logo} alt="Preview" />
+                                    ) : (
+                                        <div className={styles.logoPlaceholder}>
+                                            <Building2 size={32} />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className={styles.uploadControls}>
+                                    <input
+                                        type="file"
+                                        id="logoInput"
+                                        accept="image/*"
+                                        onChange={handleLogoChange}
+                                        className={styles.fileInput}
+                                    />
+                                    <label htmlFor="logoInput" className={styles.uploadLabel}>
+                                        <Upload size={14} />
+                                        Seleccionar Imagen
+                                    </label>
+                                    <p className={styles.uploadHint}>Recomendado: PNG/SVG fondo transparente (Máx 2MB)</p>
+                                    {formData.logo && (
+                                        <button
+                                            type="button"
+                                            className={styles.removeLogoBtn}
+                                            onClick={() => setFormData({ ...formData, logo: null })}
+                                        >
+                                            Quitar Logo
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

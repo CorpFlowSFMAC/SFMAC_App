@@ -536,7 +536,13 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                     style={{ cursor: isMaximized ? 'default' : 'move' }}
                 >
                     <div className={styles.titleLeft}>
-                        <div className={styles.ticketIcon}>🎫</div>
+                        {ticket.cliente?.logo ? (
+                            <div className={styles.clientLogoHeader}>
+                                <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} />
+                            </div>
+                        ) : (
+                            <div className={styles.ticketIcon}>🎫</div>
+                        )}
                         <div className={styles.titleInfo}>
                             <h3>
                                 {ticket.numeroTicketCliente
