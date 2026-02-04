@@ -472,19 +472,234 @@
 }
 
 /* Bank Card Preview - Premium */
-.bankCard {
-    background: linear-gradient(135deg, #1E293B, #334155);
-    border-radius: 20px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+.bankPreviewRow {
+    display: grid;
+    grid-template-columns: 240px 1fr 140px;
+    /* Card | Inputs | Banks */
+    gap: 1.5rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: #FFFFFF;
+    border-radius: 16px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.compactBankCard {
+    border-radius: 18px;
+    padding: 1.25rem;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
     position: relative;
     overflow: hidden;
-    height: 160px;
+    height: 140px;
+    /* Reduced height for more compact layout */
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.bankCardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 2;
+}
+
+.vaultTitle {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.5rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.bankLogoBadge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 900;
+}
+
+.bankLogoBrandWrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+
+.bankLogoBadgePremium {
+    height: 24px;
+    background: white;
+    padding: 2px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.bankLogoBadgePremium img {
+    height: 100%;
+    max-width: 60px;
+    object-fit: contain;
+}
+
+.bankDetailColumn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.detailItemMini {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #FFFFFF;
+    font-size: 0.85rem;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.sideBankSelector {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.bankSelectorGridCompact {
+    display: grid;
+    grid-template-columns: 1fr;
+    /* Narrower: single column list */
+    gap: 0.4rem;
+}
+
+.bankOptionMini {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem;
+    height: 32px;
+    /* Fixed height for icon buttons */
+    background: white;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.bankOptionMini:hover {
+    transform: scale(1.05);
+    border-color: var(--bank-color);
+}
+
+.bankSelectedMini {
+    border-color: var(--bank-color) !important;
+    background: white !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15), 0 0 0 2px var(--bank-color);
+    transform: scale(1.05);
+}
+
+.cardInputsColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.formGroupCompact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.microLabel {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #64748B;
+    letter-spacing: 0.5px;
+}
+
+.cardInputWrapperShadow {
+    display: flex;
+    flex-direction: column;
+    background: #F8FAFC;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #E2E8F0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cardInputWrapperShadow:focus-within {
+    background: #FFFFFF;
+    border-color: #0EA5E9;
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
+}
+
+.cardPremiumInput {
+    background: transparent !important;
+    border: none !important;
+    color: #1E293B !important;
+    font-family: 'OCR-A', monospace !important;
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    letter-spacing: 1px;
+    outline: none !important;
+}
+
+.cardPremiumInput::placeholder {
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.bankDetailGroup {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.detailItem {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+.bankImageMini {
+    height: 22px;
+    /* Slightly larger logos */
+    width: auto;
+    max-width: 90%;
+    object-fit: contain;
+    transition: all 0.3s;
+}
+
+.bankSelectedMini .bankImageMini {
+    filter: none;
+    /* Removed inversion to keep original colors visible on white bg */
+}
+
+.miniActiveIndicator {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #22C55E;
+    color: white;
+    border-radius: 50%;
+    padding: 2px;
+    border: 1.5px solid white;
+    display: flex;
 }
 
 .bankChip {
@@ -516,43 +731,52 @@
 .bankInfoPreview {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
+    z-index: 2;
 }
 
 .bankName {
     color: rgba(255, 255, 255, 0.8);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
 }
 
-.accountNumber {
+.accountNumberCompact {
     color: white;
-    font-size: 1.3rem;
+    font-size: 0.95rem;
     font-weight: 800;
-    font-family: 'Courier New', Courier, monospace;
-    letter-spacing: 3px;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    font-family: 'OCR-A', 'Courier New', Courier, monospace;
+    letter-spacing: 1.5px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    margin: 0.25rem 0;
 }
 
-.cardFooter {
+.cardFooterCompact {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
 }
 
-.accountType {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 0.75rem;
+.userNameCompact {
+    color: white;
+    font-size: 0.65rem;
     font-weight: 700;
-    letter-spacing: 1px;
+    text-transform: uppercase;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.contactPoint {
+.accountTypeLabelCompact {
     color: rgba(255, 255, 255, 0.6);
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.5rem;
+    font-weight: 800;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1px 4px;
+    border-radius: 3px;
 }
 
 /* Bank Selector Grid */
@@ -569,34 +793,73 @@
     flex-direction: column;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.75rem 0.5rem;
+    padding: 0.6rem 0.4rem;
     background: white;
-    border: 1.5px solid #E2E8F0;
+    border: 2px solid transparent;
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s;
     position: relative;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .bankOption:hover {
-    border-color: #0EA5E9;
     transform: translateY(-2px);
-    background: #F8FAFC !important;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
 }
 
 .bankSelected {
-    border-width: 2px !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    border-color: var(--bank-color) !important;
+    background: linear-gradient(135deg, white, #F8FAFC) !important;
+    transform: scale(1.05);
 }
 
-.bankOptionLogo {
-    font-size: 1.5rem;
+.bankIconFrame {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #F1F5F9;
+    transition: all 0.3s;
+}
+
+.bankSelected .bankIconFrame {
+    background: var(--bank-color);
+}
+
+.bankEmoji {
+    font-size: 1.4rem;
+    transition: transform 0.3s;
+}
+
+.bankSelected .bankEmoji {
+    transform: scale(1.1);
+    filter: brightness(1.2);
 }
 
 .bankOptionName {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 800;
     text-transform: uppercase;
+    color: #475569;
+}
+
+.bankSelected .bankOptionName {
+    color: var(--bank-color);
+}
+
+.activeIndicator {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #22C55E;
+    color: white;
+    padding: 3px;
+    border-radius: 50%;
+    box-shadow: 0 2px 10px rgba(34, 197, 94, 0.3);
+    border: 2px solid white;
 }
 
 .checkIcon {
@@ -686,93 +949,110 @@
 }
 
 /* Digital Wallets Selector */
-.walletsContainer {
-    margin-top: 1rem;
-}
-
-.sectionLabelMini {
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #64748B;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 0.5rem;
-}
-
-.walletsSelector {
+/* Optimized Boveda Layout */
+.bovedaGridOptimized {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
 }
 
-.walletCard {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    background: white;
-    border: 1.5px solid #E2E8F0;
-    border-radius: 12px;
-    transition: all 0.3s;
+.accountTypeSelector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
 }
 
-.walletBrandIcon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+.accountTypeCard {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    background: white;
+    border: 2px solid #E2E8F0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #64748B;
+    text-transform: uppercase;
+}
+
+.accountTypeCard:hover {
+    border-color: #CBD5E1;
+    background: #F8FAFC;
+}
+
+.accountTypeActive {
+    border-color: var(--type-color) !important;
+    background: white !important;
+    color: var(--type-color) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.walletsSection {
+    grid-column: 1 / -1;
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #E2E8F0;
+    margin-top: -8px;
+    /* Tighter fit with grid above */
+}
+
+.walletsRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.walletMiniCard {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0.5rem;
+    /* Ultra-shrunk height */
+    background: #F8FAFC;
+    border: 1.5px solid transparent;
+    border-radius: 6px;
+    transition: all 0.3s;
+}
+
+.walletBrand {
+    width: 26px;
+    /* Slightly smaller icon */
+    height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: white;
     font-weight: 900;
-    font-size: 0.75rem;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    font-size: 0.8rem;
 }
 
-.walletInfo {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.walletInfo label {
-    font-size: 0.6rem;
-    font-weight: 900;
-    color: #94A3B8;
-    margin-bottom: 2px;
-}
-
-.walletInfo input {
-    border: none !important;
-    padding: 0 !important;
-    font-size: 0.85rem !important;
-    font-weight: 800 !important;
-    background: transparent !important;
-    width: 100%;
+.walletMiniCard input {
+    background: transparent;
+    border: none;
     outline: none;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #1E293B;
+    width: 100%;
 }
 
-.walletInfo input:focus {
-    box-shadow: none !important;
-}
-
-.walletActiveYape {
+.yapeActive {
     border-color: #7C3AED;
-    background: rgba(124, 58, 237, 0.05);
+    background: white;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.1);
 }
 
-.walletActiveYape label {
-    color: #7C3AED;
-}
-
-.walletActivePlin {
+.plinActive {
     border-color: #00D1FF;
-    background: rgba(0, 209, 255, 0.05);
-}
-
-.walletActivePlin label {
-    color: #00D1FF;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 209, 255, 0.1);
 }
 
 @media (max-width: 1200px) {

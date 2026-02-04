@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, User, Wrench, CreditCard, ChevronRight, CheckCircle, MapPin, Compass, CreditCard as CardIcon, FileText, Landmark, Sun, Mountain, Map, Trees } from "lucide-react";
+import { X, User, Wrench, CreditCard, ChevronRight, CheckCircle, MapPin, Compass, CreditCard as CardIcon, FileText, Landmark, Sun, Mountain, Map, Trees, Phone } from "lucide-react";
 import styles from "./technicianDrawer.module.css";
 import { SERVICE_TYPES, getServicesAsOptions } from "@/lib/serviceTypes";
 import { ZONES as STANDARDIZED_ZONES } from "@/lib/zones";
@@ -44,10 +44,15 @@ const ZONES = STANDARDIZED_ZONES.map(z => ({
 }));
 
 const BANKS = [
-    { id: "BCP", name: "BCP", logo: "🏦", color: "#FF6600", gradient: ["#002A8F", "#0047AB"] },
-    { id: "Interbank", name: "Interbank", logo: "💳", color: "#00A859", gradient: ["#00A859", "#008B4E"] },
-    { id: "BBVA", name: "BBVA", logo: "🏧", color: "#004481", gradient: ["#004481", "#043263"] },
-    { id: "Scotiabank", name: "Scotiabank", logo: "💰", color: "#EC1C24", gradient: ["#EC1C24", "#C4121A"] }
+    { id: "BCP", name: "BCP", logo: "/banks/bcp.png", color: "#FF6600", accent: "#002A8F", gradient: ["#002A8F", "#0047AB"] },
+    { id: "Interbank", name: "Interbank", logo: "/banks/interbank.png", color: "#00A859", accent: "#00A859", gradient: ["#00A859", "#008B4E"] },
+    { id: "BBVA", name: "BBVA", logo: "/banks/bbva.png", color: "#004481", accent: "#004481", gradient: ["#004481", "#043263"] },
+    { id: "Scotiabank", name: "Scotiabank", logo: "/banks/scotiabank.png", color: "#EC1C24", accent: "#EC1C24", gradient: ["#EC1C24", "#C4121A"] }
+];
+
+const ACCOUNT_TYPES = [
+    { id: "Ahorros", label: "Ahorros", icon: Landmark, color: "#0EA5E9" },
+    { id: "Corriente", label: "Corriente", icon: Landmark, color: "#8B5CF6" }
 ];
 
 export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }: TechnicianDrawerProps) {
@@ -348,101 +353,147 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                         <div className={styles.stepContent}>
                             <h3 className={styles.stepTitle}>💳 Bóveda Bancaria</h3>
 
-                            {/* Bank Card Preview Premium */}
-                            {(() => {
-                                const selectedBank = BANKS.find(b => b.id === formData.banco) || BANKS[0];
-                                return (
-                                    <div
-                                        className={styles.bankCard}
-                                        style={{
-                                            background: `linear-gradient(135deg, ${selectedBank.gradient[0]}, ${selectedBank.gradient[1]})`
-                                        }}
-                                    >
-                                        <div className={styles.bankChip}></div>
-                                        <div className={styles.bankLogo}>{selectedBank.logo}</div>
-                                        <div className={styles.bankInfoPreview}>
-                                            <div className={styles.bankName}>{selectedBank.name}</div>
-                                            <div className={styles.accountNumber}>{formData.numeroCuenta || "XXXX - XXXX - XXXX - XXXX"}</div>
-                                            <div className={styles.cardFooter}>
-                                                <div className={styles.accountType}>{formData.tipoCuenta.toUpperCase()}</div>
-                                                <div className={styles.contactPoint}>{formData.celular}</div>
+                            {/* Premium Preview & Selector Row */}
+                            <div className={styles.bankPreviewRow}>
+                                {/* Bank Card Preview Premium */}
+                                {(() => {
+                                    const selectedBank = BANKS.find(b => b.id === formData.banco) || BANKS[0];
+                                    return (
+                                        <>
+                                            {/* Left: Bank Card Preview */}
+                                            <div
+                                                className={styles.compactBankCard}
+                                                style={{
+                                                    background: `linear-gradient(135deg, ${selectedBank.gradient[0]}, ${selectedBank.gradient[1]})`
+                                                }}
+                                            >
+                                                <div className={styles.bankCardHeader}>
+                                                    <div className={styles.vaultTitle}>
+                                                        <Landmark size={12} />
+                                                        <span>VAULT</span>
+                                                    </div>
+                                                    <div className={styles.bankLogoBrandWrapper}>
+                                                        <div className={styles.bankLogoBadgePremium}>
+                                                            <img src={selectedBank.logo} alt={selectedBank.name} />
+                                                        </div>
+                                                        <div className={styles.bankDetailColumn}>
+                                                            <div className={styles.detailItemMini}>
+                                                                <MapPin size={12} />
+                                                                <span>{formData.zona}</span>
+                                                            </div>
+                                                            <div className={styles.detailItemMini}>
+                                                                <Phone size={12} />
+                                                                <span>{formData.celular}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className={styles.bankChip}></div>
+                                                <div className={styles.cardFooterCompact}>
+                                                    <span className={styles.accountTypeLabelCompact}>{formData.tipoCuenta.toUpperCase()}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
 
-                            <div className={styles.sectionLabel}>Seleccione Entidad Financiera *</div>
-                            <div className={styles.bankSelectorGrid}>
-                                {BANKS.map(bank => (
-                                    <div
-                                        key={bank.id}
-                                        className={`${styles.bankOption} ${formData.banco === bank.id ? styles.bankSelected : ''}`}
-                                        onClick={() => setFormData({ ...formData, banco: bank.id })}
-                                        style={{
-                                            borderColor: formData.banco === bank.id ? bank.color : 'transparent',
-                                            background: formData.banco === bank.id ? `${bank.color}10` : 'white'
-                                        }}
-                                    >
-                                        <span className={styles.bankOptionLogo}>{bank.logo}</span>
-                                        <span className={styles.bankOptionName} style={{ color: formData.banco === bank.id ? bank.color : '#475569' }}>{bank.name}</span>
-                                        {formData.banco === bank.id && <div className={styles.checkIcon}>✓</div>}
+                                            {/* Middle: Integrated Inputs Column */}
+                                            <div className={styles.cardInputsColumn}>
+                                                <div className={styles.formGroupCompact}>
+                                                    <label className={styles.microLabel}>NÚMERO DE CUENTA</label>
+                                                    <div className={styles.cardInputWrapperShadow}>
+                                                        <input
+                                                            className={styles.cardPremiumInput}
+                                                            type="text"
+                                                            value={formData.numeroCuenta}
+                                                            onChange={(e) => setFormData({ ...formData, numeroCuenta: e.target.value })}
+                                                            placeholder="•••• •••• •••• ••••"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className={styles.formGroupCompact}>
+                                                    <label className={styles.microLabel}>CCI INTERBANCARIO</label>
+                                                    <div className={styles.cardInputWrapperShadow}>
+                                                        <input
+                                                            className={styles.cardPremiumInput}
+                                                            type="text"
+                                                            value={formData.cci}
+                                                            onChange={(e) => setFormData({ ...formData, cci: e.target.value })}
+                                                            placeholder="•••• •••• •••• •••• ••••"
+                                                            maxLength={20}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+
+                                {/* Interactive Bank Selector */}
+                                <div className={styles.sideBankSelector}>
+                                    <div className={styles.bankSelectorGridCompact}>
+                                        {BANKS.map(bank => (
+                                            <div
+                                                key={bank.id}
+                                                className={`${styles.bankOptionMini} ${formData.banco === bank.id ? styles.bankSelectedMini : ''}`}
+                                                onClick={() => setFormData({ ...formData, banco: bank.id })}
+                                                style={{
+                                                    '--bank-color': bank.color,
+                                                    '--bank-accent': bank.accent
+                                                } as any}
+                                                title={bank.name}
+                                            >
+                                                {formData.banco === bank.id && (
+                                                    <div className={styles.miniActiveIndicator}>
+                                                        <CheckCircle size={10} />
+                                                    </div>
+                                                )}
+                                                <img src={bank.logo} alt={bank.name} className={styles.bankImageMini} />
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                </div>
                             </div>
 
-                            <div className={styles.formGrid}>
+                            <div className={styles.bovedaGridOptimized}>
                                 <div className={styles.formGroup}>
-                                    <label><MapPin size={14} /> Tipo de Cuenta *</label>
-                                    <select value={formData.tipoCuenta} onChange={(e) => setFormData({ ...formData, tipoCuenta: e.target.value })} required>
-                                        <option value="Ahorros">Ahorros</option>
-                                        <option value="Corriente">Corriente</option>
-                                    </select>
-                                </div>
-
-                                <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                                    <label><Compass size={14} /> Número de Cuenta *</label>
-                                    <input type="text" value={formData.numeroCuenta} onChange={(e) => setFormData({ ...formData, numeroCuenta: e.target.value })} placeholder="Ej: 191-12345678-0-12" required />
-                                </div>
-
-                                <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
-                                    <label><Map size={14} /> CCI (Opcional)</label>
-                                    <input type="text" value={formData.cci} onChange={(e) => setFormData({ ...formData, cci: e.target.value })} placeholder="Ej: 00219100123456780112" maxLength={20} />
-                                </div>
-
-                                <div className={styles.walletsContainer} style={{ gridColumn: '1 / -1' }}>
-                                    <div className={styles.sectionLabelMini}>Billeteras Digitales</div>
-                                    <div className={styles.walletsSelector}>
-                                        <div className={`${styles.walletCard} ${formData.yape ? styles.walletActiveYape : ''}`}>
-                                            <div className={styles.walletBrandIcon} style={{ background: '#7C3AED' }}>
-                                                Y
+                                    <label>Tipo de Cuenta *</label>
+                                    <div className={styles.accountTypeSelector}>
+                                        {ACCOUNT_TYPES.map(type => (
+                                            <div
+                                                key={type.id}
+                                                className={`${styles.accountTypeCard} ${formData.tipoCuenta === type.id ? styles.accountTypeActive : ''}`}
+                                                onClick={() => setFormData({ ...formData, tipoCuenta: type.id })}
+                                                style={{ '--type-color': type.color } as any}
+                                            >
+                                                <type.icon size={16} />
+                                                <span>{type.label}</span>
                                             </div>
-                                            <div className={styles.walletInfo}>
-                                                <label>YAPE</label>
-                                                <input
-                                                    type="tel"
-                                                    value={formData.yape}
-                                                    onChange={(e) => { const value = e.target.value.replace(/\D/g, '').slice(0, 9); setFormData({ ...formData, yape: value }); }}
-                                                    placeholder="987..."
-                                                    maxLength={9}
-                                                />
-                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+
+
+                                <div className={styles.walletsSection}>
+                                    <div className={styles.sectionLabelMini}>Ecosistema de Pago Móvil</div>
+                                    <div className={styles.walletsRow}>
+                                        <div className={`${styles.walletMiniCard} ${formData.yape ? styles.yapeActive : ''}`}>
+                                            <div className={styles.walletBrand} style={{ background: '#7C3AED' }}>Y</div>
+                                            <input
+                                                type="tel"
+                                                value={formData.yape}
+                                                onChange={(e) => setFormData({ ...formData, yape: e.target.value.replace(/\D/g, '').slice(0, 9) })}
+                                                placeholder="Yape"
+                                                maxLength={9}
+                                            />
                                         </div>
-
-                                        <div className={`${styles.walletCard} ${formData.plin ? styles.walletActivePlin : ''}`}>
-                                            <div className={styles.walletBrandIcon} style={{ background: '#00D1FF' }}>
-                                                P
-                                            </div>
-                                            <div className={styles.walletInfo}>
-                                                <label>PLIN</label>
-                                                <input
-                                                    type="tel"
-                                                    value={formData.plin}
-                                                    onChange={(e) => { const value = e.target.value.replace(/\D/g, '').slice(0, 9); setFormData({ ...formData, plin: value }); }}
-                                                    placeholder="912..."
-                                                    maxLength={9}
-                                                />
-                                            </div>
+                                        <div className={`${styles.walletMiniCard} ${formData.plin ? styles.plinActive : ''}`}>
+                                            <div className={styles.walletBrand} style={{ background: '#00D1FF' }}>P</div>
+                                            <input
+                                                type="tel"
+                                                value={formData.plin}
+                                                onChange={(e) => setFormData({ ...formData, plin: e.target.value.replace(/\D/g, '').slice(0, 9) })}
+                                                placeholder="Plin"
+                                                maxLength={9}
+                                            />
                                         </div>
                                     </div>
                                 </div>
