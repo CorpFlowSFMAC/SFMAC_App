@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
-import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar } from "./TicketSummary";
+import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar } from "./TicketSummary";
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
 import styles from "./TicketWindow.module.css";
@@ -638,6 +638,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                             />
 
                             <DiagnosisInfoBar ticket={ticketData} />
+                            <QuoteAssistantBar ticket={ticketData} />
                             <QuotationInfoBar ticket={ticketData} />
                             <FinancialLiquidationBar ticket={ticketData} />
                             <UnifiedEvidenceBar ticket={ticketData} />
