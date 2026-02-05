@@ -825,13 +825,33 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
 
                                                     <div className={styles.formGroupCompact}>
                                                         <label>Adjuntos</label>
-                                                        <div
-                                                            className={styles.uploadBoxMini}
-                                                            onClick={() => fieldEvidenceRef.current?.click()}
-                                                            style={{ cursor: 'pointer' }}
-                                                        >
-                                                            <Camera size={16} />
-                                                            <span>{evidenciasCampo.length > 0 ? `${evidenciasCampo.length} Fotos` : 'Fotos'}</span>
+                                                        <div className={styles.thumbnailsWrapper}>
+                                                            {evidenciasCampo.length > 0 ? (
+                                                                evidenciasCampo.map((evidence, idx) => (
+                                                                    <div key={idx} className={styles.uploadBoxMini} title={evidence.name}>
+                                                                        <img src={evidence.url} alt="evidencia" />
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <div
+                                                                    className={styles.uploadBoxMini}
+                                                                    onClick={() => fieldEvidenceRef.current?.click()}
+                                                                    style={{ cursor: 'pointer' }}
+                                                                >
+                                                                    <Camera size={20} />
+                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 700 }}>FOTOS</span>
+                                                                </div>
+                                                            )}
+                                                            {/* Botón flotante para agregar más si ya hay fotos */}
+                                                            {evidenciasCampo.length > 0 && (
+                                                                <div
+                                                                    className={styles.uploadBoxMini}
+                                                                    onClick={() => fieldEvidenceRef.current?.click()}
+                                                                    style={{ cursor: 'pointer', background: '#F1F5F9' }}
+                                                                >
+                                                                    <Plus size={20} />
+                                                                </div>
+                                                            )}
                                                             <input
                                                                 type="file"
                                                                 multiple

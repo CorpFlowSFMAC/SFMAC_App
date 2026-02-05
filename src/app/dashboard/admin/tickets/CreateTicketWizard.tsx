@@ -350,7 +350,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                 Tipo de Servicio
                             </h3>
                             <p className={styles.stepDescription}>
-                                ✨ Servicios disponibles según especialidades de técnicos
+                                Servicios disponibles según especialidades de técnicos
                             </p>
 
                             <div className={styles.serviceMainRow}>
@@ -381,7 +381,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                                         }}
                                                     >
                                                         <IconComponent
-                                                            size={18}
+                                                            size={24}
                                                             className={!isSelected ? styles.iconPulsing : ''}
                                                         />
                                                     </div>
@@ -404,7 +404,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                             placeholder="Describa el problema detalladamente. Ejemplo: Falla en compresor, fuga de refrigerante, etc."
                                             value={formData.descripcionProblema}
                                             onChange={(e) => setFormData({ ...formData, descripcionProblema: e.target.value })}
-                                            rows={8}
+                                            rows={5}
                                         />
                                         <div className={styles.textCounter}>
                                             <span style={{ color: formData.descripcionProblema.length >= 10 ? '#10B981' : '#EF4444' }}>
@@ -413,35 +413,35 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                             <span> / 500 caracteres</span>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            <div className={styles.ticketClienteSection}>
-                                <label>
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.tieneNumeroCliente}
-                                        onChange={(e) => setFormData({ ...formData, tieneNumeroCliente: e.target.checked })}
-                                    />
-                                    ¿El cliente ya asignó un número de ticket?
-                                </label>
-                                {formData.tieneNumeroCliente && (
-                                    <div className={styles.ticketClienteInputWrapper}>
-                                        <input
-                                            type="text"
-                                            placeholder={`Ej: MB000000.${new Date().getFullYear().toString().slice(-2)}`}
-                                            value={formData.numeroTicketCliente}
-                                            onChange={(e) => setFormData({ ...formData, numeroTicketCliente: e.target.value.toUpperCase() })}
-                                            className={`${styles.ticketClienteInput} ${formData.numeroTicketCliente && !isTicketClienteValid() ? styles.inputError : ''}`}
-                                            maxLength={11}
-                                        />
-                                        {formData.numeroTicketCliente && !isTicketClienteValid() && (
-                                            <span className={styles.errorHint}>
-                                                Formato inválido: MB + 6 dígitos + .{new Date().getFullYear().toString().slice(-2)}
-                                            </span>
+                                    <div className={styles.ticketClienteSection}>
+                                        <label>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.tieneNumeroCliente}
+                                                onChange={(e) => setFormData({ ...formData, tieneNumeroCliente: e.target.checked })}
+                                            />
+                                            ¿Ticket del Cliente?
+                                        </label>
+                                        {formData.tieneNumeroCliente && (
+                                            <div className={styles.ticketClienteInputWrapper}>
+                                                <input
+                                                    type="text"
+                                                    placeholder={`Ej: MB000000.${new Date().getFullYear().toString().slice(-2)}`}
+                                                    value={formData.numeroTicketCliente}
+                                                    onChange={(e) => setFormData({ ...formData, numeroTicketCliente: e.target.value.toUpperCase() })}
+                                                    className={`${styles.ticketClienteInput} ${formData.numeroTicketCliente && !isTicketClienteValid() ? styles.inputError : ''}`}
+                                                    maxLength={11}
+                                                />
+                                                {formData.numeroTicketCliente && !isTicketClienteValid() && (
+                                                    <span className={styles.errorHint}>
+                                                        Formato: MB + 6 dígitos + .{new Date().getFullYear().toString().slice(-2)}
+                                                    </span>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     )}

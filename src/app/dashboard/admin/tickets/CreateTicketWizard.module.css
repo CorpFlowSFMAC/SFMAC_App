@@ -161,16 +161,19 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: white;
+    background: linear-gradient(135deg, #F8FAFC, #E2E8F0);
     border: 2px solid #E0E7FF;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #CBD5E1;
+    color: #94A3B8;
     position: relative;
     z-index: 1;
     transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 4px 8px rgba(139, 92, 246, 0.08);
+    box-shadow:
+        inset 0 1px 2px rgba(255, 255, 255, 0.8),
+        0 4px 8px rgba(139, 92, 246, 0.08);
+    /* Sombra suave */
 }
 
 .progressStepActive {
@@ -205,9 +208,27 @@
 /* 💫 CONTENT */
 .wizardContent {
     flex: 1;
-    padding: 1.25rem 1.75rem;
+    padding: 1rem 1.75rem;
     overflow-y: auto;
-    background: linear-gradient(180deg, #FAFAFA, #FFFFFF);
+    background: #FFFFFF;
+    /* Scrollbar fino y elegante */
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E1 transparent;
+}
+
+.wizardContent::-webkit-scrollbar {
+    width: 6px;
+}
+
+.wizardContent::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.wizardContent::-webkit-scrollbar-thumb {
+    background-color: #CBD5E1;
+    border-radius: 20px;
+    border: 2px solid transparent;
+    background-clip: content-box;
 }
 
 .step {
@@ -235,11 +256,18 @@
     color: #1F2937;
     font-size: 1.15rem;
     font-weight: 800;
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.2rem 0;
     background: linear-gradient(135deg, #8B5CF6, #6366F1);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+
+.stepDescription {
+    margin: 0 0 0.6rem 0;
+    font-size: 0.85rem;
+    color: #64748B;
+    font-weight: 500;
 }
 
 /* 🔍 SEARCH BOX VIBRANTE - STICKY PARA EVITAR SOBREPOSICIÓN */
@@ -398,8 +426,8 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 6px;
-    background: linear-gradient(90deg, #8B5CF6, #6366F1, #3B82F6);
+    height: 4px;
+    background: linear-gradient(90deg, #94A3B8, #CBD5E1, #94A3B8);
     opacity: 0;
     transition: opacity 0.3s;
 }
@@ -415,13 +443,13 @@
 }
 
 .sedeCardSelected {
-    border-color: #10B981;
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(52, 211, 153, 0.06));
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15), 0 16px 36px rgba(16, 185, 129, 0.35);
+    border-color: #64748B;
+    background: linear-gradient(135deg, #F8FAFC, #F1F5F9);
+    box-shadow: 0 0 0 4px rgba(100, 116, 139, 0.15), 0 16px 36px rgba(100, 116, 139, 0.25);
 }
 
 .sedeCardSelected::before {
-    background: linear-gradient(90deg, #10B981, #34D399);
+    background: linear-gradient(90deg, #475569, #64748B);
     opacity: 1;
 }
 
@@ -435,20 +463,38 @@
 }
 
 .sedeIconWrapper {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, #8B5CF6, #6366F1);
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 50%, #F1F5F9 100%);
+    border: 1px solid #FFFFFF;
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.35);
+    color: #475569;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.7),
+        0 4px 10px rgba(0, 0, 0, 0.1),
+        inset 2px 2px 4px rgba(255, 255, 255, 1),
+        inset -2px -2px 4px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+}
+
+.sedeIconWrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 40%, rgba(255, 255, 255, 0.8) 50%, transparent 60%);
+    opacity: 0.5;
 }
 
 .checkIconSede {
-    color: #10B981;
-    filter: drop-shadow(0 2px 8px rgba(16, 185, 129, 0.5));
+    color: #475569;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .sedeCardBody {
@@ -519,8 +565,9 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
+    gap: 1.5rem;
     align-items: flex-start;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .serviceSelectionColumn {
@@ -533,43 +580,71 @@
 
 .serviciosGridCompact {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
 }
 
 .servicioCardCompact {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.6rem 0.75rem;
-    border-radius: 10px;
-    border: 1.5px solid #E2E8F0;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.5rem;
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
+    min-height: 85px;
+
 }
 
 .servicioCardCompact:hover {
     border-color: #8B5CF6;
     background: #F5F3FF !important;
-    transform: translateX(4px);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.15);
 }
 
 .compactIconWrapper {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.3s;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+
+    /* VISTA METÁLICA */
+    background: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 50%, #F1F5F9 100%);
+    border: 1px solid #FFFFFF;
+    color: #64748B;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.7),
+        0 4px 8px rgba(0, 0, 0, 0.08),
+        inset 2px 2px 4px rgba(255, 255, 255, 1),
+        inset -2px -2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .servicioCardCompact span {
     font-size: 0.7rem;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.5px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.servicioCardSelected .compactIconWrapper {
+    background: linear-gradient(135deg, #E2E8F0 0%, #CBD5E1 100%) !important;
+    border-color: #94A3B8;
+    color: #1E293B !important;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.servicioCardSelected span {
+    color: #1E293B !important;
 }
 
 .servicioCardSelected {
@@ -581,7 +656,7 @@
 .diagnosticoSectionCompact {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    /* height: 100%; Removido */
 }
 
 .compactLabel {
@@ -596,7 +671,7 @@
 
 .diagnosticoSectionCompact textarea {
     flex: 1;
-    min-height: 200px;
+    min-height: 120px;
     padding: 0.8rem;
     border: 2px solid #E0E7FF;
     border-radius: 12px;
@@ -652,10 +727,11 @@
 }
 
 .ticketClienteSection {
+    margin-top: 1rem;
     background: linear-gradient(135deg, #F3E8FF, #EDE9FE);
     border: 2px solid #DDD6FE;
     border-radius: 12px;
-    padding: 1.1rem;
+    padding: 0.9rem;
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
 }
 
@@ -719,13 +795,18 @@
 .dropZoneIcon {
     width: 44px;
     height: 44px;
-    background: white;
-    border-radius: 10px;
+    background: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 50%, #F1F5F9 100%);
+    border: 1px solid #FFFFFF;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #8B5CF6;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
+    color: #475569;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.7),
+        0 4px 8px rgba(0, 0, 0, 0.08),
+        inset 2px 2px 4px rgba(255, 255, 255, 1),
+        inset -2px -2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .dropZoneText {
@@ -1141,6 +1222,7 @@
         grid-template-columns: 1fr;
     }
 }
+
 .ticketClienteInputWrapper {
     display: flex;
     flex-direction: column;

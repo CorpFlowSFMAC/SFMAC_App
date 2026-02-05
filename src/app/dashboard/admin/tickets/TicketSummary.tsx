@@ -100,7 +100,12 @@ export function InfoBarBase({ ticket, title, icon: Icon, color, gradient }: Info
                             {ticket.evidencias.slice(0, 3).map((evidencia: any, index: number) => (
                                 <div key={index} className={styles.miniThumb} title={evidencia.name}>
                                     {evidencia.url ? (
-                                        <img src={evidencia.url} alt="Evidencia" className={styles.thumbImage} />
+                                        <>
+                                            <img src={evidencia.url} alt="Evidencia" className={styles.thumbImage} />
+                                            <div className={styles.largePreview}>
+                                                <img src={evidencia.url} alt="Vista ampliada" />
+                                            </div>
+                                        </>
                                     ) : (
                                         <FileText size={10} />
                                     )}
@@ -390,8 +395,17 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
 
     if (!hasAnyEvidence) return null;
 
-    // Solo mostrar esta barra unificada en estados avanzados de liquidación o cierre
-    const visibleStates = ["documentacion_enviada", "por_liquidar", "ticket_cerrado"];
+    // Mostrar esta barra desde que se finaliza el reporte técnico (en_cotizacion)
+    const visibleStates = [
+        "en_cotizacion",
+        "cotizacion_enviada",
+        "cotizacion_aprobada",
+        "en_ejecucion",
+        "documentacion_enviada",
+        "por_liquidar",
+        "pago_realizado",
+        "ticket_cerrado"
+    ];
     if (!visibleStates.includes(ticket.estadoId)) return null;
 
     return (
@@ -423,6 +437,9 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                         {ticket.evidencias.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#8B5CF6' }}>
                                 <img src={ev.url} alt="Cliente" className={styles.thumbImage} />
+                                <div className={styles.largePreview}>
+                                    <img src={ev.url} alt="Vista ampliada" />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -437,6 +454,9 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                         {ticket.evidenciasCampo.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#0D9488' }}>
                                 <img src={ev.url} alt="Inspección" className={styles.thumbImage} />
+                                <div className={styles.largePreview}>
+                                    <img src={ev.url} alt="Vista ampliada" />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -451,6 +471,9 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                         {ticket.evidenciasEjecucion.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#059669' }}>
                                 <img src={ev.url} alt="Ejecución" className={styles.thumbImage} />
+                                <div className={styles.largePreview}>
+                                    <img src={ev.url} alt="Vista ampliada" />
+                                </div>
                             </div>
                         ))}
                         {ticket.evidenciasEjecucion.length > 3 && (

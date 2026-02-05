@@ -19,7 +19,7 @@
     border: 1px solid #E2E8F0;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
     position: relative;
-    overflow: hidden;
+    /* overflow: hidden;  <-- REMOVED to allow popup to show */
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -27,6 +27,8 @@
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
     border-color: #CBD5E1;
+    z-index: 50;
+    /* Ensure tooltip appears above other bars */
 }
 
 /* Glassmorphism accent */
@@ -38,6 +40,8 @@
     bottom: 0;
     width: 6px;
     background: var(--bar-accent-color, #6366F1);
+    border-top-left-radius: 11px;
+    border-bottom-left-radius: 11px;
 }
 
 /* Section: Title & Icon (Left) */
@@ -198,12 +202,55 @@
     height: 32px;
     border-radius: 6px;
     border: 1.5px solid #E2E8F0;
-    overflow: hidden;
     background: #F8FAFC;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
+    position: relative;
+    /* Needed for absolute positioning of preview */
+}
+
+.largePreview {
+    display: none;
+    position: absolute;
+    bottom: 40px;
+    /* Position above the thumb */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    /* Large preview width */
+    height: auto;
+    background: white;
+    padding: 8px;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    border: 1px solid #E2E8F0;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.miniThumb:hover .largePreview {
+    display: block;
+}
+
+.largePreview img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
 }
 
 .miniThumb:hover {
@@ -216,6 +263,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: 4px;
 }
 
 .moreCount {
