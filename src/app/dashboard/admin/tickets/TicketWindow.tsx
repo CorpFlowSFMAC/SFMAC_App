@@ -58,8 +58,16 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     const [partidasCotizacion, setPartidasCotizacion] = useState<any[]>(ticketData.partidas || []);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si está aprobada
-    const [porcentajeAdelanto, setPorcentajeAdelanto] = useState(0.5); // 40%, 50% o 60%
+    const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null); // Null forces explicit selection
     const [userRole, setUserRole] = useState<string | null>(null);
+
+    // Toast Notification System
+    const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
+
+    const showToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ visible: true, title, message, type });
+        setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
+    };
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -80,11 +88,14 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     const [newExpense, setNewExpense] = useState({ concepto: "", monto: "", tipo: "Gasto Operativo" });
     const fileInputRef = useRef<HTMLInputElement>(null);
     const fieldEvidenceRef = useRef<HTMLInputElement>(null);
+    const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
+    const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
 
     useEffect(() => {
         const interval = setInterval(() => {
             setCurrentTime(new Date());
         }, 1000);
+
 
         // Auto-reparar datos del técnico si faltan
         if (ticketData.tecnico?.id && (!ticketData.tecnico.banco || !ticketData.tecnico.numeroCuenta || !ticketData.tecnico.cci)) {
@@ -134,8 +145,12 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     // Guardar estado del ticket cuando cambia y sincronizar con la lista maestra
     useEffect(() => {
         if (typeof window !== 'undefined' && ticketData) {
-            // 1. Guardar en el storage individual
-            localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
+            // 1. Guardar en el storage individual (detalle completo)
+            try {
+                localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
+            } catch (e) {
+                console.error("Error saving individual ticket state (quota?):", e);
+            }
 
             // 2. Sincronizar con la lista maestra 'tickets' para reflejar cambios en el Dashboard/Kanban
             const savedTickets = localStorage.getItem("tickets");
@@ -144,9 +159,30 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                     const allTickets = JSON.parse(savedTickets);
                     const index = allTickets.findIndex((t: any) => t.id === ticket.id);
                     if (index !== -1) {
-                        // Solo actualizar si hay cambios reales para evitar bucles
-                        if (JSON.stringify(allTickets[index]) !== JSON.stringify(ticketData)) {
-                            allTickets[index] = { ...allTickets[index], ...ticketData };
+                        // ⚠️ OPTIMIZACIÓN: Excluir campos pesados al sincronizar con la lista maestra
+                        // para evitar "QuotaExceededError". El detalle vive en `ticket_state_${id}`.
+                        const { evidenciasCampo, voucher, photos, archivosAdjuntos, cotizacionFormal, ...lightTicketData } = ticketData;
+
+                        // Preparar el objeto candidato para la lista maestra
+                        const candidateTicket = { ...allTickets[index], ...lightTicketData };
+
+                        // Limpieza de seguridad: Asegurar que NO entren campos pesados
+                        delete candidateTicket.evidenciasCampo;
+                        delete candidateTicket.voucher;
+                        delete candidateTicket.photos;
+                        delete candidateTicket.archivosAdjuntos;
+                        delete candidateTicket.cotizacionFormal;
+
+                        // Comparar con la versión actual en lista maestra (también limpiando por si acaso)
+                        const currentInMaster = { ...allTickets[index] };
+                        delete currentInMaster.evidenciasCampo;
+                        delete currentInMaster.voucher;
+                        delete currentInMaster.photos;
+                        delete currentInMaster.archivosAdjuntos;
+                        delete currentInMaster.cotizacionFormal;
+
+                        if (JSON.stringify(currentInMaster) !== JSON.stringify(candidateTicket)) {
+                            allTickets[index] = candidateTicket;
                             localStorage.setItem("tickets", JSON.stringify(allTickets));
 
                             // Disparar eventos para que el Dashboard/Kanban se actualicen inmediatamente
@@ -160,6 +196,41 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             }
         }
     }, [ticketData, ticket.id]);
+
+    // Listener para sincronizar cambios externos (ej: confirmación del Gerente desde otra pestaña)
+    useEffect(() => {
+        const handleStorageUpdate = (e: any) => {
+            // Si es un evento de storage real, verificamos la key
+            if (e.type === 'storage' && e.key !== `ticket_state_${ticket.id}` && e.key !== 'tickets') {
+                return;
+            }
+
+            // Recargar datos desde localStorage
+            const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    // Actualizamos el estado local para reflejar los cambios externos (ej: adelantoPagado: true)
+                    setTicketData((prev: any) => {
+                        // Evitar updates innecesarios si ya son iguales
+                        if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
+                        return { ...prev, ...parsed };
+                    });
+                } catch (err) {
+                    console.error("Error syncing external state:", err);
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorageUpdate);
+        // Escuchar también evento custom para actualizaciones en la misma ventana (si fuera el caso)
+        window.addEventListener('local-storage-update', handleStorageUpdate);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageUpdate);
+            window.removeEventListener('local-storage-update', handleStorageUpdate);
+        };
+    }, [ticket.id]);
 
 
     const handleAssignment = (assignmentData: any) => {
@@ -209,7 +280,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
 
     const handleSendFieldReport = () => {
         if (!diagnostico) {
-            alert("Por favor ingrese el diagnóstico técnico.");
+            showToast("Diagnóstico Requerido", "Por favor ingrese el diagnóstico técnico antes de enviar.", "error");
             return;
         }
 
@@ -270,7 +341,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
-        alert("Modificación autorizada por Gerencia. La cotización ha sido desbloqueada.");
+        showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
     };
 
     const handleProceedToExecution = () => {
@@ -302,7 +373,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                 costoAnteriorTecnico: currentTotal
             };
             setTicketData(updated);
-            alert(`Costo ajustado exitosamente a S/ ${val.toFixed(2)}. Ahora puede proceder con el adelanto.`);
+            showToast("Costo Reacordado", `Nuevo monto técnico ajustado a S/ ${val.toFixed(2)}.`, "success");
         }
     };
 
@@ -316,7 +387,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
 
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 2) {
-            alert("Es obligatorio adjuntar al menos 2 fotos (DURANTE y DESPUÉS) para finalizar.");
+            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÉS).", "error");
             return;
         }
         const updated = {
@@ -329,11 +400,16 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             evidencias: ticketData.evidencias || [] // Asegurar fotos del cliente
         };
         setTicketData(updated);
-        alert("¡Trabajo finalizado! Se ha generado el expediente fotográfico unificado.");
+        showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 
     const handleRequestExtraAdvance = () => {
-        const monto = prompt("Ingrese el monto del adelanto adicional solicitado por el técnico (Petición al Gerente):");
+        // Toggle input visibility instead of using prompt
+        setShowExtraAdvanceInput(true);
+    };
+
+    const submitExtraAdvanceRequest = () => {
+        const monto = extraAdvanceAmount;
         if (monto && !isNaN(parseFloat(monto))) {
             const val = parseFloat(monto);
             const pagosPrevios = ticketData.historialPagosTecnico || [];
@@ -341,7 +417,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             const costoRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
 
             if (totalPagado + val > costoRef + 0.01) {
-                alert("Error: El monto solicitado excede el saldo pendiente del técnico.");
+                showToast("Saldo Insuficiente", "El adelanto solicitado excede el saldo pendiente del técnico.", "error");
                 return;
             }
 
@@ -352,7 +428,11 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                     fecha: new Date().toISOString()
                 }
             });
-            alert("Solicitud registrada. El Gerente debe realizar el depósito para poder confirmarlo.");
+            setShowExtraAdvanceInput(false);
+            setExtraAdvanceAmount("");
+            showToast("Petición Enviada", "Solicitud registrada. Esperando aprobación de Gerencia.", "info");
+        } else {
+            showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
         }
     };
 
@@ -376,10 +456,24 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             montoAdelanto: totalPagado + solicitud.monto,
             solicitudAdelantoExtra: null
         });
-        alert(`Se ha confirmado que el Gerente depositó S/ ${solicitud.monto.toFixed(2)}.`);
+        showToast("Depósito Confirmado", `Se registró el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
+    };
+
+    const handleRequestVisitPayment = () => {
+        const amount = parseFloat(ticketData.costoVisita || 0);
+        const updated = {
+            ...ticketData,
+            solicitudPagoVisita: {
+                monto: amount,
+                fecha: new Date().toISOString()
+            }
+        };
+        setTicketData(updated);
+        showToast("Solicitud Enviada", `Se solicitó pago de visita por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleConfirmVisitPayment = () => {
+        // Solo permitir si hay solicitud o si es admin forzando (pero idealmente debería haber solicitud)
         const amount = parseFloat(ticketData.costoVisita || 0);
         const pagosPrevios = ticketData.historialPagosTecnico || [];
 
@@ -396,20 +490,29 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             visitPaymentConfirmed: true,
             historialPagosTecnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: (ticketData.montoAdelanto || 0) + amount,
-            fechaPagoVisita: new Date().toISOString()
+            fechaPagoVisita: new Date().toISOString(),
+            solicitudPagoVisita: null // Limpiar solicitud
         });
-        alert(`Se ha confirmado el pago de visita de S/ ${amount.toFixed(2)}. El técnico ahora puede proceder con la inspección.`);
+        showToast("Pago de Visita Exitoso", `Se confirmó el depósito de S/ ${amount.toFixed(2)}.`, "success");
     };
 
     const handleConfirmAdvance = () => {
+        // Usar el porcentaje solicitado si existe, de lo contrario usar el seleccionado localmente
+        const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
+
+        if (!pctReal) {
+            showToast("Selección Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
+            return;
+        }
+
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costoReferencia * porcentajeAdelanto;
+        const amount = costoReferencia * pctReal;
 
         const pagosPrevios = ticketData.historialPagosTecnico || [];
         const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
 
         if (totalPagado + amount > costoReferencia + 0.01) {
-            alert(`Error: El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado de S/ ${costoReferencia.toFixed(2)} (Ya se pagó S/ ${totalPagado.toFixed(2)}).`);
+            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
             return;
         }
 
@@ -417,7 +520,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: amount,
-            porcentaje: porcentajeAdelanto,
+            porcentaje: pctReal,
             referencia: "Adelanto Operativo"
         };
 
@@ -426,11 +529,51 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             adelantoPagado: true,
             historialPagosTecnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + amount,
-            fechaPagoAdelanto: new Date().toISOString()
+            fechaPagoAdelanto: new Date().toISOString(),
+            // Limpiamos la solicitud ya que se atendió
+            solicitudAdelanto: null
         };
 
         setTicketData(updated);
-        alert(`Se ha confirmado el depósito de S/ ${amount.toFixed(2)} (${(porcentajeAdelanto * 100).toFixed(0)}% del costo ref.) al técnico.`);
+        showToast("Adelanto Confirmado", `Se ha confirmado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
+    };
+
+    const handleRequestAdvance = () => {
+        if (!porcentajeAdelanto) {
+            showToast("Selección Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
+            return;
+        }
+
+        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const amount = costoReferencia * porcentajeAdelanto;
+
+        const updated = {
+            ...ticketData,
+            solicitudAdelanto: {
+                porcentaje: porcentajeAdelanto,
+                monto: amount,
+                fecha: new Date().toISOString()
+            }
+        };
+        setTicketData(updated);
+        showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "info");
+    };
+
+    const handleRequestFinalLiquidation = () => {
+        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const pagosPrevios = ticketData.historialPagosTecnico || [];
+        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
+        const amount = costoReferencia - totalPagado;
+
+        const updated = {
+            ...ticketData,
+            solicitudLiquidacion: {
+                monto: amount,
+                fecha: new Date().toISOString()
+            }
+        };
+        setTicketData(updated);
+        showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleFinalLiquidationPay = () => {
@@ -440,7 +583,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
         const amount = costoReferencia - totalPagado;
 
         if (amount < 0) {
-            alert("Error: El saldo es negativo. Verifique los depósitos previos.");
+            showToast("Balance Negativo", "El saldo es negativo. Verifique los depósitos previos.", "error");
             return;
         }
 
@@ -460,7 +603,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
         };
 
         setTicketData(updated);
-        alert(`Se ha registrado el pago final de S/ ${amount.toFixed(2)}. El ticket ha sido LIQUIDADO Y CERRADO satisfactoriamente.`);
+        showToast("Ticket Liquidado", `Se registró el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -707,13 +850,28 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                 {userRole === 'admin' ? (
                                                     <button className={styles.confirmAdvanceBtn} onClick={handleConfirmVisitPayment}>
                                                         <CheckCircle size={18} />
-                                                        CONFIRMAR QUE GERENCIA YA PAGÓ LA VISITA
+                                                        <span>
+                                                            CONFIRMAR DEPÓSITO VISITA
+                                                            {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
+                                                        </span>
                                                     </button>
                                                 ) : (
-                                                    <div className={styles.adminOnlyMessage}>
-                                                        <Clock size={18} />
-                                                        <span>Esperando que el Administrador confirme el depósito</span>
-                                                    </div>
+                                                    !ticketData.solicitudPagoVisita ? (
+                                                        <button
+                                                            className={styles.sendReportBtnOptimistic}
+                                                            onClick={handleRequestVisitPayment}
+                                                            style={{ width: '100%', marginTop: '12px', background: '#3B82F6', justifyContent: 'center' }}
+                                                        >
+                                                            <Send size={18} />
+                                                            <span>SOLICITAR PAGO A GERENCIA</span>
+                                                        </button>
+                                                    ) : (
+                                                        <div className={styles.waitingForManager}>
+                                                            <Clock size={24} color="#3B82F6" />
+                                                            <span style={{ fontSize: '1.1rem' }}>¡ SOLICITUD ENVIADA !</span>
+                                                            <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Estamos gestionando el pago de la visita con Gerencia.</span>
+                                                        </div>
+                                                    )
                                                 )}
 
                                                 <div className={styles.bankNote}>
@@ -1097,7 +1255,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                             partidas: partidasCotizacion,
                                                                             fechaUltimaModificacion: new Date().toISOString()
                                                                         });
-                                                                        alert("Cambios guardados y cotización bloqueada nuevamente.");
+                                                                        showToast("Cotización Guardada", "Cambios guardados y cotización bloqueada nuevamente.", "success");
                                                                     }}
                                                                 >
                                                                     <CheckCircle size={18} />
@@ -1181,17 +1339,23 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                                     <span className={styles.adjustedBadge}>¡COSTO REAJUSTADO!</span>
                                                                                 )}
                                                                             </div>
-                                                                            <div className={styles.percentageSelector}>
-                                                                                {[0.4, 0.5, 0.6].map(p => (
-                                                                                    <button
-                                                                                        key={p}
-                                                                                        className={`${styles.pctBtn} ${porcentajeAdelanto === p ? styles.pctActive : ''}`}
-                                                                                        onClick={() => setPorcentajeAdelanto(p)}
-                                                                                    >
-                                                                                        {(p * 100).toFixed(0)}%
-                                                                                    </button>
-                                                                                ))}
-                                                                            </div>
+                                                                            {!ticketData.solicitudAdelanto ? (
+                                                                                <div className={styles.percentageSelector}>
+                                                                                    {[0.4, 0.5, 0.6].map(p => (
+                                                                                        <button
+                                                                                            key={p}
+                                                                                            className={`${styles.pctBtn} ${porcentajeAdelanto === p ? styles.pctActive : ''}`}
+                                                                                            onClick={() => setPorcentajeAdelanto(p)}
+                                                                                        >
+                                                                                            {(p * 100).toFixed(0)}%
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div style={{ background: '#ECFDF5', padding: '4px 8px', borderRadius: '4px', border: '1px solid #10B981', color: '#047857', fontWeight: 'bold' }}>
+                                                                                    SOLICITADO: {(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%
+                                                                                </div>
+                                                                            )}
                                                                         </div>
 
                                                                         <div className={styles.techBankDetails}>
@@ -1227,15 +1391,63 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                         </div>
 
                                                                         {userRole === 'admin' ? (
-                                                                            <button className={styles.confirmAdvanceBtn} onClick={handleConfirmAdvance}>
+                                                                            <button
+                                                                                className={styles.confirmAdvanceBtn}
+                                                                                onClick={handleConfirmAdvance}
+                                                                                disabled={!ticketData.solicitudAdelanto && porcentajeAdelanto === null}
+                                                                                style={(!ticketData.solicitudAdelanto && porcentajeAdelanto === null) ? { opacity: 0.5, cursor: 'not-allowed', filter: 'grayscale(1)' } : {}}
+                                                                            >
                                                                                 <Wallet size={18} />
-                                                                                <span>CONFIRMAR DEPÓSITO S/ {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}</span>
+                                                                                <span>
+                                                                                    {ticketData.solicitudAdelanto ?
+                                                                                        `CONFIRMAR DEPÓSITO (SOLICITUD: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%)` :
+                                                                                        porcentajeAdelanto !== null ?
+                                                                                            `CONFIRMAR DEPÓSITO S/ ${((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}` :
+                                                                                            "SELECCIONE % PARA CONFIRMAR"
+                                                                                    }
+                                                                                </span>
                                                                             </button>
                                                                         ) : (
-                                                                            <div className={styles.adminOnlyMessage}>
-                                                                                <Clock size={18} />
-                                                                                <span>Esperando confirmación de Gerencia</span>
-                                                                            </div>
+                                                                            !ticketData.solicitudAdelanto ? (
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                                    {porcentajeAdelanto === null && (
+                                                                                        <p style={{ fontSize: '0.75rem', color: '#EF4444', textAlign: 'center', margin: 0, fontWeight: 700 }}>
+                                                                                            * Seleccione 40%, 50% o 60% arriba
+                                                                                        </p>
+                                                                                    )}
+                                                                                    <button
+                                                                                        className={styles.sendReportBtnOptimistic}
+                                                                                        onClick={handleRequestAdvance}
+                                                                                        disabled={porcentajeAdelanto === null}
+                                                                                        style={{
+                                                                                            width: '100%',
+                                                                                            marginTop: '4px',
+                                                                                            background: '#3B82F6',
+                                                                                            justifyContent: 'center',
+                                                                                            opacity: porcentajeAdelanto === null ? 0.5 : 1,
+                                                                                            cursor: porcentajeAdelanto === null ? 'not-allowed' : 'pointer'
+                                                                                        }}
+                                                                                    >
+                                                                                        <Send size={18} />
+                                                                                        <span>SOLICITAR PAGO A GERENCIA</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className={styles.waitingForManager}>
+                                                                                    <Clock size={24} color="#3B82F6" />
+                                                                                    <span style={{ fontSize: '1.1rem' }}>¡ ADELANTO SOLICITADO !</span>
+                                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>El pago está en proceso de aprobación por Gerencia.</span>
+                                                                                </div>
+                                                                            )
+                                                                        )}
+
+                                                                        {ticketData.solicitudAdelanto && userRole !== 'admin' && (
+                                                                            <button
+                                                                                style={{ marginTop: '8px', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline', width: '100%' }}
+                                                                                onClick={() => setTicketData({ ...ticketData, solicitudAdelanto: null })}
+                                                                            >
+                                                                                Cancelar o Modificar Solicitud
+                                                                            </button>
                                                                         )}
                                                                         <p className={styles.bankNote}>⚠️ Solo el Administrador puede confirmar transferencias.</p>
 
@@ -1327,22 +1539,77 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                 {!ticketData.solicitudAdelantoExtra ? (
                                                                     <>
                                                                         <p style={{ fontSize: '0.8rem', color: '#92400E' }}>La Gestora envía la petición al Gerente para fondos extra.</p>
-                                                                        <button className={styles.extraAdvanceBtn} onClick={handleRequestExtraAdvance}>
-                                                                            <Wallet size={16} />
-                                                                            SOLICITAR ADELANTO AL GERENTE
-                                                                        </button>
+                                                                        {!showExtraAdvanceInput ? (
+                                                                            <button className={styles.extraAdvanceBtn} onClick={handleRequestExtraAdvance}>
+                                                                                <Wallet size={16} />
+                                                                                SOLICITAR ADELANTO AL GERENTE
+                                                                            </button>
+                                                                        ) : (
+                                                                            <div className={styles.extraAdvanceForm}>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    placeholder="Monto a solicitar (S/)"
+                                                                                    value={extraAdvanceAmount}
+                                                                                    onChange={(e) => setExtraAdvanceAmount(e.target.value)}
+                                                                                    className={styles.expenseInput}
+                                                                                    autoFocus
+                                                                                />
+                                                                                <div className={styles.miniActions}>
+                                                                                    <button
+                                                                                        className={styles.confirmSmallBtn}
+                                                                                        onClick={submitExtraAdvanceRequest}
+                                                                                    >
+                                                                                        <CheckCircle size={14} /> Solicitud
+                                                                                    </button>
+                                                                                    <button
+                                                                                        className={styles.cancelSmallBtn}
+                                                                                        onClick={() => {
+                                                                                            setShowExtraAdvanceInput(false);
+                                                                                            setExtraAdvanceAmount("");
+                                                                                        }}
+                                                                                    >
+                                                                                        <X size={14} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
                                                                     </>
                                                                 ) : (
                                                                     <div className={styles.pendingAdvanceBox}>
-                                                                        <div className={styles.pendingBadge}>ESPERANDO DEPÓSITO</div>
-                                                                        <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>Monto solicitado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}</p>
-                                                                        <button className={styles.confirmManagerDepositBtn} onClick={handleConfirmExtraAdvance}>
-                                                                            <CheckCircle size={14} />
-                                                                            CONFIRMAR QUE GERENTE YA DEPOSITÓ
-                                                                        </button>
-                                                                        <button className={styles.cancelRequestBtn} onClick={() => setTicketData({ ...ticketData, solicitudAdelantoExtra: null })}>
-                                                                            Cancelar Petición
-                                                                        </button>
+                                                                        {ticketData.solicitudAdelantoExtra.pagado ? (
+                                                                            <>
+                                                                                <div className={styles.pendingBadge} style={{ background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' }}>
+                                                                                    ✅ DEPÓSITO REALIZADO
+                                                                                </div>
+                                                                                <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', marginTop: '4px' }}>
+                                                                                    Monto abonado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}
+                                                                                </p>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className={styles.pendingBadge}>ESPERANDO DEPÓSITO</div>
+                                                                                <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>Monto solicitado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}</p>
+
+                                                                                {userRole === 'admin' ? (
+                                                                                    <button className={styles.confirmManagerDepositBtn} onClick={handleConfirmExtraAdvance}>
+                                                                                        <CheckCircle size={14} />
+                                                                                        CONFIRMAR DEPÓSITO MANUALMENTE
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <div className={styles.waitingForManager} style={{ marginTop: '0', padding: '12px' }}>
+                                                                                        <Clock size={20} color="#B45309" />
+                                                                                        <span style={{ color: '#B45309' }}>¡ PETICIÓN ENVIADA !</span>
+                                                                                        <span style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: 500 }}>Esperando depósito extra del Gerente.</span>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {userRole !== 'admin' && (
+                                                                                    <button className={styles.cancelRequestBtn} onClick={() => setTicketData({ ...ticketData, solicitudAdelantoExtra: null })}>
+                                                                                        Cancelar Petición
+                                                                                    </button>
+                                                                                )}
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -1486,6 +1753,9 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                 placeholder={`EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`}
                                                                 value={ticketData.numeroTicketCliente || ""}
                                                                 autoFocus={!ticketData.numeroTicketCliente}
+                                                                // Si el ticket ya venía con número asignado (desde props), bloquear edición
+                                                                disabled={!!ticket.numeroTicketCliente}
+                                                                style={ticket.numeroTicketCliente ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.]/g, '');
                                                                     setTicketData({ ...ticketData, numeroTicketCliente: val });
@@ -1523,7 +1793,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                             documentosValidados: documentosChecklist
                                                         };
                                                         setTicketData(updated);
-                                                        alert("¡Documentación validada! El ticket ha pasado a liquidación final.");
+                                                        showToast("Documentación Validada", "El ticket ha pasado a liquidación final.", "success");
                                                     }}
                                                 >
                                                     <span>PASAR A LIQUIDACIÓN FINAL</span>
@@ -1667,13 +1937,28 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                 onClick={handleFinalLiquidationPay}
                                                             >
                                                                 <DollarSign size={20} />
-                                                                CONFIRMAR DEPÓSITO DE SALDO FINAL
+                                                                <span>
+                                                                    CONFIRMAR DEPÓSITO FINAL
+                                                                    {ticketData.solicitudLiquidacion && " (SOLICITADO)"}
+                                                                </span>
                                                             </button>
                                                         ) : (
-                                                            <div className={styles.adminOnlyMessage} style={{ marginBottom: '20px' }}>
-                                                                <Clock size={18} />
-                                                                <span>Esperando que el Administrador liquide el saldo</span>
-                                                            </div>
+                                                            !ticketData.solicitudLiquidacion ? (
+                                                                <button
+                                                                    className={styles.proceedToLiquidationBtn}
+                                                                    onClick={handleRequestFinalLiquidation}
+                                                                    style={{ background: '#3B82F6', marginTop: '0' }}
+                                                                >
+                                                                    <Send size={20} />
+                                                                    <span>SOLICITAR LIQUIDACIÓN FINAL</span>
+                                                                </button>
+                                                            ) : (
+                                                                <div className={styles.waitingForManager}>
+                                                                    <Clock size={24} color="#3B82F6" />
+                                                                    <span style={{ fontSize: '1.1rem' }}>¡ LIQUIDACIÓN EN PROCESO !</span>
+                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Solicitud de cierre enviada a Gerencia.</span>
+                                                                </div>
+                                                            )
                                                         )}
 
                                                         <p className={styles.liquidationNote}>
@@ -1717,7 +2002,25 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                         ticket={ticketData}
                         onClose={() => setShowAssignmentDrawer(false)}
                         onAssign={handleAssignment}
+                        onShowToast={showToast}
                     />
+                )}
+
+                {/* Toast Notification Render */}
+                {toast.visible && (
+                    <div className={styles.toastOverlay}>
+                        <div className={`${styles.toastCard} ${toast.type === 'success' ? styles.toastSuccess : toast.type === 'error' ? styles.toastError : styles.toastInfo}`}>
+                            <div className={styles.toastIcon}>
+                                {toast.type === 'success' && <CheckCircle2 size={24} color="white" />}
+                                {toast.type === 'error' && <AlertTriangle size={24} color="white" />}
+                                {toast.type === 'info' && <Sparkles size={24} color="white" />}
+                            </div>
+                            <div className={styles.toastContent}>
+                                <h4>{toast.title}</h4>
+                                <p>{toast.message}</p>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div >
         </>

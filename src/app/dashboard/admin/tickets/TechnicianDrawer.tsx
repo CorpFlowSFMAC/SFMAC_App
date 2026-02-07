@@ -11,9 +11,10 @@ interface TechnicianDrawerProps {
     onClose: () => void;
     ticket: any;
     onAssign: (data: any) => void;
+    onShowToast?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign }: TechnicianDrawerProps) {
+export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, onShowToast }: TechnicianDrawerProps) {
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [selectedTechnician, setSelectedTechnician] = useState<any>(null);
     const [costoVisita, setCostoVisita] = useState("");
@@ -81,7 +82,11 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign }: 
 
         const visita = costoVisita ? parseFloat(costoVisita) : 0;
         if (visita > 20) {
-            alert("El costo máximo de visita técnica es de S/ 20.00");
+            if (onShowToast) {
+                onShowToast("Costo Excesivo", "El costo máximo de visita técnica es de S/ 20.00", "error");
+            } else {
+                alert("El costo máximo de visita técnica es de S/ 20.00");
+            }
             return;
         }
 

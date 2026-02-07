@@ -80,7 +80,10 @@ export default function TicketsPage() {
 
                         if (normalizedMaster !== normalizedSaved) {
                             hasChanges = true;
-                            return { ...t, ...parsed, estadoId: normalizedSaved };
+                            // ⚠️ OPTIMIZACIÓN: No sincronizar campos pesados (imágenes/base64) al listado general
+                            // para evitar "QuotaExceededError". El detalle se carga individualmente.
+                            const { evidenciasCampo, voucher, ...lightState } = parsed;
+                            return { ...t, ...lightState, estadoId: normalizedSaved };
                         }
                     } catch (e) {
                         console.error("Error parsing saved ticket state for sync:", e);
