@@ -33,6 +33,7 @@ interface PaymentItem {
     monto: number;
     estado: 'pendiente' | 'pagado';
     fecha: string;
+    voucherRef?: string | null;
 }
 
 interface PaymentTicketGroup {
@@ -53,6 +54,8 @@ interface PaymentTicketGroup {
     saldoPendiente: number;
     items: PaymentItem[];
     historialDepositos: any[];
+    costoVisita?: number;
+    voucherVisita?: string | null;
 }
 
 export default function PaymentsPage() {
@@ -209,7 +212,9 @@ export default function PaymentsPage() {
                             montoAdelantado: totalPagado, // Total Pagado Histórico
                             saldoPendiente: montoPactadoBase - totalPagado,
                             items: items,
-                            historialDepositos: pagos
+                            historialDepositos: pagos,
+                            costoVisita: ticket.costoVisita || ticket.solicitudPagoVisita?.monto,
+                            voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita')?.voucherRef
                         });
                     }
 
@@ -404,6 +409,27 @@ export default function PaymentsPage() {
                                                             <span>CTA: {group.tecnico.numeroCuenta}</span>
                                                             {group.tecnico.cci && <span>CCI: {group.tecnico.cci}</span>}
                                                         </div>
+
+                                                        {/* Visualización de Costo de Visita y Voucher */}
+                                                        {group.costoVisita && group.costoVisita > 0 && (
+                                                            <div className={styles.visitCostRow}>
+                                                                <div className={styles.visitLabelRow}>
+                                                                    <ArrowUpRight size={12} />
+                                                                    <span>Costo Visita: <strong>S/ {group.costoVisita.toFixed(2)}</strong></span>
+                                                                </div>
+                                                                {group.voucherVisita && (
+                                                                    <div className={styles.voucherThumbBox}>
+                                                                        <img
+                                                                            src={localStorage.getItem(group.voucherVisita) || ""}
+                                                                            alt="Voucher Visita"
+                                                                            className={styles.miniVoucher}
+                                                                            onClick={() => setShowVoucher(localStorage.getItem(group.voucherVisita!))}
+                                                                        />
+                                                                        <div className={styles.zoomPulse}></div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </td>

@@ -893,3 +893,78 @@
         opacity: 1;
     }
 }
+
+/* Visit Cost & Voucher Thumb Styles */
+.visitCostRow {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #CBD5E1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.visitLabelRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: #64748B;
+}
+
+.visitLabelRow strong {
+    color: #475569;
+}
+
+.voucherThumbBox {
+    position: relative;
+    width: 32px;
+    height: 32px;
+}
+
+.miniVoucher {
+    width: 32px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #E2E8F0;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: white;
+}
+
+.miniVoucher:hover {
+    transform: scale(3.5) translateX(-15px) translateY(-10px);
+    z-index: 100;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    border-color: #3B82F6;
+}
+
+.zoomPulse {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: #3B82F6;
+    border-radius: 50%;
+    border: 2px solid white;
+    animation: thumbPulse 2s infinite;
+}
+
+@keyframes thumbPulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.5);
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
