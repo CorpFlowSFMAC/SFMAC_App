@@ -17,13 +17,6 @@ interface TicketWindowProps {
 }
 
 export default function TicketWindow({ ticket, onClose, index = 0, children }: TicketWindowProps) {
-    const [isMaximized, setIsMaximized] = useState(true);
-    const [isMinimized, setIsMinimized] = useState(false);
-    const [position, setPosition] = useState({ x: 100, y: 50 });
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-    const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
-
     // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
     const [ticketData, setTicketData] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -46,6 +39,24 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             estadoId: normalizeStateId(ticket.estadoId)
         };
     });
+
+    const [isMaximized, setIsMaximized] = useState(() => ticketData?.isMaximized !== undefined ? ticketData.isMaximized : true);
+    const [isMinimized, setIsMinimized] = useState(() => ticketData?.isMinimized !== undefined ? ticketData.isMinimized : false);
+    const [position, setPosition] = useState(() => ticketData?.position || { x: 100 + (index * 30), y: 50 + (index * 30) });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const [zIndex, setZIndex] = useState(1001 + (index || 0));
+    const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
+
+    // Sincronizar estados de UI con ticketData para persistencia
+    useEffect(() => {
+        setTicketData((prev: any) => ({
+            ...prev,
+            isMaximized,
+            isMinimized,
+            position
+        }));
+    }, [isMaximized, isMinimized, isDragging]); // Sincronizar cuando cambian banderas o termina drag (vía isDragging)
 
     // Estados para el reporte de campo (Paso 4)
     const [diagnostico, setDiagnostico] = useState("");
@@ -110,6 +121,8 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                             tecnico: {
                                 ...prev.tecnico,
                                 banco: fullTech.banco,
+                                nombre: fullTech.nombre,
+                                apellido: fullTech.apellido,
                                 numeroCuenta: fullTech.numeroCuenta,
                                 cci: fullTech.cci,
                                 yape: fullTech.yape,
@@ -222,13 +235,22 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             }
         };
 
+        const handleReopen = (e: any) => {
+            if (e.detail?.ticketId === ticket.id) {
+                setIsMaximized(true);
+                setIsMinimized(false);
+                setZIndex(Date.now() % 10000000);
+            }
+        };
+
         window.addEventListener('storage', handleStorageUpdate);
-        // Escuchar también evento custom para actualizaciones en la misma ventana (si fuera el caso)
         window.addEventListener('local-storage-update', handleStorageUpdate);
+        window.addEventListener('ticket-reopen', handleReopen as EventListener);
 
         return () => {
             window.removeEventListener('storage', handleStorageUpdate);
             window.removeEventListener('local-storage-update', handleStorageUpdate);
+            window.removeEventListener('ticket-reopen', handleReopen as EventListener);
         };
     }, [ticket.id]);
 
@@ -638,6 +660,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
+        setZIndex(Date.now() % 10000000); // Traer al frente al hacer click
         if (isMaximized) return;
 
         const rect = windowRef.current?.getBoundingClientRect();
@@ -676,74 +699,105 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     }, [isDragging, dragOffset, isMaximized]);
 
     const handleMaximize = () => {
-        setIsMaximized(!isMaximized);
+        const nextState = !isMaximized;
+        setIsMaximized(nextState);
         setIsMinimized(false);
     };
 
     const handleMinimize = () => {
-        setIsMinimized(!isMinimized);
+        const nextState = !isMinimized;
+        setIsMinimized(nextState);
     };
 
     return (
         <>
-            {isMaximized && !isMinimized && <div className={styles.overlay} onClick={onClose} />}
+            {isMaximized && !isMinimized && <div className={styles.overlay} onClick={onClose} style={{ zIndex: zIndex - 1 }} />}
 
             <div
                 ref={windowRef}
                 className={`${styles.window} ${isMaximized ? styles.maximized : ''} ${isMinimized ? styles.minimized : ''}`}
+                onClick={() => setZIndex(Date.now() % 10000000)}
                 style={
                     isMinimized
-                        ? { left: `${20 + (index * 410)}px`, bottom: '20px' }
-                        : (!isMaximized ? { left: `${position.x}px`, top: `${position.y}px` } : {})
+                        ? { left: `${20 + (index * 270)}px`, bottom: '20px', zIndex: zIndex }
+                        : (!isMaximized
+                            ? { left: `${position.x}px`, top: `${position.y}px`, zIndex: zIndex }
+                            : { zIndex: zIndex }
+                        )
                 }
             >
                 <div
                     className={styles.titleBar}
                     onMouseDown={handleMouseDown}
-                    style={{ cursor: isMaximized ? 'default' : 'move' }}
+                    onClick={() => {
+                        if (isMinimized) {
+                            setIsMinimized(false);
+                            if (!isMaximized) setIsMaximized(false);
+                        }
+                    }}
+                    style={{ cursor: (isMaximized && !isMinimized) ? 'default' : 'move' }}
                 >
                     <div className={styles.titleLeft}>
-                        {ticket.cliente?.logo ? (
-                            <div className={styles.clientLogoHeader}>
-                                <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} />
-                            </div>
+                        {!isMinimized ? (
+                            <>
+                                {ticket.cliente?.logo ? (
+                                    <div className={styles.clientLogoHeader}>
+                                        <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} />
+                                    </div>
+                                ) : (
+                                    <div className={styles.ticketIcon}>🎫</div>
+                                )}
+                                <div className={styles.titleInfo}>
+                                    <h3>
+                                        {ticket.numeroTicketCliente
+                                            ? ticket.numeroTicketCliente
+                                            : `Ticket #${ticket.id.slice(-6)}`
+                                        }
+                                    </h3>
+                                    <span>{ticket.cliente?.nombre || 'Sin cliente'}</span>
+                                </div>
+                            </>
                         ) : (
-                            <div className={styles.ticketIcon}>🎫</div>
+                            <div className={styles.titleInfoMinimized}>
+                                <h3 className={styles.minimizedTicketNumber}>
+                                    {ticket.numeroTicketCliente
+                                        ? ticket.numeroTicketCliente
+                                        : `TKT-${ticket.id.slice(-6).toUpperCase()}`
+                                    }
+                                </h3>
+                            </div>
                         )}
-                        <div className={styles.titleInfo}>
-                            <h3>
-                                {ticket.numeroTicketCliente
-                                    ? ticket.numeroTicketCliente
-                                    : `Ticket #${ticket.id.slice(-6)}`
-                                }
-                            </h3>
-                            <span>{ticket.cliente?.nombre || 'Sin cliente'}</span>
-                        </div>
                     </div>
 
-                    <div className={`${styles.slaTimerHeader} ${ticketData.pausadoSLA ? styles.paused : ''}`}>
-                        <Clock size={14} />
-                        <span>{formatElapsedTime()}</span>
-                        {ticketData.pausadoSLA && <span className={styles.pausedLabel}>PAUSADO</span>}
-                    </div>
+                    {!isMinimized && (
+                        <div className={`${styles.slaTimerHeader} ${ticketData.pausadoSLA ? styles.paused : ''}`}>
+                            <Clock size={14} />
+                            <span>{formatElapsedTime()}</span>
+                            {ticketData.pausadoSLA && <span className={styles.pausedLabel}>PAUSADO</span>}
+                        </div>
+                    )}
 
                     <div className={styles.windowControls}>
+                        {!isMinimized && (
+                            <>
+                                <button
+                                    className={styles.controlBtn}
+                                    onClick={handleMinimize}
+                                    title="Minimizar"
+                                >
+                                    <Minimize2 size={16} />
+                                </button>
+                                <button
+                                    className={styles.controlBtn}
+                                    onClick={handleMaximize}
+                                    title={isMaximized ? "Restaurar" : "Maximizar"}
+                                >
+                                    {isMaximized ? <Square size={14} /> : <Maximize2 size={16} />}
+                                </button>
+                            </>
+                        )}
                         <button
-                            className={styles.controlBtn}
-                            onClick={handleMinimize}
-                            title="Minimizar"
-                        >
-                            <Minimize2 size={16} />
-                        </button>
-                        <button
-                            className={styles.controlBtn}
-                            onClick={handleMaximize}
-                            title={isMaximized ? "Restaurar" : "Maximizar"}
-                        >
-                            {isMaximized ? <Square size={14} /> : <Maximize2 size={16} />}
-                        </button>
-                        <button
-                            className={`${styles.controlBtn} ${styles.closeBtn}`}
+                            className={`${styles.controlBtn} ${styles.closeBtn} ${isMinimized ? styles.minimizedClose : ''}`}
                             onClick={onClose}
                             title="Cerrar"
                         >

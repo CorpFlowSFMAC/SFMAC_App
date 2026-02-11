@@ -79,8 +79,18 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         }
     }, [isDraftRestored]);
 
+    const [allTickets] = useLocalStorage<any[]>("tickets", []);
+
+    const isTicketClienteDuplicate = (): boolean => {
+        if (!formData.tieneNumeroCliente || !formData.numeroTicketCliente) return false;
+        return allTickets.some(t =>
+            t.numeroTicketCliente === formData.numeroTicketCliente
+        );
+    };
+
     const isTicketClienteValid = (): boolean => {
         if (!formData.tieneNumeroCliente) return true;
+        if (isTicketClienteDuplicate()) return false;
         const currentYearSuffix = new Date().getFullYear().toString().slice(-2);
         const regex = new RegExp(`^MB\\d{6}\\.${currentYearSuffix}$`);
         return regex.test(formData.numeroTicketCliente);
@@ -93,7 +103,8 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
             case 3: return (
                 !!formData.tipoServicio &&
                 formData.descripcionProblema.trim().length >= 10 &&
-                isTicketClienteValid()
+                isTicketClienteValid() &&
+                !isTicketClienteDuplicate()
             );
             case 4: return true;
             case 5: return true;
@@ -125,6 +136,12 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
     };
 
     const handleGenerarTicket = () => {
+        if (formData.tieneNumeroCliente && isTicketClienteDuplicate()) {
+            alert("❌ Error: El número de ticket de cliente ya existe. Por favor use uno único.");
+            setCurrentStep(3);
+            return;
+        }
+
         const nuevoTicket = {
             id: `TKT-${Date.now()}`,
             ...formData,
@@ -430,10 +447,15 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                                     placeholder={`Ej: MB000000.${new Date().getFullYear().toString().slice(-2)}`}
                                                     value={formData.numeroTicketCliente}
                                                     onChange={(e) => setFormData({ ...formData, numeroTicketCliente: e.target.value.toUpperCase() })}
-                                                    className={`${styles.ticketClienteInput} ${formData.numeroTicketCliente && !isTicketClienteValid() ? styles.inputError : ''}`}
+                                                    className={`${styles.ticketClienteInput} ${formData.numeroTicketCliente && (!isTicketClienteValid() || isTicketClienteDuplicate()) ? styles.inputError : ''}`}
                                                     maxLength={11}
                                                 />
-                                                {formData.numeroTicketCliente && !isTicketClienteValid() && (
+                                                {formData.numeroTicketCliente && isTicketClienteDuplicate() && (
+                                                    <span className={styles.errorHint} style={{ color: '#EF4444' }}>
+                                                        ❌ Este número de ticket ya existe. Debe ser único.
+                                                    </span>
+                                                )}
+                                                {formData.numeroTicketCliente && !isTicketClienteValid() && !isTicketClienteDuplicate() && (
                                                     <span className={styles.errorHint}>
                                                         Formato: MB + 6 dígitos + .{new Date().getFullYear().toString().slice(-2)}
                                                     </span>

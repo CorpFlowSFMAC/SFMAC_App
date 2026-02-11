@@ -55,12 +55,39 @@ const useTicketAge = (createdAt: string) => {
 export default function TicketsPage() {
     const [tickets, setTickets] = useLocalStorage<any[]>("tickets", []);
     const [showWizard, setShowWizard] = useState(false);
-    const [openTickets, setOpenTickets] = useState<any[]>([]);
+    const [openTickets, setOpenTickets] = useLocalStorage<any[]>("open_tickets", []);
     const [viewMode, setViewMode] = useState<"active" | "closed">("active");
 
 
     const handleCreateTicket = (newTicket: any) => {
         setTickets([{ ...newTicket, createdAt: new Date().toISOString() }, ...tickets]);
+    };
+
+    const handleOpenTicket = (ticket: any) => {
+        if (typeof window !== 'undefined') {
+            // 🚀 REGLA DE ORO: Si el usuario hace clic en la tarjeta, quiere VER el ticket.
+            // Forzamos el estado persistido a NO MINIMIZADO antes de montar la ventana.
+            const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify({
+                        ...parsed,
+                        isMinimized: false,
+                        isMaximized: true
+                    }));
+                } catch (e) {
+                    console.error("Error resetting window state on open:", e);
+                }
+            }
+        }
+
+        if (!openTickets.find(t => t.id === ticket.id)) {
+            setOpenTickets([...openTickets, ticket]);
+        } else {
+            // Si ya está abierta, avisar a la ventana que se maximice/traiga al frente
+            window.dispatchEvent(new CustomEvent('ticket-reopen', { detail: { ticketId: ticket.id } }));
+        }
     };
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -298,11 +325,7 @@ export default function TicketsPage() {
                                             ticket={ticket}
                                             service={service}
                                             ServiceIcon={service?.icon}
-                                            onTicketClick={() => {
-                                                if (!openTickets.find(t => t.id === ticket.id)) {
-                                                    setOpenTickets([...openTickets, ticket]);
-                                                }
-                                            }}
+                                            onTicketClick={() => handleOpenTicket(ticket)}
                                         />
                                     );
                                 })}
@@ -325,11 +348,7 @@ export default function TicketsPage() {
                                             <TicketRow
                                                 key={ticket.id}
                                                 ticket={ticket}
-                                                onTicketClick={() => {
-                                                    if (!openTickets.find(t => t.id === ticket.id)) {
-                                                        setOpenTickets([...openTickets, ticket]);
-                                                    }
-                                                }}
+                                                onTicketClick={() => handleOpenTicket(ticket)}
                                             />
                                         ))}
                                     </tbody>

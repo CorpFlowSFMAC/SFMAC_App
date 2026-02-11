@@ -53,7 +53,7 @@
 }
 
 /* Estado Maximizado */
-.window.maximized {
+.window.maximized:not(.minimized) {
     top: 0 !important;
     left: 0 !important;
     width: 100vw !important;
@@ -71,7 +71,7 @@
     height: 56px !important;
     bottom: 20px !important;
     top: auto !important;
-    width: 400px !important;
+    width: 260px !important;
 }
 
 /* Barra de TÃ­tulo */
@@ -145,6 +145,27 @@
     text-overflow: ellipsis;
 }
 
+.titleInfoMinimized {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    margin-left: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.minimizedTicketNumber {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 900;
+    color: white;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Controles de Ventana */
 .windowControls {
     display: flex;
@@ -177,6 +198,25 @@
 
 .closeBtn:hover {
     background: #EF4444;
+}
+
+.minimizedClose {
+    background: transparent !important;
+    opacity: 0.8;
+}
+
+.minimizedClose:hover {
+    background: #EF4444 !important;
+    opacity: 1;
+}
+
+.window.minimized .titleBar {
+    cursor: pointer !important;
+    transition: background 0.2s;
+}
+
+.window.minimized .titleBar:hover {
+    background: linear-gradient(135deg, #9D76F7, #B79BFA);
 }
 
 /* Contenido de la Ventana */

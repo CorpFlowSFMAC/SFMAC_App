@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle } from "lucide-react";
+import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -827,6 +827,8 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
 
 
 export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps) {
+    const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
+
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
     if (!ticket.montoFinal && !ticket.montoTotalCotizado && !ticket.costoManoObra) return null;
 
@@ -893,6 +895,15 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                                 <span style={{ fontSize: '9px', color: '#B45309', opacity: 0.7, fontWeight: 600 }}>
                                     ({new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })})
                                 </span>
+                                {(p.voucher || p.voucherRef) && (
+                                    <button
+                                        onClick={() => setViewingVoucher(p.voucher || localStorage.getItem(p.voucherRef))}
+                                        style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#6366F1' }}
+                                        title="Ver Voucher"
+                                    >
+                                        <Eye size={12} />
+                                    </button>
+                                )}
                                 <CheckCircle2 size={10} color="#059669" />
                             </div>
                         ))}
@@ -938,6 +949,23 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                         ticket.adelantoPagado ? 'ADELANTO PAGADO' : 'PENDIENTE INICIAL'}
                 </span>
             </div>
+
+            {viewingVoucher && (
+                <div
+                    style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', zIndex: 1000000, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+                    onClick={() => setViewingVoucher(null)}
+                >
+                    <div style={{ position: 'relative', maxWidth: '85%', maxHeight: '85%' }} onClick={e => e.stopPropagation()}>
+                        <img src={viewingVoucher} alt="Voucher" style={{ width: '100%', height: 'auto', borderRadius: '12px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} />
+                        <button
+                            style={{ position: 'absolute', top: '-20px', right: '-20px', background: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(0,0,0,0.3)' }}
+                            onClick={() => setViewingVoucher(null)}
+                        >
+                            <X size={24} color="#1E293B" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

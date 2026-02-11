@@ -8,7 +8,9 @@ interface TicketStateNavigatorProps {
 }
 
 export default function TicketStateNavigator({ currentStateId }: TicketStateNavigatorProps) {
-    const currentState = getStateById(currentStateId);
+    // Normalizar estados intermedios para la visualización en el tracker
+    const normalizedId = currentStateId === "esperando_pago_visita" ? "tecnico_asignado" : currentStateId;
+    const currentState = getStateById(normalizedId);
     const currentOrder = currentState?.order || 1;
 
     // Solo mostrar estados operativos principales (excluyendo estados finales y alternativos)
@@ -21,7 +23,7 @@ export default function TicketStateNavigator({ currentStateId }: TicketStateNavi
             {/* Barra Kanban Horizontal Minimalista */}
             <div className={styles.kanbanFlow}>
                 {mainStates.map((state) => {
-                    const isActive = state.id === currentStateId;
+                    const isActive = state.id === normalizedId;
                     const isPast = state.order < currentOrder;
                     const isFuture = state.order > currentOrder;
                     const StateIcon = state.icon;

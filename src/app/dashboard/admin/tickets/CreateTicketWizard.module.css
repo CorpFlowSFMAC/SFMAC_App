@@ -55,7 +55,7 @@
 .wizardHeader {
     background: linear-gradient(135deg, #8B5CF6, #A78BFA, #C4B5FD);
     color: white;
-    padding: 0.75rem 1.25rem;
+    padding: 0.6rem 1.15rem;
     border-radius: 20px 20px 0 0;
     display: flex;
     justify-content: space-between;
@@ -208,7 +208,7 @@
 /* 💫 CONTENT */
 .wizardContent {
     flex: 1;
-    padding: 1rem 1.75rem;
+    padding: 0.75rem 1.5rem;
     overflow-y: auto;
     background: #FFFFFF;
     /* Scrollbar fino y elegante */
@@ -256,7 +256,7 @@
     color: #1F2937;
     font-size: 1.15rem;
     font-weight: 800;
-    margin: 0 0 0.2rem 0;
+    margin: 0 0 0.15rem 0;
     background: linear-gradient(135deg, #8B5CF6, #6366F1);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -926,27 +926,27 @@
     background: #FFFFFF;
     border: 2px solid #E2E8F0;
     border-radius: 20px;
-    padding: 1.5rem;
+    padding: 1.15rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    margin-bottom: 1.5rem;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .resumenGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    gap: 0.85rem;
 }
 
 .resumenLabelGroup {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.6rem;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
     color: #64748B;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -954,32 +954,32 @@
 
 .resumenValueCard {
     background: #F8FAFC;
-    border-radius: 14px;
-    padding: 1rem;
+    border-radius: 12px;
+    padding: 0.65rem 0.85rem;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    border: 1.5px solid #F1F5F9;
+    gap: 0.75rem;
+    border: 1px solid #F1F5F9;
 }
 
 .miniLogo {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
     font-weight: 900;
-    font-size: 1rem;
+    font-size: 0.85rem;
     flex-shrink: 0;
 }
 
 .miniIconBox {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     background: white;
-    border-radius: 10px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -994,21 +994,22 @@
 }
 
 .miniInfo strong {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     color: #1E293B;
     font-weight: 800;
+    line-height: 1.2;
 }
 
 .miniInfo span {
-    font-size: 0.75rem;
+    font-size: 0.68rem;
     color: #64748B;
     font-weight: 600;
 }
 
 .resumenMainContent {
     background: linear-gradient(135deg, #F5F3FF, #FAF5FF);
-    border-radius: 16px;
-    padding: 1.25rem;
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
     border: 1px solid #E9D5FF;
 }
 
@@ -1016,30 +1017,30 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 .detailBadge {
     background: #8B5CF6;
     color: white;
-    padding: 0.4rem 0.8rem;
-    border-radius: 8px;
-    font-size: 0.7rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 7px;
+    font-size: 0.65rem;
     font-weight: 800;
     text-transform: uppercase;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     box-shadow: 0 4px 10px rgba(139, 92, 246, 0.2);
 }
 
 .ticketClienteBadge {
     background: #FFFFFF;
     color: #7C3AED;
-    border: 1.5px solid #7C3AED;
-    padding: 0.35rem 0.7rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
+    border: 1.2px solid #7C3AED;
+    padding: 0.3rem 0.6rem;
+    border-radius: 7px;
+    font-size: 0.7rem;
     font-weight: 800;
 }
 
@@ -1051,8 +1052,8 @@
 .quoteIcon {
     position: absolute;
     left: 0;
-    top: -10px;
-    font-size: 2.5rem;
+    top: -8px;
+    font-size: 1.8rem;
     color: #DDD6FE;
     font-family: serif;
     line-height: 1;
@@ -1061,9 +1062,9 @@
 .resumenDescriptionBox p {
     margin: 0;
     color: #4B5563;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    line-height: 1.6;
+    line-height: 1.4;
 }
 
 .resumenFooterRow {
@@ -1075,9 +1076,9 @@
 .metaItem {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     color: #94A3B8;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 700;
 }
 
@@ -1086,10 +1087,10 @@
 }
 
 .confirmationTip {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: #6B7280;
     font-weight: 700;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 /* Ocultado Viejo Resumen */
@@ -1103,19 +1104,19 @@
     background: linear-gradient(135deg, #10B981, #34D399);
     color: white;
     border: none;
-    padding: 0.85rem;
-    border-radius: 12px;
+    padding: 0.75rem;
+    border-radius: 11px;
     font-weight: 900;
-    font-size: 1rem;
+    font-size: 0.95rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.6rem;
+    gap: 0.5rem;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
 }
 
 .generarBtn:hover {
@@ -1125,7 +1126,7 @@
 
 /* 📌 FOOTER VIBRANTE */
 .wizardFooter {
-    padding: 0.85rem 1.75rem;
+    padding: 0.75rem 1.5rem;
     border-top: 2px solid #E5E7EB;
     display: flex;
     justify-content: space-between;

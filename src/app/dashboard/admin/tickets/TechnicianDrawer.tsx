@@ -93,13 +93,14 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         const assignmentData = {
             tecnico: {
                 id: selectedTechnician.id,
-                nombre: `${selectedTechnician.nombre} ${selectedTechnician.apellido}`,
+                nombre: selectedTechnician.nombre,
+                apellido: selectedTechnician.apellido,
                 celular: selectedTechnician.celular,
                 zona: selectedTechnician.zona,
                 especialidades: selectedTechnician.especialidades,
                 foto: selectedTechnician.foto,
                 banco: selectedTechnician.banco,
-                cuentaBancaria: selectedTechnician.cuentaBancaria,
+                numeroCuenta: selectedTechnician.numeroCuenta,
                 cci: selectedTechnician.cci,
                 yape: selectedTechnician.yape,
                 plin: selectedTechnician.plin

@@ -22,7 +22,8 @@ import {
     User,
     Smartphone,
     Upload,
-    Eye
+    Eye,
+    X
 } from "lucide-react";
 import styles from "./payments.module.css";
 
@@ -59,6 +60,7 @@ export default function PaymentsPage() {
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
     const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
+    const [showVoucher, setShowVoucher] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -101,7 +103,7 @@ export default function PaymentsPage() {
             if (saved) {
                 try {
                     const ticket = JSON.parse(saved);
-                    const ticketNum = ticket.numeroTicket || `#${ticket.id.toString().slice(-6).toUpperCase()}`;
+                    const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id.toString().slice(-6).toUpperCase()}`;
 
                     const costoManoObra = parseFloat(ticket.costoManoObra || 0);
                     const costoMateriales = parseFloat(ticket.costoMateriales || 0);
@@ -122,19 +124,17 @@ export default function PaymentsPage() {
                     const items: PaymentItem[] = [];
 
                     // 1. Adelanto
-                    if (ticket.estadoId === 'cotizacion_aprobada' || ticket.adelantoPagado) {
-                        const pct = ticket.porcentajeAdelanto || 0.5;
-                        const adelantoMonto = montoPactadoBase * pct;
+                    if (ticket.estadoId === 'cotizacion_aprobada' || ticket.adelantoPagado || ticket.solicitudAdelanto) {
+                        const pct = ticket.solicitudAdelanto?.porcentaje || ticket.porcentajeAdelanto || 0.5;
+                        const adelantoMonto = ticket.solicitudAdelanto?.monto || (montoPactadoBase * pct);
                         const adelantoRealizado = ticket.adelantoPagado;
 
-                        // Solo mostrar si es relevante (pagado o pendiente si corresponde)
-                        // Aquí asumimos siempre mostrar si existe la "intención"
                         items.push({
                             id: `${ticket.id}_adelanto`,
                             tipo: 'Adelanto',
                             monto: adelantoMonto,
                             estado: adelantoRealizado ? 'pagado' : 'pendiente',
-                            fecha: ticket.fechaAprobacionCotizacion || new Date().toISOString()
+                            fecha: ticket.solicitudAdelanto?.fecha || ticket.fechaAprobacionCotizacion || new Date().toISOString()
                         });
                     }
 
@@ -163,6 +163,21 @@ export default function PaymentsPage() {
                                 estado: ticket.estadoId === 'ticket_cerrado' ? 'pagado' : 'pendiente',
                                 fecha: ticket.fechaValidacionDocumental || ticket.fechaPagoFinal || new Date().toISOString()
                             });
+                        }
+                    }
+
+                    // 4. Pago de Visita / Movilidad
+                    if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed) {
+                        const itemVisita = {
+                            id: `${ticket.id}_visita`,
+                            tipo: 'Movilidad / Visita' as const,
+                            monto: parseFloat(ticket.solicitudPagoVisita?.monto || ticket.costoVisita || 0),
+                            estado: ticket.visitPaymentConfirmed ? 'pagado' : 'pendiente' as 'pendiente' | 'pagado',
+                            fecha: ticket.solicitudPagoVisita?.fecha || ticket.fechaPagoVisita || new Date().toISOString()
+                        };
+
+                        if (itemVisita.monto > 0) {
+                            items.push(itemVisita);
                         }
                     }
 
@@ -239,6 +254,7 @@ export default function PaymentsPage() {
         if (item.tipo === 'Adelanto') {
             updatedTicket.adelantoPagado = true;
             updatedTicket.fechaPagoAdelanto = new Date().toISOString();
+            updatedTicket.solicitudAdelanto = null;
         } else if (item.tipo === 'Refuerzo') {
             updatedTicket.solicitudAdelantoExtra = { ...ticket.solicitudAdelantoExtra, pagado: true };
         } else if (item.tipo === 'Liquidación Final') {
@@ -248,6 +264,7 @@ export default function PaymentsPage() {
             if (updatedTicket.estadoId === 'esperando_pago_visita') updatedTicket.estadoId = 'en_inspeccion';
             updatedTicket.visitPaymentConfirmed = true;
             updatedTicket.fechaPagoVisita = new Date().toISOString();
+            updatedTicket.solicitudPagoVisita = null;
         }
 
         try {
@@ -316,7 +333,7 @@ export default function PaymentsPage() {
                     <table className={styles.paymentsTable}>
                         <thead>
                             <tr>
-                                <th style={{ width: '20%' }}>TICKET / CLIENTE / SEDE</th>
+                                <th style={{ width: '20%' }}># TICKET CLIENTE / SEDE</th>
                                 <th style={{ width: '25%' }}>BENEFICIARIO (TÉCNICO)</th>
                                 <th style={{ width: '20%' }}>ESTADO FINANCIERO</th>
                                 <th style={{ width: '25%' }}>SOLICITUD ACTUAL</th>
@@ -482,6 +499,27 @@ export default function PaymentsPage() {
                                                                     <div className={styles.historyBody}>
                                                                         <span>{dep.tipo || 'Depósito'}</span>
                                                                         <strong>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
+                                                                        {dep.voucherRef && (
+                                                                            <button
+                                                                                className={styles.viewVoucherBtn}
+                                                                                style={{
+                                                                                    marginTop: '8px',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '4px',
+                                                                                    padding: '4px 8px',
+                                                                                    background: '#F1F5F9',
+                                                                                    border: '1px solid #E2E8F0',
+                                                                                    borderRadius: '4px',
+                                                                                    fontSize: '0.7rem',
+                                                                                    cursor: 'pointer',
+                                                                                    color: '#475569'
+                                                                                }}
+                                                                                onClick={() => setShowVoucher(localStorage.getItem(dep.voucherRef))}
+                                                                            >
+                                                                                <Eye size={12} /> Ver Voucher
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -497,6 +535,23 @@ export default function PaymentsPage() {
                     </table>
                 </div>
             </div>
+
+            {showVoucher && (
+                <div
+                    style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+                    onClick={() => setShowVoucher(null)}
+                >
+                    <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
+                        <img src={showVoucher} alt="Voucher" style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
+                        <button
+                            style={{ position: 'absolute', top: '-15px', right: '-15px', background: 'white', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.3)' }}
+                            onClick={() => setShowVoucher(null)}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
