@@ -59,6 +59,12 @@ export default function PaymentsPage() {
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+    const [pendingConfirmation, setPendingConfirmation] = useState<{
+        group: PaymentTicketGroup;
+        item: PaymentItem;
+        voucher?: string | null;
+        message: string;
+    } | null>(null);
     const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
     const [showVoucher, setShowVoucher] = useState<string | null>(null);
 
@@ -456,9 +462,12 @@ export default function PaymentsPage() {
                                                                             const file = e.target.files[0];
                                                                             const reader = new FileReader();
                                                                             reader.onloadend = () => {
-                                                                                if (confirm(`¿Confirmar pago de S/ ${item.monto} para ${item.tipo} y subir voucher?`)) {
-                                                                                    handleConfirmPayment(group, item, reader.result as string);
-                                                                                }
+                                                                                setPendingConfirmation({
+                                                                                    group,
+                                                                                    item,
+                                                                                    voucher: reader.result as string,
+                                                                                    message: `¿Confirmar depósito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
+                                                                                });
                                                                             };
                                                                             reader.readAsDataURL(file);
                                                                         }
@@ -468,9 +477,11 @@ export default function PaymentsPage() {
                                                             <button
                                                                 style={{ border: '1px solid #E2E8F0', background: 'white', color: '#64748B', padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', cursor: 'pointer', width: '100%' }}
                                                                 onClick={() => {
-                                                                    if (confirm(`¿Confirmar transferencia de S/ ${item.monto.toFixed(2)} a ${group.tecnico.nombre}?`)) {
-                                                                        handleConfirmPayment(group, item);
-                                                                    }
+                                                                    setPendingConfirmation({
+                                                                        group,
+                                                                        item,
+                                                                        message: `¿Confirmar transferencia directa de S/ ${item.monto.toFixed(2)} a ${group.tecnico.nombre}?`
+                                                                    });
                                                                 }}
                                                             >
                                                                 Pagar directo
@@ -560,6 +571,68 @@ export default function PaymentsPage() {
                         >
                             <X size={20} />
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Modal */}
+            {pendingConfirmation && (
+                <div className={styles.modalOverlay}>
+                    <div className={styles.modalContent}>
+                        <div className={styles.modalHeader}>
+                            <div className={styles.modalIcon}>
+                                <CreditCard size={32} />
+                            </div>
+                            <h3>Confirmar Transacción</h3>
+                        </div>
+                        <div className={styles.modalBody}>
+                            <p className={styles.modalText}>
+                                {pendingConfirmation.message}
+                            </p>
+
+                            <div className={styles.confirmationDetails}>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Ticket:</span>
+                                    <span className={styles.detailValue}>{pendingConfirmation.group.ticketNum}</span>
+                                </div>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Técnico:</span>
+                                    <span className={styles.detailValue}>{pendingConfirmation.group.tecnico.nombre}</span>
+                                </div>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Concepto:</span>
+                                    <span className={styles.detailValue}>{pendingConfirmation.item.tipo}</span>
+                                </div>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Monto a transferir:</span>
+                                    <span className={`${styles.detailValue} ${styles.popAmount}`}>
+                                        S/ {pendingConfirmation.item.monto.toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className={styles.modalFooter}>
+                                <button
+                                    className={styles.cancelBtn}
+                                    onClick={() => setPendingConfirmation(null)}
+                                >
+                                    CANCELAR
+                                </button>
+                                <button
+                                    className={styles.confirmBtn}
+                                    onClick={() => {
+                                        handleConfirmPayment(
+                                            pendingConfirmation.group,
+                                            pendingConfirmation.item,
+                                            pendingConfirmation.voucher
+                                        );
+                                        setPendingConfirmation(null);
+                                    }}
+                                >
+                                    CONFIRMAR PAGO
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
