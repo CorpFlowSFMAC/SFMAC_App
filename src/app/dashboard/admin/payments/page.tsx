@@ -71,7 +71,11 @@ export default function PaymentsPage() {
     const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
     const [showVoucher, setShowVoucher] = useState<string | null>(null);
 
+    const [userRole, setUserRole] = useState<string | null>(null);
+
     useEffect(() => {
+        const role = localStorage.getItem("userRole");
+        setUserRole(role);
         loadData();
         const handleStorageChange = () => loadData();
         window.addEventListener('storage', handleStorageChange);
@@ -81,6 +85,24 @@ export default function PaymentsPage() {
             window.removeEventListener('local-storage-update', handleStorageChange);
         };
     }, []);
+
+    if (userRole && userRole !== 'admin') {
+        return (
+            <div className={styles.emptyState} style={{ height: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <AlertCircle size={64} color="#EF4444" />
+                <h1 style={{ marginTop: '1rem', color: '#1E293B' }}>Acceso Restringido</h1>
+                <p style={{ color: '#64748B', maxWidth: '400px', textAlign: 'center', marginTop: '0.5rem' }}>
+                    Lo sentimos, este módulo de Tesorería es de uso exclusivo para el Administrador de SINFIMAC.
+                </p>
+                <button
+                    onClick={() => window.location.href = '/dashboard/gestor'}
+                    style={{ marginTop: '2rem', padding: '12px 24px', background: '#3B82F6', color: 'white', borderRadius: '12px', border: 'none', fontWeight: 800, cursor: 'pointer' }}
+                >
+                    Volver al Panel Operativo
+                </button>
+            </div>
+        );
+    }
 
     const calculateMonthlyTotals = (keys: string[]) => {
         const totals: { [key: string]: number } = {};

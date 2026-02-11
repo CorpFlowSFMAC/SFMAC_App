@@ -30,7 +30,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                         estadoId: normalizeStateId(parsed.estadoId || ticket.estadoId)
                     };
                 } catch (e) {
-                    console.error('Error parsing saved ticket state:', e);
+                    // Error parsing state
                 }
             }
         }
@@ -135,7 +135,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                         }));
                     }
                 } catch (e) {
-                    console.error("Error repairing tech data:", e);
+                    // Error repairing tech data
                 }
             }
         }
@@ -166,7 +166,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
             try {
                 localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
             } catch (e) {
-                console.error("Error saving individual ticket state (quota?):", e);
+                // Error saving individual ticket state
             }
 
             // 2. Sincronizar con la lista maestra 'tickets' para reflejar cambios en el Dashboard/Kanban
@@ -208,7 +208,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                         }
                     }
                 } catch (e) {
-                    console.error("Error syncing ticket with master list:", e);
+                    // Sync error
                 }
             }
         }

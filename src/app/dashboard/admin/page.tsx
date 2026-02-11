@@ -103,14 +103,16 @@ export default function AdminDashboard() {
                         <ArrowRight size={20} className={styles.arrow} />
                     </Link>
 
-                    <Link href="/dashboard/admin/payments" className={styles.accessCard}>
-                        <div className={styles.accessIcon} style={{ background: '#F59E0B20', color: '#F59E0B' }}><DollarSign size={20} /></div>
-                        <div className={styles.accessInfo}>
-                            <h3>Tesorería</h3>
-                            <p>Pagos a técnicos y liquidaciones.</p>
-                        </div>
-                        <ArrowRight size={20} className={styles.arrow} />
-                    </Link>
+                    {localStorage.getItem("userRole") === 'admin' && (
+                        <Link href="/dashboard/admin/payments" className={styles.accessCard}>
+                            <div className={styles.accessIcon} style={{ background: '#F59E0B20', color: '#F59E0B' }}><DollarSign size={20} /></div>
+                            <div className={styles.accessInfo}>
+                                <h3>Tesorería</h3>
+                                <p>Pagos a técnicos y liquidaciones.</p>
+                            </div>
+                            <ArrowRight size={20} className={styles.arrow} />
+                        </Link>
+                    )}
 
                     <Link href="/dashboard/admin/technicians" className={styles.accessCard}>
                         <div className={styles.accessIcon} style={{ background: '#3B82F620', color: '#3B82F6' }}><Users size={20} /></div>

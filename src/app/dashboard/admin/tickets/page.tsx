@@ -63,6 +63,27 @@ export default function TicketsPage() {
         setTickets([{ ...newTicket, createdAt: new Date().toISOString() }, ...tickets]);
     };
 
+    // 🚀 Lógica de Limpieza de Tickets (One-time)
+    useEffect(() => {
+        const shouldCleanup = new URLSearchParams(window.location.search).get('cleanup');
+        if (shouldCleanup === 'tickets') {
+            console.log("Iniciando limpieza de tickets...");
+            localStorage.removeItem("tickets");
+            localStorage.removeItem("open_tickets");
+            localStorage.removeItem("ticket_draft");
+
+            // Eliminar estados individuales de tickets
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('ticket_state_')) {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            alert("Los tickets han sido eliminados del sistema. El sistema se reiniciará.");
+            window.location.href = window.location.pathname; // Quitar el query param
+        }
+    }, []);
+
     const handleOpenTicket = (ticket: any) => {
         if (typeof window !== 'undefined') {
             // 🚀 REGLA DE ORO: Si el usuario hace clic en la tarjeta, quiere VER el ticket.
@@ -113,7 +134,7 @@ export default function TicketsPage() {
                             return { ...t, ...lightState, estadoId: normalizedSaved };
                         }
                     } catch (e) {
-                        console.error("Error parsing saved ticket state for sync:", e);
+                        // Error parsing saved ticket state
                     }
                 }
                 // Asegurar que al menos el ID esté normalizado
@@ -183,30 +204,6 @@ export default function TicketsPage() {
                     </button>
                 </div>
 
-                <button
-                    className={styles.resetBtn}
-                    onClick={() => {
-                        if (confirm("🚨 ¿CONFIRMAR REESTABLECIMIENTO TOTAL? \n\nEsto borrará permanentemente:\n• Todos los TICKETS\n• Todos los CLIENTES y sus Sedes\n• Todos los TÉCNICOS\n\nEl sistema volverá a su estado inicial de fábrica.")) {
-                            // 1. Borrado manual de llaves principales
-                            localStorage.removeItem("tickets");
-                            localStorage.removeItem("clients");
-                            localStorage.removeItem("clientsData");
-                            localStorage.removeItem("technicians");
-                            localStorage.removeItem("client_draft");
-                            localStorage.removeItem("ticket_draft");
-
-                            // 2. Limpieza total de seguridad
-                            localStorage.clear();
-
-                            // 3. Forzar refresco y avisar
-                            alert("Sistema reestablecido correctamente.");
-                            window.location.href = "/dashboard/admin/tickets";
-                        }
-                    }}
-                    title="Limpiar Base de Datos Completa"
-                >
-                    Limpiar Sistema
-                </button>
                 <button
                     className={styles.createBtn}
                     onClick={() => setShowWizard(true)}

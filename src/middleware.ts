@@ -13,10 +13,9 @@ export function middleware(request: NextRequest) {
 
         // 2. Controlar acceso según el rol (seguridad básica)
         if (pathname.startsWith('/dashboard/admin') && userRole !== 'admin') {
-            // Permitir a la gestora entrar a Tickets, Técnicos y Pagos
+            // Permitir a la gestora entrar solo a Tickets, Técnicos y Reportes (NO Pagos)
             const isAllowedPath = pathname.startsWith('/dashboard/admin/tickets') ||
                 pathname.startsWith('/dashboard/admin/technicians') ||
-                pathname.startsWith('/dashboard/admin/payments') ||
                 pathname.startsWith('/dashboard/admin/reportes');
 
             if (!isAllowedPath) {

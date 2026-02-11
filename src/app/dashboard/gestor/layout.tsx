@@ -74,10 +74,12 @@ export default function GestorLayout({
                         Sistema Tickets
                     </Link>
 
-                    <Link href="/dashboard/admin/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
-                        <DollarSign size={20} />
-                        Pagos y Tesorería
-                    </Link>
+                    {isMounted && userRole === 'admin' && (
+                        <Link href="/dashboard/admin/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
+                            <DollarSign size={20} />
+                            Pagos y Tesorería
+                        </Link>
+                    )}
 
                     <Link href="/dashboard/admin/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
                         <BarChart3 size={20} />
