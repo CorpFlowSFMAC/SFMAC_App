@@ -214,20 +214,36 @@
 .largePreview {
     display: none;
     position: absolute;
-    bottom: 40px;
-    /* Position above the thumb */
+    top: 40px;
+    /* Changed to pop DOWN to avoid clipping with sticky navigator */
     left: 50%;
     transform: translateX(-50%);
-    width: 320px;
-    /* Large preview width */
-    height: auto;
+    width: 340px;
+    max-height: 450px;
+    /* Added max-height to prevent vertical clipping */
     background: white;
-    padding: 8px;
-    border-radius: 12px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
+    padding: 10px;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+    /* Extremely high z-index */
     border: 1px solid #E2E8F0;
-    animation: fadeIn 0.2s ease-out;
+    animation: fadeInPreview 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+    pointer-events: none;
+    /* Prevents flickering */
+}
+
+@keyframes fadeInPreview {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
 }
 
 .miniThumb:hover .largePreview {
@@ -237,7 +253,10 @@
 .largePreview img {
     width: 100%;
     height: auto;
-    border-radius: 8px;
+    max-height: 400px;
+    object-fit: contain;
+    /* Ensures the whole image is visible without cropping */
+    border-radius: 10px;
     display: block;
 }
 

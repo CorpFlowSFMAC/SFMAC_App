@@ -98,6 +98,10 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     const [evidenciasEjecucion, setEvidenciasEjecucion] = useState<any[]>(ticketData.evidenciasEjecucion || []);
     const [newExpense, setNewExpense] = useState({ concepto: "", monto: "", tipo: "Gasto Operativo" });
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Estados para Negociación de Costo
+    const [showNegotiationModal, setShowNegotiationModal] = useState(false);
+    const [negotiationNewCost, setNegotiationNewCost] = useState("");
     const fieldEvidenceRef = useRef<HTMLInputElement>(null);
     const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
     const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
@@ -378,24 +382,29 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
     const handleAdjustTechnicianCost = () => {
         const currentMO = parseFloat(ticketData.costoManoObra || 0);
         const currentMAT = parseFloat(ticketData.costoMateriales || 0);
-        const currentTotal = currentMO + currentMAT;
+        const currentTotal = (currentMO + currentMAT).toFixed(2);
+        setNegotiationNewCost(currentTotal);
+        setShowNegotiationModal(true);
+    };
 
-        const nuevoTotal = prompt(`Costo actual del técnico: S/ ${currentTotal.toFixed(2)}\nIngrese el NUEVO costo negociado (Total MO + MAT):`, currentTotal.toString());
+    const confirmNegotiatedCost = () => {
+        if (negotiationNewCost && !isNaN(parseFloat(negotiationNewCost))) {
+            const val = parseFloat(negotiationNewCost);
+            const currentMO = parseFloat(ticketData.costoManoObra || 0);
+            const currentMAT = parseFloat(ticketData.costoMateriales || 0);
 
-        if (nuevoTotal && !isNaN(parseFloat(nuevoTotal))) {
-            const val = parseFloat(nuevoTotal);
-            // Proporcionalmente ajustamos MO y MAT o simplemente lo ponemos en MO si es más simple, 
-            // pero para ser precisos intentaremos mantener la proporción o pedir desglosado.
-            // Para simplicidad del flujo solicitado:
             const updated = {
                 ...ticketData,
-                costoManoObra: val, // Ponemos el total en MO por ahora o podrías pedir ambos
+                costoManoObra: val,
                 costoMateriales: 0,
                 costoAjustadoPostAprobacion: true,
-                costoAnteriorTecnico: currentTotal
+                costoAnteriorTecnico: currentMO + currentMAT
             };
             setTicketData(updated);
+            setShowNegotiationModal(false);
             showToast("Costo Reacordado", `Nuevo monto técnico ajustado a S/ ${val.toFixed(2)}.`, "success");
+        } else {
+            showToast("Monto Inválido", "Por favor ingrese un número válido para el costo.", "error");
         }
     };
 
@@ -752,7 +761,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                         {ticket.numeroTicketCliente
                                             ? ticket.numeroTicketCliente
                                             : `Ticket #${ticket.id.slice(-6)}`
-                                        }
+                                        } (Nego MOD)
                                     </h3>
                                     <span>{ticket.cliente?.nombre || 'Sin cliente'}</span>
                                 </div>
@@ -2067,6 +2076,62 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                     />
                 )}
 
+                {/* Modal de Negociación de Costo */}
+                {showNegotiationModal && (
+                    <div className={styles.modalOverlay}>
+                        <div className={styles.negotiationModalCard}>
+                            <div className={styles.negotiationModalHeader}>
+                                <div className={styles.negoIconWrapper}>
+                                    <Calculator size={24} />
+                                </div>
+                                <div className={styles.negoTitleGroup}>
+                                    <h3>Ajuste de Costo Negociado</h3>
+                                    <span>Re-negociación con el técnico asignado</span>
+                                </div>
+                                <button className={styles.closeNegoBtn} onClick={() => setShowNegotiationModal(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div className={styles.currentCostDisplay}>
+                                    <span className={styles.currentCostLabel}>COSTO ACTUAL REGISTRADO</span>
+                                    <div className={styles.currentCostBig}>
+                                        S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toFixed(2)}
+                                    </div>
+                                </div>
+
+                                <div className={styles.negoInputWrapper}>
+                                    <label>Nuevo Costo Acordado (Mano de Obra + Materiales)</label>
+                                    <div className={styles.negoInputGroup}>
+                                        <div className={styles.negoInputPrefix}>S/</div>
+                                        <input
+                                            type="number"
+                                            value={negotiationNewCost}
+                                            onChange={(e) => setNegotiationNewCost(e.target.value)}
+                                            placeholder="0.00"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <p className={styles.negoHelpText}>
+                                        * Este ajuste quedará registrado como costo de ejecución final para el técnico.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowNegotiationModal(false)}>
+                                    Cancelar
+                                </button>
+                                <button className={styles.negoConfirmBtn} onClick={confirmNegotiatedCost}>
+                                    <CheckCircle size={18} />
+                                    Confirmar Nuevo Costo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Toast Notification Render */}
                 {toast.visible && (
                     <div className={styles.toastOverlay}>
@@ -2083,7 +2148,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                         </div>
                     </div>
                 )}
-            </div >
+            </div>
         </>
     );
 }

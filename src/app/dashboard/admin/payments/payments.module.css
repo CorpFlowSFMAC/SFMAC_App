@@ -896,47 +896,54 @@
 
 /* Visit Cost & Voucher Thumb Styles */
 .visitCostRow {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px dashed #CBD5E1;
+    margin-top: 10px;
+    padding: 10px;
+    background: #F8FAFC;
+    border-radius: 10px;
+    border: 1px solid #E2E8F0;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+    z-index: 10;
 }
 
 .visitLabelRow {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.75rem;
-    color: #64748B;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #475569;
 }
 
 .visitLabelRow strong {
-    color: #475569;
+    color: #0F172A;
+    font-weight: 800;
 }
 
 .voucherThumbBox {
     position: relative;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
 }
 
 .miniVoucher {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     object-fit: cover;
-    border-radius: 6px;
-    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    border: 2px solid white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    background: white;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background: #CBD5E1;
 }
 
 .miniVoucher:hover {
-    transform: scale(3.5) translateX(-15px) translateY(-10px);
-    z-index: 100;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    transform: scale(4.5) translateX(-20px);
+    z-index: 999;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
     border-color: #3B82F6;
 }
 

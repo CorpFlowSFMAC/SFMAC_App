@@ -121,6 +121,14 @@ export default function PaymentsPage() {
                     const pagos = ticket.historialPagosTecnico || [];
                     const totalPagado = pagos.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
 
+                    const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
+
+                    const voucherVisita = pagos.find((p: any) => {
+                        const tipo = (p.tipo || "").toLowerCase();
+                        const ref = (p.referencia || "").toLowerCase();
+                        return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
+                    })?.voucherRef;
+
                     const techData = {
                         nombre: `${ticket.tecnico?.nombre || ''} ${ticket.tecnico?.apellido || ''}`.trim() || 'Sin asignar',
                         banco: ticket.tecnico?.banco || '---',
@@ -186,13 +194,14 @@ export default function PaymentsPage() {
                     }
 
                     // 4. Pago de Visita / Movilidad
-                    if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed) {
+                    if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed || ticket.costoPasaje) {
+                        const montoVisita = parseFloat(ticket.solicitudPagoVisita?.monto || ticket.costoVisita || ticket.costoPasaje || 0);
                         const itemVisita = {
                             id: `${ticket.id}_visita`,
                             tipo: 'Movilidad / Visita' as const,
-                            monto: parseFloat(ticket.solicitudPagoVisita?.monto || ticket.costoVisita || 0),
+                            monto: montoVisita,
                             estado: ticket.visitPaymentConfirmed ? 'pagado' : 'pendiente' as 'pendiente' | 'pagado',
-                            fecha: ticket.solicitudPagoVisita?.fecha || ticket.fechaPagoVisita || new Date().toISOString()
+                            fecha: ticket.solicitudPagoVisita?.fecha || ticket.fechaPagoVisita || ticket.fechaAsignacion || new Date().toISOString()
                         };
 
                         if (itemVisita.monto > 0) {
@@ -213,8 +222,8 @@ export default function PaymentsPage() {
                             saldoPendiente: montoPactadoBase - totalPagado,
                             items: items,
                             historialDepositos: pagos,
-                            costoVisita: ticket.costoVisita || ticket.solicitudPagoVisita?.monto,
-                            voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita')?.voucherRef
+                            costoVisita: visitCost,
+                            voucherVisita: voucherVisita
                         });
                     }
 
@@ -298,6 +307,12 @@ export default function PaymentsPage() {
 
         window.dispatchEvent(new Event('local-storage-update'));
         loadData();
+    };
+
+    const getVoucherSrc = (ref?: string | null) => {
+        if (!ref) return "";
+        if (ref.startsWith("data:image")) return ref;
+        return localStorage.getItem(ref) || "";
     };
 
     const filteredGroups = paymentGroups.filter(g => {
@@ -420,10 +435,10 @@ export default function PaymentsPage() {
                                                                 {group.voucherVisita && (
                                                                     <div className={styles.voucherThumbBox}>
                                                                         <img
-                                                                            src={localStorage.getItem(group.voucherVisita) || ""}
+                                                                            src={getVoucherSrc(group.voucherVisita)}
                                                                             alt="Voucher Visita"
                                                                             className={styles.miniVoucher}
-                                                                            onClick={() => setShowVoucher(localStorage.getItem(group.voucherVisita!))}
+                                                                            onClick={() => setShowVoucher(getVoucherSrc(group.voucherVisita))}
                                                                         />
                                                                         <div className={styles.zoomPulse}></div>
                                                                     </div>

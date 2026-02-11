@@ -140,6 +140,22 @@ export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: 
     const scheduleDate = hasScheduling ? new Date(ticket.fechaVisita) : null;
     const scheduleLabel = ticket.programacionLabel || "Visita Programada";
 
+    const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || 0);
+
+    const voucherVisita = (ticket.historialPagosTecnico || []).find((p: any) => {
+        const tipo = (p.tipo || "").toLowerCase();
+        const ref = (p.referencia || "").toLowerCase();
+        return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
+    })?.voucherRef;
+
+    const [showFullVoucher, setShowFullVoucher] = useState<string | null>(null);
+
+    const getVoucherSrc = (ref?: string | null) => {
+        if (!ref) return "";
+        if (ref.startsWith("data:image")) return ref;
+        return localStorage.getItem(ref) || "";
+    };
+
     return (
         <div
             className={styles.infoBar}
@@ -176,10 +192,21 @@ export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: 
                 <span className={styles.infoValue}>📱 {techPhone}</span>
             </div>
 
-            {ticket.costoVisita > 0 && (
+            {visitCost > 0 && (
                 <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Costo Visita</span>
-                    <span className={styles.infoValue}>S/ {ticket.costoVisita.toFixed(2)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className={styles.infoValue}>S/ {visitCost.toFixed(2)}</span>
+                        {voucherVisita && (
+                            <div className={styles.miniThumb} style={{ border: '2px solid #10B981', cursor: 'pointer' }} onClick={() => setShowFullVoucher(getVoucherSrc(voucherVisita))}>
+                                <img src={getVoucherSrc(voucherVisita)} className={styles.thumbImage} alt="Voucher" />
+                                <div className={styles.largePreview}>
+                                    <img src={getVoucherSrc(voucherVisita)} alt="Preview" />
+                                    <div style={{ padding: '4px', fontSize: '0.7rem', textAlign: 'center', fontWeight: 800, color: '#047857' }}>VOUCHER DE MOVILIDAD</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -227,6 +254,23 @@ export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: 
                         </button>
                     )}
                 </>
+            )}
+
+            {showFullVoucher && (
+                <div
+                    style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+                    onClick={() => setShowFullVoucher(null)}
+                >
+                    <div style={{ position: 'relative', maxWidth: '85%', maxHeight: '85%' }}>
+                        <img src={showFullVoucher} alt="Voucher Full" style={{ width: '100%', height: 'auto', borderRadius: '12px', border: '4px solid white', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} />
+                        <button
+                            style={{ position: 'absolute', top: -20, right: -20, background: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}
+                            onClick={(e) => { e.stopPropagation(); setShowFullVoucher(null); }}
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );
