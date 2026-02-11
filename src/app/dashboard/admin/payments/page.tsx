@@ -266,7 +266,7 @@ export default function PaymentsPage() {
             updatedTicket.fechaPagoAdelanto = new Date().toISOString();
             updatedTicket.solicitudAdelanto = null;
         } else if (item.tipo === 'Refuerzo') {
-            updatedTicket.solicitudAdelantoExtra = { ...ticket.solicitudAdelantoExtra, pagado: true };
+            updatedTicket.solicitudAdelantoExtra = null;
         } else if (item.tipo === 'Liquidación Final') {
             updatedTicket.estadoId = 'ticket_cerrado';
             updatedTicket.fechaPagoFinal = new Date().toISOString();

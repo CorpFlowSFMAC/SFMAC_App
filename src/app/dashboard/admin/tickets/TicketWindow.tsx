@@ -1590,13 +1590,33 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                                             <div className={`${styles.executionCard} ${styles.extraAdvanceRequest}`}>
                                                                 <h4><Coins size={18} /> GESTIÓN DE ANTICIPOS</h4>
+
+                                                                {/* Historial de refuerzos realizados */}
+                                                                {(() => {
+                                                                    const refuerzos = (ticketData.historialPagosTecnico || []).filter((p: any) =>
+                                                                        p.referencia?.includes("Adelanto Adicional") || p.tipo === "Refuerzo"
+                                                                    );
+                                                                    if (refuerzos.length === 0) return null;
+                                                                    return (
+                                                                        <div className={styles.reinforcementHistory}>
+                                                                            {refuerzos.map((r: any, idx: number) => (
+                                                                                <div key={r.id || idx} className={styles.reinforcementItem}>
+                                                                                    <CheckCircle size={14} color="#059669" />
+                                                                                    <span>S/ {r.monto.toFixed(2)}</span>
+                                                                                    <small>{new Date(r.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}</small>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    );
+                                                                })()}
+
                                                                 {!ticketData.solicitudAdelantoExtra ? (
                                                                     <>
-                                                                        <p style={{ fontSize: '0.8rem', color: '#92400E' }}>La Gestora envía la petición al Gerente para fondos extra.</p>
+                                                                        <p style={{ fontSize: '0.8rem', color: '#92400E' }}>Solicite fondos extra si el técnico requiere refuerzo operativo.</p>
                                                                         {!showExtraAdvanceInput ? (
                                                                             <button className={styles.extraAdvanceBtn} onClick={handleRequestExtraAdvance}>
                                                                                 <Wallet size={16} />
-                                                                                SOLICITAR ADELANTO AL GERENTE
+                                                                                SOLICITAR REFUERZO ECONÓMICO
                                                                             </button>
                                                                         ) : (
                                                                             <div className={styles.extraAdvanceForm}>
@@ -1613,7 +1633,7 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                                         className={styles.confirmSmallBtn}
                                                                                         onClick={submitExtraAdvanceRequest}
                                                                                     >
-                                                                                        <CheckCircle size={14} /> Solicitud
+                                                                                        <CheckCircle size={14} /> Enviar
                                                                                     </button>
                                                                                     <button
                                                                                         className={styles.cancelSmallBtn}
@@ -1630,39 +1650,26 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
                                                                     </>
                                                                 ) : (
                                                                     <div className={styles.pendingAdvanceBox}>
-                                                                        {ticketData.solicitudAdelantoExtra.pagado ? (
-                                                                            <>
-                                                                                <div className={styles.pendingBadge} style={{ background: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' }}>
-                                                                                    ✅ DEPÓSITO REALIZADO
-                                                                                </div>
-                                                                                <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', marginTop: '4px' }}>
-                                                                                    Monto abonado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}
-                                                                                </p>
-                                                                            </>
+                                                                        <div className={styles.pendingBadge}>ESPERANDO DEPÓSITO</div>
+                                                                        <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>Monto solicitado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}</p>
+
+                                                                        {userRole === 'admin' ? (
+                                                                            <button className={styles.confirmManagerDepositBtn} onClick={handleConfirmExtraAdvance}>
+                                                                                <CheckCircle size={14} />
+                                                                                CONFIRMAR DEPÓSITO MANUALMENTE
+                                                                            </button>
                                                                         ) : (
-                                                                            <>
-                                                                                <div className={styles.pendingBadge}>ESPERANDO DEPÓSITO</div>
-                                                                                <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>Monto solicitado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}</p>
+                                                                            <div className={styles.waitingForManager} style={{ marginTop: '0', padding: '12px' }}>
+                                                                                <Clock size={20} color="#B45309" />
+                                                                                <span style={{ color: '#B45309' }}>¡ PETICIÓN ENVIADA !</span>
+                                                                                <span style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: 500 }}>Esperando depósito extra del Gerente.</span>
+                                                                            </div>
+                                                                        )}
 
-                                                                                {userRole === 'admin' ? (
-                                                                                    <button className={styles.confirmManagerDepositBtn} onClick={handleConfirmExtraAdvance}>
-                                                                                        <CheckCircle size={14} />
-                                                                                        CONFIRMAR DEPÓSITO MANUALMENTE
-                                                                                    </button>
-                                                                                ) : (
-                                                                                    <div className={styles.waitingForManager} style={{ marginTop: '0', padding: '12px' }}>
-                                                                                        <Clock size={20} color="#B45309" />
-                                                                                        <span style={{ color: '#B45309' }}>¡ PETICIÓN ENVIADA !</span>
-                                                                                        <span style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: 500 }}>Esperando depósito extra del Gerente.</span>
-                                                                                    </div>
-                                                                                )}
-
-                                                                                {userRole !== 'admin' && (
-                                                                                    <button className={styles.cancelRequestBtn} onClick={() => setTicketData({ ...ticketData, solicitudAdelantoExtra: null })}>
-                                                                                        Cancelar Petición
-                                                                                    </button>
-                                                                                )}
-                                                                            </>
+                                                                        {userRole !== 'admin' && (
+                                                                            <button className={styles.cancelRequestBtn} onClick={() => setTicketData({ ...ticketData, solicitudAdelantoExtra: null })}>
+                                                                                Cancelar Petición
+                                                                            </button>
                                                                         )}
                                                                     </div>
                                                                 )}
