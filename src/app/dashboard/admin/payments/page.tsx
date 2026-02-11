@@ -124,18 +124,22 @@ export default function PaymentsPage() {
                     const items: PaymentItem[] = [];
 
                     // 1. Adelanto
-                    if (ticket.estadoId === 'cotizacion_aprobada' || ticket.adelantoPagado || ticket.solicitudAdelanto) {
+                    // Mostrar si está en estado de aprobación, si ya se pagó, o si hay una solicitud explícita
+                    const isRelevantForAdelanto = ['cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar'].includes(ticket.estadoId);
+                    if (isRelevantForAdelanto || ticket.adelantoPagado || ticket.solicitudAdelanto) {
                         const pct = ticket.solicitudAdelanto?.porcentaje || ticket.porcentajeAdelanto || 0.5;
                         const adelantoMonto = ticket.solicitudAdelanto?.monto || (montoPactadoBase * pct);
                         const adelantoRealizado = ticket.adelantoPagado;
 
-                        items.push({
-                            id: `${ticket.id}_adelanto`,
-                            tipo: 'Adelanto',
-                            monto: adelantoMonto,
-                            estado: adelantoRealizado ? 'pagado' : 'pendiente',
-                            fecha: ticket.solicitudAdelanto?.fecha || ticket.fechaAprobacionCotizacion || new Date().toISOString()
-                        });
+                        if (adelantoMonto > 0 || adelantoRealizado) {
+                            items.push({
+                                id: `${ticket.id}_adelanto`,
+                                tipo: 'Adelanto',
+                                monto: adelantoMonto,
+                                estado: adelantoRealizado ? 'pagado' : 'pendiente',
+                                fecha: ticket.solicitudAdelanto?.fecha || ticket.fechaAprobacion || ticket.fechaAprobacionCotizacion || new Date().toISOString()
+                            });
+                        }
                     }
 
                     // 2. Refuerzo
@@ -149,19 +153,25 @@ export default function PaymentsPage() {
                         });
                     }
 
-                    // 3. Liquidación
-                    if (ticket.estadoId === 'por_liquidar' || ticket.estadoId === 'ticket_cerrado') {
+                    // 3. Liquidación Final
+                    // Mostrar si hay una solicitud explícita, si está en estados finales, o si ya se cerró
+                    const hasSolicitudLiquidacion = !!ticket.solicitudLiquidacion;
+                    const isRelevantForFinal = ['documentacion_enviada', 'por_liquidar', 'ticket_cerrado'].includes(ticket.estadoId);
+
+                    if (isRelevantForFinal || hasSolicitudLiquidacion) {
                         const saldoReal = montoPactadoBase - totalPagado;
                         const pagoFinal = pagos.find((p: any) => p.referencia?.includes("Liquidación") || p.tipo === "Liquidación Final");
-                        const montoSolicitadoFinal = ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal;
 
-                        if (montoSolicitadoFinal > 0 || ticket.estadoId === 'ticket_cerrado') {
+                        // Si hay solicitud, usamos ese monto. Si no, el saldo real.
+                        const montoSolicitadoFinal = ticket.solicitudLiquidacion?.monto || (ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal);
+
+                        if (montoSolicitadoFinal > 0 || ticket.estadoId === 'ticket_cerrado' || hasSolicitudLiquidacion) {
                             items.push({
                                 id: `${ticket.id}_final`,
                                 tipo: 'Liquidación Final',
                                 monto: montoSolicitadoFinal,
                                 estado: ticket.estadoId === 'ticket_cerrado' ? 'pagado' : 'pendiente',
-                                fecha: ticket.fechaValidacionDocumental || ticket.fechaPagoFinal || new Date().toISOString()
+                                fecha: ticket.solicitudLiquidacion?.fecha || ticket.fechaValidacionDocumental || ticket.fechaPagoFinal || new Date().toISOString()
                             });
                         }
                     }
@@ -260,6 +270,7 @@ export default function PaymentsPage() {
         } else if (item.tipo === 'Liquidación Final') {
             updatedTicket.estadoId = 'ticket_cerrado';
             updatedTicket.fechaPagoFinal = new Date().toISOString();
+            updatedTicket.solicitudLiquidacion = null;
         } else if (item.tipo === 'Movilidad / Visita') {
             if (updatedTicket.estadoId === 'esperando_pago_visita') updatedTicket.estadoId = 'en_inspeccion';
             updatedTicket.visitPaymentConfirmed = true;
