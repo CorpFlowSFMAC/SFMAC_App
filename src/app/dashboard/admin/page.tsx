@@ -10,6 +10,7 @@ import Link from "next/link";
 import styles from "./admin.module.css";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { normalizeStateId } from "@/lib/ticketStates";
+import SyncToSupabaseButton from "@/components/SyncToSupabaseButton";
 
 export default function AdminDashboard() {
     const [tickets] = useLocalStorage<any[]>("tickets", []);
@@ -133,6 +134,9 @@ export default function AdminDashboard() {
                     </Link>
                 </div>
             </div>
+
+            {/* Botón de sincronización con Supabase */}
+            <SyncToSupabaseButton />
         </div>
     );
 }
