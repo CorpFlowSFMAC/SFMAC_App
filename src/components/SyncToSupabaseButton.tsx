@@ -18,6 +18,36 @@ export default function SyncToSupabaseButton() {
     const [progress, setProgress] = useState('');
     const [results, setResults] = useState<any>(null);
     const [error, setError] = useState('');
+    const [cleanupResults, setCleanupResults] = useState<any>(null);
+
+    const cleanInvalidData = () => {
+        try {
+            // Leer datos actuales
+            const clients = JSON.parse(localStorage.getItem('clients') || '[]');
+            const before = clients.length;
+
+            // Filtrar clientes válidos
+            const validClients = clients.filter((c: any) => {
+                const hasName = c.nombre || c.name;
+                return hasName && hasName.trim() !== '';
+            });
+
+            const removed = before - validClients.length;
+
+            // Guardar datos limpios
+            localStorage.setItem('clients', JSON.stringify(validClients));
+
+            setCleanupResults({
+                before,
+                after: validClients.length,
+                removed
+            });
+
+            setProgress('✅ Datos limpiados correctamente');
+        } catch (err: any) {
+            setError(`Error al limpiar datos: ${err.message}`);
+        }
+    };
 
     const syncToSupabase = async () => {
         setSyncing(true);
@@ -256,6 +286,44 @@ export default function SyncToSupabaseButton() {
             >
                 {syncing ? 'Sincronizando...' : 'Sincronizar Ahora'}
             </button>
+
+            <button
+                onClick={cleanInvalidData}
+                disabled={syncing}
+                style={{
+                    width: '100%',
+                    padding: '10px',
+                    marginTop: '10px',
+                    background: syncing ? '#ccc' : '#ff9800',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    cursor: syncing ? 'not-allowed' : 'pointer',
+                    fontWeight: '600'
+                }}
+            >
+                🧹 Limpiar Datos Inválidos
+            </button>
+
+            {cleanupResults && (
+                <div style={{
+                    marginTop: '15px',
+                    padding: '15px',
+                    background: '#fff3e0',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                }}>
+                    <div style={{ fontWeight: '600', marginBottom: '10px' }}>
+                        🧹 Limpieza Completada
+                    </div>
+                    <div>📊 Clientes antes: {cleanupResults.before}</div>
+                    <div>✅ Clientes después: {cleanupResults.after}</div>
+                    <div style={{ color: '#f57c00', fontWeight: '600' }}>
+                        🗑️ Eliminados: {cleanupResults.removed}
+                    </div>
+                </div>
+            )}
 
             {progress && (
                 <div style={{
