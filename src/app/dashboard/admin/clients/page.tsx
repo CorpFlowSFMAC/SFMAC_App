@@ -5,15 +5,11 @@ import { Plus, Search, Building2, MapPin, TrendingUp, Sparkles, Trash2, Pencil }
 import { useRouter } from "next/navigation";
 import styles from "./clients.module.css";
 import ClientDrawer from "./ClientDrawer";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-
-// Mock Data inicial - solo se usa si no hay datos en localStorage
-import { INITIAL_CLIENTS, INITIAL_CLIENTS_DATA } from "@/lib/data/clients";
+import { useClients } from "@/hooks/useSupabaseData";
 
 export default function ClientsPage() {
     const router = useRouter();
-    const [clients, setClients, isLoaded] = useLocalStorage<any[]>("clients", INITIAL_CLIENTS);
-    const [clientsData, setClientsData] = useLocalStorage<any>("clientsData", INITIAL_CLIENTS_DATA);
+    const { clients, loading, createClient: createClientAPI, updateClient: updateClientAPI, deleteClient: deleteClientAPI } = useClients();
     const [searchTerm, setSearchTerm] = useState("");
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editClient, setEditClient] = useState<any>(null);
@@ -25,67 +21,38 @@ export default function ClientsPage() {
         }
     }, []);
 
-    // Derivar contador real de sedes de clientsData si existe
-    const clientsWithUpdatedCounts = clients.map(client => {
-        const detail = clientsData[client.id.toString()];
-        return {
-            ...client,
-            totalBranches: detail ? detail.branches.length : client.totalBranches
-        };
-    });
-
-    const filteredClients = clientsWithUpdatedCounts.filter((client: any) =>
+    const filteredClients = clients.filter((client: any) =>
         client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.ruc.includes(searchTerm)
+        (client.ruc && client.ruc.includes(searchTerm))
     );
 
-    const handleClientCreated = (newClient: any) => {
-        // Validar que el RUC no exista
-        const rucExists = clients.some((client: any) => client.ruc === newClient.ruc);
-        if (rucExists) {
-            alert(`❌ El RUC ${newClient.ruc} ya está registrado en el sistema`);
-            return;
+    const handleClientCreated = async (newClient: any) => {
+        try {
+            // Validar que el RUC no exista
+            const rucExists = clients.some((client: any) => client.ruc === newClient.ruc);
+            if (rucExists) {
+                alert(`❌ El RUC ${newClient.ruc} ya está registrado en el sistema`);
+                return;
+            }
+
+            // Crear cliente en Supabase
+            await createClientAPI(newClient);
+            setIsDrawerOpen(false);
+        } catch (error) {
+            console.error('Error creating client:', error);
+            alert('❌ Error al crear el cliente. Por favor intenta nuevamente.');
         }
-
-        const clientId = Date.now();
-        const clientWithId = {
-            ...newClient,
-            id: clientId,
-            totalBranches: 0,
-            status: "active"
-        };
-
-        // 1. Guardar en la lista de clientes
-        setClients([...clients, clientWithId]);
-
-        // 2. Guardar en clientsData con estructura completa
-        const newClientData = {
-            ...clientWithId,
-            createdAt: new Date().toISOString().split('T')[0],
-            branches: []
-        };
-
-        setClientsData({
-            ...clientsData,
-            [clientId.toString()]: newClientData
-        });
     };
 
-    const handleClientUpdated = (updatedClient: any) => {
-        // 1. Actualizar en la lista de clientes
-        setClients(clients.map((c: any) => c.id === updatedClient.id ? updatedClient : c));
-
-        // 2. Actualizar en clientsData preservando las sedes
-        const currentDetail = clientsData[updatedClient.id.toString()];
-        setClientsData({
-            ...clientsData,
-            [updatedClient.id.toString()]: {
-                ...currentDetail,
-                ...updatedClient,
-            }
-        });
-        setEditClient(null);
-        setIsDrawerOpen(false);
+    const handleClientUpdated = async (updatedClient: any) => {
+        try {
+            await updateClientAPI(updatedClient.id, updatedClient);
+            setEditClient(null);
+            setIsDrawerOpen(false);
+        } catch (error) {
+            console.error('Error updating client:', error);
+            alert('❌ Error al actualizar el cliente. Por favor intenta nuevamente.');
+        }
     };
 
     const handleEditClient = (client: any, e: React.MouseEvent) => {
@@ -94,25 +61,24 @@ export default function ClientsPage() {
         setIsDrawerOpen(true);
     };
 
-    const handleDeleteClient = (clientId: number, e: React.MouseEvent) => {
-        e.stopPropagation(); // Evitar que se abra el detalle del cliente
+    const handleDeleteClient = async (clientId: number, e: React.MouseEvent) => {
+        e.stopPropagation();
 
         const client = clients.find((c: any) => c.id === clientId);
         if (!client) return;
 
         if (confirm(`¿Está seguro de eliminar el cliente "${client.name}"?\n\nEsta acción eliminará también todas sus sedes.`)) {
-            // Eliminar de la lista
-            setClients(clients.filter((c: any) => c.id !== clientId));
-
-            // Eliminar de clientsData
-            const newClientsData = { ...clientsData };
-            delete newClientsData[clientId.toString()];
-            setClientsData(newClientsData);
+            try {
+                await deleteClientAPI(clientId.toString());
+            } catch (error) {
+                console.error('Error deleting client:', error);
+                alert('❌ Error al eliminar el cliente. Por favor intenta nuevamente.');
+            }
         }
     };
 
-    // Mostrar loading mientras se carga localStorage
-    if (!isLoaded) {
+    // Mostrar loading mientras se cargan los datos de Supabase
+    if (loading) {
         return (
             <div className={styles.container}>
                 <div className={styles.loadingState}>
