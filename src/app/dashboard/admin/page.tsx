@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
     Users, Ticket, AlertTriangle, TrendingUp,
     ArrowRight, Clock, CheckCircle2, DollarSign,
@@ -14,6 +14,15 @@ import { normalizeStateId } from "@/lib/ticketStates";
 export default function AdminDashboard() {
     const [tickets] = useLocalStorage<any[]>("tickets", []);
     const [technicians] = useLocalStorage<any[]>("technicians", []);
+    const [isMounted, setIsMounted] = useState(false);
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        setIsMounted(true);
+        if (typeof window !== 'undefined') {
+            setUserRole(localStorage.getItem("userRole"));
+        }
+    }, []);
 
     // 📊 Quick Stats
     const stats = useMemo(() => {
@@ -103,7 +112,7 @@ export default function AdminDashboard() {
                         <ArrowRight size={20} className={styles.arrow} />
                     </Link>
 
-                    {localStorage.getItem("userRole") === 'admin' && (
+                    {isMounted && userRole === 'admin' && (
                         <Link href="/dashboard/admin/payments" className={styles.accessCard}>
                             <div className={styles.accessIcon} style={{ background: '#F59E0B20', color: '#F59E0B' }}><DollarSign size={20} /></div>
                             <div className={styles.accessInfo}>
