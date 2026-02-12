@@ -40,7 +40,17 @@ export const clientsAPI = {
         return data;
     },
 
-    async create(client: { name: string }) {
+    async create(client: {
+        name: string;
+        ruc?: string;
+        address?: string;
+        email?: string;
+        phone?: string;
+        zone?: string;
+        logo?: string;
+        icon?: string;
+        color_aura?: string;
+    }) {
         const { data, error } = await supabase
             .from('clients')
             .insert(client)
@@ -51,7 +61,17 @@ export const clientsAPI = {
         return data;
     },
 
-    async update(id: string, updates: Partial<{ name: string }>) {
+    async update(id: string, updates: Partial<{
+        name: string;
+        ruc: string;
+        address: string;
+        email: string;
+        phone: string;
+        zone: string;
+        logo: string;
+        icon: string;
+        color_aura: string;
+    }>) {
         const { data, error } = await supabase
             .from('clients')
             .update(updates)

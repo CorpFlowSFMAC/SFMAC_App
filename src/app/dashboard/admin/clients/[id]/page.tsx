@@ -112,7 +112,7 @@ export default function ClientDetailPage() {
             {/* Tab Content */}
             <div className={styles.tabContent}>
                 {activeTab === "info" && <InfoTab client={clientData} />}
-                {activeTab === "branches" && <BranchesTab branches={branches} setBranches={handleBranchesChange} clientColor={clientData.color_aura || '#0066CC'} />}
+                {activeTab === "branches" && <BranchesTab branches={branches} setBranches={handleBranchesChange} clientColor={clientData.color_aura || '#0066CC'} clientId={clientId} createBranch={createBranch} updateBranch={updateBranch} deleteBranch={deleteBranch} />}
                 {activeTab === "stats" && <StatsTab branches={branches} clientColor={clientData.color_aura || '#0066CC'} />}
             </div>
         </div>

@@ -61,13 +61,13 @@ const DEPARTMENT_TO_ZONE: { [key: string]: string } = {
 export default function BranchModal({ isOpen, onClose, onSave, branch, clientColor, isViewOnly }: BranchModalProps) {
     const [formData, setFormData] = useState({
         tipo: "Agencia",
-        codigoTopaz: "",
-        nombre: "",
-        direccion: "",
+        codigo_topaz: "",
+        name: "",
+        address: "",
         distrito: "",
         provincia: "",
         departamento: "",
-        zona: "LIMA"
+        zone: "LIMA"
     });
 
     useEffect(() => {
@@ -76,13 +76,13 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
         } else {
             setFormData({
                 tipo: "Agencia",
-                codigoTopaz: "",
-                nombre: "",
-                direccion: "",
+                codigo_topaz: "",
+                name: "",
+                address: "",
                 distrito: "",
                 provincia: "",
                 departamento: "",
-                zona: "LIMA"
+                zone: "LIMA"
             });
         }
     }, [branch, isOpen]);
@@ -94,7 +94,7 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
         if (isViewOnly) return;
 
         // Validación adicional del código Topaz
-        if (!/^[0-9]{3}$/.test(formData.codigoTopaz)) {
+        if (!/^[0-9]{3}$/.test(formData.codigo_topaz)) {
             alert("❌ El Código Topaz debe tener exactamente 3 dígitos numéricos");
             return;
         }
@@ -106,7 +106,7 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
         if (isViewOnly) return;
         // Zona automática basada en el departamento
         const autoZone = DEPARTMENT_TO_ZONE[dept] || "Lima Centro";
-        setFormData({ ...formData, departamento: dept, provincia: "", distrito: "", zona: autoZone });
+        setFormData({ ...formData, departamento: dept, provincia: "", distrito: "", zone: autoZone });
     };
 
     const handleProvChange = (prov: string) => {
@@ -158,11 +158,11 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
                             <label><Hash size={16} /> Código Topaz *</label>
                             <input
                                 type="text"
-                                value={formData.codigoTopaz}
+                                value={formData.codigo_topaz}
                                 onChange={(e) => {
                                     if (isViewOnly) return;
                                     const value = e.target.value.replace(/\D/g, '').slice(0, 3);
-                                    setFormData({ ...formData, codigoTopaz: value });
+                                    setFormData({ ...formData, codigo_topaz: value });
                                 }}
                                 placeholder="001"
                                 maxLength={3}
@@ -177,7 +177,7 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
                             <label><MapPin size={16} /> Zona (Automática)</label>
                             <input
                                 type="text"
-                                value={formData.zona}
+                                value={formData.zone}
                                 readOnly
                                 className={styles.readonlyField}
                                 style={{ background: `${clientColor}20`, borderColor: clientColor }}
@@ -188,8 +188,8 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
                             <label>Nombre de la Sede *</label>
                             <input
                                 type="text"
-                                value={formData.nombre}
-                                onChange={(e) => !isViewOnly && setFormData({ ...formData, nombre: e.target.value.toUpperCase() })}
+                                value={formData.name}
+                                onChange={(e) => !isViewOnly && setFormData({ ...formData, name: e.target.value.toUpperCase() })}
                                 placeholder="AGENCIA MIRAFLORES"
                                 style={{ textTransform: 'uppercase' }}
                                 required
@@ -201,8 +201,8 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
                             <label>Dirección *</label>
                             <input
                                 type="text"
-                                value={formData.direccion}
-                                onChange={(e) => !isViewOnly && setFormData({ ...formData, direccion: e.target.value.toUpperCase() })}
+                                value={formData.address}
+                                onChange={(e) => !isViewOnly && setFormData({ ...formData, address: e.target.value.toUpperCase() })}
                                 placeholder="AV. LARCO 1234"
                                 style={{ textTransform: 'uppercase' }}
                                 required

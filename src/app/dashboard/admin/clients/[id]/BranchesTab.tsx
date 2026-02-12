@@ -9,9 +9,13 @@ interface BranchesTabProps {
     branches: any[];
     setBranches: (branches: any[]) => void;
     clientColor: string;
+    clientId: string;
+    createBranch: (data: any) => Promise<any>;
+    updateBranch: (id: string, data: any) => Promise<any>;
+    deleteBranch: (id: string) => Promise<void>;
 }
 
-export default function BranchesTab({ branches, setBranches, clientColor }: BranchesTabProps) {
+export default function BranchesTab({ branches, setBranches, clientColor, clientId, createBranch, updateBranch, deleteBranch }: BranchesTabProps) {
     const [userRole, setUserRole] = useState<string | null>(null);
 
     useEffect(() => {
@@ -26,17 +30,17 @@ export default function BranchesTab({ branches, setBranches, clientColor }: Bran
     const [editingBranch, setEditingBranch] = useState<any>(null);
     const [isViewOnly, setIsViewOnly] = useState(false);
 
-    const zones = Array.from(new Set(branches.map(b => b.zona)));
+    const zones = Array.from(new Set(branches.map(b => b.zone || 'Sin Zona')));
     const filteredBranches = branches.filter(branch => {
         const matchesSearch =
-            branch.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            branch.codigoTopaz.includes(searchTerm);
-        const matchesZone = !filterZone || branch.zona === filterZone;
+            (branch.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (branch.codigo_topaz || '').includes(searchTerm);
+        const matchesZone = !filterZone || branch.zone === filterZone;
         return matchesSearch && matchesZone;
     });
 
     const branchesByZone = zones.reduce<{ [key: string]: any[] }>((acc, zone) => {
-        acc[zone] = filteredBranches.filter(b => b.zona === zone);
+        acc[zone] = filteredBranches.filter(b => (b.zone || 'Sin Zona') === zone);
         return acc;
     }, {});
 
@@ -58,19 +62,29 @@ export default function BranchesTab({ branches, setBranches, clientColor }: Bran
         setIsModalOpen(true);
     };
 
-    const handleDelete = (id: number) => {
+    const handleDelete = async (id: string) => {
         if (confirm("¿Está seguro de eliminar esta sede?")) {
-            setBranches(branches.filter(b => b.id !== id));
+            try {
+                await deleteBranch(id);
+            } catch (error) {
+                console.error('Error deleting branch:', error);
+                alert('❌ Error al eliminar la sede');
+            }
         }
     };
 
-    const handleSave = (branchData: any) => {
-        if (editingBranch) {
-            setBranches(branches.map(b => (b.id === editingBranch.id ? { ...branchData, id: editingBranch.id } : b)));
-        } else {
-            setBranches([...branches, { ...branchData, id: Date.now() }]);
+    const handleSave = async (branchData: any) => {
+        try {
+            if (editingBranch) {
+                await updateBranch(editingBranch.id, branchData);
+            } else {
+                await createBranch({ ...branchData, client_id: clientId });
+            }
+            setIsModalOpen(false);
+        } catch (error) {
+            console.error('Error saving branch:', error);
+            alert('❌ Error al guardar la sede');
         }
-        setIsModalOpen(false);
     };
 
     return (
@@ -124,12 +138,12 @@ export default function BranchesTab({ branches, setBranches, clientColor }: Bran
                                         {branch.tipo === "Matriz" ? <Building2 size={22} /> : <Store size={22} />}
                                     </div>
                                     <div className={styles.branchInfo}>
-                                        <div className={styles.branchName}>{branch.nombre}</div>
-                                        <div className={styles.branchAddress}>{branch.direccion}</div>
+                                        <div className={styles.branchName}>{branch.name || 'Sin nombre'}</div>
+                                        <div className={styles.branchAddress}>{branch.address || 'Sin dirección'}</div>
                                         <div className={styles.branchMeta}>
-                                            <span className={styles.codeBadge}>{branch.codigoTopaz}</span>
+                                            <span className={styles.codeBadge}>{branch.codigo_topaz || 'N/A'}</span>
                                             <span className={`${styles.typeBadge} ${branch.tipo === "Matriz" ? styles.typeMatriz : styles.typeAgencia}`}>
-                                                {branch.tipo}
+                                                {branch.tipo || 'Agencia'}
                                             </span>
                                         </div>
                                     </div>
