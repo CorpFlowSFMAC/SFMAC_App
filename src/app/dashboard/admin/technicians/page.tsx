@@ -5,33 +5,30 @@ import { Plus, Search, Users, Sparkles, Filter, Trash2, Wrench } from "lucide-re
 import { useRouter } from "next/navigation";
 import styles from "./technicians.module.css";
 import TechnicianDrawer from "./TechnicianDrawer";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useTechnicians } from "@/hooks/useSupabaseData";
 import { SKILL_ICONS, SKILL_COLORS, SERVICE_TYPES } from "@/lib/serviceTypes";
-
-
-// Mock Data inicial
-const INITIAL_TECHNICIANS: any[] = [];
 
 export default function TechniciansPage() {
     const router = useRouter();
-    const [technicians, setTechnicians, isLoaded] = useLocalStorage("technicians", INITIAL_TECHNICIANS);
+    const { technicians, loading, createTechnician, updateTechnician, deleteTechnician } = useTechnicians();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterZone, setFilterZone] = useState("");
     const [filterSkill, setFilterSkill] = useState("");
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingTech, setEditingTech] = useState<any>(null);
 
-    const zones = Array.from(new Set(technicians.map((t: any) => t.zona)));
-    // ✅ Usar especialidades desde SERVICE_TYPES en vez de las del array
+    const zones = Array.from(new Set(technicians.map((t: any) => t.zone || t.zona).filter(Boolean)));
     const allSkills = SERVICE_TYPES.map(s => s.nombreCorto);
 
     const filteredTechnicians = technicians.filter((tech: any) => {
+        const fullName = `${tech.first_name || tech.nombre || ''} ${tech.last_name || tech.apellido || ''}`.toLowerCase();
+        const docNumber = tech.document_number || tech.numeroDoc || '';
+
         const matchesSearch =
-            tech.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            tech.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            tech.numeroDoc.includes(searchTerm);
-        const matchesZone = !filterZone || tech.zona === filterZone;
-        const matchesSkill = !filterSkill || tech.especialidades.includes(filterSkill);
+            fullName.includes(searchTerm.toLowerCase()) ||
+            docNumber.includes(searchTerm);
+        const matchesZone = !filterZone || (tech.zone || tech.zona) === filterZone;
+        const matchesSkill = !filterSkill || (tech.specialties || tech.especialidades || []).includes(filterSkill);
         return matchesSearch && matchesZone && matchesSkill;
     });
 
@@ -45,33 +42,47 @@ export default function TechniciansPage() {
         setIsDrawerOpen(true);
     };
 
-    const handleSave = (techData: any) => {
-        if (editingTech) {
-            setTechnicians(technicians.map((t: any) => (t.id === editingTech.id ? { ...techData, id: editingTech.id, calificacion: editingTech.calificacion } : t)));
-        } else {
-            // Validar DNI duplicado
-            const docExists = technicians.some((t: any) => t.numeroDoc === techData.numeroDoc);
-            if (docExists) {
-                alert(`❌ El documento ${techData.numeroDoc} ya está registrado`);
-                return;
+    const handleSave = async (techData: any) => {
+        try {
+            if (editingTech) {
+                await updateTechnician(editingTech.id, techData);
+            } else {
+                // Validar DNI duplicado
+                const docExists = technicians.some((t: any) =>
+                    (t.document_number || t.numeroDoc) === (techData.document_number || techData.numeroDoc)
+                );
+                if (docExists) {
+                    alert(`❌ El documento ${techData.document_number || techData.numeroDoc} ya está registrado`);
+                    return;
+                }
+                await createTechnician(techData);
             }
-            setTechnicians([...technicians, { ...techData, id: Date.now(), calificacion: 5 }]);
+            setIsDrawerOpen(false);
+            setEditingTech(null);
+        } catch (error) {
+            console.error('Error saving technician:', error);
+            alert('❌ Error al guardar el técnico. Por favor intenta nuevamente.');
         }
-        setIsDrawerOpen(false);
     };
 
-    const handleDelete = (id: number, e: React.MouseEvent) => {
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
 
         const tech = technicians.find((t: any) => t.id === id);
         if (!tech) return;
 
-        if (confirm(`¿Está seguro de eliminar al técnico "${tech.nombre} ${tech.apellido}"?\n\nEsta acción no se puede deshacer.`)) {
-            setTechnicians(technicians.filter((t: any) => t.id !== id));
+        const name = `${tech.first_name || tech.nombre || ''} ${tech.last_name || tech.apellido || ''}`;
+        if (confirm(`¿Está seguro de eliminar al técnico "${name}"?\n\nEsta acción no se puede deshacer.`)) {
+            try {
+                await deleteTechnician(id);
+            } catch (error) {
+                console.error('Error deleting technician:', error);
+                alert('❌ Error al eliminar el técnico. Por favor intenta nuevamente.');
+            }
         }
     };
 
-    if (!isLoaded) {
+    if (loading) {
         return (
             <div className={styles.container}>
                 <div className={styles.loadingState}>
@@ -131,56 +142,68 @@ export default function TechniciansPage() {
 
             {/* Grid de Tarjetas Luminosas */}
             <div className={styles.grid}>
-                {filteredTechnicians.map((tech: any) => (
-                    <div key={tech.id} className={styles.techCard}>
-                        <div className={styles.cardHeader}>
-                            <div className={styles.photoCircle}>
-                                {tech.foto ? (
-                                    <img src={tech.foto} alt={tech.nombre} />
-                                ) : (
-                                    <Users size={32} />
-                                )}
+                {filteredTechnicians.map((tech: any) => {
+                    const firstName = tech.first_name || tech.nombre || '';
+                    const lastName = tech.last_name || tech.apellido || '';
+                    const docType = tech.document_type || tech.tipoDoc || 'DNI';
+                    const docNumber = tech.document_number || tech.numeroDoc || '';
+                    const phone = tech.phone || tech.celular || '';
+                    const zone = tech.zone || tech.zona || '';
+                    const photo = tech.photo || tech.foto || null;
+                    const rating = tech.rating || tech.calificacion || 5;
+                    const specialties = tech.specialties || tech.especialidades || [];
+
+                    return (
+                        <div key={tech.id} className={styles.techCard}>
+                            <div className={styles.cardHeader}>
+                                <div className={styles.photoCircle}>
+                                    {photo ? (
+                                        <img src={photo} alt={firstName} />
+                                    ) : (
+                                        <Users size={32} />
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className={styles.cardBody}>
+                                <h3 className={styles.techName}>{firstName} {lastName}</h3>
+                                <div className={styles.techDoc}>
+                                    <span>{docType}: {docNumber}</span>
+                                    <span className={styles.techPhone}>📱 {phone}</span>
+                                </div>
+
+                                <div className={styles.skillsGrid}>
+                                    {specialties.map((skill: string) => {
+                                        const Icon = SKILL_ICONS[skill] || Wrench;
+                                        return (
+                                            <div key={skill} className={styles.skillBadge} style={{ background: `${SKILL_COLORS[skill]}20`, borderColor: SKILL_COLORS[skill] }}>
+                                                <Icon size={12} color={SKILL_COLORS[skill]} />
+                                                <span style={{ color: SKILL_COLORS[skill] }}>{skill}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className={styles.zoneBadge}>
+                                    📍 {zone}
+                                </div>
+
+                                <div className={styles.rating}>
+                                    {"⭐".repeat(rating)}
+                                </div>
+                            </div>
+
+                            <div className={styles.cardActions}>
+                                <button onClick={() => handleEdit(tech)} className={styles.editBtn}>
+                                    ✏️ Editar
+                                </button>
+                                <button onClick={(e) => handleDelete(tech.id, e)} className={styles.deleteBtn} title="Eliminar técnico">
+                                    <Trash2 size={16} />
+                                </button>
                             </div>
                         </div>
-
-                        <div className={styles.cardBody}>
-                            <h3 className={styles.techName}>{tech.nombre} {tech.apellido}</h3>
-                            <div className={styles.techDoc}>
-                                <span>{tech.tipoDoc}: {tech.numeroDoc}</span>
-                                <span className={styles.techPhone}>📱 {tech.celular}</span>
-                            </div>
-
-                            <div className={styles.skillsGrid}>
-                                {tech.especialidades.map((skill: string) => {
-                                    const Icon = SKILL_ICONS[skill] || Wrench;
-                                    return (
-                                        <div key={skill} className={styles.skillBadge} style={{ background: `${SKILL_COLORS[skill]}20`, borderColor: SKILL_COLORS[skill] }}>
-                                            <Icon size={12} color={SKILL_COLORS[skill]} />
-                                            <span style={{ color: SKILL_COLORS[skill] }}>{skill}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className={styles.zoneBadge}>
-                                📍 {tech.zona}
-                            </div>
-
-                            <div className={styles.rating}>
-                                {"⭐".repeat(tech.calificacion)}
-                            </div>
-                        </div>
-
-                        <div className={styles.cardActions}>
-                            <button onClick={() => handleEdit(tech)} className={styles.editBtn}>
-                                ✏️ Editar
-                            </button>
-                            <button onClick={(e) => handleDelete(tech.id, e)} className={styles.deleteBtn} title="Eliminar técnico">
-                                <Trash2 size={16} />
-                            </button>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {filteredTechnicians.length === 0 && (

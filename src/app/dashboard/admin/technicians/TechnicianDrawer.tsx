@@ -80,23 +80,23 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     useEffect(() => {
         if (technician) {
             setFormData({
-                nombre: technician.nombre || "",
-                apellido: technician.apellido || "",
-                tipoDoc: technician.tipoDoc || "DNI",
-                numeroDoc: technician.numeroDoc || "",
-                celular: technician.celular || "",
+                nombre: technician.first_name || technician.nombre || "",
+                apellido: technician.last_name || technician.apellido || "",
+                tipoDoc: technician.document_type || technician.tipoDoc || "DNI",
+                numeroDoc: technician.document_number || technician.numeroDoc || "",
+                celular: technician.phone || technician.celular || "",
                 celular2: technician.celular2 || "",
                 email: technician.email || "",
                 direccion: technician.direccion || "",
-                foto: technician.foto || null,
-                especialidades: technician.especialidades || [],
-                zona: technician.zona || "LIMA",
-                banco: technician.banco || "BCP",
+                foto: technician.photo || technician.foto || null,
+                especialidades: technician.specialties || technician.especialidades || [],
+                zona: technician.zone || technician.zona || "LIMA",
+                banco: technician.bank_name || technician.banco || "BCP",
                 tipoCuenta: technician.tipoCuenta || "Ahorros",
-                numeroCuenta: technician.numeroCuenta || "",
+                numeroCuenta: technician.account_number || technician.numeroCuenta || "",
                 cci: technician.cci || "",
-                yape: technician.yape || "",
-                plin: technician.plin || ""
+                yape: technician.yape_number || technician.yape || "",
+                plin: technician.plin_number || technician.plin || ""
             });
             setCurrentStep(1);
         } else {
@@ -158,7 +158,27 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
-        onSave(formData);
+        // Transformar datos al formato de Supabase
+        const supabaseData = {
+            first_name: formData.nombre,
+            last_name: formData.apellido,
+            document_type: formData.tipoDoc,
+            document_number: formData.numeroDoc,
+            phone: formData.celular,
+            email: formData.email,
+            zone: formData.zona,
+            specialties: formData.especialidades,
+            photo: formData.foto,
+            rating: technician?.rating || technician?.calificacion || 5,
+            bank_name: formData.banco,
+            account_number: formData.numeroCuenta,
+            cci: formData.cci,
+            yape_number: formData.yape,
+            plin_number: formData.plin,
+            status: 'active'
+        };
+
+        onSave(supabaseData);
     };
 
     const toggleSpecialty = (specialty: string) => {
