@@ -46,7 +46,8 @@ export default function ClientsPage() {
 
     const handleClientUpdated = async (updatedClient: any) => {
         try {
-            await updateClientAPI(updatedClient.id, updatedClient);
+            const { id, created_at, totalBranches, ...updateData } = updatedClient;
+            await updateClientAPI(id, updateData);
             setEditClient(null);
             setIsDrawerOpen(false);
         } catch (error) {
