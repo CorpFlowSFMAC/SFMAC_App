@@ -73,8 +73,11 @@ export default function TechniciansPage() {
         const tech = technicians.find((t: any) => t.id === id);
         if (!tech) return;
 
-        const name = `${tech.first_name || tech.nombre || ''} ${tech.last_name || tech.apellido || ''}`;
-        if (confirm(`¿Está seguro de eliminar al técnico "${name}"?\n\nEsta acción no se puede deshacer.`)) {
+        const firstName = tech.first_name || tech.nombre || '';
+        const lastName = tech.last_name || tech.apellido || '';
+        const fullName = tech.name || `${firstName} ${lastName}`.trim() || 'Técnico';
+
+        if (confirm(`¿Está seguro de eliminar al técnico "${fullName}"?\n\nEsta acción no se puede deshacer.`)) {
             try {
                 await deleteTechnician(id);
             } catch (error) {
@@ -147,11 +150,11 @@ export default function TechniciansPage() {
                 {filteredTechnicians.map((tech: any) => {
                     const firstName = tech.first_name || tech.nombre || '';
                     const lastName = tech.last_name || tech.apellido || '';
-                    const fullName = tech.name || `${firstName} ${lastName}`.trim();
+                    const fullName = tech.name || `${firstName} ${lastName}`.trim() || 'Técnico sin nombre';
                     const docType = tech.document_type || tech.tipoDoc || 'DNI';
-                    const docNumber = tech.document_number || tech.numeroDoc || '';
-                    const phone = tech.phone || tech.celular || '';
-                    const zone = tech.zone || tech.zona || '';
+                    const docNumber = tech.document_number || tech.numeroDoc || '---';
+                    const phone = tech.phone || tech.celular || tech.yape_number || tech.plin_number || '---';
+                    const zone = tech.zone || tech.zona || 'PAN PERÚ';
                     const photo = tech.photo || tech.foto || null;
                     const rating = tech.rating || tech.calificacion || 5;
                     const specialties = tech.specialties || tech.especialidades || [];

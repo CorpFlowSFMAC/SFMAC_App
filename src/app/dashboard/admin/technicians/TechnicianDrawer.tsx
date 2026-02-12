@@ -79,9 +79,23 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
     useEffect(() => {
         if (technician) {
+            // Lógica de extracción para técnicos antiguos que solo tienen 'name'
+            let nombre = technician.first_name || technician.nombre || "";
+            let apellido = technician.last_name || technician.apellido || "";
+
+            if (!nombre && !apellido && technician.name) {
+                const parts = technician.name.trim().split(' ');
+                if (parts.length > 1) {
+                    nombre = parts[0];
+                    apellido = parts.slice(1).join(' ');
+                } else {
+                    nombre = parts[0];
+                }
+            }
+
             setFormData({
-                nombre: technician.first_name || technician.nombre || "",
-                apellido: technician.last_name || technician.apellido || "",
+                nombre,
+                apellido,
                 tipoDoc: technician.document_type || technician.tipoDoc || "DNI",
                 numeroDoc: technician.document_number || technician.numeroDoc || "",
                 celular: technician.phone || technician.celular || "",
