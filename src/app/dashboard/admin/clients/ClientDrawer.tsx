@@ -22,7 +22,7 @@ export default function ClientDrawer({ isOpen, onClose, onClientCreated, onClien
         email: "",
         phone: "",
         zone: "Lima Centro",
-        colorAura: BRAND_COLORS[0],
+        color_aura: BRAND_COLORS[0],
         icon: "🏢",
         logo: null as string | null
     });
@@ -36,7 +36,7 @@ export default function ClientDrawer({ isOpen, onClose, onClientCreated, onClien
                 email: editClient.email || "",
                 phone: editClient.phone || "",
                 zone: editClient.zone || "Lima Centro",
-                colorAura: editClient.colorAura || BRAND_COLORS[0],
+                color_aura: editClient.color_aura || BRAND_COLORS[0],
                 icon: editClient.icon || "🏢",
                 logo: editClient.logo || null
             });
@@ -48,7 +48,7 @@ export default function ClientDrawer({ isOpen, onClose, onClientCreated, onClien
                 email: "",
                 phone: "",
                 zone: "Lima Centro",
-                colorAura: BRAND_COLORS[0],
+                color_aura: BRAND_COLORS[0],
                 icon: "🏢",
                 logo: null
             });
@@ -204,11 +204,11 @@ export default function ClientDrawer({ isOpen, onClose, onClientCreated, onClien
                                 {BRAND_COLORS.map(color => (
                                     <div
                                         key={color}
-                                        className={`${styles.colorOption} ${formData.colorAura === color ? styles.colorSelected : ''}`}
+                                        className={`${styles.colorOption} ${formData.color_aura === color ? styles.colorSelected : ''}`}
                                         style={{ backgroundColor: color }}
-                                        onClick={() => setFormData({ ...formData, colorAura: color })}
+                                        onClick={() => setFormData({ ...formData, color_aura: color })}
                                     >
-                                        {formData.colorAura === color && <div className={styles.checkmark}>✓</div>}
+                                        {formData.color_aura === color && <div className={styles.checkmark}>✓</div>}
                                     </div>
                                 ))}
                             </div>

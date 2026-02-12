@@ -7,80 +7,26 @@ import styles from "./clientDetail.module.css";
 import InfoTab from "./InfoTab";
 import BranchesTab from "./BranchesTab";
 import StatsTab from "./StatsTab";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { INITIAL_CLIENTS_DATA, INITIAL_CLIENTS } from "@/lib/data/clients";
-
-// Tipo para los datos de clientes
-interface ClientData {
-    id: number;
-    name: string;
-    ruc: string;
-    logo: string | null;
-    address: string;
-    email: string;
-    phone: string;
-    zone: string;
-    colorAura: string;
-    icon: string;
-    createdAt: string;
-    branches: any[];
-}
-
-interface ClientsDataMap {
-    [key: string]: ClientData;
-}
+import { useClient, useBranches } from "@/hooks/useSupabaseData";
 
 export default function ClientDetailPage() {
     const router = useRouter();
     const params = useParams();
     const clientId = params.id as string;
 
-    const [clientsData, setClientsData, isLoaded] = useLocalStorage<ClientsDataMap>("clientsData", INITIAL_CLIENTS_DATA);
-    const [clients, setClients] = useLocalStorage<any[]>("clients", INITIAL_CLIENTS);
+    const { client: clientData, loading: clientLoading } = useClient(clientId);
+    const { branches, loading: branchesLoading, createBranch, updateBranch, deleteBranch } = useBranches(clientId);
     const [activeTab, setActiveTab] = useState("branches");
 
-    const clientData = clientsData[clientId];
-    const [branches, setBranches] = useState(clientData?.branches || []);
+    const loading = clientLoading || branchesLoading;
 
-    // Sincronizar branches con clientsData y asegurar que el contador en la lista principal sea correcto
-    useEffect(() => {
-        if (clientData && isLoaded) {
-            setBranches(clientData.branches);
-
-            // Sincronizar contador en la lista principal si es necesario
-            const clientInList = clients.find(c => c.id === Number(clientId));
-            if (clientInList && clientInList.totalBranches !== clientData.branches.length) {
-                const updatedClients = clients.map(c =>
-                    c.id === Number(clientId) ? { ...c, totalBranches: clientData.branches.length } : c
-                );
-                setClients(updatedClients);
-            }
-        }
-    }, [clientId, isLoaded, clientData?.branches.length]);
-
-    // Actualizar branches en localStorage cuando cambien
-    const handleBranchesChange = (newBranches: any[]) => {
-        setBranches(newBranches);
-        if (clientData) {
-            // 1. Actualizar detalle (clientsData)
-            const updatedClientsData = {
-                ...clientsData,
-                [clientId]: {
-                    ...clientData,
-                    branches: newBranches
-                }
-            };
-            setClientsData(updatedClientsData);
-
-            // 2. Actualizar lista principal (clients) para que el contador sea exacto
-            const updatedClientsList = clients.map(c =>
-                c.id === Number(clientId) ? { ...c, totalBranches: newBranches.length } : c
-            );
-            setClients(updatedClientsList);
-        }
+    // Función para manejar cambios en branches
+    const handleBranchesChange = async (newBranches: any[]) => {
+        // Esta función ya no es necesaria porque useBranches maneja el estado automáticamente
+        // Pero la mantenemos por compatibilidad con BranchesTab
     };
 
-    if (!isLoaded) {
+    if (loading) {
         return (
             <div className={styles.container}>
                 <div className={styles.loadingState}>
@@ -112,7 +58,7 @@ export default function ClientDetailPage() {
     ];
 
     return (
-        <div className={styles.container} style={{ '--client-color': clientData.colorAura } as any}>
+        <div className={styles.container} style={{ '--client-color': clientData.color_aura || '#0066CC' } as any}>
             {/* Animated Header */}
             <div className={styles.header}>
                 <button onClick={() => router.push("/dashboard/admin/clients")} className={styles.backBtn}>
@@ -121,18 +67,18 @@ export default function ClientDetailPage() {
                 </button>
 
                 <div className={styles.clientInfo}>
-                    <div className={styles.clientLogo} style={{ borderColor: clientData.colorAura }}>
+                    <div className={styles.clientLogo} style={{ borderColor: clientData.color_aura || '#0066CC' }}>
                         {clientData.logo ? (
                             <img src={clientData.logo} alt={clientData.name} />
                         ) : (
-                            <span className={styles.clientEmoji}>{clientData.icon}</span>
+                            <span className={styles.clientEmoji}>{clientData.icon || '🏢'}</span>
                         )}
                     </div>
-                    <div className={styles.glowOrb} style={{ background: clientData.colorAura }}></div>
+                    <div className={styles.glowOrb} style={{ background: clientData.color_aura || '#0066CC' }}></div>
                     <div>
                         <h1 className={styles.clientName}>{clientData.name}</h1>
                         <div className={styles.clientMeta}>
-                            <span>RUC: {clientData.ruc}</span>
+                            <span>RUC: {clientData.ruc || 'No especificado'}</span>
                             <span>•</span>
                             <span>{branches.length} sedes</span>
                             <span>•</span>
@@ -155,7 +101,7 @@ export default function ClientDetailPage() {
                         <tab.icon size={18} />
                         <span>{tab.label}</span>
                         {tab.badge !== undefined && (
-                            <span className={styles.tabBadge} style={{ background: clientData.colorAura }}>
+                            <span className={styles.tabBadge} style={{ background: clientData.color_aura || '#0066CC' }}>
                                 {tab.badge}
                             </span>
                         )}
@@ -166,8 +112,8 @@ export default function ClientDetailPage() {
             {/* Tab Content */}
             <div className={styles.tabContent}>
                 {activeTab === "info" && <InfoTab client={clientData} />}
-                {activeTab === "branches" && <BranchesTab branches={branches} setBranches={handleBranchesChange} clientColor={clientData.colorAura} />}
-                {activeTab === "stats" && <StatsTab branches={branches} clientColor={clientData.colorAura} />}
+                {activeTab === "branches" && <BranchesTab branches={branches} setBranches={handleBranchesChange} clientColor={clientData.color_aura || '#0066CC'} />}
+                {activeTab === "stats" && <StatsTab branches={branches} clientColor={clientData.color_aura || '#0066CC'} />}
             </div>
         </div>
     );
