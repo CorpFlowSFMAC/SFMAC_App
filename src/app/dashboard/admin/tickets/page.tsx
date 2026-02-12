@@ -5,9 +5,9 @@ import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, M
 import CreateTicketWizard from "./CreateTicketWizard";
 import TicketWindow from "./TicketWindow";
 import styles from "./page.module.css";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
+import { useTickets } from "@/hooks/useSupabaseData";
 
 // Hook para calcular tiempo transcurrido
 const useTicketAge = (createdAt: string) => {
@@ -53,14 +53,16 @@ const useTicketAge = (createdAt: string) => {
 };
 
 export default function TicketsPage() {
-    const [tickets, setTickets] = useLocalStorage<any[]>("tickets", []);
+    // Usar hooks de Supabase en lugar de localStorage
+    const { tickets, loading: loadingTickets, createTicket, refresh: refreshTickets } = useTickets();
     const [showWizard, setShowWizard] = useState(false);
-    const [openTickets, setOpenTickets] = useLocalStorage<any[]>("open_tickets", []);
+    const [openTickets, setOpenTickets] = useState<any[]>([]);
     const [viewMode, setViewMode] = useState<"active" | "closed">("active");
 
 
-    const handleCreateTicket = (newTicket: any) => {
-        setTickets([{ ...newTicket, createdAt: new Date().toISOString() }, ...tickets]);
+    const handleCreateTicket = async (newTicket: any) => {
+        await createTicket(newTicket);
+        await refreshTickets();
     };
 
     // 🚀 Lógica de Limpieza de Tickets (One-time)
@@ -147,7 +149,9 @@ export default function TicketsPage() {
             });
 
             if (hasChanges) {
-                setTickets(updatedTickets);
+                // setTickets ya no existe - los datos vienen de Supabase
+                // TODO: Actualizar estados en Supabase si es necesario
+                // await updateTicket(ticket.id, { estadoId: normalizedId });
             }
         }
     }, [tickets.length]); // Solo al cambiar la cantidad de tickets o al montar

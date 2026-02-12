@@ -7,8 +7,7 @@ import {
 } from "lucide-react";
 import styles from "./CreateTicketWizard.module.css";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { INITIAL_CLIENTS, INITIAL_CLIENTS_DATA } from "@/lib/data/clients";
+import { useClients, useBranches } from "@/hooks/useSupabaseData";
 
 interface CreateTicketWizardProps {
     onClose: () => void;
@@ -32,17 +31,17 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         fechaCreacion: new Date().toISOString(),
     });
 
-    // 🔗 INTEGRACIÓN REAL: Cargar datos persistentes con fallbacks
-    const [rawClients] = useLocalStorage<any[]>("clients", INITIAL_CLIENTS);
-    const [clientsData] = useLocalStorage<any>("clientsData", INITIAL_CLIENTS_DATA);
+    // 🔗 INTEGRACIÓN CON SUPABASE
+    const { clients: rawClients, loading: loadingClients } = useClients();
+    const { branches: allBranches, loading: loadingBranches } = useBranches();
 
     // Mapear clientes al formato esperado por el Wizard
     const clientes = (rawClients || []).map((c: any) => ({
-        id: (c.id || "").toString(),
+        id: c.id.toString(),
         nombre: c.name || "Sin Nombre",
         ruc: c.ruc || "---",
         prioridad: "Alta",
-        color: c.colorAura || "#8B5CF6",
+        color: c.color_aura || "#8B5CF6",
         logo: c.logo || null
     }));
 
@@ -79,13 +78,11 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         }
     }, [isDraftRestored]);
 
-    const [allTickets] = useLocalStorage<any[]>("tickets", []);
+    // Tickets se manejan desde el componente padre
 
     const isTicketClienteDuplicate = (): boolean => {
-        if (!formData.tieneNumeroCliente || !formData.numeroTicketCliente) return false;
-        return allTickets.some(t =>
-            t.numeroTicketCliente === formData.numeroTicketCliente
-        );
+        // Validación de duplicados se hará en el servidor
+        return false;
     };
 
     const isTicketClienteValid = (): boolean => {
@@ -166,23 +163,23 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         c.ruc.includes(searchTerm)
     );
 
-    // 🔗 CORREGIDA: Obtener sedes del cliente seleccionado
+    // 🔗 Obtener sedes del cliente seleccionado desde Supabase
     const sedesDisponibles = formData.clienteId ?
-        (clientsData[formData.clienteId]?.branches || [])
+        (allBranches || [])
+            .filter((b: any) => b.client_id === formData.clienteId)
             .filter((b: any) =>
-                b.nombre.toLowerCase().includes(searchTermSede.toLowerCase()) ||
-                b.direccion.toLowerCase().includes(searchTermSede.toLowerCase()) ||
-                (b.distrito && b.distrito.toLowerCase().includes(searchTermSede.toLowerCase())) ||
-                (b.codigoTopaz && b.codigoTopaz.toLowerCase().includes(searchTermSede.toLowerCase()))
+                b.name.toLowerCase().includes(searchTermSede.toLowerCase()) ||
+                b.address.toLowerCase().includes(searchTermSede.toLowerCase()) ||
+                (b.zone && b.zone.toLowerCase().includes(searchTermSede.toLowerCase()))
             )
             .map((b: any) => ({
                 id: b.id,
-                tipo: b.tipo || "Agencia",
-                nombre: b.nombre,
-                direccion: b.direccion,
-                distrito: b.distrito || "",
-                codigoTopaz: b.codigoTopaz || "",
-                zona: b.zona || ""
+                tipo: "Agencia",
+                nombre: b.name,
+                direccion: b.address,
+                distrito: "",
+                codigoTopaz: "",
+                zona: b.zone || ""
             })) : [];
 
     return (

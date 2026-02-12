@@ -8,13 +8,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import styles from "./admin.module.css";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { normalizeStateId } from "@/lib/ticketStates";
 import SyncToSupabaseButton from "@/components/SyncToSupabaseButton";
+import { useTickets, useTechnicians } from "@/hooks/useSupabaseData";
 
 export default function AdminDashboard() {
-    const [tickets] = useLocalStorage<any[]>("tickets", []);
-    const [technicians] = useLocalStorage<any[]>("technicians", []);
+    // Usar hooks de Supabase en lugar de localStorage
+    const { tickets, loading: loadingTickets } = useTickets();
+    const { technicians, loading: loadingTechs } = useTechnicians();
     const [isMounted, setIsMounted] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
 
