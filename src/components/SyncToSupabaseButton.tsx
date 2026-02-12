@@ -51,11 +51,18 @@ export default function SyncToSupabaseButton() {
 
             for (const client of localClients) {
                 try {
+                    // Validar que el cliente tenga nombre
+                    const clientName = client.nombre || client.name;
+                    if (!clientName || clientName.trim() === '') {
+                        stats.errors.push(`Cliente sin nombre (ID: ${client.id || 'desconocido'})`);
+                        continue;
+                    }
+
                     // Verificar si existe
                     const { data: existing } = await supabase
                         .from('clients')
                         .select('*')
-                        .eq('name', client.nombre)
+                        .eq('name', clientName)
                         .maybeSingle();
 
                     if (existing) {
@@ -64,7 +71,7 @@ export default function SyncToSupabaseButton() {
                         // Crear nuevo
                         const { data: newClient, error } = await supabase
                             .from('clients')
-                            .insert({ name: client.nombre })
+                            .insert({ name: clientName })
                             .select()
                             .single();
 
@@ -73,7 +80,8 @@ export default function SyncToSupabaseButton() {
                         stats.clientsCreated++;
                     }
                 } catch (err: any) {
-                    stats.errors.push(`Cliente "${client.nombre}": ${err.message}`);
+                    const clientName = client.nombre || client.name || 'sin nombre';
+                    stats.errors.push(`Cliente "${clientName}": ${err.message}`);
                 }
             }
 
