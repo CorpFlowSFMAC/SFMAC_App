@@ -375,12 +375,17 @@ export function useTickets(statusId?: string, technicianId?: string) {
         branch_id?: string;
         technician_id?: string;
         status_id?: string;
+        service_type?: string;
         description?: string;
+        diagnosis?: string;
         client_ticket_number?: string;
         labor_cost?: number;
         materials_cost?: number;
         visit_cost?: number;
         total_quoted_amount?: number;
+        priority?: string;
+        created_by?: string;
+        current_step?: number;
         metadata?: any;
     }) => {
         try {

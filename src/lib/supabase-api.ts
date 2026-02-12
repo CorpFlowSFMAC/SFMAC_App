@@ -360,12 +360,17 @@ export const ticketsAPI = {
         branch_id?: string;
         technician_id?: string;
         status_id?: string;
+        service_type?: string;
         description?: string;
+        diagnosis?: string;
         client_ticket_number?: string;
         labor_cost?: number;
         materials_cost?: number;
         visit_cost?: number;
         total_quoted_amount?: number;
+        priority?: string;
+        created_by?: string;
+        current_step?: number;
         metadata?: any;
     }) {
         const { data, error } = await supabase
@@ -383,15 +388,23 @@ export const ticketsAPI = {
         branch_id: string;
         technician_id: string;
         status_id: string;
+        service_type: string;
         description: string;
+        diagnosis: string;
         client_ticket_number: string;
         labor_cost: number;
         materials_cost: number;
         visit_cost: number;
         total_quoted_amount: number;
+        priority: string;
+        created_by: string;
+        current_step: number;
         quotation_date: string;
         execution_date: string;
         closure_date: string;
+        is_sla_paused: boolean;
+        sla_pause_date: string;
+        sla_reactivation_date: string;
         metadata: any;
     }>) {
         const { data, error } = await supabase

@@ -132,22 +132,50 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         setFormData({ ...formData, sede, sedeId: sede.id });
     };
 
-    const handleGenerarTicket = () => {
+    const handleGenerarTicket = async () => {
         if (formData.tieneNumeroCliente && isTicketClienteDuplicate()) {
             alert("❌ Error: El número de ticket de cliente ya existe. Por favor use uno único.");
             setCurrentStep(3);
             return;
         }
 
-        const nuevoTicket = {
-            id: `TKT-${Date.now()}`,
-            ...formData,
-            estado: "Nuevo Ticket",
-            estadoId: "nuevo", // Aseguramos sincronía con TICKET_STATES
-            fechaCreacion: new Date().toISOString(),
+        // Convertir evidencias a Base64 para guardarlas en Supabase (metadata)
+        const processFiles = async () => {
+            const results = await Promise.all(
+                formData.evidencias.map(file => {
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve({
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            url: e.target?.result
+                        });
+                        reader.readAsDataURL(file);
+                    });
+                })
+            );
+            return results;
         };
+
+        const evidenciasBase64 = await processFiles();
+
+        const supabaseTicket = {
+            client_id: formData.clienteId,
+            branch_id: formData.sedeId,
+            status_id: "nuevo",
+            service_type: formData.tipoServicio,
+            description: formData.descripcionProblema,
+            client_ticket_number: formData.tieneNumeroCliente ? formData.numeroTicketCliente : null,
+            created_by: formData.creadoPor,
+            metadata: {
+                evidencias: evidenciasBase64,
+                service_type_name: formData.tipoServicioNombre
+            }
+        };
+
         localStorage.removeItem("ticket_draft");
-        onCreateTicket(nuevoTicket);
+        onCreateTicket(supabaseTicket);
         onClose();
     };
 

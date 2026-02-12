@@ -54,7 +54,7 @@ const useTicketAge = (createdAt: string) => {
 
 export default function TicketsPage() {
     // Usar hooks de Supabase en lugar de localStorage
-    const { tickets, loading: loadingTickets, createTicket, refresh: refreshTickets } = useTickets();
+    const { tickets, loading: loadingTickets, createTicket, updateTicket, refresh: refreshTickets } = useTickets();
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
     const [viewMode, setViewMode] = useState<"active" | "closed">("active");
@@ -377,6 +377,7 @@ export default function TicketsPage() {
                         key={ticket.id}
                         ticket={ticket}
                         index={index}
+                        onUpdate={updateTicket}
                         onClose={() => setOpenTickets(openTickets.filter(t => t.id !== ticket.id))}
                     />
                 ))

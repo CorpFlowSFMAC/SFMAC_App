@@ -12,11 +12,12 @@ import styles from "./TicketWindow.module.css";
 interface TicketWindowProps {
     ticket: any;
     onClose: () => void;
+    onUpdate?: (id: string, updates: any) => Promise<any>;
     index?: number;
     children?: React.ReactNode;
 }
 
-export default function TicketWindow({ ticket, onClose, index = 0, children }: TicketWindowProps) {
+export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
     // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
     const [ticketData, setTicketData] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -159,60 +160,57 @@ export default function TicketWindow({ ticket, onClose, index = 0, children }: T
 
     const windowRef = useRef<HTMLDivElement>(null);
 
-    // Guardar estado del ticket cuando cambia y sincronizar con la lista maestra
+    // 🚀 SINCRONIZACIÓN CON SUPABASE (Reemplaza localStorage)
     useEffect(() => {
-        if (typeof window !== 'undefined' && ticketData) {
-            // 1. Guardar en el storage individual (detalle completo)
-            try {
-                localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
-            } catch (e) {
-                // Error saving individual ticket state
-            }
+        if (!onUpdate || !ticketData) return;
 
-            // 2. Sincronizar con la lista maestra 'tickets' para reflejar cambios en el Dashboard/Kanban
-            const savedTickets = localStorage.getItem("tickets");
-            if (savedTickets) {
-                try {
-                    const allTickets = JSON.parse(savedTickets);
-                    const index = allTickets.findIndex((t: any) => t.id === ticket.id);
-                    if (index !== -1) {
-                        // ⚠️ OPTIMIZACIÓN: Excluir campos pesados al sincronizar con la lista maestra
-                        // para evitar "QuotaExceededError". El detalle vive en `ticket_state_${id}`.
-                        const { evidenciasCampo, voucher, photos, archivosAdjuntos, cotizacionFormal, ...lightTicketData } = ticketData;
+        const syncTimeout = setTimeout(async () => {
+            // ⚠️ OPTIMIZACIÓN: Solo sincronizar datos de negocio, no estados de UI de la ventana
+            const {
+                isMaximized, isMinimized, position, zIndex,
+                ...businessData
+            } = ticketData;
 
-                        // Preparar el objeto candidato para la lista maestra
-                        const candidateTicket = { ...allTickets[index], ...lightTicketData };
-
-                        // Limpieza de seguridad: Asegurar que NO entren campos pesados
-                        delete candidateTicket.evidenciasCampo;
-                        delete candidateTicket.voucher;
-                        delete candidateTicket.photos;
-                        delete candidateTicket.archivosAdjuntos;
-                        delete candidateTicket.cotizacionFormal;
-
-                        // Comparar con la versión actual en lista maestra (también limpiando por si acaso)
-                        const currentInMaster = { ...allTickets[index] };
-                        delete currentInMaster.evidenciasCampo;
-                        delete currentInMaster.voucher;
-                        delete currentInMaster.photos;
-                        delete currentInMaster.archivosAdjuntos;
-                        delete currentInMaster.cotizacionFormal;
-
-                        if (JSON.stringify(currentInMaster) !== JSON.stringify(candidateTicket)) {
-                            allTickets[index] = candidateTicket;
-                            localStorage.setItem("tickets", JSON.stringify(allTickets));
-
-                            // Disparar eventos para que el Dashboard/Kanban se actualicen inmediatamente
-                            window.dispatchEvent(new Event('storage'));
-                            window.dispatchEvent(new Event('local-storage-update'));
-                        }
-                    }
-                } catch (e) {
-                    // Sync error
+            // Mapeo de campos UI (Español) -> Supabase (Inglés)
+            const updates: any = {
+                status_id: businessData.estadoId,
+                description: businessData.descripcionProblema,
+                client_ticket_number: businessData.numeroTicketCliente,
+                diagnosis: businessData.diagnostico,
+                labor_cost: parseFloat(businessData.costoManoObra || 0),
+                materials_cost: parseFloat(businessData.costoMateriales || 0),
+                visit_cost: parseFloat(businessData.costoVisita || 0),
+                total_quoted_amount: parseFloat(businessData.montoFinal || 0),
+                technician_id: businessData.tecnico?.id || businessData.technician_id,
+                is_sla_paused: businessData.pausadoSLA,
+                sla_pause_date: businessData.fechaPausa,
+                sla_reactivation_date: businessData.fechaReactivacion,
+                quotation_date: businessData.fechaCotizacion,
+                execution_date: businessData.fechaInicioEjecucion,
+                closure_date: businessData.fechaCierre,
+                metadata: {
+                    ...businessData,
+                    // Asegurar que campos pesados se mantengan pero en metadata
+                    evidenciasCampo: businessData.evidenciasCampo,
+                    evidenciasEjecucion: businessData.evidenciasEjecucion,
+                    gastos: businessData.gastos,
+                    partidas: businessData.partidas,
+                    historialPagosTecnico: businessData.historialPagosTecnico,
+                    documentosChecklist: businessData.documentosChecklist
                 }
+            };
+
+            try {
+                await onUpdate(ticket.id, updates);
+                // También guardamos localmente por redundancia
+                localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
+            } catch (err) {
+                console.error("Error syncing ticket to Supabase:", err);
             }
-        }
-    }, [ticketData, ticket.id]);
+        }, 1200);
+
+        return () => clearTimeout(syncTimeout);
+    }, [ticketData, ticket.id, onUpdate]);
 
     // Listener para sincronizar cambios externos (ej: confirmación del Gerente desde otra pestaña)
     useEffect(() => {
