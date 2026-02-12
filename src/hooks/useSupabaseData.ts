@@ -302,6 +302,38 @@ export function useTechnicians(status?: string) {
     };
 }
 
+export function useTechnician(id: string | null) {
+    const [technician, setTechnician] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+
+    const fetchTechnician = useCallback(async () => {
+        if (!id) {
+            setTechnician(null);
+            setLoading(false);
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const data = await techniciansAPI.getById(id);
+            setTechnician(data);
+            setError(null);
+        } catch (err) {
+            setError(err as Error);
+            console.error('Error fetching technician:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [id]);
+
+    useEffect(() => {
+        fetchTechnician();
+    }, [fetchTechnician]);
+
+    return { technician, loading, error, refresh: fetchTechnician };
+}
+
 // ============================================
 // TICKETS HOOKS
 // ============================================

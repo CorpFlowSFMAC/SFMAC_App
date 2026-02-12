@@ -234,9 +234,12 @@ export const techniciansAPI = {
         rating?: number;
         bank_name?: string;
         account_number?: string;
+        account_type?: string;
         cci?: string;
         yape_number?: string;
         plin_number?: string;
+        address?: string;
+        phone_secondary?: string;
         status?: string;
     }) {
         // Asegurar que name esté presente si no se proporciona
@@ -268,9 +271,12 @@ export const techniciansAPI = {
         rating: number;
         bank_name: string;
         account_number: string;
+        account_type: string;
         cci: string;
         yape_number: string;
         plin_number: string;
+        address: string;
+        phone_secondary: string;
         status: string;
     }>) {
         // Actualizar name si cambian first_name o last_name y no se proporciona name
