@@ -160,6 +160,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
         // Transformar datos al formato de Supabase
         const supabaseData = {
+            name: `${formData.nombre} ${formData.apellido}`.trim(),
             first_name: formData.nombre,
             last_name: formData.apellido,
             document_type: formData.tipoDoc,

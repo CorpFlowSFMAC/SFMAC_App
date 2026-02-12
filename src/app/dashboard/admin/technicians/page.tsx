@@ -21,7 +21,9 @@ export default function TechniciansPage() {
     const allSkills = SERVICE_TYPES.map(s => s.nombreCorto);
 
     const filteredTechnicians = technicians.filter((tech: any) => {
-        const fullName = `${tech.first_name || tech.nombre || ''} ${tech.last_name || tech.apellido || ''}`.toLowerCase();
+        const firstName = tech.first_name || tech.nombre || '';
+        const lastName = tech.last_name || tech.apellido || '';
+        const fullName = (tech.name || `${firstName} ${lastName}`.trim() || '').toLowerCase();
         const docNumber = tech.document_number || tech.numeroDoc || '';
 
         const matchesSearch =
@@ -145,6 +147,7 @@ export default function TechniciansPage() {
                 {filteredTechnicians.map((tech: any) => {
                     const firstName = tech.first_name || tech.nombre || '';
                     const lastName = tech.last_name || tech.apellido || '';
+                    const fullName = tech.name || `${firstName} ${lastName}`.trim();
                     const docType = tech.document_type || tech.tipoDoc || 'DNI';
                     const docNumber = tech.document_number || tech.numeroDoc || '';
                     const phone = tech.phone || tech.celular || '';
@@ -158,7 +161,7 @@ export default function TechniciansPage() {
                             <div className={styles.cardHeader}>
                                 <div className={styles.photoCircle}>
                                     {photo ? (
-                                        <img src={photo} alt={firstName} />
+                                        <img src={photo} alt={fullName} />
                                     ) : (
                                         <Users size={32} />
                                     )}
@@ -166,7 +169,7 @@ export default function TechniciansPage() {
                             </div>
 
                             <div className={styles.cardBody}>
-                                <h3 className={styles.techName}>{firstName} {lastName}</h3>
+                                <h3 className={styles.techName}>{fullName}</h3>
                                 <div className={styles.techDoc}>
                                     <span>{docType}: {docNumber}</span>
                                     <span className={styles.techPhone}>📱 {phone}</span>

@@ -221,10 +221,17 @@ export const techniciansAPI = {
     },
 
     async create(technician: {
-        name: string;
+        name?: string;
+        first_name?: string;
+        last_name?: string;
+        document_type?: string;
         document_number?: string;
         phone?: string;
         email?: string;
+        zone?: string;
+        specialties?: string[];
+        photo?: string;
+        rating?: number;
         bank_name?: string;
         account_number?: string;
         cci?: string;
@@ -232,6 +239,11 @@ export const techniciansAPI = {
         plin_number?: string;
         status?: string;
     }) {
+        // Asegurar que name esté presente si no se proporciona
+        if (!technician.name && (technician.first_name || technician.last_name)) {
+            technician.name = `${technician.first_name || ''} ${technician.last_name || ''}`.trim();
+        }
+
         const { data, error } = await supabase
             .from('technicians')
             .insert(technician)
@@ -244,9 +256,16 @@ export const techniciansAPI = {
 
     async update(id: string, updates: Partial<{
         name: string;
+        first_name: string;
+        last_name: string;
+        document_type: string;
         document_number: string;
         phone: string;
         email: string;
+        zone: string;
+        specialties: string[];
+        photo: string;
+        rating: number;
         bank_name: string;
         account_number: string;
         cci: string;
@@ -254,6 +273,13 @@ export const techniciansAPI = {
         plin_number: string;
         status: string;
     }>) {
+        // Actualizar name si cambian first_name o last_name y no se proporciona name
+        if (!updates.name && (updates.first_name || updates.last_name)) {
+            // Para ser precisos tendríamos que obtener el registro actual, 
+            // pero como en el UI solemos enviar todo el form, 
+            // confiamos en que TechnicianDrawer envíe el name actualizado.
+        }
+
         const { data, error } = await supabase
             .from('technicians')
             .update(updates)
