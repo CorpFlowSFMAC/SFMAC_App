@@ -151,8 +151,8 @@ export default function ClientsPage() {
                         className={styles.clientCard}
                         onClick={() => router.push(`/dashboard/admin/clients/${client.id}`)}
                         style={{
-                            '--card-color': client.colorAura,
-                            '--card-glow': `${client.colorAura}40`
+                            '--card-color': client.color_aura || '#0066CC',
+                            '--card-glow': `${client.color_aura || '#0066CC'}40`
                         } as any}
                     >
                         {/* Animated Background */}
@@ -164,10 +164,10 @@ export default function ClientsPage() {
                                 {client.logo ? (
                                     <img src={client.logo} alt={client.name} />
                                 ) : (
-                                    <span className={styles.clientEmoji}>{client.icon}</span>
+                                    <span className={styles.clientEmoji}>{client.icon || '🏢'}</span>
                                 )}
                             </div>
-                            <div className={styles.glowOrb} style={{ background: client.colorAura }}></div>
+                            <div className={styles.glowOrb} style={{ background: client.color_aura || '#0066CC' }}></div>
                             {userRole === 'admin' && (
                                 <div className={styles.cardActions}>
                                     <button
@@ -190,20 +190,20 @@ export default function ClientsPage() {
 
                         <div className={styles.cardBody}>
                             <h3 className={styles.clientName}>{client.name}</h3>
-                            <span className={styles.clientRuc}>RUC: {client.ruc}</span>
+                            <span className={styles.clientRuc}>RUC: {client.ruc || 'No especificado'}</span>
 
                             <div className={styles.infoRow}>
                                 <MapPin size={14} />
-                                <span>{client.address}</span>
+                                <span>{client.address || 'Dirección no especificada'}</span>
                             </div>
                         </div>
 
                         <div className={styles.cardFooter}>
                             <div className={styles.statBadge}>
                                 <Building2 size={14} />
-                                <span>{client.totalBranches} sedes</span>
+                                <span>{client.totalBranches || 0} sedes</span>
                             </div>
-                            <div className={styles.zoneBadge}>{client.zone}</div>
+                            <div className={styles.zoneBadge}>{client.zone || 'LIMA'}</div>
                         </div>
 
                         {/* Interactive Hover Effect */}

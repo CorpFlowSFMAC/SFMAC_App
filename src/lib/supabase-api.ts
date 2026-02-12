@@ -13,11 +13,20 @@ export const clientsAPI = {
     async getAll() {
         const { data, error } = await supabase
             .from('clients')
-            .select('*')
+            .select(`
+                *,
+                branch_offices(count)
+            `)
             .order('name');
 
         if (error) throw error;
-        return data;
+
+        // Transformar el conteo de sedes
+        return data?.map(client => ({
+            ...client,
+            totalBranches: client.branch_offices?.[0]?.count || 0,
+            branch_offices: undefined // Eliminar el objeto de conteo
+        })) || [];
     },
 
     async getById(id: string) {
