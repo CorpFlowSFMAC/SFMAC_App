@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { normalizeStateId } from '@/lib/ticketStates';
 import {
     clientsAPI,
     branchesAPI,
@@ -334,6 +335,61 @@ export function useTechnician(id: string | null) {
     return { technician, loading, error, refresh: fetchTechnician };
 }
 
+const normalizeTicket = (t: any) => {
+    if (!t) return null;
+
+    // Normalizar Cliente (Supabase 'clients' -> UI 'cliente')
+    const clienteRaw = t.clients || t.cliente;
+    const cliente = clienteRaw ? {
+        ...clienteRaw,
+        nombre: clienteRaw.name || clienteRaw.nombre || 'Sin Nombre',
+        color: clienteRaw.color_aura || clienteRaw.color || '#8B5CF6'
+    } : null;
+
+    // Normalizar Sede (Supabase 'branch_offices' -> UI 'sede')
+    const sedeRaw = t.branch_offices || t.sede;
+    const sede = sedeRaw ? {
+        ...sedeRaw,
+        nombre: sedeRaw.name || sedeRaw.nombre || 'Sin Sede',
+        direccion: sedeRaw.address || sedeRaw.direccion || 'Sin dirección',
+        zona: sedeRaw.zone || sedeRaw.zona || 'PAN PERÚ'
+    } : null;
+
+    // Normalizar Técnico (Supabase 'technicians' -> UI 'tecnico')
+    const tecnicoRaw = t.technicians || t.tecnico;
+    const tecnico = tecnicoRaw ? {
+        ...tecnicoRaw,
+        nombre: tecnicoRaw.name || tecnicoRaw.nombre || 'Sin Técnico'
+    } : null;
+
+    return {
+        ...t,
+        // Mapeo de campos raíz
+        estadoId: normalizeStateId(t.status_id || t.estadoId || 'nuevo'),
+        descripcionProblema: t.description || t.descripcionProblema || '',
+        numeroTicketCliente: t.client_ticket_number || t.numeroTicketCliente || '',
+        fechaCreacion: t.created_at || t.fechaCreacion,
+        createdAt: t.created_at || t.createdAt || t.fechaCreacion, // Usado en SLA
+        costoManoObra: t.labor_cost || t.costoManoObra || 0,
+        costoMateriales: t.materials_cost || t.costoMateriales || 0,
+        costoVisita: t.visit_cost || t.costoVisita || 0,
+        montoFinal: t.total_quoted_amount || t.montoFinal || 0,
+
+        // Relaciones normalizadas
+        cliente,
+        sede,
+        tecnico,
+
+        // Otros campos operativos
+        tipoServicio: t.service_type || t.tipoServicio,
+        creadoPor: t.created_by || t.creadoPor,
+        diagnostico: t.diagnosis || t.diagnostico,
+
+        // Conservar metadatos (evidencias, partidas, etc.)
+        ...(t.metadata || {})
+    };
+};
+
 // ============================================
 // TICKETS HOOKS
 // ============================================
@@ -356,7 +412,7 @@ export function useTickets(statusId?: string, technicianId?: string) {
                 data = await ticketsAPI.getAll();
             }
 
-            setTickets(data);
+            setTickets((data || []).map(normalizeTicket));
             setError(null);
         } catch (err) {
             setError(err as Error);
@@ -370,28 +426,12 @@ export function useTickets(statusId?: string, technicianId?: string) {
         fetchTickets();
     }, [fetchTickets]);
 
-    const createTicket = useCallback(async (ticketData: {
-        client_id?: string;
-        branch_id?: string;
-        technician_id?: string;
-        status_id?: string;
-        service_type?: string;
-        description?: string;
-        diagnosis?: string;
-        client_ticket_number?: string;
-        labor_cost?: number;
-        materials_cost?: number;
-        visit_cost?: number;
-        total_quoted_amount?: number;
-        priority?: string;
-        created_by?: string;
-        current_step?: number;
-        metadata?: any;
-    }) => {
+    const createTicket = useCallback(async (ticketData: any) => {
         try {
             const newTicket = await ticketsAPI.create(ticketData);
-            setTickets(prev => [newTicket, ...prev]);
-            return newTicket;
+            const normalized = normalizeTicket(newTicket);
+            setTickets(prev => [normalized, ...prev]);
+            return normalized;
         } catch (err) {
             console.error('Error creating ticket:', err);
             throw err;
@@ -401,8 +441,9 @@ export function useTickets(statusId?: string, technicianId?: string) {
     const updateTicket = useCallback(async (id: string, updates: any) => {
         try {
             const updated = await ticketsAPI.update(id, updates);
-            setTickets(prev => prev.map(t => t.id === id ? updated : t));
-            return updated;
+            const normalized = normalizeTicket(updated);
+            setTickets(prev => prev.map(t => t.id === id ? normalized : t));
+            return normalized;
         } catch (err) {
             console.error('Error updating ticket:', err);
             throw err;
@@ -445,7 +486,7 @@ export function useTicket(id: string | null) {
         try {
             setLoading(true);
             const data = await ticketsAPI.getById(id);
-            setTicket(data);
+            setTicket(normalizeTicket(data));
             setError(null);
         } catch (err) {
             setError(err as Error);

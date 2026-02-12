@@ -116,45 +116,9 @@ export default function TicketsPage() {
     const [searchTerm, setSearchTerm] = useState("");
 
     // 🛠️ REPARACIÓN/SINCRONIZACIÓN AUTOMÁTICA
-    // Si un ticket tiene un estado guardado individualmente que difiere de la lista maestra, sincronizarlo.
-    useEffect(() => {
-        if (tickets.length > 0) {
-            let hasChanges = false;
-            const updatedTickets = tickets.map((t: any) => {
-                const savedState = localStorage.getItem(`ticket_state_${t.id}`);
-                if (savedState) {
-                    try {
-                        const parsed = JSON.parse(savedState);
-                        const normalizedMaster = normalizeStateId(t.estadoId);
-                        const normalizedSaved = normalizeStateId(parsed.estadoId);
+    // Eliminada la sincronización local forzada, ahora se usa normalización en el hook useTickets
+    // para asegurar que los datos de Supabase sean compatibles con la UI.
 
-                        if (normalizedMaster !== normalizedSaved) {
-                            hasChanges = true;
-                            // ⚠️ OPTIMIZACIÓN: No sincronizar campos pesados (imágenes/base64) al listado general
-                            // para evitar "QuotaExceededError". El detalle se carga individualmente.
-                            const { evidenciasCampo, voucher, ...lightState } = parsed;
-                            return { ...t, ...lightState, estadoId: normalizedSaved };
-                        }
-                    } catch (e) {
-                        // Error parsing saved ticket state
-                    }
-                }
-                // Asegurar que al menos el ID esté normalizado
-                const normId = normalizeStateId(t.estadoId);
-                if (t.estadoId !== normId) {
-                    hasChanges = true;
-                    return { ...t, estadoId: normId };
-                }
-                return t;
-            });
-
-            if (hasChanges) {
-                // setTickets ya no existe - los datos vienen de Supabase
-                // TODO: Actualizar estados en Supabase si es necesario
-                // await updateTicket(ticket.id, { estadoId: normalizedId });
-            }
-        }
-    }, [tickets.length]); // Solo al cambiar la cantidad de tickets o al montar
 
     // Estadísticas rápidas usando el flujo operativo real
     const stats = {
@@ -168,11 +132,18 @@ export default function TicketsPage() {
     };
 
     const filteredTickets = tickets.filter((t: any) => {
-        const isClosed = normalizeStateId(t.estadoId) === "ticket_cerrado";
+        const sid = normalizeStateId(t.estadoId);
+        const isClosed = sid === "ticket_cerrado";
+
+        const clienteNombre = (t.cliente?.nombre || t.metadata?.cliente?.nombre || "").toLowerCase();
+        const descripcion = (t.descripcionProblema || "").toLowerCase();
+        const tktCliente = (t.numeroTicketCliente || "").toLowerCase();
+        const search = searchTerm.toLowerCase();
+
         const matchesSearch =
-            t.cliente?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            t.descripcionProblema?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            t.numeroTicketCliente?.toLowerCase().includes(searchTerm.toLowerCase());
+            clienteNombre.includes(search) ||
+            descripcion.includes(search) ||
+            tktCliente.includes(search);
 
         if (viewMode === "active") return !isClosed && matchesSearch;
         return isClosed && matchesSearch;
