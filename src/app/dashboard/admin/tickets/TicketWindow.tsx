@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle } from "lucide-react";
+import * as XLSX from 'xlsx';
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2 } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar } from "./TicketSummary";
@@ -27,14 +28,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 try {
                     const parsed = JSON.parse(saved);
 
-                    // 🛡️ HARDENING INITIAL STATE:
-                    // Al cargar la página, IGNORAMOS los campos de negocio críticos del localStorage.
+                    // ðŸ›¡ï¸ HARDENING INITIAL STATE:
+                    // Al cargar la pó¡gina, IGNORAMOS los campos de negocio cró­ticos del localStorage.
                     // La verdad absoluta viene del prop 'ticket' (Server/Realtime).
                     const {
                         adelantoPagado,
                         fechaPagoAdelanto,
                         historialPagosTecnico,
-                        estadoId, // El estado es ultra crítico
+                        estadoId, // El estado es ultra cró­tico
                         status_id,
                         visitPaymentConfirmed,
                         solicitudAdelanto,
@@ -77,7 +78,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             isMinimized,
             position
         }));
-    }, [isMaximized, isMinimized, isDragging]); // Sincronizar cuando cambian banderas o termina drag (vía isDragging)
+    }, [isMaximized, isMinimized, isDragging]); // Sincronizar cuando cambian banderas o termina drag (vó­a isDragging)
 
     // Estados para el reporte de campo (Paso 4)
     const [diagnostico, setDiagnostico] = useState("");
@@ -86,10 +87,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [modalidad, setModalidad] = useState("todo_costo");
     const [evidenciasCampo, setEvidenciasCampo] = useState<any[]>([]);
     const [montoTotalCotizado, setMontoTotalCotizado] = useState(ticketData.montoFinal || 0);
+    const [montoSubtotal, setMontoSubtotal] = useState(ticketData.montoSubtotal || 0);
+    const [montoIGV, setMontoIGV] = useState(ticketData.montoIGV || 0);
     const quotationEditorRef = useRef<any>(null);
     const [partidasCotizacion, setPartidasCotizacion] = useState<any[]>(ticketData.partidas || []);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
-    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si está aprobada
+    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si estó¡ aprobada
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null); // Null forces explicit selection
     const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -101,14 +104,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
 
-    // 🔗 SINCRONIZACIÓN EXTERNA: Actualizar estado local si el ticket cambia desde afuera (ej: Supabase Realtime)
+    // ðŸ”— SINCRONIZACIó“N EXTERNA: Actualizar estado local si el ticket cambia desde afuera (ej: Supabase Realtime)
     useEffect(() => {
         if (ticket) {
             setTicketData((prev: any) => {
                 // Evitar ciclos infinitos comparando strings
                 if (JSON.stringify(prev) === JSON.stringify(ticket)) return prev;
 
-                // 🛡️ REGLA DE ORO DE FLUJO: Si el pago se confirma externamente,
+                // ðŸ›¡ï¸ REGLA DE ORO DE FLUJO: Si el pago se confirma externamente,
                 // debemos DESTRUIR cualquier rastro de la solicitud antigua para desbloquear la UI.
                 const overrides: any = {};
 
@@ -120,13 +123,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 // Caso 2: Pago de Visita (Paso 2 -> 3)
                 if (ticket.visitPaymentConfirmed) {
                     overrides.solicitudPagoVisita = null;
-                    // Forzar avance visual si estábamos atorados en "esperando pago"
+                    // Forzar avance visual si estó¡bamos atorados en "esperando pago"
                     if (prev.estadoId === 'esperando_pago_visita' || ticket.estadoId === 'en_inspeccion') {
                         overrides.estadoId = 'en_inspeccion';
                     }
                 }
 
-                // Caso 3: Refuerzo Económico (Ejecución)
+                // Caso 3: Refuerzo Econó³mico (Ejecució³n)
                 // Si existe una solicitud local, y vemos un pago de Refuerzo posterior en el server, LIMPIAR.
                 if (prev.solicitudAdelantoExtra) {
                     const reqDate = new Date(prev.solicitudAdelantoExtra.fecha).getTime();
@@ -134,7 +137,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     const isPaid = pagos.some((p: any) => {
                         const isRefuerzo = p.tipo === 'Refuerzo' || p.referencia?.includes('Refuerzo') || p.referencia?.includes('Adelanto Adicional');
                         const payDate = new Date(p.fecha).getTime();
-                        // Si el pago es posterior o igual a la solicitud, es su confirmación.
+                        // Si el pago es posterior o igual a la solicitud, es su confirmació³n.
                         return isRefuerzo && payDate >= reqDate;
                     });
 
@@ -157,9 +160,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     }, []);
 
-    // Estados para Ejecución (Paso 11)
+    // Estados para Ejecució³n (Paso 11)
     const [gastos, setGastos] = useState<any[]>(ticketData.gastos || []);
-    // Estados para Cierre y Documentación (Paso 9)
+    // Estados para Cierre y Documentació³n (Paso 9)
     const [documentosChecklist, setDocumentosChecklist] = useState({
         actaConformidad: false,
         ats: false,
@@ -170,21 +173,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [newExpense, setNewExpense] = useState({ concepto: "", monto: "", tipo: "Gasto Operativo" });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Estados para Negociación de Costo
+    // Estados para Negociació³n de Costo
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
     const fieldEvidenceRef = useRef<HTMLInputElement>(null);
     const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
     const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
 
+    // Estado para Cotización BCP
+    const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizacionBCP || null);
+    const bcpFileInputRef = useRef<HTMLInputElement>(null);
+
     useEffect(() => {
         const interval = setInterval(() => {
             setCurrentTime(new Date());
         }, 1000);
-
-
-        // Legacy auto-repair from localStorage removed
-
 
         return () => clearInterval(interval);
     }, [ticketData.tecnico?.id]);
@@ -205,22 +208,22 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const windowRef = useRef<HTMLDivElement>(null);
 
-    // 🚀 SINCRONIZACIÓN CON SUPABASE (Reemplaza localStorage)
+    // ðŸš€ SINCRONIZACIó“N CON SUPABASE (Reemplaza localStorage)
     const lastSyncData = useRef<string>("");
 
     const syncToSupabase = useCallback(async (isImmediate = false) => {
         if (!onUpdate || !ticketData) return;
 
-        // ⚠️ OPTIMIZACIÓN: Solo sincronizar datos de negocio
+        // âš ï¸ OPTIMIZACIó“N: Solo sincronizar datos de negocio
         const {
             isMaximized, isMinimized, position, zIndex,
-            cliente, sede, tecnico, // Evital guardar objetos pesados en raíz de Supabase
+            cliente, sede, tecnico, // Evital guardar objetos pesados en raó­z de Supabase
             metadata: _unusedMetadata,
             ...businessData
         } = ticketData;
 
-        // Mapeo de campos UI (Español) -> Supabase (Inglés)
-        // 🛡️ PROTECCIÓN DE ESCRITURA: Si no soy Admin, NO debo tocar campos de dinero o estado crítico
+        // Mapeo de campos UI (Espaó±ol) -> Supabase (Ingló©s)
+        // ðŸ›¡ï¸ PROTECCIó“N DE ESCRITURA: Si no soy Admin, NO debo tocar campos de dinero o estado cró­tico
         const isAdmin = userRole === 'admin';
 
         // Estrategia de Merge: Si soy Admin, mi local state manda. Si soy Gestora, el Server (prop ticket) manda en temas de pagos.
@@ -245,7 +248,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
             metadata: {
                 ...businessData,
-                // Forzar campos críticos desde el servidor si no soy Admin
+                // Forzar campos cró­ticos desde el servidor si no soy Admin
                 adelantoPagado: isAdmin ? businessData.adelantoPagado : sourceMetadata.adelantoPagado,
                 fechaPagoAdelanto: isAdmin ? businessData.fechaPagoAdelanto : sourceMetadata.fechaPagoAdelanto,
                 historialPagosTecnico: isAdmin ? businessData.historialPagosTecnico : sourceMetadata.historialPagosTecnico,
@@ -255,11 +258,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 solicitudAdelanto: ticket.adelantoPagado ? null : businessData.solicitudAdelanto,
                 solicitudPagoVisita: ticket.visitPaymentConfirmed ? null : businessData.solicitudPagoVisita,
 
-                tecnico: tecnico // Preservamos datos del técnico en metadata para redundancia UI
+                tecnico: tecnico // Preservamos datos del tó©cnico en metadata para redundancia UI
             }
         };
 
-        // 🛡️ ANTI-OVERWRITE: Solo sincronizar si hay cambios reales respecto al último sync
+        // ðŸ›¡ï¸ ANTI-OVERWRITE: Solo sincronizar si hay cambios reales respecto al óºltimo sync
         const currentDataStr = JSON.stringify(updates);
         if (currentDataStr === lastSyncData.current) return;
 
@@ -281,7 +284,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         return () => clearTimeout(syncTimeout);
     }, [ticketData, syncToSupabase]);
 
-    // Listener para sincronizar cambios externos (ej: confirmación del Gerente desde otra pestaña)
+    // Listener para sincronizar cambios externos (ej: confirmació³n del Gerente desde otra pestaó±a)
     useEffect(() => {
         const handleStorageUpdate = (e: any) => {
             // Si es un evento de storage real, verificamos la key
@@ -295,8 +298,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 try {
                     const parsed = JSON.parse(saved);
 
-                    // 🛡️ PROTECCIÓN CRÍTICA: Filtrar campos de negocio que NUNCA deben venir del localStorage
-                    // porque la fuente de verdad es Supabase. Esto evita que un caché viejo revierta pagos o estados.
+                    // ðŸ›¡ï¸ PROTECCIó“N CRóTICA: Filtrar campos de negocio que NUNCA deben venir del localStorage
+                    // porque la fuente de verdad es Supabase. Esto evita que un cachó© viejo revierta pagos o estados.
                     const {
                         adelantoPagado,
                         fechaPagoAdelanto,
@@ -344,11 +347,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
 
     const handleAssignment = (assignmentData: any) => {
-        // Actualizar el ticket con los datos de asignación
+        // Actualizar el ticket con los datos de asignació³n
         const updatedTicket = {
             ...ticketData,
             ...assignmentData,
-            // Si hay costo de visita > 0, requerimos pago de gerencia antes de inspección
+            // Si hay costo de visita > 0, requerimos pago de gerencia antes de inspecció³n
             // Si no hay costo, procedemos normal
             estadoId: ticketData.estadoId === "nuevo"
                 ? (parseFloat(assignmentData.costoVisita || 0) > 0 ? "esperando_pago_visita" : "en_inspeccion")
@@ -390,7 +393,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleSendFieldReport = () => {
         if (!diagnostico) {
-            showToast("Diagnóstico Requerido", "Por favor ingrese el diagnóstico técnico antes de enviar.", "error");
+            showToast("Diagnó³stico Requerido", "Por favor ingrese el diagnó³stico tó©cnico antes de enviar.", "error");
             return;
         }
 
@@ -410,12 +413,58 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTimeout(() => syncToSupabase(true), 100);
     };
 
+    const handleBcpFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
+
+            // 1. Process for storage (Base64) - Original logic
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+                const b64 = reader.result as string;
+                setBcpQuotationFile({
+                    name: file.name,
+                    url: b64,
+                    type: file.type,
+                    fecha: new Date().toISOString()
+                });
+
+                // Actualizar tambió©n ticketData para persistencia en Supabase
+                setTicketData((prev: any) => ({
+                    ...prev,
+                    archivoCotizacionBCP: {
+                        name: file.name,
+                        url: b64,
+                        type: file.type,
+                        fecha: new Date().toISOString()
+                    }
+                }));
+
+                showToast("Archivo Cargado", "Plantilla BCP adjuntada correctamente.", "success");
+            };
+            reader.onerror = error => console.error("Error reading file:", error);
+        }
+    };
+
+
+
+
     const handleSendQuote = async () => {
-        if (quotationEditorRef.current) {
-            try {
-                await quotationEditorRef.current.downloadPDF();
-            } catch (err) {
-                console.error("Error al descargar PDF:", err);
+        const isBCP = ticketData.cliente?.nombre?.toUpperCase().includes("BCP");
+
+        if (isBCP) {
+            if (!bcpQuotationFile) {
+                showToast("Archivo Faltante", "Debe adjuntar la plantilla Excel BCP antes de enviar.", "error");
+                return;
+            }
+        } else {
+            // Flujo normal (No BCP)
+            if (quotationEditorRef.current) {
+                try {
+                    await quotationEditorRef.current.downloadPDF();
+                } catch (err) {
+                    console.error("Error al descargar PDF:", err);
+                }
             }
         }
 
@@ -425,11 +474,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             fechaCotizacion: new Date().toISOString(),
             partidas: partidasCotizacion,
             montoFinal: montoTotalCotizado,
+            montoSubtotal: montoSubtotal,
+            montoIGV: montoIGV,
             pausadoSLA: true,
-            fechaPausa: new Date().toISOString()
+            fechaPausa: new Date().toISOString(),
+            archivoCotizacionBCP: isBCP ? bcpQuotationFile : null
         };
 
         setTicketData(updated);
+        showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
     };
 
     const handleApproveQuote = () => {
@@ -444,7 +497,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             omitirAjusteTecnico: false
         };
         setTicketData(approved);
-        // Sync inmediato para que Tesorería vea la habilitación del adelanto
+        // Sync inmediato para que Tesoreró­a vea la habilitació³n del adelanto
         setTimeout(() => syncToSupabase(true), 100);
     };
 
@@ -455,7 +508,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
-        showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+        showToast("Edició³n Habilitada", "La cotizació³n ha sido desbloqueada para realizar ajustes.", "info");
     };
 
     const handleProceedToExecution = () => {
@@ -490,9 +543,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             };
             setTicketData(updated);
             setShowNegotiationModal(false);
-            showToast("Costo Reacordado", `Nuevo monto técnico ajustado a S/ ${val.toFixed(2)}.`, "success");
+            showToast("Costo Reacordado", `Nuevo monto tó©cnico ajustado a S/ ${val.toFixed(2)}.`, "success");
         } else {
-            showToast("Monto Inválido", "Por favor ingrese un número válido para el costo.", "error");
+            showToast("Monto Invó¡lido", "Por favor ingrese un nóºmero vó¡lido para el costo.", "error");
         }
     };
 
@@ -506,7 +559,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 2) {
-            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÉS).", "error");
+            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUó‰S).", "error");
             return;
         }
         const updated = {
@@ -519,7 +572,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             evidencias: ticketData.evidencias || [] // Asegurar fotos del cliente
         };
         setTicketData(updated);
-        showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
+        showToast("Â¡Ejecució³n Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 
     const handleRequestExtraAdvance = () => {
@@ -536,7 +589,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const costoRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
 
             if (totalPagado + val > costoRef + 0.01) {
-                showToast("Saldo Insuficiente", "El adelanto solicitado excede el saldo pendiente del técnico.", "error");
+                showToast("Saldo Insuficiente", "El adelanto solicitado excede el saldo pendiente del tó©cnico.", "error");
                 return;
             }
 
@@ -551,9 +604,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             setExtraAdvanceAmount("");
             // Sync inmediato para que aparezca en pagos
             setTimeout(() => syncToSupabase(true), 100);
-            showToast("Petición Enviada", "Solicitud registrada. Esperando aprobación de Gerencia.", "info");
+            showToast("Petició³n Enviada", "Solicitud registrada. Esperando aprobación de Gerencia.", "info");
         } else {
-            showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
+            showToast("Monto Invó¡lido", "Por favor ingrese un monto vó¡lido.", "error");
         }
     };
 
@@ -568,7 +621,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: solicitud.monto,
-            referencia: "Adelanto Adicional (Ejecución)"
+            referencia: "Adelanto Adicional (Ejecució³n)"
         };
 
         setTicketData({
@@ -577,7 +630,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             montoAdelanto: totalPagado + solicitud.monto,
             solicitudAdelantoExtra: null
         });
-        showToast("Depósito Confirmado", `Se registró el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
+        showToast("Depó³sito Confirmado", `Se registró³ el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
     };
 
     const handleRequestVisitPayment = () => {
@@ -592,11 +645,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTicketData(updated);
         // Sync inmediato para que aparezca en pagos
         setTimeout(() => syncToSupabase(true), 100);
-        showToast("Solicitud Enviada", `Se solicitó pago de visita por S/ ${amount.toFixed(2)}.`, "info");
+        showToast("Solicitud Enviada", `Se solicitó³ pago de visita por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleConfirmVisitPayment = () => {
-        // Solo permitir si hay solicitud o si es admin forzando (pero idealmente debería haber solicitud)
+        // Solo permitir si hay solicitud o si es admin forzando (pero idealmente deberó­a haber solicitud)
         const amount = parseFloat(ticketData.costoVisita || 0);
         const pagosPrevios = ticketData.historialPagosTecnico || [];
 
@@ -604,7 +657,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: amount,
-            referencia: "Pago de Visita Técnica (Gerencia)"
+            referencia: "Pago de Visita Tó©cnica (Gerencia)"
         };
 
         setTicketData({
@@ -616,7 +669,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             fechaPagoVisita: new Date().toISOString(),
             solicitudPagoVisita: null // Limpiar solicitud
         });
-        showToast("Pago de Visita Exitoso", `Se confirmó el depósito de S/ ${amount.toFixed(2)}.`, "success");
+        showToast("Pago de Visita Exitoso", `Se confirmó³ el depó³sito de S/ ${amount.toFixed(2)}.`, "success");
     };
 
     const handleConfirmAdvance = () => {
@@ -624,7 +677,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
 
         if (!pctReal) {
-            showToast("Selección Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
+            showToast("Selecció³n Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
             return;
         }
 
@@ -635,7 +688,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
 
         if (totalPagado + amount > costoReferencia + 0.01) {
-            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
+            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excederó­a el costo total pactado.`, "error");
             return;
         }
 
@@ -653,17 +706,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             historialPagosTecnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + amount,
             fechaPagoAdelanto: new Date().toISOString(),
-            // Limpiamos la solicitud ya que se atendió
+            // Limpiamos la solicitud ya que se atendió³
             solicitudAdelanto: null
         };
 
         setTicketData(updated);
-        showToast("Adelanto Confirmado", `Se ha confirmado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
+        showToast("Adelanto Confirmado", `Se ha confirmado el depó³sito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
     };
 
     const handleRequestAdvance = () => {
         if (!porcentajeAdelanto) {
-            showToast("Selección Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
+            showToast("Selecció³n Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
             return;
         }
 
@@ -700,7 +753,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTicketData(updated);
         // Sync inmediato para que aparezca en pagos
         setTimeout(() => syncToSupabase(true), 100);
-        showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
+        showToast("Liquidació³n Solicitada", `Solicitud de liquidació³n final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleFinalLiquidationPay = () => {
@@ -710,7 +763,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const amount = costoReferencia - totalPagado;
 
         if (amount < 0) {
-            showToast("Balance Negativo", "El saldo es negativo. Verifique los depósitos previos.", "error");
+            showToast("Balance Negativo", "El saldo es negativo. Verifique los depó³sitos previos.", "error");
             return;
         }
 
@@ -718,7 +771,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: amount,
-            referencia: "Liquidación Final del Servicio"
+            referencia: "Liquidació³n Final del Servicio"
         };
 
         const updated = {
@@ -730,7 +783,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         setTicketData(updated);
-        showToast("Ticket Liquidado", `Se registró el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
+        showToast("Ticket Liquidado", `Se registró³ el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -745,7 +798,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                 setEvidenciasEjecucion(prev => {
                     const updated = [...prev, newEvidence];
-                    // Actualizar también en ticketData para persistencia
+                    // Actualizar tambió©n en ticketData para persistencia
                     setTicketData((current: any) => ({ ...current, evidenciasEjecucion: updated }));
                     return updated;
                 });
@@ -850,7 +903,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} />
                                     </div>
                                 ) : (
-                                    <div className={styles.ticketIcon}>🎫</div>
+                                    <div className={styles.ticketIcon}>ðŸŽ«</div>
                                 )}
                                 <div className={styles.titleInfo}>
                                     <h3>
@@ -922,7 +975,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         <div className={styles.infoHistory}>
                             <InfoBarBase
                                 ticket={ticketData}
-                                title="Revisión Inicial"
+                                title="Revisió³n Inicial"
                                 icon={FileText}
                                 color="#8B5CF6"
                                 gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"
@@ -953,10 +1006,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {ticketData.estadoId === "nuevo" && (
                                         <div className={styles.stepActions}>
                                             <p className={styles.stepHint}>
-                                                Revise la información y proceda a la asignación del especialista.
+                                                Revise la informació³n y proceda a la asignació³n del especialista.
                                             </p>
                                             <button className={styles.mainActionBtn} onClick={handleProceedToAssignment}>
-                                                <span>Asignar Técnico</span>
+                                                <span>Asignar Tó©cnico</span>
                                                 <ArrowRight size={18} />
                                             </button>
                                         </div>
@@ -970,8 +1023,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <Coins size={20} />
                                                     </div>
                                                     <div className={styles.advanceTitleGroup}>
-                                                        <h4>ORDEN DE PAGO: VISITA TÉCNICA</h4>
-                                                        <span>Requiere confirmación de Gerencia</span>
+                                                        <h4>ORDEN DE PAGO: VISITA Tó‰CNICA</h4>
+                                                        <span>Requiere confirmació³n de Gerencia</span>
                                                     </div>
                                                     <div className={styles.advanceAmountBadge}>
                                                         S/ {parseFloat(ticketData.costoVisita || 0).toFixed(2)}
@@ -980,7 +1033,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                 <div className={styles.techBankDetails}>
                                                     <div className={styles.bankRow}>
-                                                        <strong>Técnico:</strong>
+                                                        <strong>Tó©cnico:</strong>
                                                         <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
                                                     </div>
                                                     <div className={styles.bankRow}>
@@ -988,7 +1041,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <span>{ticketData.tecnico?.banco || '---'}</span>
                                                     </div>
                                                     <div className={styles.bankRow}>
-                                                        <strong>Nº Cuenta:</strong>
+                                                        <strong>NÂº Cuenta:</strong>
                                                         <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                     </div>
                                                     <div className={styles.bankRow}>
@@ -1010,7 +1063,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <button className={styles.confirmAdvanceBtn} onClick={handleConfirmVisitPayment}>
                                                         <CheckCircle size={18} />
                                                         <span>
-                                                            CONFIRMAR DEPÓSITO VISITA
+                                                            CONFIRMAR DEPó“SITO VISITA
                                                             {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
                                                         </span>
                                                     </button>
@@ -1027,14 +1080,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     ) : (
                                                         <div className={styles.waitingForManager}>
                                                             <Clock size={24} color="#3B82F6" />
-                                                            <span style={{ fontSize: '1.1rem' }}>¡ SOLICITUD ENVIADA !</span>
+                                                            <span style={{ fontSize: '1.1rem' }}>Â¡ SOLICITUD ENVIADA !</span>
                                                             <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Estamos gestionando el pago de la visita con Gerencia.</span>
                                                         </div>
                                                     )
                                                 )}
 
                                                 <div className={styles.bankNote}>
-                                                    * Solo el Administrador puede confirmar depósitos bancarios.
+                                                    * Solo el Administrador puede confirmar depó³sitos bancarios.
                                                 </div>
                                             </div>
                                         </div>
@@ -1046,9 +1099,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.schedulingHeader}>
                                                     <Calendar size={28} color="#8B5CF6" />
                                                     <div style={{ textAlign: 'left' }}>
-                                                        <h3 style={{ margin: 0, fontSize: '18px', color: '#1F2937' }}>Agendar Visita Técnica</h3>
+                                                        <h3 style={{ margin: 0, fontSize: '18px', color: '#1F2937' }}>Agendar Visita Tó©cnica</h3>
                                                         <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#6B7280' }}>
-                                                            Seleccione la fecha de ejecución acordada
+                                                            Seleccione la fecha de ejecució³n acordada
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1081,13 +1134,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             const updated = {
                                                                 ...ticketData,
                                                                 fechaVisita: tomorrow.toISOString(),
-                                                                programacionLabel: "MAÑANA",
+                                                                programacionLabel: "MAó‘ANA",
                                                                 estadoId: "visita_realizada"
                                                             };
                                                             setTicketData(updated);
                                                         }}
                                                     >
-                                                        <span className={styles.optLabel}>MAÑANA</span>
+                                                        <span className={styles.optLabel}>MAó‘ANA</span>
                                                         <span className={styles.optDate}>
                                                             {new Date(Date.now() + 86400000).toLocaleDateString('es-PE', { day: '2-digit', month: 'long' })}
                                                         </span>
@@ -1103,16 +1156,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.headerTitleRow}>
                                                     <ClipboardCheck size={24} className={styles.optimisticIcon} />
                                                     <div style={{ textAlign: 'left' }}>
-                                                        <h3 className={styles.reportMainTitle}>Reporte Técnico de Campo</h3>
-                                                        <p className={styles.reportSubtitle}>Evaluación técnica y solución propuesta</p>
+                                                        <h3 className={styles.reportMainTitle}>Reporte Tó©cnico de Campo</h3>
+                                                        <p className={styles.reportSubtitle}>Evaluació³n tó©cnica y solució³n propuesta</p>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div className={styles.diagnosticoArea}>
-                                                <label className={styles.optimisticLabel}>Diagnóstico Técnico Final</label>
+                                                <label className={styles.optimisticLabel}>Diagnó³stico Tó©cnico Final</label>
                                                 <textarea
-                                                    placeholder="Describa el hallazgo y la solución técnica..."
+                                                    placeholder="Describa el hallazgo y la solució³n tó©cnica..."
                                                     value={diagnostico}
                                                     onChange={(e) => setDiagnostico(e.target.value)}
                                                     className={styles.formTextareaOptimistic}
@@ -1160,7 +1213,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <span style={{ fontSize: '0.65rem', fontWeight: 700 }}>FOTOS</span>
                                                                 </div>
                                                             )}
-                                                            {/* Botón flotante para agregar más si ya hay fotos */}
+                                                            {/* Botó³n flotante para agregar mó¡s si ya hay fotos */}
                                                             {evidenciasCampo.length > 0 && (
                                                                 <div
                                                                     className={styles.uploadBoxMini}
@@ -1220,7 +1273,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     className={styles.sendReportBtnOptimistic}
                                                     onClick={handleSendFieldReport}
                                                 >
-                                                    <span>FINALIZAR REPORTE TÉCNICO</span>
+                                                    <span>FINALIZAR REPORTE Tó‰CNICO</span>
                                                     <ArrowRight size={18} />
                                                 </button>
                                             </div>
@@ -1232,10 +1285,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                             <div className={styles.quotationHeader} onClick={() => ticketData.estadoId !== "en_cotizacion" && setIsQuotationCollapsed(!isQuotationCollapsed)}>
                                                 <FileSpreadsheet size={28} color="#10B981" />
                                                 <div style={{ textAlign: 'left', flex: 1 }}>
-                                                    <h3 className={styles.quotationTitle}>
+                                                    <h3 className={styles.quotationTitle} style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
                                                         {ticketData.estadoId === "en_cotizacion" ? "Elaboración de Cotización Formal" : "Cotización Aprobada y Registrada"}
                                                     </h3>
-                                                    <p className={styles.quotationSubtitle}>
+                                                    <p className={styles.quotationSubtitle} style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
                                                         {ticketData.estadoId === "en_cotizacion"
                                                             ? "Prepare el presupuesto final usando la plantilla oficial"
                                                             : isQuotationCollapsed ? "Pulse para ver detalles de la cotización" : "Documento oficial del servicio. Los cambios requieren autorización."
@@ -1246,14 +1299,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && (
                                                     <div className={styles.headerRightActions}>
                                                         {!ticketData.modificacionAutorizada && (
-                                                            <div className={styles.lockedBadge}>
-                                                                <X size={14} />
+                                                            <div style={{ background: '#fef2f2', color: '#ef4444', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid #fee2e2' }}>
+                                                                <X size={12} />
                                                                 BLOQUEADA
                                                             </div>
                                                         )}
                                                         {ticketData.modificacionAutorizada && (
-                                                            <div className={styles.authorizedBadge}>
-                                                                <CheckCircle size={14} />
+                                                            <div style={{ background: '#f0fdf4', color: '#22c55e', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid #dcfce7' }}>
+                                                                <CheckCircle size={12} />
                                                                 AUTORIZADA
                                                             </div>
                                                         )}
@@ -1277,7 +1330,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <h4 className={styles.summaryTitle}>Meta de Rentabilidad</h4>
                                                             <div className={styles.profitabilityGrid}>
                                                                 <div className={styles.techCostCard}>
-                                                                    <span className={styles.techCostLabel}>PRESUPUESTO TÉCNICO</span>
+                                                                    <span className={styles.techCostLabel}>PRESUPUESTO Tó‰CNICO</span>
                                                                     <div className={styles.techCostDetail}>
                                                                         <div className={styles.techRow}>
                                                                             <label>Mano de Obra:</label>
@@ -1323,11 +1376,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 return (
                                                                                     <div className={styles.lossWarning}>
                                                                                         <div className={styles.lossTitle}>
-                                                                                            <X size={16} /> {/* O AlertTriangle si estuviera importado, pero X está disponible */}
-                                                                                            <span>⚠️ PERDIDA DETECTADA</span>
+                                                                                            <X size={16} /> {/* O AlertTriangle si estuviera importado, pero X estó¡ disponible */}
+                                                                                            <span>âš ï¸ PERDIDA DETECTADA</span>
                                                                                         </div>
                                                                                         <span className={styles.lossValue}>
-                                                                                            El presupuesto es menor al costo técnico (S/ {totalCostoTecnico.toFixed(2)})
+                                                                                            El presupuesto es menor al costo tó©cnico (S/ {totalCostoTecnico.toFixed(2)})
                                                                                         </span>
                                                                                     </div>
                                                                                 );
@@ -1356,48 +1409,213 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </div>
                                                             {ticketData.estadoId === "en_cotizacion" && (
                                                                 <p className={styles.profitabilityHint}>
-                                                                    💡 Ajuste los precios en el editor de la derecha para cubrir el costo técnico y alcanzar el margen operativo sugerido.
+                                                                    ðŸ’¡ Ajuste los precios en el editor de la derecha para cubrir el costo tó©cnico y alcanzar el margen operativo sugerido.
                                                                 </p>
                                                             )}
 
                                                             {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
                                                                 <div className={styles.authorizationSection}>
-                                                                    <div className={styles.authLockIcon}>🔒</div>
+                                                                    <div className={styles.authLockIcon}>ðŸ”’</div>
                                                                     <p className={styles.authText}>
-                                                                        La cotización ya fue aprobada por el cliente. Para realizar cambios, se requiere el visto bueno de Gerencia.
+                                                                        La cotizació³n ya fue aprobada por el cliente. Para realizar cambios, se requiere el visto bueno de Gerencia.
                                                                     </p>
                                                                     <button
                                                                         className={styles.authorizeBtn}
                                                                         onClick={handleAuthorizeModification}
                                                                     >
-                                                                        Autorizar Modificación
+                                                                        Autorizar Modificació³n
                                                                     </button>
                                                                 </div>
+
                                                             )}
                                                         </div>
                                                     </div>
-
                                                     <div className={styles.quotationMainEditor}>
-                                                        <OnlineQuotationEditor
-                                                            ref={quotationEditorRef}
-                                                            isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
-                                                            clientInfo={ticketData.cliente}
-                                                            sedeInfo={ticketData.sede}
-                                                            servicioId={ticketData.servicioId}
-                                                            ticketId={ticketData.numeroTicketCliente || ticketData.id}
-                                                            initialItems={partidasCotizacion}
-                                                            suggestedTotal={(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)) / 0.45}
-                                                            onUpdate={(items: any[], total: number) => {
-                                                                setPartidasCotizacion(items);
-                                                                setMontoTotalCotizado(total);
-                                                            }}
-                                                        />
+                                                        {/* Ló³gica Diferenciada: BCP vs Otros Clientes */}
+                                                        {ticketData.cliente?.nombre?.toUpperCase().includes("BCP") ? (
+                                                            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                                                                    <div style={{ background: 'linear-gradient(135deg, #0284c7, #0369a1)', padding: '12px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.2)' }}>
+                                                                        <FileSpreadsheet size={24} color="#ffffff" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 style={{ margin: 0, color: '#0f172a', fontSize: '17px', fontWeight: 800 }}>Cotización Formato BCP</h4>
+                                                                        <p style={{ margin: 0, color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
+                                                                            Uso obligatorio de la plantilla oficial de Excel.
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Zona de Carga / Visualizació³n */}
+                                                                {!bcpQuotationFile ? (
+                                                                    <div
+                                                                        onClick={() => (ticketData.estadoId === 'en_cotizacion' || ticketData.modificacionAutorizada) && bcpFileInputRef.current?.click()}
+                                                                        style={{
+                                                                            cursor: (ticketData.estadoId === 'en_cotizacion' || ticketData.modificacionAutorizada) ? 'pointer' : 'not-allowed',
+                                                                            padding: '30px',
+                                                                            background: '#f8fafc',
+                                                                            borderRadius: '16px',
+                                                                            textAlign: 'center',
+                                                                            border: '2px dashed #cbd5e1',
+                                                                            transition: 'all 0.3s ease',
+                                                                            display: 'flex',
+                                                                            flexDirection: 'column',
+                                                                            alignItems: 'center',
+                                                                            gap: '12px',
+                                                                            position: 'relative'
+                                                                        }}
+                                                                    >
+                                                                        <div style={{ background: '#ffffff', padding: '16px', borderRadius: '50%', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                                                                            <Upload size={28} color='#0284c7' />
+                                                                        </div>
+                                                                        <div>
+                                                                            <h5 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>Cargar Plantilla Excel</h5>
+                                                                            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Haga clic para adjuntar archivo .xlsx</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{ background: 'white', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                                            <div style={{ background: '#dcfce7', padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                                <FileSpreadsheet size={32} color="#16a34a" />
+                                                                            </div>
+                                                                            <div style={{ flex: 1 }}>
+                                                                                <p style={{ margin: '0 0 4px 0', fontWeight: 600, fontSize: '15px', color: '#1e293b' }}>{bcpQuotationFile.name}</p>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                    <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>EXCEL</span>
+                                                                                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>â€¢ Subido el {new Date(bcpQuotationFile.fecha).toLocaleDateString()}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                            {(ticketData.estadoId === "en_cotizacion" || ticketData.modificacionAutorizada) && (
+                                                                                <button
+                                                                                    onClick={() => setBcpQuotationFile(null)}
+                                                                                    style={{
+                                                                                        background: '#fee2e2',
+                                                                                        border: 'none',
+                                                                                        cursor: 'pointer',
+                                                                                        color: '#ef4444',
+                                                                                        padding: '10px',
+                                                                                        borderRadius: '8px',
+                                                                                        transition: 'background 0.2s'
+                                                                                    }}
+                                                                                    title="Eliminar archivo"
+                                                                                >
+                                                                                    <Trash2 size={20} />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                        {/* Enlace de descarga si ya fue enviado/bloqueado */}
+                                                                        {(!["en_cotizacion"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada) && (
+                                                                            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #f1f5f9' }}>
+                                                                                <a href={bcpQuotationFile.url} download={bcpQuotationFile.name} style={{ fontSize: '13px', color: '#2563eb', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                    <Download size={14} /> Descargar Archivo Original
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                {/* Resumen Financiero Manual */}
+                                                                <div style={{
+                                                                    marginTop: '20px',
+                                                                    padding: '24px',
+                                                                    background: 'linear-gradient(145deg, #f8fafc, #f1f5f9)',
+                                                                    borderRadius: '16px',
+                                                                    border: '1px solid #e2e8f0',
+                                                                    display: 'grid',
+                                                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                                                    gap: '24px',
+                                                                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
+                                                                }}>
+                                                                    <div>
+                                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                                                                            <FileText size={14} color='#0284c7' /> Subtotal (S/)
+                                                                        </label>
+                                                                        <div style={{ position: 'relative' }}>
+                                                                            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px', fontWeight: 700 }}>S/</span>
+                                                                            <input
+                                                                                type='number'
+                                                                                value={montoSubtotal || ''}
+                                                                                onChange={(e) => {
+                                                                                    const sub = parseFloat(e.target.value) || 0;
+                                                                                    const igvValue = parseFloat((sub * 0.18).toFixed(2));
+                                                                                    const totalValue = parseFloat((sub + igvValue).toFixed(2));
+                                                                                    setMontoSubtotal(sub);
+                                                                                    setMontoIGV(igvValue);
+                                                                                    setMontoTotalCotizado(totalValue);
+                                                                                }}
+                                                                                placeholder='0.00'
+                                                                                style={{ width: '100%', padding: '12px 12px 12px 35px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '15px', fontWeight: 700, color: '#0f172a', background: '#ffffff', outline: 'none' }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                     <div>
+                                                                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                                                                             <Percent size={14} color='#0284c7' /> IGV (18%) (S/)
+                                                                         </label>
+                                                                         <div style={{ position: 'relative' }}>
+                                                                             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px', fontWeight: 700 }}>S/</span>
+                                                                             <input
+                                                                                 type='number'
+                                                                                 value={montoIGV || ''}
+                                                                                 readOnly
+                                                                                 placeholder='0.00'
+                                                                                 style={{ width: '100%', padding: '12px 12px 12px 35px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '15px', fontWeight: 700, color: '#64748b', background: '#f8fafc', outline: 'none', cursor: 'not-allowed' }}
+                                                                             />
+                                                                         </div>
+                                                                     </div>
+
+                                                                     <div>
+                                                                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
+                                                                             <DollarSign size={14} color='#0369a1' /> Total Cotizado (S/)
+                                                                         </label>
+                                                                         <div style={{ position: 'relative' }}>
+                                                                             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0369a1', fontWeight: 800, fontSize: '14px' }}>S/</span>
+                                                                             <input
+                                                                                 type='number'
+                                                                                 value={montoTotalCotizado || ''}
+                                                                                 readOnly
+                                                                                 placeholder='0.00'
+                                                                                 style={{ width: '100%', padding: '12px 12px 12px 35px', borderRadius: '10px', border: '2px solid #0284c7', fontSize: '16px', fontWeight: 800, color: '#0369a1', background: '#f0f9ff', outline: 'none', cursor: 'not-allowed' }}
+                                                                             />
+                                                                         </div>
+                                                                     </div>
+                                                                </div>
+
+                                                                 <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '12px', fontStyle: 'italic' }}>
+                                                                     * El sistema calcula automáticamente el IGV (18%) y el Total basándose en el subtotal ingresado para garantizar la precisión.
+                                                                 </p>
+                                                                 <input
+                                                                     type='file'
+                                                                     ref={bcpFileInputRef}
+                                                                     onChange={handleBcpFileUpload}
+                                                                     accept='.xlsx, .xls'
+                                                                     style={{ display: 'none' }}
+                                                                 />
+                                                            </div>
+                                                        ) : (
+                                                            // --- VISTA ESTóNDAR (EDITOR PDF) ---
+                                                            <OnlineQuotationEditor
+                                                                ref={quotationEditorRef}
+                                                                isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
+                                                                clientInfo={ticketData.cliente}
+                                                                sedeInfo={ticketData.sede}
+                                                                servicioId={ticketData.servicioId}
+                                                                ticketId={ticketData.numeroTicketCliente || ticketData.id}
+                                                                initialItems={partidasCotizacion}
+                                                                suggestedTotal={(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)) / 0.45}
+                                                                onUpdate={(items: any[], total: number) => {
+                                                                    setPartidasCotizacion(items);
+                                                                    setMontoTotalCotizado(total);
+                                                                }}
+                                                            />
+                                                        )}
 
                                                         <div className={styles.finalActionsOptimistic}>
                                                             {ticketData.estadoId === "en_cotizacion" ? (
                                                                 <button
                                                                     className={styles.sendQuoteBtnFinal}
-                                                                    disabled={montoTotalCotizado <= 0}
+                                                                    disabled={ticketData.cliente?.nombre?.toUpperCase().includes("BCP") ? (!bcpQuotationFile || montoTotalCotizado <= 0) : montoTotalCotizado <= 0}
                                                                     onClick={handleSendQuote}
                                                                 >
                                                                     <Send size={18} />
@@ -1414,7 +1632,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             partidas: partidasCotizacion,
                                                                             fechaUltimaModificacion: new Date().toISOString()
                                                                         });
-                                                                        showToast("Cotización Guardada", "Cambios guardados y cotización bloqueada nuevamente.", "success");
+                                                                        showToast("Cotización Guardada", "Cambios guardados y cotizació³n bloqueada nuevamente.", "success");
                                                                     }}
                                                                 >
                                                                     <CheckCircle size={18} />
@@ -1422,7 +1640,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </button>
                                                             ) : (
                                                                 <div className={styles.readonlyNotice}>
-                                                                    La cotización se encuentra en modo lectura.
+                                                                    La cotizació³n se encuentra en modo lectura.
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1433,39 +1651,128 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     )}
 
                                     {ticketData.estadoId === "cotizacion_enviada" && (
-                                        <div className={styles.successStepBox}>
-                                            <div className={styles.successIconAnim}>✅</div>
-                                            <h3 className={styles.successTitleFormal}>Cotización Enviada con Éxito</h3>
-                                            <p className={styles.successDescFormal}>
-                                                El presupuesto formal ha sido enviado al correo del cliente.
-                                                <br />El ticket entrará en pausa hasta recibir la aprobación o solicitud de ajuste.
-                                            </p>
-                                            <div className={styles.waitingBadge}>
-                                                <Clock size={14} />
-                                                <span>ESPERANDO APROBACIÓN DEL CLIENTE</span>
-                                            </div>
-                                            <div className={styles.waitingActions}>
-                                                <button className={styles.approveQuoteBtn} onClick={handleApproveQuote}>
-                                                    <ThumbsUp size={18} />
-                                                    <span>REGISTRAR APROBACIÓN DEL CLIENTE</span>
-                                                </button>
-                                                <button className={styles.backToQuoteBtn} onClick={() => setTicketData({ ...ticketData, estadoId: 'en_cotizacion' })}>
-                                                    Corregir Presupuesto o Reenviar
-                                                </button>
-                                            </div>
-                                        </div>
+                                         <div style={{ 
+                                             textAlign: 'center', 
+                                             padding: '60px 40px', 
+                                             background: '#ffffff', 
+                                             borderRadius: '32px', 
+                                             boxShadow: '0 20px 50px rgba(0,0,0,0.05)',
+                                             border: '1px solid #f1f5f9',
+                                             maxWidth: '650px',
+                                             margin: '30px auto',
+                                             display: 'flex',
+                                             flexDirection: 'column',
+                                             alignItems: 'center',
+                                             gap: '24px'
+                                         }}>
+                                             <div style={{ position: 'relative' }}>
+                                                 <div style={{ 
+                                                     background: 'linear-gradient(135deg, #dcfce7, #bbf7d0)', 
+                                                     padding: '28px', 
+                                                     borderRadius: '50%', 
+                                                     display: 'inline-flex',
+                                                     boxShadow: '0 12px 24px rgba(34, 197, 94, 0.15)'
+                                                 }}>
+                                                     <Sparkles size={48} color='#15803d' />
+                                                 </div>
+                                                 <div style={{ 
+                                                     position: 'absolute', 
+                                                     bottom: -8, 
+                                                     right: -8, 
+                                                     background: '#22c55e', 
+                                                     color: 'white', 
+                                                     borderRadius: '50%', 
+                                                     padding: '6px',
+                                                     border: '4px solid #ffffff',
+                                                     boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                                                 }}>
+                                                     <CheckCircle size={20} />
+                                                 </div>
+                                             </div>
+
+                                             <div>
+                                                 <h3 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.04em' }}>
+                                                     Cotización Enviada con Éxito
+                                                 </h3>
+                                                 <p style={{ margin: 0, fontSize: '16px', color: '#64748b', lineHeight: 1.7, fontWeight: 500 }}>
+                                                     El presupuesto formal ha sido enviado al correo del cliente.<br/>
+                                                     El ticket permanecerá en pausa hasta recibir la <strong>aprobación</strong> o solicitud de ajuste.
+                                                 </p>
+                                             </div>
+
+                                             <div style={{ 
+                                                 background: 'linear-gradient(135deg, #fff7ed, #ffedd5)', 
+                                                 padding: '14px 28px', 
+                                                 borderRadius: '16px', 
+                                                 display: 'flex', 
+                                                 alignItems: 'center', 
+                                                 gap: '12px',
+                                                 border: '1px solid #fed7aa',
+                                                 boxShadow: '0 4px 12px rgba(251, 146, 60, 0.05)'
+                                             }}>
+                                                 <Clock size={18} color='#c2410c' />
+                                                 <span style={{ fontSize: '14px', fontWeight: 800, color: '#c2410c', letterSpacing: '0.03em' }}>
+                                                     ESPERANDO APROBACIÓN DEL CLIENTE
+                                                 </span>
+                                             </div>
+
+                                             <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '14px', marginTop: '10px' }}>
+                                                 <button 
+                                                     onClick={handleApproveQuote}
+                                                     style={{
+                                                         background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                                                         color: 'white',
+                                                         border: 'none',
+                                                         padding: '20px 32px',
+                                                         borderRadius: '18px',
+                                                         fontSize: '16px',
+                                                         fontWeight: 800,
+                                                         cursor: 'pointer',
+                                                         display: 'flex',
+                                                         alignItems: 'center',
+                                                         justifyContent: 'center',
+                                                         gap: '12px',
+                                                         boxShadow: '0 8px 20px rgba(34, 197, 94, 0.25)',
+                                                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                                                     }}
+                                                 >
+                                                     <ThumbsUp size={22} />
+                                                     <span>REGISTRAR APROBACIÓN DEL CLIENTE</span>
+                                                 </button>
+
+                                                 <button 
+                                                     onClick={() => setTicketData({ ...ticketData, estadoId: 'en_cotizacion' })}
+                                                     style={{
+                                                         background: 'transparent',
+                                                         color: '#64748b',
+                                                         border: '2px solid #f1f5f9',
+                                                         padding: '14px 28px',
+                                                         borderRadius: '16px',
+                                                         fontSize: '15px',
+                                                         fontWeight: 600,
+                                                         cursor: 'pointer',
+                                                         display: 'flex',
+                                                         alignItems: 'center',
+                                                         justifyContent: 'center',
+                                                         gap: '8px'
+                                                     }}
+                                                 >
+                                                     <ArrowRight size={16} /> Corregir Presupuesto o Reenviar
+                                                 </button>
+                                             </div>
+                                         </div>
                                     )}
 
                                     {["cotizacion_aprobada", "en_ejecucion"].includes(ticketData.estadoId) && (
                                         <div className={styles.stepActions}>
                                             {ticketData.estadoId === "cotizacion_aprobada" && (
                                                 <div className={styles.approvedStatusNotice}>
-                                                    <div className={styles.approvedIcon}>🎉</div>
-                                                    <h3 style={{ margin: 0, color: '#065F46' }}>¡Presupuesto Aprobado!</h3>
+                                                    <div className={styles.approvedIcon}>ðŸŽ‰</div>
+                                                    <h3 style={{ margin: 0, color: '#065F46' }}>Â¡Presupuesto Aprobado!</h3>
                                                     <p style={{ margin: '8px 0 20px 0', fontSize: '14px', color: '#059669' }}>
                                                         {ticketData.adelantoPagado
-                                                            ? "El depósito técnico ha sido realizado. Puede proceder con la ejecución."
-                                                            : "Se requiere confirmar el depósito del técnico para iniciar el servicio."
+                                                            ? "El depó³sito tó©cnico ha sido realizado. Puede proceder con la ejecució³n."
+                                                            : "Se requiere confirmar el depó³sito del tó©cnico para iniciar el servicio."
                                                         }
                                                     </p>
 
@@ -1474,9 +1781,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <div className={styles.negotiationWrapper}>
                                                                 {!ticketData.costoAjustadoPostAprobacion && !ticketData.omitirAjusteTecnico ? (
                                                                     <div className={styles.negotiationCard}>
-                                                                        <div className={styles.negotiationIcon}>🤝</div>
-                                                                        <h4>Negociación con Técnico</h4>
-                                                                        <p>El presupuesto ha sido aprobado por el cliente. ¿Desea ajustar el costo con el técnico antes de generar el adelanto?</p>
+                                                                        <div className={styles.negotiationIcon}>ðŸ¤</div>
+                                                                        <h4>Negociació³n con Tó©cnico</h4>
+                                                                        <p>El presupuesto ha sido aprobado por el cliente. Â¿Desea ajustar el costo con el tó©cnico antes de generar el adelanto?</p>
                                                                         <div className={styles.negotiationActions}>
                                                                             <button className={styles.adjustBtn} onClick={handleAdjustTechnicianCost}>
                                                                                 <DollarSign size={16} />
@@ -1493,9 +1800,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <div className={styles.advanceHeader}>
                                                                             <div className={styles.advanceTitleGroup}>
                                                                                 <h4>Orden de Adelanto</h4>
-                                                                                <span>Pago operativo para el técnico</span>
+                                                                                <span>Pago operativo para el tó©cnico</span>
                                                                                 {ticketData.costoAjustadoPostAprobacion && (
-                                                                                    <span className={styles.adjustedBadge}>¡COSTO REAJUSTADO!</span>
+                                                                                    <span className={styles.adjustedBadge}>Â¡COSTO REAJUSTADO!</span>
                                                                                 )}
                                                                             </div>
                                                                             {!ticketData.solicitudAdelanto ? (
@@ -1519,7 +1826,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                                         <div className={styles.techBankDetails}>
                                                                             <div className={styles.bankRow}>
-                                                                                <strong>Técnico:</strong>
+                                                                                <strong>Tó©cnico:</strong>
                                                                                 <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
                                                                             </div>
                                                                             <div className={styles.bankRow}>
@@ -1527,7 +1834,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 <span>{ticketData.tecnico?.banco || '---'}</span>
                                                                             </div>
                                                                             <div className={styles.bankRow}>
-                                                                                <strong>Nº Cuenta:</strong>
+                                                                                <strong>NÂº Cuenta:</strong>
                                                                                 <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                                             </div>
                                                                             <div className={styles.bankRow}>
@@ -1559,9 +1866,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 <Wallet size={18} />
                                                                                 <span>
                                                                                     {ticketData.solicitudAdelanto ?
-                                                                                        `CONFIRMAR DEPÓSITO (SOLICITUD: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%)` :
+                                                                                        `CONFIRMAR DEPó“SITO (SOLICITUD: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%)` :
                                                                                         porcentajeAdelanto !== null ?
-                                                                                            `CONFIRMAR DEPÓSITO S/ ${((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}` :
+                                                                                            `CONFIRMAR DEPó“SITO S/ ${((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}` :
                                                                                             "SELECCIONE % PARA CONFIRMAR"
                                                                                     }
                                                                                 </span>
@@ -1594,8 +1901,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             ) : (
                                                                                 <div className={styles.waitingForManager}>
                                                                                     <Clock size={24} color="#3B82F6" />
-                                                                                    <span style={{ fontSize: '1.1rem' }}>¡ ADELANTO SOLICITADO !</span>
-                                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>El pago está en proceso de aprobación por Gerencia.</span>
+                                                                                    <span style={{ fontSize: '1.1rem' }}>Â¡ ADELANTO SOLICITADO !</span>
+                                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>El pago estó¡ en proceso de aprobación por Gerencia.</span>
                                                                                 </div>
                                                                             )
                                                                         )}
@@ -1608,7 +1915,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 Cancelar o Modificar Solicitud
                                                                             </button>
                                                                         )}
-                                                                        <p className={styles.bankNote}>⚠️ Solo el Administrador puede confirmar transferencias.</p>
+                                                                        <p className={styles.bankNote}>âš ï¸ Solo el Administrador puede confirmar transferencias.</p>
 
                                                                         {ticketData.costoAjustadoPostAprobacion && (
                                                                             <button className={styles.resetNegotiationBtn} onClick={() => setTicketData({ ...ticketData, costoAjustadoPostAprobacion: false, costoManoObra: ticketData.costoAnteriorTecnico, costoMateriales: 0 })}>
@@ -1623,7 +1930,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         {ticketData.adelantoPagado && (
                                                             <button className={styles.startExecutionBtn} onClick={handleProceedToExecution}>
                                                                 <Hammer size={24} />
-                                                                <span>INICIAR EJECUCIÓN EN SEDE</span>
+                                                                <span>INICIAR EJECUCIó“N EN SEDE</span>
                                                             </button>
                                                         )}
                                                     </div>
@@ -1635,7 +1942,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <div className={styles.executionHeader}>
                                                         <Hammer size={32} />
                                                         <div style={{ textAlign: 'left' }}>
-                                                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Trabajos en Ejecución</h3>
+                                                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Trabajos en Ejecució³n</h3>
                                                             <p style={{ margin: '4px 0 0 0', opacity: 0.9 }}>Sede: {ticketData.sede?.nombre}</p>
                                                         </div>
                                                     </div>
@@ -1665,7 +1972,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 >
                                                                     <option>Gasto Operativo</option>
                                                                     <option>Compra Material</option>
-                                                                    <option>Factura Técnico</option>
+                                                                    <option>Factura Tó©cnico</option>
                                                                 </select>
                                                                 <button className={styles.addExpenseBtn} onClick={handleAddExpense}><Plus size={16} /></button>
                                                             </div>
@@ -1694,7 +2001,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                                             <div className={`${styles.executionCard} ${styles.extraAdvanceRequest}`}>
-                                                                <h4><Coins size={18} /> GESTIÓN DE ANTICIPOS</h4>
+                                                                <h4><Coins size={18} /> GESTIó“N DE ANTICIPOS</h4>
 
                                                                 {/* Historial de refuerzos realizados */}
                                                                 {(() => {
@@ -1717,11 +2024,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                                 {!ticketData.solicitudAdelantoExtra ? (
                                                                     <>
-                                                                        <p style={{ fontSize: '0.8rem', color: '#92400E' }}>Solicite fondos extra si el técnico requiere refuerzo operativo.</p>
+                                                                        <p style={{ fontSize: '0.8rem', color: '#92400E' }}>Solicite fondos extra si el tó©cnico requiere refuerzo operativo.</p>
                                                                         {!showExtraAdvanceInput ? (
                                                                             <button className={styles.extraAdvanceBtn} onClick={handleRequestExtraAdvance}>
                                                                                 <Wallet size={16} />
-                                                                                SOLICITAR REFUERZO ECONÓMICO
+                                                                                SOLICITAR REFUERZO ECONó“MICO
                                                                             </button>
                                                                         ) : (
                                                                             <div className={styles.extraAdvanceForm}>
@@ -1755,25 +2062,25 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </>
                                                                 ) : (
                                                                     <div className={styles.pendingAdvanceBox}>
-                                                                        <div className={styles.pendingBadge}>ESPERANDO DEPÓSITO</div>
+                                                                        <div className={styles.pendingBadge}>ESPERANDO DEPó“SITO</div>
                                                                         <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>Monto solicitado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}</p>
 
                                                                         {userRole === 'admin' ? (
                                                                             <button className={styles.confirmManagerDepositBtn} onClick={handleConfirmExtraAdvance}>
                                                                                 <CheckCircle size={14} />
-                                                                                CONFIRMAR DEPÓSITO MANUALMENTE
+                                                                                CONFIRMAR DEPó“SITO MANUALMENTE
                                                                             </button>
                                                                         ) : (
                                                                             <div className={styles.waitingForManager} style={{ marginTop: '0', padding: '12px' }}>
                                                                                 <Clock size={20} color="#B45309" />
-                                                                                <span style={{ color: '#B45309' }}>¡ PETICIÓN ENVIADA !</span>
-                                                                                <span style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: 500 }}>Esperando depósito extra del Gerente.</span>
+                                                                                <span style={{ color: '#B45309' }}>Â¡ PETICIó“N ENVIADA !</span>
+                                                                                <span style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: 500 }}>Esperando depó³sito extra del Gerente.</span>
                                                                             </div>
                                                                         )}
 
                                                                         {userRole !== 'admin' && (
                                                                             <button className={styles.cancelRequestBtn} onClick={() => setTicketData({ ...ticketData, solicitudAdelantoExtra: null })}>
-                                                                                Cancelar Petición
+                                                                                Cancelar Petició³n
                                                                             </button>
                                                                         )}
                                                                     </div>
@@ -1781,7 +2088,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </div>
 
                                                             <div className={styles.executionCard}>
-                                                                <h4><Camera size={18} /> EVIDENCIAS (DURANTE Y DESPUÉS)</h4>
+                                                                <h4><Camera size={18} /> EVIDENCIAS (DURANTE Y DESPUó‰S)</h4>
                                                                 <div className={styles.evidenceGridExecution}>
                                                                     {evidenciasEjecucion.map((ev, idx) => (
                                                                         <div key={idx} className={styles.evidenceThumbExecution}>
@@ -1815,7 +2122,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </div>
                                                                 </div>
                                                                 <p style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '8px' }}>
-                                                                    * Mínimo 2 fotos obligatorias para finalizar.
+                                                                    * Mó­nimo 2 fotos obligatorias para finalizar.
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -1827,7 +2134,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         disabled={evidenciasEjecucion.length < 2}
                                                     >
                                                         <CheckCircle size={20} />
-                                                        FINALIZAR TODOS LOS TRABAJOS Y ENVIAR DOCUMENTACIÓN
+                                                        FINALIZAR TODOS LOS TRABAJOS Y ENVIAR DOCUMENTACIó“N
                                                     </button>
                                                 </div>
                                             )}
@@ -1840,8 +2147,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.checklistHeader}>
                                                     <ClipboardCheck size={32} color="#6366F1" />
                                                     <div style={{ textAlign: 'left' }}>
-                                                        <h3 className={styles.checklistTitle}>Checklist de Cierre y Documentación</h3>
-                                                        <p className={styles.checklistSubtitle}>Valide los documentos obligatorios para proceder a la liquidación</p>
+                                                        <h3 className={styles.checklistTitle}>Checklist de Cierre y Documentació³n</h3>
+                                                        <p className={styles.checklistSubtitle}>Valide los documentos obligatorios para proceder a la liquidació³n</p>
                                                     </div>
                                                 </div>
 
@@ -1855,7 +2162,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                         <div className={styles.checkText}>
                                                             <strong>1. ACTA DE CONFORMIDAD FIRMADA</strong>
-                                                            <span>Sustento de recepción del cliente</span>
+                                                            <span>Sustento de recepció³n del cliente</span>
                                                         </div>
                                                     </div>
 
@@ -1880,7 +2187,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             {documentosChecklist.declaracionJurada && <CheckCircle2 size={18} />}
                                                         </div>
                                                         <div className={styles.checkText}>
-                                                            <strong>3. DECLARACIÓN JURADA</strong>
+                                                            <strong>3. DECLARACIó“N JURADA</strong>
                                                             <span>Conformidad administrativa</span>
                                                         </div>
                                                     </div>
@@ -1898,7 +2205,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
 
-                                                    {/* Nuevo Item: Número de Ticket del Cliente */}
+                                                    {/* Nuevo Item: Nóºmero de Ticket del Cliente */}
                                                     <div
                                                         className={`${styles.checkItem} ${ticketData.numeroTicketCliente ? styles.checkItemActive : styles.checkItemAlert}`}
                                                         style={{ cursor: 'default' }}
@@ -1908,7 +2215,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                         <div className={styles.checkText}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <strong>5. NÚMERO DE TICKET DEL CLIENTE</strong>
+                                                                <strong>5. NóšMERO DE TICKET DEL CLIENTE</strong>
                                                                 {ticketData.numeroTicketCliente && (
                                                                     <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
                                                                 )}
@@ -1919,7 +2226,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 placeholder={`EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`}
                                                                 value={ticketData.numeroTicketCliente || ""}
                                                                 autoFocus={!ticketData.numeroTicketCliente}
-                                                                // Si el ticket ya venía con número asignado (desde props), bloquear edición
+                                                                // Si el ticket ya venó­a con nóºmero asignado (desde props), bloquear edició³n
                                                                 disabled={!!ticket.numeroTicketCliente}
                                                                 style={ticket.numeroTicketCliente ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
@@ -1930,18 +2237,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             />
                                                             {!ticketData.numeroTicketCliente && (
                                                                 <span style={{ color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    ¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
+                                                                    Â¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
                                                                 </span>
                                                             )}
                                                             {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
                                                                 <span style={{ color: '#F59E0B', fontSize: '0.65rem', fontWeight: 700, marginTop: '4px', lineHeight: '1.2' }}>
-                                                                    FORMATO REQUERIDO: MB + 6 DÍGITOS + PUNTO + AÑO (26)<br />
+                                                                    FORMATO REQUERIDO: MB + 6 DóGITOS + PUNTO + Aó‘O (26)<br />
                                                                     Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
                                                                 </span>
                                                             )}
                                                             {ticketData.numeroTicketCliente && (/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
                                                                 <span style={{ color: '#059669', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    ✓ FORMATO VÁLIDO
+                                                                    âœ“ FORMATO VóLIDO
                                                                 </span>
                                                             )}
                                                         </div>
@@ -1959,16 +2266,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             documentosValidados: documentosChecklist
                                                         };
                                                         setTicketData(updated);
-                                                        showToast("Documentación Validada", "El ticket ha pasado a liquidación final.", "success");
+                                                        showToast("Documentació³n Validada", "El ticket ha pasado a liquidació³n final.", "success");
                                                     }}
                                                 >
-                                                    <span>PASAR A LIQUIDACIÓN FINAL</span>
+                                                    <span>PASAR A LIQUIDACIó“N FINAL</span>
                                                     <ArrowRight size={20} />
                                                 </button>
 
                                                 {(!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente) && (
                                                     <p className={styles.checklistAlert}>
-                                                        * Todos los documentos y el número de ticket del cliente son obligatorios para continuar.
+                                                        * Todos los documentos y el nóºmero de ticket del cliente son obligatorios para continuar.
                                                     </p>
                                                 )}
                                             </div>
@@ -1984,10 +2291,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
                                                     <div className={styles.liquidationTitles}>
                                                         <h3 style={ticketData.estadoId === "ticket_cerrado" ? { color: 'white' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidación Final de Servicio"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidació³n Final de Servicio"}
                                                         </h3>
                                                         <span style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la información financiera ha sido auditada y cerrada." : "Cálculo automático del saldo pendiente para el técnico"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la informació³n financiera ha sido auditada y cerrada." : "Có¡lculo automó¡tico del saldo pendiente para el tó©cnico"}
                                                         </span>
                                                     </div>
                                                     <div className={styles.liquidationTotalBadge}>
@@ -2004,7 +2311,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
 
                                                     <div className={styles.liquidationItem}>
-                                                        <span className={styles.liquidationLabel}>Total Depósitos Realizados</span>
+                                                        <span className={styles.liquidationLabel}>Total Depó³sitos Realizados</span>
                                                         <span className={styles.liquidationValue} style={{ color: '#059669' }}>
                                                             - S/ {(ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
@@ -2024,7 +2331,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 </div>
 
                                                 <div className={styles.techBankDetailsLiquidation}>
-                                                    <h4>Datos de Pago del Técnico: {ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</h4>
+                                                    <h4>Datos de Pago del Tó©cnico: {ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</h4>
                                                     <div className={styles.bankGrid}>
                                                         <div className={styles.bankField}>
                                                             <strong>BANCO:</strong>
@@ -2104,7 +2411,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             >
                                                                 <DollarSign size={20} />
                                                                 <span>
-                                                                    CONFIRMAR DEPÓSITO FINAL
+                                                                    CONFIRMAR DEPó“SITO FINAL
                                                                     {ticketData.solicitudLiquidacion && " (SOLICITADO)"}
                                                                 </span>
                                                             </button>
@@ -2116,19 +2423,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     style={{ background: '#3B82F6', marginTop: '0' }}
                                                                 >
                                                                     <Send size={20} />
-                                                                    <span>SOLICITAR LIQUIDACIÓN FINAL</span>
+                                                                    <span>SOLICITAR LIQUIDACIó“N FINAL</span>
                                                                 </button>
                                                             ) : (
                                                                 <div className={styles.waitingForManager}>
                                                                     <Clock size={24} color="#3B82F6" />
-                                                                    <span style={{ fontSize: '1.1rem' }}>¡ LIQUIDACIÓN EN PROCESO !</span>
+                                                                    <span style={{ fontSize: '1.1rem' }}>Â¡ LIQUIDACIó“N EN PROCESO !</span>
                                                                     <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Solicitud de cierre enviada a Gerencia.</span>
                                                                 </div>
                                                             )
                                                         )}
 
                                                         <p className={styles.liquidationNote}>
-                                                            * Solo el Administrador puede cerrar financieramente el ticket mediante el depósito final.
+                                                            * Solo el Administrador puede cerrar financieramente el ticket mediante el depó³sito final.
                                                         </p>
                                                     </>
                                                 ) : (
@@ -2153,7 +2460,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.statusBadge}>{ticketData.estadoId?.replace('_', ' ')}</div>
-                                            <p>Este módulo operativo se encuentra en preparación.</p>
+                                            <p>Este mó³dulo operativo se encuentra en preparació³n.</p>
                                         </div>
                                     )}
                                 </>
@@ -2172,7 +2479,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     />
                 )}
 
-                {/* Modal de Negociación de Costo */}
+                {/* Modal de Negociació³n de Costo */}
                 {showNegotiationModal && (
                     <div className={styles.modalOverlay}>
                         <div className={styles.negotiationModalCard}>
@@ -2182,7 +2489,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 </div>
                                 <div className={styles.negoTitleGroup}>
                                     <h3>Ajuste de Costo Negociado</h3>
-                                    <span>Re-negociación con el técnico asignado</span>
+                                    <span>Re-negociació³n con el tó©cnico asignado</span>
                                 </div>
                                 <button className={styles.closeNegoBtn} onClick={() => setShowNegotiationModal(false)}>
                                     <X size={20} />
@@ -2210,7 +2517,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         />
                                     </div>
                                     <p className={styles.negoHelpText}>
-                                        * Este ajuste quedará registrado como costo de ejecución final para el técnico.
+                                        * Este ajuste quedaró¡ registrado como costo de ejecució³n final para el tó©cnico.
                                     </p>
                                 </div>
                             </div>
