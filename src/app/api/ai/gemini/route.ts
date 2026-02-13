@@ -1,91 +1,118 @@
-﻿import { GoogleGenerativeAI } from "@google/generative-ai";
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
     try {
-        const { prompt, imageBase64, images } = await req.json();
+        const { prompt, images } = await req.json();
 
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return NextResponse.json(
-                { error: "GEMINI_API_KEY is not defined in environment variables" },
+                { error: "GEMINI_API_KEY no está configurada en las variables de entorno." },
                 { status: 500 }
             );
         }
 
-        const genAI = new GoogleGenerativeAI(apiKey);
+        // --- SISTEMA DE INSTRUCCIONES ---
+        const systemPrompt = `Eres un experto cotizador de mantenimiento para la empresa SINFIMAC.
+Genera un DESGLOSE DETALLADO DE PARTIDAS (Cotización) en formato JSON.
 
-        // Forzamos el uso de la API v1 (estable) para evitar el error 404 del endpoint v1beta.
-        // En v1, movemos las instrucciones al prompt para evitar errores de "campos desconocidos".
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-        }, { apiVersion: "v1" });
+REGLAS:
+1. Rentabilidad: Asegura un margen del 55% sobre el costo técnico.
+2. Formato: Responde ÚNICAMENTE con el objeto JSON puro. Sin texto extra, sin bloques markdown (\`\`\`json).
+3. Idioma: Español profesional.
 
-        const systemInstruction = `Eres un experto cotizador de mantenimiento para la empresa SINFIMAC. 
-        Tu tarea es generar un DESGLOSE DETALLADO DE PARTIDAS (Cotización) en formato JSON.
+FORMATO REQUERIDO:
+{
+  "partidas": [
+    { "item": "1.0", "titulo": "...", "descripcion": "...", "unidad": "GLB/UND", "cantidad": 1, "precio_unitario": 0, "precio_total": 0 }
+  ],
+  "resumen": {
+    "costo_tecnico_total": 0,
+    "precio_total_venta": 0,
+    "margen_logrado": "55%",
+    "comentario_ia": "...",
+    "advertencia_ia": "..."
+  }
+}`;
 
-        REGLAS:
-        1. El precio de venta total debe respetar un margen del 55% sobre el costo técnico.
-        2. Responde ÚNICAMENTE con el objeto JSON puro.
-        3. No envíes bloques de código markdown (\`\`\`json).
-        
-        FORMATO JSON REQUERIDO:
-        { 
-          "partidas": [{ "item": "string", "titulo": "string", "descripcion": "string", "unidad": "string", "cantidad": 0, "precio_unitario": 0, "precio_total": 0 }], 
-          "resumen": { "costo_tecnico_total": 0, "precio_total_venta": 0, "margen_logrado": "string", "comentario_ia": "string" } 
-        }`;
-
-        const parts: any[] = [{ text: `${systemInstruction}\n\nSOLICITUD DEL USUARIO:\n${prompt}` }];
-
-        // Handle legacy single image field
-        if (imageBase64) {
-            const match = imageBase64.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
-            if (match) {
-                parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-            } else {
-                parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64 } });
+        // --- PREPARAR CONTENIDO PARA GOOGLE API (DIRECT FETCH) ---
+        const contents = [
+            {
+                role: "user",
+                parts: [
+                    { text: `${systemPrompt}\n\nSOLICITUD DEL USUARIO:\n${prompt}` }
+                ]
             }
-        }
+        ];
 
-        // Handle multiple images array
+        // Añadir imágenes si existen
         if (images && Array.isArray(images)) {
             images.forEach((img: string) => {
                 const match = img.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
                 if (match) {
-                    parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-                } else {
-                    parts.push({ inlineData: { mimeType: "image/jpeg", data: img } });
+                    contents[0].parts.push({
+                        inline_data: {
+                            mime_type: match[1],
+                            data: match[2]
+                        }
+                    } as any);
                 }
             });
         }
 
-        // generateContent con parámetros mínimos para v1
-        const result = await model.generateContent({
-            contents: [{ role: "user", parts }],
+        // --- LLAMADA DIRECTA A LA API (BYPASS SDK) ---
+        // Usamos la v1 estable y el modelo flash estándar
+        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+        const apiResponse = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents,
+                generationConfig: {
+                    temperature: 0.1,
+                    topP: 0.95,
+                    topK: 40,
+                    maxOutputTokens: 8192,
+                }
+            })
         });
 
-        const response = await result.response;
-        let text = response.text();
+        const data = await apiResponse.json();
 
-        // Limpieza de posible markdown
-        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-
-        // Ensure we return valid JSON
-        try {
-            const jsonResponse = JSON.parse(text);
-            return NextResponse.json(jsonResponse);
-        } catch (e) {
-            console.error("Failed to parse Gemini response as JSON:", text);
-            return NextResponse.json({ raw: text }, { status: 200 });
+        if (!apiResponse.ok) {
+            console.error("Error de Google API:", data);
+            return NextResponse.json(
+                {
+                    error: `Error de Google: ${data.error?.message || "Error desconocido"}`,
+                    details: data
+                },
+                { status: apiResponse.status }
+            );
         }
 
-    } catch (error) {
-        console.error("Error processing AI request:", error);
+        let resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+        // Limpiamos la respuesta de cualquier envoltorio markdown si la IA ignora las reglas
+        resultText = resultText.replace(/```json/g, "").replace(/```/g, "").trim();
+
+        try {
+            const jsonResponse = JSON.parse(resultText);
+            return NextResponse.json(jsonResponse);
+        } catch (parseError) {
+            console.error("Error parseando JSON de la IA:", resultText);
+            return NextResponse.json(
+                { error: "La IA no devolvió un formato JSON válido.", raw: resultText },
+                { status: 500 }
+            );
+        }
+
+    } catch (error: any) {
+        console.error("Error en /api/ai/gemini:", error);
         return NextResponse.json(
-            {
-                error: (error as Error).message,
-                details: error
-            },
+            { error: error.message || "Error interno del servidor" },
             { status: 500 }
         );
     }
