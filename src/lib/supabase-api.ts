@@ -146,6 +146,11 @@ export const branchesAPI = {
         name: string;
         address?: string;
         zone?: string;
+        departamento?: string;
+        provincia?: string;
+        distrito?: string;
+        codigo_topaz?: string;
+        tipo?: string;
     }) {
         const { data, error } = await supabase
             .from('branch_offices')
@@ -161,6 +166,11 @@ export const branchesAPI = {
         name: string;
         address: string;
         zone: string;
+        departamento: string;
+        provincia: string;
+        distrito: string;
+        codigo_topaz: string;
+        tipo: string;
     }>) {
         const { data, error } = await supabase
             .from('branch_offices')
@@ -356,9 +366,9 @@ export const ticketsAPI = {
     },
 
     async create(ticket: {
-        client_id?: string;
-        branch_id?: string;
-        technician_id?: string;
+        client_id?: string | null;
+        branch_id?: string | null;
+        technician_id?: string | null;
         status_id?: string;
         service_type?: string;
         description?: string;

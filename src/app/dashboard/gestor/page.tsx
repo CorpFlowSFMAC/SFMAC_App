@@ -5,7 +5,7 @@ import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, M
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
 import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
 import styles from "@/app/dashboard/admin/tickets/page.module.css";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useTickets } from "@/hooks/useSupabaseData";
 import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 
@@ -53,52 +53,24 @@ const useTicketAge = (createdAt: string) => {
 };
 
 export default function GestorDashboard() {
-    const [tickets, setTickets] = useLocalStorage<any[]>("tickets", []);
+    const { tickets, loading, createTicket, updateTicket } = useTickets();
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
     const [viewMode, setViewMode] = useState<"active" | "closed">("active");
 
-
-    const handleCreateTicket = (newTicket: any) => {
-        setTickets([{ ...newTicket, createdAt: new Date().toISOString() }, ...tickets]);
+    const handleCreateTicket = async (ticketData: any) => {
+        try {
+            await createTicket(ticketData);
+            setShowWizard(false);
+        } catch (err) {
+            console.error("Error creating ticket:", err);
+            alert("Error al crear el ticket en la nube.");
+        }
     };
 
     const [searchTerm, setSearchTerm] = useState("");
 
-    // 🛠️ REPARACIÓN/SINCRONIZACIÓN AUTOMÁTICA
-    useEffect(() => {
-        if (tickets.length > 0) {
-            let hasChanges = false;
-            const updatedTickets = tickets.map((t: any) => {
-                const savedState = localStorage.getItem(`ticket_state_${t.id}`);
-                if (savedState) {
-                    try {
-                        const parsed = JSON.parse(savedState);
-                        const normalizedMaster = normalizeStateId(t.estadoId);
-                        const normalizedSaved = normalizeStateId(parsed.estadoId);
-
-                        if (normalizedMaster !== normalizedSaved) {
-                            hasChanges = true;
-                            return { ...t, ...parsed, estadoId: normalizedSaved };
-                        }
-                    } catch (e) {
-                        console.error("Error parsing saved ticket state for sync:", e);
-                    }
-                }
-                const normId = normalizeStateId(t.estadoId);
-                if (t.estadoId !== normId) {
-                    hasChanges = true;
-                    return { ...t, estadoId: normId };
-                }
-                return t;
-            });
-
-            if (hasChanges) {
-                setTickets(updatedTickets);
-            }
-        }
-    }, [tickets.length]);
-
+    // Estadísticas rápidas usando el flujo operativo real
     const stats = {
         total: tickets.length,
         nuevos: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "nuevo").length,
@@ -108,6 +80,7 @@ export default function GestorDashboard() {
         }).length,
         completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
     };
+
 
     const filteredTickets = tickets.filter((t: any) => {
         const isClosed = normalizeStateId(t.estadoId) === "ticket_cerrado";
@@ -232,7 +205,12 @@ export default function GestorDashboard() {
             </div>
 
             <div className={styles.ticketsList}>
-                {filteredTickets.length === 0 ? (
+                {loading ? (
+                    <div className={styles.emptyState}>
+                        <Clock size={48} className={styles.pulse} />
+                        <p style={{ marginTop: '1rem', color: '#64748B' }}>Cargando gestión operativa...</p>
+                    </div>
+                ) : filteredTickets.length === 0 ? (
                     <div className={styles.emptyState}>
                         <div className={styles.emptyIcon}>
                             <Sparkles size={40} />
@@ -318,6 +296,7 @@ export default function GestorDashboard() {
                         key={ticket.id}
                         ticket={ticket}
                         index={index}
+                        onUpdate={updateTicket}
                         onClose={() => setOpenTickets(openTickets.filter(t => t.id !== ticket.id))}
                     />
                 ))
@@ -327,7 +306,7 @@ export default function GestorDashboard() {
 }
 
 function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
-    const slaColors = {
+    const slaColors: any = {
         ok: "#10B981",
         warning: "#F59E0B",
         critical: "#EF4444",

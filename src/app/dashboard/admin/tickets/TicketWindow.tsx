@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
@@ -19,16 +19,36 @@ interface TicketWindowProps {
 
 export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
     // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
+    // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
     const [ticketData, setTicketData] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
+
+                    // 🛡️ HARDENING INITIAL STATE:
+                    // Al cargar la página, IGNORAMOS los campos de negocio críticos del localStorage.
+                    // La verdad absoluta viene del prop 'ticket' (Server/Realtime).
+                    const {
+                        adelantoPagado,
+                        fechaPagoAdelanto,
+                        historialPagosTecnico,
+                        estadoId, // El estado es ultra crítico
+                        status_id,
+                        visitPaymentConfirmed,
+                        solicitudAdelanto,
+                        fechaPagoVisita,
+                        solicitudPagoVisita,
+                        montoFinal,
+                        ...safeToRestore
+                    } = parsed;
+
                     return {
                         ...ticket,
-                        ...parsed,
-                        estadoId: normalizeStateId(parsed.estadoId || ticket.estadoId)
+                        ...safeToRestore,
+                        // Forzamos el estado del server si existe conflicto
+                        estadoId: normalizeStateId(ticket.estadoId || parsed.estadoId)
                     };
                 } catch (e) {
                     // Error parsing state
@@ -81,6 +101,56 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
 
+    // 🔗 SINCRONIZACIÓN EXTERNA: Actualizar estado local si el ticket cambia desde afuera (ej: Supabase Realtime)
+    useEffect(() => {
+        if (ticket) {
+            setTicketData((prev: any) => {
+                // Evitar ciclos infinitos comparando strings
+                if (JSON.stringify(prev) === JSON.stringify(ticket)) return prev;
+
+                // 🛡️ REGLA DE ORO DE FLUJO: Si el pago se confirma externamente,
+                // debemos DESTRUIR cualquier rastro de la solicitud antigua para desbloquear la UI.
+                const overrides: any = {};
+
+                // Caso 1: Adelanto Operativo (Paso 7 -> 8)
+                if (ticket.adelantoPagado) {
+                    overrides.solicitudAdelanto = null;
+                }
+
+                // Caso 2: Pago de Visita (Paso 2 -> 3)
+                if (ticket.visitPaymentConfirmed) {
+                    overrides.solicitudPagoVisita = null;
+                    // Forzar avance visual si estábamos atorados en "esperando pago"
+                    if (prev.estadoId === 'esperando_pago_visita' || ticket.estadoId === 'en_inspeccion') {
+                        overrides.estadoId = 'en_inspeccion';
+                    }
+                }
+
+                // Caso 3: Refuerzo Económico (Ejecución)
+                // Si existe una solicitud local, y vemos un pago de Refuerzo posterior en el server, LIMPIAR.
+                if (prev.solicitudAdelantoExtra) {
+                    const reqDate = new Date(prev.solicitudAdelantoExtra.fecha).getTime();
+                    const pagos = ticket.historialPagosTecnico || [];
+                    const isPaid = pagos.some((p: any) => {
+                        const isRefuerzo = p.tipo === 'Refuerzo' || p.referencia?.includes('Refuerzo') || p.referencia?.includes('Adelanto Adicional');
+                        const payDate = new Date(p.fecha).getTime();
+                        // Si el pago es posterior o igual a la solicitud, es su confirmación.
+                        return isRefuerzo && payDate >= reqDate;
+                    });
+
+                    if (isPaid) {
+                        overrides.solicitudAdelantoExtra = null;
+                    }
+                }
+
+                return { ...prev, ...ticket, ...overrides };
+            });
+            // Sincronizar estados dependientes
+            if (ticket.gastos) setGastos(ticket.gastos);
+            if (ticket.evidenciasEjecucion) setEvidenciasEjecucion(ticket.evidenciasEjecucion);
+        }
+    }, [ticket]);
+
     useEffect(() => {
         if (typeof window !== 'undefined') {
             setUserRole(localStorage.getItem("userRole"));
@@ -113,33 +183,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }, 1000);
 
 
-        // Auto-reparar datos del técnico si faltan
-        if (ticketData.tecnico?.id && (!ticketData.tecnico.banco || !ticketData.tecnico.numeroCuenta || !ticketData.tecnico.cci)) {
-            const storedTechs = localStorage.getItem('technicians');
-            if (storedTechs) {
-                try {
-                    const allTechs = JSON.parse(storedTechs);
-                    const fullTech = allTechs.find((t: any) => t.id === ticketData.tecnico.id);
-                    if (fullTech) {
-                        setTicketData((prev: any) => ({
-                            ...prev,
-                            tecnico: {
-                                ...prev.tecnico,
-                                banco: fullTech.banco,
-                                nombre: fullTech.nombre,
-                                apellido: fullTech.apellido,
-                                numeroCuenta: fullTech.numeroCuenta,
-                                cci: fullTech.cci,
-                                yape: fullTech.yape,
-                                plin: fullTech.plin
-                            }
-                        }));
-                    }
-                } catch (e) {
-                    // Error repairing tech data
-                }
-            }
-        }
+        // Legacy auto-repair from localStorage removed
+
 
         return () => clearInterval(interval);
     }, [ticketData.tecnico?.id]);
@@ -161,56 +206,80 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const windowRef = useRef<HTMLDivElement>(null);
 
     // 🚀 SINCRONIZACIÓN CON SUPABASE (Reemplaza localStorage)
-    useEffect(() => {
+    const lastSyncData = useRef<string>("");
+
+    const syncToSupabase = useCallback(async (isImmediate = false) => {
         if (!onUpdate || !ticketData) return;
 
-        const syncTimeout = setTimeout(async () => {
-            // ⚠️ OPTIMIZACIÓN: Solo sincronizar datos de negocio, no estados de UI de la ventana
-            const {
-                isMaximized, isMinimized, position, zIndex,
-                ...businessData
-            } = ticketData;
+        // ⚠️ OPTIMIZACIÓN: Solo sincronizar datos de negocio
+        const {
+            isMaximized, isMinimized, position, zIndex,
+            cliente, sede, tecnico, // Evital guardar objetos pesados en raíz de Supabase
+            metadata: _unusedMetadata,
+            ...businessData
+        } = ticketData;
 
-            // Mapeo de campos UI (Español) -> Supabase (Inglés)
-            const updates: any = {
-                status_id: businessData.estadoId,
-                description: businessData.descripcionProblema,
-                client_ticket_number: businessData.numeroTicketCliente,
-                diagnosis: businessData.diagnostico,
-                labor_cost: parseFloat(businessData.costoManoObra || 0),
-                materials_cost: parseFloat(businessData.costoMateriales || 0),
-                visit_cost: parseFloat(businessData.costoVisita || 0),
-                total_quoted_amount: parseFloat(businessData.montoFinal || 0),
-                technician_id: businessData.tecnico?.id || businessData.technician_id,
-                is_sla_paused: businessData.pausadoSLA,
-                sla_pause_date: businessData.fechaPausa,
-                sla_reactivation_date: businessData.fechaReactivacion,
-                quotation_date: businessData.fechaCotizacion,
-                execution_date: businessData.fechaInicioEjecucion,
-                closure_date: businessData.fechaCierre,
-                metadata: {
-                    ...businessData,
-                    // Asegurar que campos pesados se mantengan pero en metadata
-                    evidenciasCampo: businessData.evidenciasCampo,
-                    evidenciasEjecucion: businessData.evidenciasEjecucion,
-                    gastos: businessData.gastos,
-                    partidas: businessData.partidas,
-                    historialPagosTecnico: businessData.historialPagosTecnico,
-                    documentosChecklist: businessData.documentosChecklist
-                }
-            };
+        // Mapeo de campos UI (Español) -> Supabase (Inglés)
+        // 🛡️ PROTECCIÓN DE ESCRITURA: Si no soy Admin, NO debo tocar campos de dinero o estado crítico
+        const isAdmin = userRole === 'admin';
 
-            try {
-                await onUpdate(ticket.id, updates);
-                // También guardamos localmente por redundancia
-                localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
-            } catch (err) {
-                console.error("Error syncing ticket to Supabase:", err);
+        // Estrategia de Merge: Si soy Admin, mi local state manda. Si soy Gestora, el Server (prop ticket) manda en temas de pagos.
+        const sourceForPayments = isAdmin ? businessData : ticket;
+        const sourceMetadata = isAdmin ? businessData : (ticket.metadata || {});
+
+        const updates: any = {
+            status_id: isAdmin ? businessData.estadoId : (ticket.status_id || businessData.estadoId),
+            description: businessData.descripcionProblema, // Gestora edita esto
+            client_ticket_number: businessData.numeroTicketCliente, // Gestora edita esto
+            diagnosis: businessData.diagnostico, // Gestora edita esto
+            labor_cost: parseFloat(sourceForPayments.costoManoObra || 0),
+            materials_cost: parseFloat(sourceForPayments.costoMateriales || 0),
+            visit_cost: parseFloat(sourceForPayments.costoVisita || 0),
+            total_quoted_amount: parseFloat(sourceForPayments.montoFinal || 0),
+            technician_id: tecnico?.id || businessData.technician_id || ticket.technician_id,
+            is_sla_paused: isAdmin ? businessData.pausadoSLA : ticket.is_sla_paused,
+            sla_pause_date: isAdmin ? businessData.fechaPausa : ticket.sla_pause_date,
+            sla_reactivation_date: isAdmin ? businessData.fechaReactivacion : ticket.sla_reactivation_date,
+            quotation_date: businessData.fechaCotizacion,
+            execution_date: sourceForPayments.fechaInicioEjecucion || ticket.execution_date,
+            closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
+            metadata: {
+                ...businessData,
+                // Forzar campos críticos desde el servidor si no soy Admin
+                adelantoPagado: isAdmin ? businessData.adelantoPagado : sourceMetadata.adelantoPagado,
+                fechaPagoAdelanto: isAdmin ? businessData.fechaPagoAdelanto : sourceMetadata.fechaPagoAdelanto,
+                historialPagosTecnico: isAdmin ? businessData.historialPagosTecnico : sourceMetadata.historialPagosTecnico,
+                visitPaymentConfirmed: isAdmin ? businessData.visitPaymentConfirmed : sourceMetadata.visitPaymentConfirmed,
+                fechaPagoVisita: isAdmin ? businessData.fechaPagoVisita : sourceMetadata.fechaPagoVisita,
+
+                solicitudAdelanto: ticket.adelantoPagado ? null : businessData.solicitudAdelanto,
+                solicitudPagoVisita: ticket.visitPaymentConfirmed ? null : businessData.solicitudPagoVisita,
+
+                tecnico: tecnico // Preservamos datos del técnico en metadata para redundancia UI
             }
-        }, 1200);
+        };
+
+        // 🛡️ ANTI-OVERWRITE: Solo sincronizar si hay cambios reales respecto al último sync
+        const currentDataStr = JSON.stringify(updates);
+        if (currentDataStr === lastSyncData.current) return;
+
+        try {
+            await onUpdate(ticket.id, updates);
+            lastSyncData.current = currentDataStr; // Actualizar marca de tiempo del sync
+            // Por redundancia UI local
+            localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
+        } catch (err) {
+            console.error("Error syncing ticket to Supabase:", err);
+        }
+    }, [ticketData, ticket.id, onUpdate]);
+
+    useEffect(() => {
+        const syncTimeout = setTimeout(() => {
+            syncToSupabase();
+        }, 1500);
 
         return () => clearTimeout(syncTimeout);
-    }, [ticketData, ticket.id, onUpdate]);
+    }, [ticketData, syncToSupabase]);
 
     // Listener para sincronizar cambios externos (ej: confirmación del Gerente desde otra pestaña)
     useEffect(() => {
@@ -225,11 +294,28 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    // Actualizamos el estado local para reflejar los cambios externos (ej: adelantoPagado: true)
+
+                    // 🛡️ PROTECCIÓN CRÍTICA: Filtrar campos de negocio que NUNCA deben venir del localStorage
+                    // porque la fuente de verdad es Supabase. Esto evita que un caché viejo revierta pagos o estados.
+                    const {
+                        adelantoPagado,
+                        fechaPagoAdelanto,
+                        historialPagosTecnico,
+                        estadoId,
+                        status_id,
+                        visitPaymentConfirmed,
+                        solicitudAdelanto,
+                        fechaPagoVisita,
+                        solicitudPagoVisita,
+                        montoFinal, // El monto aprobado es sagrado
+                        ...safeToRestore
+                    } = parsed;
+
+                    // Actualizamos el estado local PERO respetando los datos sensibles del servidor
                     setTicketData((prev: any) => {
                         // Evitar updates innecesarios si ya son iguales
                         if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
-                        return { ...prev, ...parsed };
+                        return { ...prev, ...safeToRestore };
                     });
                 } catch (err) {
                     console.error("Error syncing external state:", err);
@@ -320,6 +406,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         setTicketData(reportData);
+        // Sync inmediato para que el cambio de estado se vea en el dashboard
+        setTimeout(() => syncToSupabase(true), 100);
     };
 
     const handleSendQuote = async () => {
@@ -356,6 +444,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             omitirAjusteTecnico: false
         };
         setTicketData(approved);
+        // Sync inmediato para que Tesorería vea la habilitación del adelanto
+        setTimeout(() => syncToSupabase(true), 100);
     };
 
     const handleAuthorizeModification = () => {
@@ -459,6 +549,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             });
             setShowExtraAdvanceInput(false);
             setExtraAdvanceAmount("");
+            // Sync inmediato para que aparezca en pagos
+            setTimeout(() => syncToSupabase(true), 100);
             showToast("Petición Enviada", "Solicitud registrada. Esperando aprobación de Gerencia.", "info");
         } else {
             showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
@@ -498,6 +590,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             }
         };
         setTicketData(updated);
+        // Sync inmediato para que aparezca en pagos
+        setTimeout(() => syncToSupabase(true), 100);
         showToast("Solicitud Enviada", `Se solicitó pago de visita por S/ ${amount.toFixed(2)}.`, "info");
     };
 
@@ -585,6 +679,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             }
         };
         setTicketData(updated);
+        // Sync inmediato para que aparezca en pagos
+        setTimeout(() => syncToSupabase(true), 100);
         showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "info");
     };
 
@@ -602,6 +698,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             }
         };
         setTicketData(updated);
+        // Sync inmediato para que aparezca en pagos
+        setTimeout(() => syncToSupabase(true), 100);
         showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
@@ -864,7 +962,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "esperando_pago_visita" && (
+                                    {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.advanceRequestCard}>
                                                 <div className={styles.advanceHeader}>
@@ -942,7 +1040,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "en_inspeccion" && (
+                                    {(ticketData.estadoId === "en_inspeccion" || (ticketData.estadoId === "esperando_pago_visita" && ticketData.visitPaymentConfirmed)) && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.schedulingBox}>
                                                 <div className={styles.schedulingHeader}>

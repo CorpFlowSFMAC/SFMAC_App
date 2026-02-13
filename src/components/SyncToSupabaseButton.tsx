@@ -143,7 +143,12 @@ export default function SyncToSupabaseButton() {
                                     client_id: supabaseClientId,
                                     name: branch.nombre,
                                     address: branch.direccion || '',
-                                    zone: branch.zona || 'LIMA'
+                                    zone: branch.zona || 'LIMA',
+                                    departamento: branch.departamento || null,
+                                    provincia: branch.provincia || null,
+                                    distrito: branch.distrito || null,
+                                    codigo_topaz: branch.codigoTopaz || null,
+                                    tipo: branch.tipo || 'Agencia'
                                 })
                                 .select()
                                 .single();

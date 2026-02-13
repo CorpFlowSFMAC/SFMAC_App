@@ -161,8 +161,8 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         const evidenciasBase64 = await processFiles();
 
         const supabaseTicket = {
-            client_id: formData.clienteId,
-            branch_id: formData.sedeId,
+            client_id: formData.clienteId || null,
+            branch_id: formData.sedeId || null,
             status_id: "nuevo",
             service_type: formData.tipoServicio,
             description: formData.descripcionProblema,
@@ -170,13 +170,22 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
             created_by: formData.creadoPor,
             metadata: {
                 evidencias: evidenciasBase64,
-                service_type_name: formData.tipoServicioNombre
+                service_type_name: formData.tipoServicioNombre,
+                estadoId: "nuevo", // Sincronizar campo redundante
+                descripcionProblema: formData.descripcionProblema,
+                fechaCreacion: new Date().toISOString()
             }
         };
 
-        localStorage.removeItem("ticket_draft");
-        onCreateTicket(supabaseTicket);
-        onClose();
+        try {
+            localStorage.removeItem("ticket_draft");
+            await onCreateTicket(supabaseTicket);
+            onClose();
+        } catch (error: any) {
+            console.error("Error al crear ticket:", error);
+            console.error("Detalles del error:", error.message, error.details, error.hint);
+            alert(`Hubo un error al crear el ticket: ${error.message || "Error desconocido"}`);
+        }
     };
 
     const getFilePreview = (file: File) => {

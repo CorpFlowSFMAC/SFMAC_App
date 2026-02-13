@@ -25,6 +25,8 @@ import {
     Eye,
     X
 } from "lucide-react";
+import { useTickets } from "@/hooks/useSupabaseData";
+import { normalizeStateId } from "@/lib/ticketStates";
 import styles from "./payments.module.css";
 
 interface PaymentItem {
@@ -43,6 +45,7 @@ interface PaymentTicketGroup {
     sede: string;
     tecnico: {
         nombre: string;
+        id?: string;
         banco: string;
         numeroCuenta: string;
         cci: string;
@@ -59,6 +62,7 @@ interface PaymentTicketGroup {
 }
 
 export default function PaymentsPage() {
+    const { tickets, loading, updateTicket, refresh } = useTickets();
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
@@ -76,15 +80,14 @@ export default function PaymentsPage() {
     useEffect(() => {
         const role = localStorage.getItem("userRole");
         setUserRole(role);
-        loadData();
-        const handleStorageChange = () => loadData();
-        window.addEventListener('storage', handleStorageChange);
-        window.addEventListener('local-storage-update', handleStorageChange);
-        return () => {
-            window.removeEventListener('storage', handleStorageChange);
-            window.removeEventListener('local-storage-update', handleStorageChange);
-        };
     }, []);
+
+    // 🔄 Procesar tickets de Supabase a grupos de pago
+    useEffect(() => {
+        if (tickets.length > 0) {
+            processTicketsToGroups(tickets);
+        }
+    }, [tickets]);
 
     if (userRole && userRole !== 'admin') {
         return (
@@ -104,193 +107,174 @@ export default function PaymentsPage() {
         );
     }
 
-    const calculateMonthlyTotals = (keys: string[]) => {
+    const calculateMonthlyTotalsFromTickets = (allTickets: any[]) => {
         const totals: { [key: string]: number } = {};
-        keys.forEach(key => {
-            const saved = localStorage.getItem(key);
-            if (!saved) return;
-            try {
-                const ticket = JSON.parse(saved);
-                (ticket.historialPagosTecnico || []).forEach((p: any) => {
-                    if (p.monto && p.fecha && p.estado !== 'anulado') {
-                        const date = new Date(p.fecha);
-                        const k = date.toLocaleString('es-PE', { month: 'long', year: 'numeric' });
-                        const formattedKey = k.charAt(0).toUpperCase() + k.slice(1);
-                        totals[formattedKey] = (totals[formattedKey] || 0) + p.monto;
-                    }
-                });
-            } catch (e) { }
+        allTickets.forEach(ticket => {
+            (ticket.historialPagosTecnico || []).forEach((p: any) => {
+                if (p.monto && p.fecha && p.estado !== 'anulado') {
+                    const date = new Date(p.fecha);
+                    const k = date.toLocaleString('es-PE', { month: 'long', year: 'numeric' });
+                    const formattedKey = k.charAt(0).toUpperCase() + k.slice(1);
+                    totals[formattedKey] = (totals[formattedKey] || 0) + p.monto;
+                }
+            });
         });
         setMonthlyTotals(totals);
     };
 
-    const loadData = () => {
+    const processTicketsToGroups = (allTickets: any[]) => {
         const allGroups: PaymentTicketGroup[] = [];
-        const keys = Object.keys(localStorage);
-        const ticketKeys = keys.filter(k => k.startsWith('ticket_state_'));
 
-        ticketKeys.forEach(key => {
-            const saved = localStorage.getItem(key);
-            if (saved) {
-                try {
-                    const ticket = JSON.parse(saved);
-                    const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id.toString().slice(-6).toUpperCase()}`;
+        allTickets.forEach(ticket => {
+            try {
+                const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id.toString().slice(-6).toUpperCase()}`;
 
-                    const costoManoObra = parseFloat(ticket.costoManoObra || 0);
-                    const costoMateriales = parseFloat(ticket.costoMateriales || 0);
-                    const montoPactadoBase = costoManoObra + costoMateriales;
+                const costoManoObra = parseFloat(ticket.costoManoObra || 0);
+                const costoMateriales = parseFloat(ticket.costoMateriales || 0);
+                const montoPactadoBase = costoManoObra + costoMateriales;
 
-                    const pagos = ticket.historialPagosTecnico || [];
-                    const totalPagado = pagos.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
+                const pagos = ticket.historialPagosTecnico || [];
+                const totalPagado = pagos.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
 
-                    const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
+                const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
 
-                    const voucherVisita = pagos.find((p: any) => {
-                        const tipo = (p.tipo || "").toLowerCase();
-                        const ref = (p.referencia || "").toLowerCase();
-                        return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
-                    })?.voucherRef;
+                const voucherVisita = pagos.find((p: any) => {
+                    const tipo = (p.tipo || "").toLowerCase();
+                    const ref = (p.referencia || "").toLowerCase();
+                    return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
+                })?.voucherRef;
 
-                    const techData = {
-                        nombre: `${ticket.tecnico?.nombre || ''} ${ticket.tecnico?.apellido || ''}`.trim() || 'Sin asignar',
-                        banco: ticket.tecnico?.banco || '---',
-                        numeroCuenta: ticket.tecnico?.numeroCuenta || '---',
-                        cci: ticket.tecnico?.cci || '---',
-                        yape: ticket.tecnico?.yape,
-                        plin: ticket.tecnico?.plin
+                const techData = {
+                    id: ticket.tecnico?.id || ticket.metadata?.tecnico?.id,
+                    nombre: ticket.tecnico?.nombre || ticket.metadata?.tecnico?.nombre || ticket.tecnico?.name || 'Sin asignar',
+                    banco: ticket.tecnico?.banco || ticket.metadata?.tecnico?.banco || ticket.tecnico?.bank_name || '---',
+                    numeroCuenta: ticket.tecnico?.numeroCuenta || ticket.metadata?.tecnico?.numeroCuenta || ticket.tecnico?.account_number || '---',
+                    cci: ticket.tecnico?.cci || ticket.metadata?.tecnico?.cci || '---',
+                    yape: ticket.tecnico?.yape || ticket.metadata?.tecnico?.yape || ticket.tecnico?.yape_number,
+                    plin: ticket.tecnico?.plin || ticket.metadata?.tecnico?.plin || ticket.tecnico?.plin_number
+                };
+
+                const items: PaymentItem[] = [];
+
+                // 1. Adelanto
+                const isRelevantForAdelanto = ['cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar'].includes(ticket.estadoId);
+                if (isRelevantForAdelanto || ticket.adelantoPagado || ticket.solicitudAdelanto) {
+                    const pct = ticket.solicitudAdelanto?.porcentaje || ticket.porcentajeAdelanto || 0.5;
+                    const adelantoMonto = ticket.solicitudAdelanto?.monto || (montoPactadoBase * pct);
+                    const adelantoRealizado = ticket.adelantoPagado;
+
+                    if (adelantoMonto > 0 || adelantoRealizado) {
+                        items.push({
+                            id: `${ticket.id}_adelanto`,
+                            tipo: 'Adelanto',
+                            monto: adelantoMonto,
+                            estado: adelantoRealizado ? 'pagado' : 'pendiente',
+                            fecha: ticket.solicitudAdelanto?.fecha || ticket.fechaAprobacion || ticket.fechaAprobacionCotizacion || new Date().toISOString()
+                        });
+                    }
+                }
+
+                // 2. Refuerzo
+                if (ticket.solicitudAdelantoExtra) {
+                    items.push({
+                        id: `${ticket.id}_refuerzo`,
+                        tipo: 'Refuerzo',
+                        monto: ticket.solicitudAdelantoExtra.monto,
+                        estado: ticket.solicitudAdelantoExtra.pagado ? 'pagado' : 'pendiente',
+                        fecha: ticket.solicitudAdelantoExtra.fecha
+                    });
+                }
+
+                // 3. Liquidación Final
+                const hasSolicitudLiquidacion = !!ticket.solicitudLiquidacion;
+                const isRelevantForFinal = ['documentacion_enviada', 'por_liquidar', 'ticket_cerrado'].includes(ticket.estadoId);
+
+                if (isRelevantForFinal || hasSolicitudLiquidacion) {
+                    const saldoReal = montoPactadoBase - totalPagado;
+                    const pagoFinal = pagos.find((p: any) => p.referencia?.includes("Liquidación") || p.tipo === "Liquidación Final");
+
+                    const montoSolicitadoFinal = ticket.solicitudLiquidacion?.monto || (ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal);
+
+                    if (montoSolicitadoFinal > 0 || ticket.estadoId === 'ticket_cerrado' || hasSolicitudLiquidacion) {
+                        items.push({
+                            id: `${ticket.id}_final`,
+                            tipo: 'Liquidación Final',
+                            monto: montoSolicitadoFinal,
+                            estado: ticket.estadoId === 'ticket_cerrado' ? 'pagado' : 'pendiente',
+                            fecha: ticket.solicitudLiquidacion?.fecha || ticket.fechaValidacionDocumental || ticket.fechaPagoFinal || new Date().toISOString()
+                        });
+                    }
+                }
+
+                // 4. Pago de Visita / Movilidad
+                if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed || ticket.costoPasaje) {
+                    const montoVisita = parseFloat(ticket.solicitudPagoVisita?.monto || ticket.costoVisita || ticket.costoPasaje || 0);
+                    const itemVisita = {
+                        id: `${ticket.id}_visita`,
+                        tipo: 'Movilidad / Visita' as const,
+                        monto: montoVisita,
+                        estado: ticket.visitPaymentConfirmed ? 'pagado' : 'pendiente' as 'pendiente' | 'pagado',
+                        fecha: ticket.solicitudPagoVisita?.fecha || ticket.fechaPagoVisita || ticket.fechaAsignacion || new Date().toISOString()
                     };
 
-                    const items: PaymentItem[] = [];
-
-                    // 1. Adelanto
-                    // Mostrar si está en estado de aprobación, si ya se pagó, o si hay una solicitud explícita
-                    const isRelevantForAdelanto = ['cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar'].includes(ticket.estadoId);
-                    if (isRelevantForAdelanto || ticket.adelantoPagado || ticket.solicitudAdelanto) {
-                        const pct = ticket.solicitudAdelanto?.porcentaje || ticket.porcentajeAdelanto || 0.5;
-                        const adelantoMonto = ticket.solicitudAdelanto?.monto || (montoPactadoBase * pct);
-                        const adelantoRealizado = ticket.adelantoPagado;
-
-                        if (adelantoMonto > 0 || adelantoRealizado) {
-                            items.push({
-                                id: `${ticket.id}_adelanto`,
-                                tipo: 'Adelanto',
-                                monto: adelantoMonto,
-                                estado: adelantoRealizado ? 'pagado' : 'pendiente',
-                                fecha: ticket.solicitudAdelanto?.fecha || ticket.fechaAprobacion || ticket.fechaAprobacionCotizacion || new Date().toISOString()
-                            });
-                        }
+                    if (itemVisita.monto > 0) {
+                        items.push(itemVisita);
                     }
-
-                    // 2. Refuerzo
-                    if (ticket.solicitudAdelantoExtra) {
-                        items.push({
-                            id: `${ticket.id}_refuerzo`,
-                            tipo: 'Refuerzo',
-                            monto: ticket.solicitudAdelantoExtra.monto,
-                            estado: ticket.solicitudAdelantoExtra.pagado ? 'pagado' : 'pendiente',
-                            fecha: ticket.solicitudAdelantoExtra.fecha
-                        });
-                    }
-
-                    // 3. Liquidación Final
-                    // Mostrar si hay una solicitud explícita, si está en estados finales, o si ya se cerró
-                    const hasSolicitudLiquidacion = !!ticket.solicitudLiquidacion;
-                    const isRelevantForFinal = ['documentacion_enviada', 'por_liquidar', 'ticket_cerrado'].includes(ticket.estadoId);
-
-                    if (isRelevantForFinal || hasSolicitudLiquidacion) {
-                        const saldoReal = montoPactadoBase - totalPagado;
-                        const pagoFinal = pagos.find((p: any) => p.referencia?.includes("Liquidación") || p.tipo === "Liquidación Final");
-
-                        // Si hay solicitud, usamos ese monto. Si no, el saldo real.
-                        const montoSolicitadoFinal = ticket.solicitudLiquidacion?.monto || (ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal);
-
-                        if (montoSolicitadoFinal > 0 || ticket.estadoId === 'ticket_cerrado' || hasSolicitudLiquidacion) {
-                            items.push({
-                                id: `${ticket.id}_final`,
-                                tipo: 'Liquidación Final',
-                                monto: montoSolicitadoFinal,
-                                estado: ticket.estadoId === 'ticket_cerrado' ? 'pagado' : 'pendiente',
-                                fecha: ticket.solicitudLiquidacion?.fecha || ticket.fechaValidacionDocumental || ticket.fechaPagoFinal || new Date().toISOString()
-                            });
-                        }
-                    }
-
-                    // 4. Pago de Visita / Movilidad
-                    if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed || ticket.costoPasaje) {
-                        const montoVisita = parseFloat(ticket.solicitudPagoVisita?.monto || ticket.costoVisita || ticket.costoPasaje || 0);
-                        const itemVisita = {
-                            id: `${ticket.id}_visita`,
-                            tipo: 'Movilidad / Visita' as const,
-                            monto: montoVisita,
-                            estado: ticket.visitPaymentConfirmed ? 'pagado' : 'pendiente' as 'pendiente' | 'pagado',
-                            fecha: ticket.solicitudPagoVisita?.fecha || ticket.fechaPagoVisita || ticket.fechaAsignacion || new Date().toISOString()
-                        };
-
-                        if (itemVisita.monto > 0) {
-                            items.push(itemVisita);
-                        }
-                    }
-
-                    // Only add group if there are items to show
-                    if (items.length > 0) {
-                        allGroups.push({
-                            ticketId: ticket.id,
-                            ticketNum,
-                            cliente: ticket.cliente?.nombre || 'MiBanco',
-                            sede: ticket.sede?.nombre || 'Sede Central',
-                            tecnico: techData,
-                            montoPactado: montoPactadoBase,
-                            montoAdelantado: totalPagado, // Total Pagado Histórico
-                            saldoPendiente: montoPactadoBase - totalPagado,
-                            items: items,
-                            historialDepositos: pagos,
-                            costoVisita: visitCost,
-                            voucherVisita: voucherVisita
-                        });
-                    }
-
-                } catch (e) {
-                    console.error("Error parsing ticket:", e);
                 }
+
+                if (items.length > 0) {
+                    allGroups.push({
+                        ticketId: ticket.id,
+                        ticketNum,
+                        cliente: ticket.cliente?.nombre || 'Cliente',
+                        sede: ticket.sede?.nombre || 'Sede',
+                        tecnico: techData,
+                        montoPactado: montoPactadoBase,
+                        montoAdelantado: totalPagado,
+                        saldoPendiente: montoPactadoBase - totalPagado,
+                        items: items,
+                        historialDepositos: pagos,
+                        costoVisita: visitCost,
+                        voucherVisita: voucherVisita
+                    });
+                }
+
+            } catch (e) {
+                console.error("Error processing ticket for payments:", e);
             }
         });
 
-        // Ordenar: Grupos con pendientes primero, luego por fecha más reciente (usando el item más nuevo)
+        // Ordenar
         allGroups.sort((a, b) => {
             const hasPendingA = a.items.some(i => i.estado === 'pendiente');
             const hasPendingB = b.items.some(i => i.estado === 'pendiente');
-
             if (hasPendingA !== hasPendingB) return hasPendingA ? -1 : 1;
-
-            // Si ambos son iguales, ordenar por fecha del último item
             const lastDateA = a.items.reduce((max, i) => i.fecha > max ? i.fecha : max, "");
             const lastDateB = b.items.reduce((max, i) => i.fecha > max ? i.fecha : max, "");
-
             return new Date(lastDateB).getTime() - new Date(lastDateA).getTime();
         });
 
         setPaymentGroups(allGroups);
-        calculateMonthlyTotals(ticketKeys);
+        calculateMonthlyTotalsFromTickets(allTickets);
     };
-    const handleConfirmPayment = (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
-        const saved = localStorage.getItem(`ticket_state_${group.ticketId}`);
-        if (!saved) return;
 
-        const ticket = JSON.parse(saved);
-        const paymentId = Date.now().toString();
-
-        let voucherRef = null;
-        if (voucherBase64) {
-            try {
-                const vKey = `payment_voucher_${paymentId}`;
-                localStorage.setItem(vKey, voucherBase64);
-                voucherRef = vKey;
-            } catch (e) {
-                console.error("Error saving voucher image:", e);
-                alert("No se pudo guardar la imagen del voucher. El pago se registrará sin imagen.");
-            }
+    const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
+        let freshTicket: any;
+        try {
+            // 🛡️ FRESH FETCH: Obtener datos frescos de la BD para evitar sobreescrituras póstumas
+            freshTicket = await ticketsAPI.getById(group.ticketId);
+        } catch (err) {
+            console.error("Error fetching fresh ticket for payment:", err);
+            // Fallback al estado local si falla la red (riesgoso pero necesario)
+            freshTicket = tickets.find(t => t.id === group.ticketId);
         }
 
+        if (!freshTicket) return;
+
+        // Base metadata from source of truth
+        const baseMetadata = freshTicket.metadata || {};
+
+        const paymentId = Date.now().toString();
         const nuevoPago = {
             id: paymentId,
             monto: item.monto,
@@ -298,37 +282,57 @@ export default function PaymentsPage() {
             tipo: item.tipo,
             estado: 'pagado',
             referencia: `Transferencia Web - ${item.tipo}`,
-            voucherRef
+            voucherRef: voucherBase64
         };
 
-        const updatedTicket = { ...ticket, historialPagosTecnico: [...(ticket.historialPagosTecnico || []), nuevoPago] };
+        // Actualizar historial en metadata
+        const historialPagosTecnico = [...(baseMetadata.historialPagosTecnico || []), nuevoPago];
+
+        // Construir nuevo metadata preservando TODO lo que ya existía (Merge Strategy)
+        const newMetadata = {
+            ...baseMetadata,
+            historialPagosTecnico
+        };
+
+        const updates: any = {
+            metadata: newMetadata
+        };
 
         if (item.tipo === 'Adelanto') {
-            updatedTicket.adelantoPagado = true;
-            updatedTicket.fechaPagoAdelanto = new Date().toISOString();
-            updatedTicket.solicitudAdelanto = null;
+            updates.status_id = 'en_ejecucion';
+            newMetadata.estadoId = 'en_ejecucion';
+            updates.execution_date = new Date().toISOString();
+            newMetadata.fechaInicioEjecucion = updates.execution_date;
+
+            // 🔥 CRÍTICO: Bandera explícita
+            newMetadata.adelantoPagado = true;
+            newMetadata.fechaPagoAdelanto = updates.execution_date;
+            newMetadata.solicitudAdelanto = null;
         } else if (item.tipo === 'Refuerzo') {
-            updatedTicket.solicitudAdelantoExtra = null;
+            newMetadata.solicitudAdelantoExtra = null;
         } else if (item.tipo === 'Liquidación Final') {
-            updatedTicket.estadoId = 'ticket_cerrado';
-            updatedTicket.fechaPagoFinal = new Date().toISOString();
-            updatedTicket.solicitudLiquidacion = null;
+            updates.status_id = 'ticket_cerrado';
+            newMetadata.estadoId = 'ticket_cerrado';
+            updates.closure_date = new Date().toISOString();
+            newMetadata.fechaPagoFinal = updates.closure_date;
+            newMetadata.solicitudLiquidacion = null;
         } else if (item.tipo === 'Movilidad / Visita') {
-            if (updatedTicket.estadoId === 'esperando_pago_visita') updatedTicket.estadoId = 'en_inspeccion';
-            updatedTicket.visitPaymentConfirmed = true;
-            updatedTicket.fechaPagoVisita = new Date().toISOString();
-            updatedTicket.solicitudPagoVisita = null;
+            if (freshTicket.status_id === 'esperando_pago_visita') {
+                updates.status_id = 'en_inspeccion';
+                newMetadata.estadoId = 'en_inspeccion';
+            }
+            newMetadata.visitPaymentConfirmed = true;
+            newMetadata.fechaPagoVisita = new Date().toISOString();
+            newMetadata.solicitudPagoVisita = null;
         }
 
         try {
-            localStorage.setItem(`ticket_state_${group.ticketId}`, JSON.stringify(updatedTicket));
-        } catch (e) {
-            alert("Error al guardar estado del ticket. Limpie el historial.");
-            return;
+            await updateTicket(group.ticketId, updates);
+            await refresh();
+        } catch (err) {
+            console.error("Error confirming payment in Supabase:", err);
+            alert("Error al procesar el pago. Por favor intente de nuevo.");
         }
-
-        window.dispatchEvent(new Event('local-storage-update'));
-        loadData();
     };
 
     const getVoucherSrc = (ref?: string | null) => {
@@ -389,235 +393,241 @@ export default function PaymentsPage() {
                 </div>
 
                 <div className={styles.tableBody}>
-                    <table className={styles.paymentsTable}>
-                        <thead>
-                            <tr>
-                                <th style={{ width: '20%' }}># TICKET CLIENTE / SEDE</th>
-                                <th style={{ width: '25%' }}>BENEFICIARIO (TÉCNICO)</th>
-                                <th style={{ width: '20%' }}>ESTADO FINANCIERO</th>
-                                <th style={{ width: '25%' }}>SOLICITUD ACTUAL</th>
-                                <th style={{ width: '10%' }}>ACCIONES</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredGroups.length === 0 ? (
+                    {loading ? (
+                        <div className={styles.emptyState}>
+                            <Clock size={48} className={styles.pulseAnimation} />
+                            <p>Cargando peticiones de fondos desde la nube...</p>
+                        </div>
+                    ) : (
+                        <table className={styles.paymentsTable}>
+                            <thead>
                                 <tr>
-                                    <td colSpan={5}>
-                                        <div className={styles.emptyState}>
-                                            <AlertCircle size={48} />
-                                            <p>No hay solicitudes en esta categoría.</p>
-                                        </div>
-                                    </td>
+                                    <th style={{ width: '20%' }}># TICKET CLIENTE / SEDE</th>
+                                    <th style={{ width: '25%' }}>BENEFICIARIO (TÉCNICO)</th>
+                                    <th style={{ width: '20%' }}>ESTADO FINANCIERO</th>
+                                    <th style={{ width: '25%' }}>SOLICITUD ACTUAL</th>
+                                    <th style={{ width: '10%' }}>ACCIONES</th>
                                 </tr>
-                            ) : (
-                                filteredGroups.map((group) => (
-                                    <React.Fragment key={group.ticketId}>
-                                        <tr className={`${styles.paymentRow} ${group.items.some(i => i.estado === 'pendiente') ? styles.rowPending : styles.rowPaid}`}>
-                                            <td>
-                                                <div className={styles.ticketCell}>
-                                                    <span className={styles.ticketId}>{group.ticketNum}</span>
-                                                    <div className={styles.clientInfo}>
-                                                        <Building2 size={12} />
-                                                        <strong>{group.cliente}</strong>
-                                                        <span className={styles.sedeText}>({group.sede})</span>
+                            </thead>
+                            <tbody>
+                                {filteredGroups.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5}>
+                                            <div className={styles.emptyState}>
+                                                <AlertCircle size={48} />
+                                                <p>No hay solicitudes en esta categoría.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredGroups.map((group) => (
+                                        <React.Fragment key={group.ticketId}>
+                                            <tr className={`${styles.paymentRow} ${group.items.some(i => i.estado === 'pendiente') ? styles.rowPending : styles.rowPaid}`}>
+                                                <td>
+                                                    <div className={styles.ticketCell}>
+                                                        <span className={styles.ticketId}>{group.ticketNum}</span>
+                                                        <div className={styles.clientInfo}>
+                                                            <Building2 size={12} />
+                                                            <strong>{group.cliente}</strong>
+                                                            <span className={styles.sedeText}>({group.sede})</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className={styles.techCell}>
-                                                    <div className={styles.techNameRow}>
-                                                        <User size={14} />
-                                                        <span>{group.tecnico.nombre}</span>
-                                                    </div>
-                                                    <div className={styles.bankDetailBox}>
-                                                        <div className={styles.bankRow} style={{ justifyContent: 'space-between', width: '100%' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                <CreditCard size={12} />
-                                                                <span className={styles.bankName}>{group.tecnico.banco}</span>
+                                                </td>
+                                                <td>
+                                                    <div className={styles.techCell}>
+                                                        <div className={styles.techNameRow}>
+                                                            <User size={14} />
+                                                            <span>{group.tecnico.nombre}</span>
+                                                        </div>
+                                                        <div className={styles.bankDetailBox}>
+                                                            <div className={styles.bankRow} style={{ justifyContent: 'space-between', width: '100%' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <CreditCard size={12} />
+                                                                    <span className={styles.bankName}>{group.tecnico.banco}</span>
+                                                                </div>
+                                                                {(group.tecnico.yape || group.tecnico.plin) && (
+                                                                    <div className={styles.walletRow} style={{ gap: '4px' }}>
+                                                                        {group.tecnico.yape && <span className={styles.walletBadgeYape}><Smartphone size={10} /> {group.tecnico.yape}</span>}
+                                                                        {group.tecnico.plin && <span className={styles.walletBadgePlin}><Smartphone size={10} /> {group.tecnico.plin}</span>}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            {(group.tecnico.yape || group.tecnico.plin) && (
-                                                                <div className={styles.walletRow} style={{ gap: '4px' }}>
-                                                                    {group.tecnico.yape && <span className={styles.walletBadgeYape}><Smartphone size={10} /> {group.tecnico.yape}</span>}
-                                                                    {group.tecnico.plin && <span className={styles.walletBadgePlin}><Smartphone size={10} /> {group.tecnico.plin}</span>}
+                                                            <div className={styles.accountNumbers}>
+                                                                <span>CTA: {group.tecnico.numeroCuenta || '---'}</span>
+                                                                {group.tecnico.cci && <span>CCI: {group.tecnico.cci}</span>}
+                                                            </div>
+
+                                                            {/* Visualización de Costo de Visita y Voucher */}
+                                                            {group.costoVisita && group.costoVisita > 0 && (
+                                                                <div className={styles.visitCostRow}>
+                                                                    <div className={styles.visitLabelRow}>
+                                                                        <ArrowUpRight size={12} />
+                                                                        <span>Costo Visita: <strong>S/ {group.costoVisita.toFixed(2)}</strong></span>
+                                                                    </div>
+                                                                    {group.voucherVisita && (
+                                                                        <div className={styles.voucherThumbBox}>
+                                                                            <img
+                                                                                src={getVoucherSrc(group.voucherVisita)}
+                                                                                alt="Voucher Visita"
+                                                                                className={styles.miniVoucher}
+                                                                                onClick={() => setShowVoucher(getVoucherSrc(group.voucherVisita))}
+                                                                            />
+                                                                            <div className={styles.zoomPulse}></div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <div className={styles.accountNumbers}>
-                                                            <span>CTA: {group.tecnico.numeroCuenta}</span>
-                                                            {group.tecnico.cci && <span>CCI: {group.tecnico.cci}</span>}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div className={styles.financialGridCompact}>
+                                                        <div className={styles.finRowCompact}>
+                                                            <span className={styles.finLabelCompact}>PACTADO TOTAL</span>
+                                                            <span className={styles.finValueCompact} style={{ color: '#0F172A' }}>S/ {group.montoPactado.toFixed(2)}</span>
                                                         </div>
-
-                                                        {/* Visualización de Costo de Visita y Voucher */}
-                                                        {group.costoVisita && group.costoVisita > 0 && (
-                                                            <div className={styles.visitCostRow}>
-                                                                <div className={styles.visitLabelRow}>
-                                                                    <ArrowUpRight size={12} />
-                                                                    <span>Costo Visita: <strong>S/ {group.costoVisita.toFixed(2)}</strong></span>
+                                                        <div className={styles.finRowCompact}>
+                                                            <span className={styles.finLabelCompact}>PAGADO PREVIO</span>
+                                                            <span className={styles.finValueCompact} style={{ color: '#059669' }}>- S/ {group.montoAdelantado.toFixed(2)}</span>
+                                                        </div>
+                                                        <div className={`${styles.finRowCompact} ${styles.finRowTotal}`}>
+                                                            <span className={styles.finLabelCompact}>SALDO PENDIENTE</span>
+                                                            <span className={styles.finValueCompact} style={{ color: group.saldoPendiente < 0 ? '#DC2626' : '#2563EB' }}>
+                                                                S/ {group.saldoPendiente.toFixed(2)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div className={styles.requestsContainer}>
+                                                        {group.items.map((item) => (
+                                                            <div key={item.id} className={styles.requestItemRow} style={{ marginBottom: '8px', padding: '6px', border: '1px solid #E2E8F0', borderRadius: '6px', background: item.estado === 'pendiente' ? '#FEF3C7' : '#F0FDF4' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                                    <span className={`${styles.typeBadge} ${item.tipo === 'Adelanto' ? styles.typeAdvance : item.tipo === 'Refuerzo' ? styles.typeReinforcement : styles.typeFinal}`}>
+                                                                        {item.tipo}
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F172A' }}>S/ {item.monto.toFixed(2)}</span>
                                                                 </div>
-                                                                {group.voucherVisita && (
-                                                                    <div className={styles.voucherThumbBox}>
-                                                                        <img
-                                                                            src={getVoucherSrc(group.voucherVisita)}
-                                                                            alt="Voucher Visita"
-                                                                            className={styles.miniVoucher}
-                                                                            onClick={() => setShowVoucher(getVoucherSrc(group.voucherVisita))}
-                                                                        />
-                                                                        <div className={styles.zoomPulse}></div>
-                                                                    </div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '0.65rem', color: '#64748B' }}>{new Date(item.fecha).toLocaleDateString('es-PE')}</span>
+                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: item.estado === 'pendiente' ? '#D97706' : '#166534' }}>
+                                                                        {item.estado === 'pendiente' ? 'PENDIENTE' : 'PAGADO'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div className={styles.actionsCell}>
+                                                        {group.items.filter(i => i.estado === 'pendiente').map((item) => (
+                                                            <div key={`action-${item.id}`} style={{ marginBottom: '8px' }}>
+                                                                <label className={styles.uploadVoucherBtn} style={{ background: '#3B82F6', color: 'white', padding: '6px 10px', borderRadius: '6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginBottom: '4px', justifyContent: 'center' }}>
+                                                                    <Upload size={14} />
+                                                                    <span>PAGAR: {item.tipo.split(' ')[0]}</span>
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        style={{ display: 'none' }}
+                                                                        onChange={(e) => {
+                                                                            if (e.target.files && e.target.files[0]) {
+                                                                                const file = e.target.files[0];
+                                                                                const reader = new FileReader();
+                                                                                reader.onloadend = () => {
+                                                                                    setPendingConfirmation({
+                                                                                        group,
+                                                                                        item,
+                                                                                        voucher: reader.result as string,
+                                                                                        message: `¿Confirmar depósito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
+                                                                                    });
+                                                                                };
+                                                                                reader.readAsDataURL(file);
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </label>
+                                                                <button
+                                                                    style={{ border: '1px solid #E2E8F0', background: 'white', color: '#64748B', padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', cursor: 'pointer', width: '100%' }}
+                                                                    onClick={() => {
+                                                                        setPendingConfirmation({
+                                                                            group,
+                                                                            item,
+                                                                            message: `¿Confirmar transferencia directa de S/ ${item.monto.toFixed(2)} a ${group.tecnico.nombre}?`
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    Pagar directo
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                        {group.items.every(i => i.estado === 'pagado') && (
+                                                            <div style={{ textAlign: 'center', padding: '8px' }}>
+                                                                <CheckCircle2 size={20} color="#22C55E" style={{ margin: '0 auto' }} />
+                                                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#15803D', display: 'block' }}>COMPLETADO</span>
+                                                                {group.historialDepositos.length > 0 && (
+                                                                    <button
+                                                                        className={styles.historyToggle}
+                                                                        style={{ marginTop: '4px' }}
+                                                                        onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}
+                                                                    >
+                                                                        {expandedHistory === group.ticketId ? <ChevronUp size={16} /> : <History size={16} />}
+                                                                    </button>
                                                                 )}
                                                             </div>
                                                         )}
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className={styles.financialGridCompact}>
-                                                    <div className={styles.finRowCompact}>
-                                                        <span className={styles.finLabelCompact}>PACTADO TOTAL</span>
-                                                        <span className={styles.finValueCompact} style={{ color: '#0F172A' }}>S/ {group.montoPactado.toFixed(2)}</span>
-                                                    </div>
-                                                    <div className={styles.finRowCompact}>
-                                                        <span className={styles.finLabelCompact}>PAGADO PREVIO</span>
-                                                        <span className={styles.finValueCompact} style={{ color: '#059669' }}>- S/ {group.montoAdelantado.toFixed(2)}</span>
-                                                    </div>
-                                                    <div className={`${styles.finRowCompact} ${styles.finRowTotal}`}>
-                                                        <span className={styles.finLabelCompact}>SALDO PENDIENTE</span>
-                                                        <span className={styles.finValueCompact} style={{ color: group.saldoPendiente < 0 ? '#DC2626' : '#2563EB' }}>
-                                                            S/ {group.saldoPendiente.toFixed(2)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className={styles.requestsContainer}>
-                                                    {group.items.map((item) => (
-                                                        <div key={item.id} className={styles.requestItemRow} style={{ marginBottom: '8px', padding: '6px', border: '1px solid #E2E8F0', borderRadius: '6px', background: item.estado === 'pendiente' ? '#FEF3C7' : '#F0FDF4' }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                                                <span className={`${styles.typeBadge} ${item.tipo === 'Adelanto' ? styles.typeAdvance : item.tipo === 'Refuerzo' ? styles.typeReinforcement : styles.typeFinal}`}>
-                                                                    {item.tipo}
-                                                                </span>
-                                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F172A' }}>S/ {item.monto.toFixed(2)}</span>
-                                                            </div>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span style={{ fontSize: '0.65rem', color: '#64748B' }}>{new Date(item.fecha).toLocaleDateString('es-PE')}</span>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: item.estado === 'pendiente' ? '#D97706' : '#166534' }}>
-                                                                    {item.estado === 'pendiente' ? 'PENDIENTE' : 'PAGADO'}
-                                                                </span>
-                                                            </div>
-                                                            {/* Actions for this specific item inside the cell? Or put actions in next column? */}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className={styles.actionsCell}>
-                                                    {group.items.filter(i => i.estado === 'pendiente').map((item) => (
-                                                        <div key={`action-${item.id}`} style={{ marginBottom: '8px' }}>
-                                                            <label className={styles.uploadVoucherBtn} style={{ background: '#3B82F6', color: 'white', padding: '6px 10px', borderRadius: '6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginBottom: '4px', justifyContent: 'center' }}>
-                                                                <Upload size={14} />
-                                                                <span>PAGAR: {item.tipo.split(' ')[0]}</span>
-                                                                <input
-                                                                    type="file"
-                                                                    accept="image/*"
-                                                                    style={{ display: 'none' }}
-                                                                    onChange={(e) => {
-                                                                        if (e.target.files && e.target.files[0]) {
-                                                                            const file = e.target.files[0];
-                                                                            const reader = new FileReader();
-                                                                            reader.onloadend = () => {
-                                                                                setPendingConfirmation({
-                                                                                    group,
-                                                                                    item,
-                                                                                    voucher: reader.result as string,
-                                                                                    message: `¿Confirmar depósito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
-                                                                                });
-                                                                            };
-                                                                            reader.readAsDataURL(file);
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </label>
-                                                            <button
-                                                                style={{ border: '1px solid #E2E8F0', background: 'white', color: '#64748B', padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', cursor: 'pointer', width: '100%' }}
-                                                                onClick={() => {
-                                                                    setPendingConfirmation({
-                                                                        group,
-                                                                        item,
-                                                                        message: `¿Confirmar transferencia directa de S/ ${item.monto.toFixed(2)} a ${group.tecnico.nombre}?`
-                                                                    });
-                                                                }}
-                                                            >
-                                                                Pagar directo
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                    {group.items.every(i => i.estado === 'pagado') && (
-                                                        <div style={{ textAlign: 'center', padding: '8px' }}>
-                                                            <CheckCircle2 size={20} color="#22C55E" style={{ margin: '0 auto' }} />
-                                                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#15803D', display: 'block' }}>COMPLETADO</span>
-                                                            {group.historialDepositos.length > 0 && (
-                                                                <button
-                                                                    className={styles.historyToggle}
-                                                                    style={{ marginTop: '4px' }}
-                                                                    onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}
-                                                                >
-                                                                    {expandedHistory === group.ticketId ? <ChevronUp size={16} /> : <History size={16} />}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {expandedHistory === group.ticketId && (
-                                            <tr className={styles.historyRow}>
-                                                <td colSpan={5}>
-                                                    <div className={styles.historyContainer}>
-                                                        <h4>Historial de Transferencias - Ticket {group.ticketNum}</h4>
-                                                        <div className={styles.historyGrid}>
-                                                            {group.historialDepositos.map((dep, idx) => (
-                                                                <div key={idx} className={styles.historyCard}>
-                                                                    <div className={styles.historyHeader}>
-                                                                        <span className={styles.historyIndex}>#{idx + 1}</span>
-                                                                        <span className={styles.historyDate}>{new Date(dep.fecha).toLocaleString()}</span>
-                                                                    </div>
-                                                                    <div className={styles.historyBody}>
-                                                                        <span>{dep.tipo || 'Depósito'}</span>
-                                                                        <strong>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
-                                                                        {dep.voucherRef && (
-                                                                            <button
-                                                                                className={styles.viewVoucherBtn}
-                                                                                style={{
-                                                                                    marginTop: '8px',
-                                                                                    display: 'flex',
-                                                                                    alignItems: 'center',
-                                                                                    gap: '4px',
-                                                                                    padding: '4px 8px',
-                                                                                    background: '#F1F5F9',
-                                                                                    border: '1px solid #E2E8F0',
-                                                                                    borderRadius: '4px',
-                                                                                    fontSize: '0.7rem',
-                                                                                    cursor: 'pointer',
-                                                                                    color: '#475569'
-                                                                                }}
-                                                                                onClick={() => setShowVoucher(localStorage.getItem(dep.voucherRef))}
-                                                                            >
-                                                                                <Eye size={12} /> Ver Voucher
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
                                                 </td>
                                             </tr>
-                                        )}
-                                    </React.Fragment>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                            {expandedHistory === group.ticketId && (
+                                                <tr className={styles.historyRow}>
+                                                    <td colSpan={5}>
+                                                        <div className={styles.historyContainer}>
+                                                            <h4>Historial de Transferencias - Ticket {group.ticketNum}</h4>
+                                                            <div className={styles.historyGrid}>
+                                                                {group.historialDepositos.map((dep, idx) => (
+                                                                    <div key={idx} className={styles.historyCard}>
+                                                                        <div className={styles.historyHeader}>
+                                                                            <span className={styles.historyIndex}>#{idx + 1}</span>
+                                                                            <span className={styles.historyDate}>{new Date(dep.fecha).toLocaleString()}</span>
+                                                                        </div>
+                                                                        <div className={styles.historyBody}>
+                                                                            <span>{dep.tipo || 'Depósito'}</span>
+                                                                            <strong>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
+                                                                            {dep.voucherRef && (
+                                                                                <button
+                                                                                    className={styles.viewVoucherBtn}
+                                                                                    style={{
+                                                                                        marginTop: '8px',
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '4px',
+                                                                                        padding: '4px 8px',
+                                                                                        background: '#F1F5F9',
+                                                                                        border: '1px solid #E2E8F0',
+                                                                                        borderRadius: '4px',
+                                                                                        fontSize: '0.7rem',
+                                                                                        cursor: 'pointer',
+                                                                                        color: '#475569'
+                                                                                    }}
+                                                                                    onClick={() => setShowVoucher(dep.voucherRef)}
+                                                                                >
+                                                                                    <Eye size={12} /> Ver Voucher
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             </div>
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Search, MapPin, Phone, Star, DollarSign, CheckCircle } from "lucide-react";
-import { SKILL_ICONS, SERVICE_TYPES, getServiceById } from "@/lib/serviceTypes";
+import { useState } from "react";
+import { X, Search, MapPin, Phone, Star, DollarSign, CheckCircle, RefreshCw } from "lucide-react";
+import { useTechnicians } from "@/hooks/useSupabaseData";
+import { SKILL_ICONS, getServiceById } from "@/lib/serviceTypes";
 import { normalizeZone, areZonesCompatible, getZoneFullName } from "@/lib/zones";
 import styles from "./TechnicianDrawer.module.css";
 
@@ -15,28 +16,13 @@ interface TechnicianDrawerProps {
 }
 
 export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, onShowToast }: TechnicianDrawerProps) {
-    const [technicians, setTechnicians] = useState<any[]>([]);
+    const { technicians, loading } = useTechnicians();
     const [selectedTechnician, setSelectedTechnician] = useState<any>(null);
     const [costoVisita, setCostoVisita] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Cargar técnicos desde localStorage
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const stored = localStorage.getItem('technicians');
-            if (stored) {
-                try {
-                    setTechnicians(JSON.parse(stored));
-                } catch (e) {
-                    console.error('Error loading technicians:', e);
-                    setTechnicians([]);
-                }
-            }
-        }
-    }, [isOpen]);
-
     // Normalizar datos del ticket para el filtro
-    const ticketZone = normalizeZone(ticket?.sede?.zona);
+    const ticketZone = normalizeZone(ticket?.sede?.zona || ticket?.sede?.zone);
     const ticketZoneDisplay = getZoneFullName(ticketZone);
 
     // Obtener el nombre corto estandarizado del servicio (ej: "ELECTRICIDAD")
@@ -47,34 +33,43 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         if (ticket.tipoServicioNombre) return ticket.tipoServicioNombre.toUpperCase();
 
         // 2. Intentar buscar por ID
-        const service = getServiceById(ticket.tipoServicio);
+        const service = getServiceById(ticket.tipoServicio || ticket.service_type);
         if (service) return service.nombreCorto;
 
         // 3. Fallback al ID en mayúsculas
-        return (ticket.tipoServicio || "").toUpperCase();
+        return (ticket.tipoServicio || ticket.service_type || "").toUpperCase();
     };
 
     const requiredSkill = getStandardizedSkill();
 
     // Filtrar técnicos compatibles
-    const compatibleTechnicians = technicians.filter((tech: any) => {
+    const compatibleTechnicians = (technicians || []).filter((tech: any) => {
         // Normalizar zona del técnico
-        const techZone = normalizeZone(tech.zona);
+        const techZone = normalizeZone(tech.zone || tech.zona);
 
         // Filtro por zona (usando sistema normalizado)
         const matchesZone = areZonesCompatible(ticketZone, techZone);
 
         // Filtro por especialidad/servicio (normalizado a mayúsculas)
-        const techSkills = (tech.especialidades || []).map((s: string) => s.toUpperCase());
+        const specialties = tech.specialties || tech.especialidades || [];
+        const techSkills = specialties.map((s: string) => s.toUpperCase());
         const matchesSkill = requiredSkill === "" || techSkills.includes(requiredSkill);
 
         // Filtro por búsqueda
-        const matchesSearch = searchTerm === "" ||
-            tech.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            tech.apellido?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            tech.numeroDoc?.includes(searchTerm);
+        const firstName = tech.first_name || tech.nombre || '';
+        const lastName = tech.last_name || tech.apellido || '';
+        const fullName = (tech.name || `${firstName} ${lastName}`).toLowerCase();
+        const docNumber = tech.document_number || tech.numeroDoc || '';
 
-        return matchesZone && matchesSkill && matchesSearch;
+        const matchesSearch = searchTerm === "" ||
+            fullName.includes(searchTerm.toLowerCase()) ||
+            docNumber.includes(searchTerm);
+
+        // Filtro de estado Activo
+        const status = (tech.status || tech.estado || '').toLowerCase();
+        const isActive = status === 'active' || status === 'activo';
+
+        return matchesZone && matchesSkill && matchesSearch && isActive;
     });
 
     const handleAssign = () => {
@@ -93,17 +88,18 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         const assignmentData = {
             tecnico: {
                 id: selectedTechnician.id,
-                nombre: selectedTechnician.nombre,
-                apellido: selectedTechnician.apellido,
-                celular: selectedTechnician.celular,
-                zona: selectedTechnician.zona,
-                especialidades: selectedTechnician.especialidades,
-                foto: selectedTechnician.foto,
-                banco: selectedTechnician.banco,
-                numeroCuenta: selectedTechnician.numeroCuenta,
+                name: selectedTechnician.name,
+                nombre: selectedTechnician.name || `${selectedTechnician.first_name || ''} ${selectedTechnician.last_name || ''}`.trim(),
+                apellido: selectedTechnician.last_name || selectedTechnician.apellido,
+                celular: selectedTechnician.phone || selectedTechnician.celular,
+                zona: selectedTechnician.zone || selectedTechnician.zona,
+                especialidades: selectedTechnician.specialties || selectedTechnician.especialidades,
+                foto: selectedTechnician.photo || selectedTechnician.foto,
+                banco: selectedTechnician.bank_name || selectedTechnician.banco,
+                numeroCuenta: selectedTechnician.account_number || selectedTechnician.numeroCuenta,
                 cci: selectedTechnician.cci,
-                yape: selectedTechnician.yape,
-                plin: selectedTechnician.plin
+                yape: selectedTechnician.yape_number || selectedTechnician.yape,
+                plin: selectedTechnician.plin_number || selectedTechnician.plin
             },
             costoVisita: visita,
             fechaAsignacion: new Date().toISOString()
@@ -114,19 +110,27 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
 
     if (!isOpen) return null;
 
+    if (loading) {
+        return (
+            <div className={styles.loadingOverlay}>
+                <div className={styles.loadingContent}>
+                    <RefreshCw className={styles.spin} size={40} />
+                    <p>Cargando técnicos autorizados...</p>
+                </div>
+            </div>
+        );
+    }
+
     const handleOverlayClick = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Evitar que el evento llegue a la ventana principal
+        e.stopPropagation();
         onClose();
     };
 
     return (
         <>
-            {/* Overlay - Solo cierra el drawer */}
             <div className={styles.overlay} onClick={handleOverlayClick} />
 
-            {/* Drawer Lateral */}
             <div className={`${styles.drawer} ${isOpen ? styles.open : ''}`} onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
                 <div className={styles.header}>
                     <div className={styles.headerContent}>
                         <h2>Asignar Técnico</h2>
@@ -137,7 +141,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                     </button>
                 </div>
 
-                {/* Info del Ticket */}
                 <div className={styles.ticketInfo}>
                     <div className={styles.infoItem}>
                         <span className={styles.label}>Zona</span>
@@ -149,7 +152,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                     </div>
                 </div>
 
-                {/* Búsqueda */}
                 <div className={styles.searchBox}>
                     <Search size={18} />
                     <input
@@ -160,7 +162,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                     />
                 </div>
 
-                {/* Lista de Técnicos */}
                 <div className={styles.techniciansList}>
                     {compatibleTechnicians.length === 0 ? (
                         <div className={styles.emptyState}>
@@ -172,8 +173,11 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                         </div>
                     ) : (
                         compatibleTechnicians.map((tech: any) => {
-                            const SkillIcon = SKILL_ICONS[tech.especialidades?.[0]];
+                            const specialties = tech.specialties || tech.especialidades || [];
+                            const SkillIcon = SKILL_ICONS[specialties[0]];
                             const isSelected = selectedTechnician?.id === tech.id;
+                            const photo = tech.photo || tech.foto;
+                            const name = tech.name || `${tech.first_name || tech.nombre} ${tech.last_name || tech.apellido}`;
 
                             return (
                                 <div
@@ -181,13 +185,12 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                                     className={`${styles.techCard} ${isSelected ? styles.selected : ''}`}
                                     onClick={() => setSelectedTechnician(tech)}
                                 >
-                                    {/* Avatar */}
                                     <div className={styles.techAvatar}>
-                                        {tech.foto ? (
-                                            <img src={tech.foto} alt={tech.nombre} />
+                                        {photo ? (
+                                            <img src={photo} alt={name} />
                                         ) : (
                                             <div className={styles.avatarPlaceholder}>
-                                                {tech.nombre?.charAt(0)}{tech.apellido?.charAt(0)}
+                                                {name.substring(0, 2).toUpperCase()}
                                             </div>
                                         )}
                                         {isSelected && (
@@ -197,27 +200,25 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                                         )}
                                     </div>
 
-                                    {/* Info */}
                                     <div className={styles.techInfo}>
-                                        <h3>{tech.nombre} {tech.apellido}</h3>
+                                        <h3>{name}</h3>
                                         <div className={styles.techDetails}>
                                             <div className={styles.detailItem}>
                                                 <Phone size={12} />
-                                                <span>{tech.celular || 'Sin teléfono'}</span>
+                                                <span>{tech.phone || tech.celular || '---'}</span>
                                             </div>
                                             <div className={styles.detailItem}>
                                                 <MapPin size={12} />
-                                                <span>{tech.zona}</span>
+                                                <span>{tech.zone || tech.zona}</span>
                                             </div>
                                             <div className={styles.detailItem}>
                                                 <Star size={12} />
-                                                <span>{tech.calificacion}/5</span>
+                                                <span>{tech.rating || tech.calificacion || 5}/5</span>
                                             </div>
                                         </div>
 
-                                        {/* Especialidades */}
                                         <div className={styles.skills}>
-                                            {tech.especialidades?.map((skill: string) => {
+                                            {specialties.map((skill: string) => {
                                                 const Icon = SKILL_ICONS[skill];
                                                 return (
                                                     <span key={skill} className={styles.skillBadge}>
@@ -234,7 +235,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                     )}
                 </div>
 
-                {/* Costos Operativos Iniciales */}
                 {selectedTechnician && (
                     <div className={styles.costoSection}>
                         <div className={styles.costItem}>
@@ -258,7 +258,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                     </div>
                 )}
 
-                {/* Footer con botón */}
                 <div className={styles.footer}>
                     <button
                         className={styles.assignBtn}

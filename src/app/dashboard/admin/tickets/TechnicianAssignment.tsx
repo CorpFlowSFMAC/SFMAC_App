@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { User, MapPin, Zap, DollarSign, RefreshCw, CheckCircle2, AlertTriangle, Phone } from "lucide-react";
 import styles from "./TechnicianAssignment.module.css";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useTechnicians } from "@/hooks/useSupabaseData";
 import { getServiceById, SKILL_ICONS } from "@/lib/serviceTypes";
 
 interface TechnicianAssignmentProps {
@@ -12,7 +12,7 @@ interface TechnicianAssignmentProps {
 }
 
 export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAssignmentProps) {
-    const [technicians] = useLocalStorage<any[]>("technicians", []);
+    const { technicians, loading } = useTechnicians();
     const [selectedTech, setSelectedTech] = useState<any>(ticket.tecnicoAsignado || null);
     const [costoPasaje, setCostoPasaje] = useState<number>(ticket.costoPasaje || 0);
     const [showReassign, setShowReassign] = useState(false);
@@ -22,17 +22,30 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
 
     // Filtrar técnicos compatibles
     const compatibleTechnicians = technicians.filter((tech: any) => {
-        // 1. Filtro por zona
-        const matchesZone = tech.zona === ticket.sede?.zona;
+        // 1. Filtro por zona (Normalizado)
+        const techZone = (tech.zone || tech.zona || '').toUpperCase();
+        const ticketZone = (ticket.sede?.zone || ticket.sede?.zona || '').toUpperCase();
+        const matchesZone = techZone === ticketZone;
 
         // 2. Filtro por especialidad (debe tener la especialidad del servicio)
-        const hasSkill = tech.especialidades?.includes(service?.nombreCorto || ticket.tipoServicio);
+        const specialties = tech.specialties || tech.especialidades || [];
+        const hasSkill = specialties.includes(service?.nombreCorto || ticket.tipoServicio);
 
-        // 3. Filtro por estado activo
-        const isActive = tech.estado === "Activo";
+        // 3. Filtro por estado activo (Normalizado)
+        const status = (tech.status || tech.estado || '').toLowerCase();
+        const isActive = status === "activo" || status === "active" || status === "Activo";
 
         return matchesZone && hasSkill && isActive;
     });
+
+    if (loading) {
+        return (
+            <div className={styles.loadingContainer}>
+                <RefreshCw className={styles.spin} size={24} />
+                <p>Buscando técnicos compatibles...</p>
+            </div>
+        );
+    }
 
     const handleAssign = () => {
         if (!selectedTech) {
@@ -114,20 +127,20 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
                     </div>
                     <div className={styles.techCard}>
                         <div className={styles.techAvatar}>
-                            {ticket.tecnicoAsignado.foto ? (
-                                <img src={ticket.tecnicoAsignado.foto} alt={ticket.tecnicoAsignado.nombre} />
+                            {(ticket.tecnicoAsignado.photo || ticket.tecnicoAsignado.foto) ? (
+                                <img src={ticket.tecnicoAsignado.photo || ticket.tecnicoAsignado.foto} alt={ticket.tecnicoAsignado.name || ticket.tecnicoAsignado.nombre} />
                             ) : (
                                 <User size={32} />
                             )}
                         </div>
                         <div className={styles.techInfo}>
-                            <h4>{ticket.tecnicoAsignado.nombre} {ticket.tecnicoAsignado.apellido}</h4>
+                            <h4>{ticket.tecnicoAsignado.name || `${ticket.tecnicoAsignado.nombre} ${ticket.tecnicoAsignado.apellido}`}</h4>
                             <div className={styles.techMeta}>
-                                <span>📱 {ticket.tecnicoAsignado.celular}</span>
-                                <span>📍 {ticket.tecnicoAsignado.zona}</span>
+                                <span>📱 {ticket.tecnicoAsignado.phone || ticket.tecnicoAsignado.celular}</span>
+                                <span>📍 {ticket.tecnicoAsignado.zone || ticket.tecnicoAsignado.zona}</span>
                             </div>
                             <div className={styles.techSkills}>
-                                {ticket.tecnicoAsignado.especialidades?.map((skill: string) => {
+                                {(ticket.tecnicoAsignado.specialties || ticket.tecnicoAsignado.especialidades)?.map((skill: string) => {
                                     const Icon = SKILL_ICONS[skill];
                                     return Icon ? <Icon key={skill} size={14} /> : null;
                                 })}
@@ -194,20 +207,20 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
                                             onClick={() => setSelectedTech(tech)}
                                         >
                                             <div className={styles.techAvatar}>
-                                                {tech.foto ? (
-                                                    <img src={tech.foto} alt={tech.nombre} />
+                                                {(tech.photo || tech.foto) ? (
+                                                    <img src={tech.photo || tech.foto} alt={tech.name || tech.nombre} />
                                                 ) : (
                                                     <User size={24} />
                                                 )}
                                             </div>
                                             <div className={styles.techDetails}>
-                                                <h4>{tech.nombre} {tech.apellido}</h4>
+                                                <h4>{tech.name || `${tech.nombre} ${tech.apellido}`}</h4>
                                                 <div className={styles.techContact}>
                                                     <Phone size={12} />
-                                                    {tech.celular}
+                                                    {tech.phone || tech.celular}
                                                 </div>
                                                 <div className={styles.techBadges}>
-                                                    {tech.especialidades?.slice(0, 2).map((skill: string) => (
+                                                    {(tech.specialties || tech.especialidades)?.slice(0, 2).map((skill: string) => (
                                                         <span key={skill} className={styles.skillBadge}>
                                                             {skill}
                                                         </span>

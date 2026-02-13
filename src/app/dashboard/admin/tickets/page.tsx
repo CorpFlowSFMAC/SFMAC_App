@@ -343,16 +343,22 @@ export default function TicketsPage() {
 
             {/* 🪟 VENTANAS FLOTANTES DE TICKETS */}
             {
-                openTickets.map((ticket, index) => (
-                    <TicketWindow
-                        key={ticket.id}
-                        ticket={ticket}
-                        index={index}
-                        onUpdate={updateTicket}
-                        onClose={() => setOpenTickets(openTickets.filter(t => t.id !== ticket.id))}
-                    />
-                ))
-            }
+                openTickets.map((ticket, index) => {
+                    // 🔥 FRESH DATA: Buscar la versión más reciente del ticket en el estado global (Realtime)
+                    // Esto asegura que si el Admin confirma un pago, la Gestora lo vea reflejado al instante
+                    // sin tener que cerrar y abrir el ticket, ya que 'tickets' se actualiza vía suscripción.
+                    const freshTicket = tickets.find(t => t.id === ticket.id) || ticket;
+
+                    return (
+                        <TicketWindow
+                            key={freshTicket.id}
+                            ticket={freshTicket}
+                            index={index}
+                            onUpdate={updateTicket}
+                            onClose={() => setOpenTickets(openTickets.filter(t => t.id !== ticket.id))}
+                        />
+                    );
+                })}
         </div >
     );
 }
