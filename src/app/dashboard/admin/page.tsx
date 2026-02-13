@@ -9,7 +9,6 @@ import {
 import Link from "next/link";
 import styles from "./admin.module.css";
 import { normalizeStateId } from "@/lib/ticketStates";
-import SyncToSupabaseButton from "@/components/SyncToSupabaseButton";
 import { useTickets, useTechnicians } from "@/hooks/useSupabaseData";
 
 export default function AdminDashboard() {
@@ -136,8 +135,6 @@ export default function AdminDashboard() {
                 </div>
             </div>
 
-            {/* Botón de sincronización con Supabase */}
-            <SyncToSupabaseButton />
         </div>
     );
 }
