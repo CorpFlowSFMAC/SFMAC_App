@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useTickets } from "@/hooks/useSupabaseData";
 import { normalizeStateId } from "@/lib/ticketStates";
+import { ticketsAPI } from "@/lib/supabase-api";
 import styles from "./payments.module.css";
 
 interface PaymentItem {
