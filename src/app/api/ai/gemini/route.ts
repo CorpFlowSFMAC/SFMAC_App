@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-pro",
+            model: "gemini-1.5-flash",
             generationConfig: {
                 responseMimeType: "application/json",
                 temperature: 0.2,
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
             JSON con el desglose de partidas. El precio de venta total debe respetar el margen del 55% sobre el costo técnico referencial, A MENOS que los ejemplos históricos sugieran otro patrón de precios de mercado.
             
             Formato JSON: { partidas: [{ item: string, titulo: string, descripcion: string, unidad: string, cantidad: number, precio_unitario: number, precio_total: number }], resumen: { costo_tecnico_total: number, precio_total_venta: number, margen_logrado: string, comentario_ia: string } }`
-        });
+        }, { apiVersion: "v1" });
 
         const parts: any[] = [{ text: prompt }];
 
