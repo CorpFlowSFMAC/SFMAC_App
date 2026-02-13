@@ -14,12 +14,13 @@ export async function POST(req: Request) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // Usamos la configuración más básica para garantizar compatibilidad entre versiones de API (v1/v1beta)
+
+        // Forzamos el uso de la API v1 (estable) para evitar el error 404 del endpoint v1beta.
+        // En v1, movemos las instrucciones al prompt para evitar errores de "campos desconocidos".
         const model = genAI.getGenerativeModel({
             model: "gemini-1.5-flash",
-        });
+        }, { apiVersion: "v1" });
 
-        // Mover instrucciones al prompt para evitar errores 400 (parámetros desconocidos como systemInstruction o responseMimeType)
         const systemInstruction = `Eres un experto cotizador de mantenimiento para la empresa SINFIMAC. 
         Tu tarea es generar un DESGLOSE DETALLADO DE PARTIDAS (Cotización) en formato JSON.
 
@@ -58,11 +59,15 @@ export async function POST(req: Request) {
             });
         }
 
-        const result = await model.generateContent(parts);
+        // generateContent con parámetros mínimos para v1
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts }],
+        });
+
         const response = await result.response;
         let text = response.text();
 
-        // Limpieza de posible markdown en la respuesta si la IA ignora la instrucción
+        // Limpieza de posible markdown
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
 
         // Ensure we return valid JSON
