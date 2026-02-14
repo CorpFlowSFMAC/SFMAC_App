@@ -63,7 +63,8 @@ interface PaymentTicketGroup {
 }
 
 export default function PaymentsPage() {
-    const { tickets, loading, updateTicket, refresh } = useTickets();
+    // Para el módulo de pagos SÍ necesitamos los metadatos completos para ver el historial de pagos y vouchers
+    const { tickets, loading, updateTicket, refresh } = useTickets(undefined, undefined, true);
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);

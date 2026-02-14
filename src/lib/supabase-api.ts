@@ -332,6 +332,18 @@ export const ticketsAPI = {
         return data;
     },
 
+    async getSummaryAll() {
+        // Seleccionamos solo campos necesarios para la lista y kanban
+        // Excluimos 'metadata' que es el que pesa megabytes por las imágenes base64
+        const { data, error } = await supabase
+            .from('tickets')
+            .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, clients(*), branch_offices(*), technicians(*)')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
+    },
+
     async getById(id: string) {
         const { data, error } = await supabase
             .from('tickets')
@@ -346,7 +358,7 @@ export const ticketsAPI = {
     async getByStatus(statusId: string) {
         const { data, error } = await supabase
             .from('tickets')
-            .select('*, clients(*), branch_offices(*), technicians(*)')
+            .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, clients(*), branch_offices(*), technicians(*)')
             .eq('status_id', statusId)
             .order('created_at', { ascending: false });
 
@@ -357,7 +369,7 @@ export const ticketsAPI = {
     async getByTechnician(technicianId: string) {
         const { data, error } = await supabase
             .from('tickets')
-            .select('*, clients(*), branch_offices(*), technicians(*)')
+            .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, clients(*), branch_offices(*), technicians(*)')
             .eq('technician_id', technicianId)
             .order('created_at', { ascending: false });
 

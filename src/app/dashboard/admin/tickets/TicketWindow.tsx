@@ -8,6 +8,7 @@ import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar } from "./TicketSummary";
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
+import { ticketsAPI } from "@/lib/supabase-api";
 import styles from "./TicketWindow.module.css";
 
 interface TicketWindowProps {
@@ -104,7 +105,31 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
 
-    // 🔗 SINCRONIZACIÓN EXTERNA: Actualizar estado local si el ticket cambia desde afuera (ej: Supabase Realtime)
+    // 🔗 SINCRONIZACIÓN Y CARGA DE DATOS COMPLETOS
+    useEffect(() => {
+        const fetchFullTicket = async () => {
+            if (ticket?.id) {
+                try {
+                    // Solo cargamos si no tenemos los metadatos o si queremos asegurar frescura
+                    // Al usar getSummaryAll en la lista, el objeto 'ticket' inicial no tiene metadatos pesados
+                    const fullTicket = await onUpdate ? await ticketsAPI.getById(ticket.id) : null;
+                    if (fullTicket) {
+                        setTicketData((prev: any) => ({
+                            ...prev,
+                            ...fullTicket,
+                            // Aseguramos que los metadatos se unan correctamente
+                            metadata: { ...(prev.metadata || {}), ...(fullTicket.metadata || {}) }
+                        }));
+                    }
+                } catch (err) {
+                    console.error("Error fetching full ticket data:", err);
+                }
+            }
+        };
+
+        fetchFullTicket();
+    }, [ticket?.id]);
+
     useEffect(() => {
         if (ticket) {
             setTicketData((prev: any) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle } from "lucide-react";
 import CreateTicketWizard from "./CreateTicketWizard";
 import TicketWindow from "./TicketWindow";
@@ -120,34 +120,38 @@ export default function TicketsPage() {
     // para asegurar que los datos de Supabase sean compatibles con la UI.
 
 
-    // Estadísticas rápidas usando el flujo operativo real
-    const stats = {
-        total: tickets.length,
-        nuevos: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "nuevo").length,
-        enProceso: tickets.filter((t: any) => {
+    // Estadísticas rápidas usando el flujo operativo real - MEMOIZED
+    const stats = React.useMemo(() => {
+        return {
+            total: tickets.length,
+            nuevos: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "nuevo").length,
+            enProceso: tickets.filter((t: any) => {
+                const sid = normalizeStateId(t.estadoId);
+                return !["nuevo", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+            }).length,
+            completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
+        };
+    }, [tickets]);
+
+    const filteredTickets = React.useMemo(() => {
+        return tickets.filter((t: any) => {
             const sid = normalizeStateId(t.estadoId);
-            return !["nuevo", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
-        }).length,
-        completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
-    };
+            const isClosed = sid === "ticket_cerrado";
 
-    const filteredTickets = tickets.filter((t: any) => {
-        const sid = normalizeStateId(t.estadoId);
-        const isClosed = sid === "ticket_cerrado";
+            const clienteNombre = (t.cliente?.nombre || t.metadata?.cliente?.nombre || "").toLowerCase();
+            const descripcion = (t.descripcionProblema || "").toLowerCase();
+            const tktCliente = (t.numeroTicketCliente || "").toLowerCase();
+            const search = searchTerm.toLowerCase();
 
-        const clienteNombre = (t.cliente?.nombre || t.metadata?.cliente?.nombre || "").toLowerCase();
-        const descripcion = (t.descripcionProblema || "").toLowerCase();
-        const tktCliente = (t.numeroTicketCliente || "").toLowerCase();
-        const search = searchTerm.toLowerCase();
+            const matchesSearch =
+                clienteNombre.includes(search) ||
+                descripcion.includes(search) ||
+                tktCliente.includes(search);
 
-        const matchesSearch =
-            clienteNombre.includes(search) ||
-            descripcion.includes(search) ||
-            tktCliente.includes(search);
-
-        if (viewMode === "active") return !isClosed && matchesSearch;
-        return isClosed && matchesSearch;
-    });
+            if (viewMode === "active") return !isClosed && matchesSearch;
+            return isClosed && matchesSearch;
+        });
+    }, [tickets, searchTerm, viewMode]);
 
     return (
         <div className={styles.page}>
@@ -225,7 +229,10 @@ export default function TicketsPage() {
             <div className={styles.kanbanFlow}>
                 {TICKET_STATES.filter(s => s.order <= 13).map((estado, index, array) => {
                     const IconComponent = estado.icon;
-                    const ticketsEnEstado = tickets.filter((t: any) => normalizeStateId(t.estadoId) === estado.id).length;
+                    // Optimizar búsqueda de tickets por estado
+                    const ticketsEnEstado = tickets.reduce((count, t) =>
+                        normalizeStateId(t.estadoId) === estado.id ? count + 1 : count, 0
+                    );
 
                     return (
                         <div key={estado.id} className={styles.flowContainer}>

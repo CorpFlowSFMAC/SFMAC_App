@@ -434,7 +434,7 @@ const normalizeTicket = (t: any) => {
 // TICKETS HOOKS
 // ============================================
 
-export function useTickets(statusId?: string, technicianId?: string) {
+export function useTickets(statusId?: string, technicianId?: string, fullData: boolean = false) {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
@@ -448,8 +448,12 @@ export function useTickets(statusId?: string, technicianId?: string) {
                 data = await ticketsAPI.getByTechnician(technicianId);
             } else if (statusId) {
                 data = await ticketsAPI.getByStatus(statusId);
-            } else {
+            } else if (fullData) {
+                // Solo si explícitamente se piden los metadatos pesados (ej: en módulo de pagos si no hay de otra)
                 data = await ticketsAPI.getAll();
+            } else {
+                // 🔥 CARGA LIGERA POR DEFECTO: Omitimos metadatos (imágenes base64) para máxima velocidad
+                data = await ticketsAPI.getSummaryAll();
             }
 
             setTickets((data || []).map(normalizeTicket));
@@ -465,15 +469,28 @@ export function useTickets(statusId?: string, technicianId?: string) {
     useEffect(() => {
         fetchTickets();
 
-        // ⚡ REALTIME: Suscribirse a cambios en tickets
+        // ⚡ REALTIME OPTIMIZADO: Suscribirse a cambios en tickets
+        // En lugar de recargar TODO, podríamos actualizar solo el ticket que cambió
         const channel = supabase
             .channel('public:tickets_changes')
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
                 table: 'tickets'
-            }, () => {
-                fetchTickets();
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    // Para nuevos tickets, quizás conviene recargar para traer las relaciones (clients, branch)
+                    // que Supabase no envía en el payload simple de realtime.
+                    fetchTickets();
+                } else if (payload.eventType === 'UPDATE') {
+                    // Actualizamos localmente si ya lo tenemos
+                    setTickets(prev => prev.map(t =>
+                        t.id === payload.new.id ? normalizeTicket({ ...t, ...payload.new }) : t
+                    ));
+                    // Opcional: fetchTickets() si necesitamos relaciones actualizadas
+                } else if (payload.eventType === 'DELETE') {
+                    setTickets(prev => prev.filter(t => t.id !== payload.old.id));
+                }
             })
             .subscribe();
 
