@@ -327,7 +327,7 @@ export function DiagnosisInfoBar({ ticket }: { ticket: any }) {
 
 export function QuoteAssistantBar({ ticket }: { ticket: any }) {
     // Solo mostrar si hay costos definidos y estamos en etapa de cotización (antes de enviarla)
-    // Lógica de Sugerencia Comercial
+    // LÓgica de Sugerencia Comercial
     const costoMO = parseFloat(ticket.costoManoObra || 0);
     const costoMat = parseFloat(ticket.costoMateriales || 0);
     const costoTotal = costoMO + costoMat;
@@ -371,7 +371,7 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
             const prompt = `
                 Actúas como el Gerente de Presupuestos Senior de SINFIMAC CORP.
 
-                OBJETIVO: Generar un PRESUPUESTO DETALLADO (Desglose de Partidas) basado en el reporte técnico. NO entregues un monto global único. Debes desglosar el trabajo en partidas lógicas de ejecución.
+                OBJETIVO: Generar un PRESUPUESTO DETALLADO (Desglose de Partidas) basado en el reporte técnico. NO entregues un monto global único. Debes desglosar el trabajo en partidas lÓgicas de ejecución.
 
                 DATOS DEL REPORTE:
                 - Cliente: ${ticket.cliente?.nombre || 'Cliente Corporativo'}
@@ -383,13 +383,13 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
                 ${historyContext}
 
                 INTELIGENCIA DE PRECIOS:
-                1. Analiza los EJEMPLOS HISTÓRICOS para entender cómo desglosamos partidas similares.
+                1. Analiza los EJEMPLOS HISTÓRICOS para entender cÓmo desglosamos partidas similares.
                 2. Si no hay ejemplos, aplica la regla general: Precio Venta ≈ Costo Técnico / 0.45 (Margen 55%).
                 3. Usa la evidencia visual (imágenes adjuntas) para afinar el alcance.
                 
                 Instrucciones:
                 1. Identifica las actividades necesarias (Ej. 'Movilización', 'Suministro de repuestos', 'Mano de obra especializada', 'Pruebas').
-                2. Distribuye el Precio de Venta Total entre estas partidas de forma lógica.
+                2. Distribuye el Precio de Venta Total entre estas partidas de forma lÓgica.
                 3. Redacta un alcance técnico profesional para cada partida.
 
                 FORMATO DE SALIDA (JSON ESTRICTO):
@@ -879,7 +879,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
     const costoReferencia = (parseFloat(ticket.costoManoObra || 0) + parseFloat(ticket.costoMateriales || 0));
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
 
-    // Sumar todos los depósitos realizados al técnico
+    // Sumar todos los depÓsitos realizados al técnico
     const totalPagadoTecnico = (ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
     const montoAdelanto = totalPagadoTecnico || ticket.montoAdelanto || 0;
     const pctReal = (montoAdelanto / (costoReferencia || 1)) * 100;
@@ -928,7 +928,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
             </div>
 
             <div className={styles.infoItem} style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                <span className={styles.infoLabel}>Historial de Depósitos ({pctReal.toFixed(0)}%)</span>
+                <span className={styles.infoLabel}>Historial de DepÓsitos ({pctReal.toFixed(0)}%)</span>
                 {(ticket.historialPagosTecnico && ticket.historialPagosTecnico.length > 0) ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {ticket.historialPagosTecnico.map((p: any, idx: number) => (

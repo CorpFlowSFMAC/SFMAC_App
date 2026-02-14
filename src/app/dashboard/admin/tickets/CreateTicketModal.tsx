@@ -251,12 +251,12 @@ export default function CreateTicketModal({ isOpen, onClose, onSave }: CreateTic
 
                                 {selectedClient && (
                                     <>
-                                        <label className={styles.label} style={{ marginTop: '1.5rem' }}>Buscar Agencia, Matriz o Código *</label>
+                                        <label className={styles.label} style={{ marginTop: '1.5rem' }}>Buscar Agencia, Matriz o CÓdigo *</label>
                                         <input
                                             type="text"
                                             value={searchSede}
                                             onChange={(e) => setSearchSede(e.target.value)}
-                                            placeholder="🔍 Nombre o código..."
+                                            placeholder="🔍 Nombre o cÓdigo..."
                                             className={styles.input}
                                         />
 

@@ -65,7 +65,7 @@ export default function TicketsPage() {
         await refreshTickets();
     };
 
-    // 🚀 Lógica de Limpieza de Tickets (One-time)
+    // 🚀 LÓgica de Limpieza de Tickets (One-time)
     useEffect(() => {
         const shouldCleanup = new URLSearchParams(window.location.search).get('cleanup');
         if (shouldCleanup === 'tickets') {

@@ -105,7 +105,7 @@ FORMATO REQUERIDO:
         } catch (parseError) {
             console.error("Error parseando JSON de la IA:", resultText);
             return NextResponse.json(
-                { error: "La IA no devolvió un formato JSON válido.", raw: resultText },
+                { error: "La IA no devolviÓ un formato JSON válido.", raw: resultText },
                 { status: 500 }
             );
         }

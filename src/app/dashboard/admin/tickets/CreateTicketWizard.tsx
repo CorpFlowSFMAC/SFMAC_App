@@ -383,7 +383,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                                     <p className={styles.sedeDistrito}>{sede.distrito}</p>
                                                 )}
                                                 {sede.codigoTopaz && (
-                                                    <span className={styles.sedeCode}>Código: {sede.codigoTopaz}</span>
+                                                    <span className={styles.sedeCode}>CÓdigo: {sede.codigoTopaz}</span>
                                                 )}
                                             </div>
                                         </div>

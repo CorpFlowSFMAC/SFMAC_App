@@ -102,7 +102,7 @@ export default function BranchesTab({ branches, setBranches, clientColor, client
             <div className={styles.toolbar}>
                 <div className={styles.searchBox}>
                     <Search size={20} />
-                    <input type="text" placeholder="Buscar sede por nombre o código..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <input type="text" placeholder="Buscar sede por nombre o cÓdigo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
 
                 <div className={styles.filterBox}>

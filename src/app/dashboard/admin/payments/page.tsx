@@ -262,7 +262,7 @@ export default function PaymentsPage() {
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
         let freshTicket: any;
         try {
-            // 🛡️ FRESH FETCH: Obtener datos frescos de la BD para evitar sobreescrituras póstumas
+            // 🛡️ FRESH FETCH: Obtener datos frescos de la BD para evitar sobreescrituras pÓstumas
             freshTicket = await ticketsAPI.getById(group.ticketId);
         } catch (err) {
             console.error("Error fetching fresh ticket for payment:", err);
@@ -539,7 +539,7 @@ export default function PaymentsPage() {
                                                                                         group,
                                                                                         item,
                                                                                         voucher: reader.result as string,
-                                                                                        message: `¿Confirmar depósito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
+                                                                                        message: `¿Confirmar depÓsito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
                                                                                     });
                                                                                 };
                                                                                 reader.readAsDataURL(file);
@@ -592,7 +592,7 @@ export default function PaymentsPage() {
                                                                             <span className={styles.historyDate}>{new Date(dep.fecha).toLocaleString()}</span>
                                                                         </div>
                                                                         <div className={styles.historyBody}>
-                                                                            <span>{dep.tipo || 'Depósito'}</span>
+                                                                            <span>{dep.tipo || 'DepÓsito'}</span>
                                                                             <strong>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
                                                                             {dep.voucherRef && (
                                                                                 <button

@@ -96,7 +96,7 @@ export default function FixBranchesPage() {
             <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', padding: '32px' }}>
                 <h1 style={{ margin: '0 0 8px 0', fontSize: '24px' }}>🛠️ Reparador de Sedes (MiBanco)</h1>
                 <p style={{ color: '#64748B', marginBottom: '24px' }}>
-                    Esta herramienta sincroniza los campos faltantes (Departamento, Provincia, Distrito, Código Topaz)
+                    Esta herramienta sincroniza los campos faltantes (Departamento, Provincia, Distrito, CÓdigo Topaz)
                     desde el archivo local hacia Supabase para las sedes de MiBanco.
                 </p>
 

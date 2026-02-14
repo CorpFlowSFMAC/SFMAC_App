@@ -93,9 +93,9 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
         e.preventDefault();
         if (isViewOnly) return;
 
-        // Validación adicional del código Topaz
+        // Validación adicional del cÓdigo Topaz
         if (!/^[0-9]{3}$/.test(formData.codigo_topaz)) {
-            alert("❌ El Código Topaz debe tener exactamente 3 dígitos numéricos");
+            alert("❌ El CÓdigo Topaz debe tener exactamente 3 dígitos numéricos");
             return;
         }
 
@@ -155,7 +155,7 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
                         </div>
 
                         <div className={styles.formGroup}>
-                            <label><Hash size={16} /> Código Topaz *</label>
+                            <label><Hash size={16} /> CÓdigo Topaz *</label>
                             <input
                                 type="text"
                                 value={formData.codigo_topaz}
@@ -167,7 +167,7 @@ export default function BranchModal({ isOpen, onClose, onSave, branch, clientCol
                                 placeholder="001"
                                 maxLength={3}
                                 pattern="[0-9]{3}"
-                                title="El código debe tener 3 dígitos numéricos"
+                                title="El cÓdigo debe tener 3 dígitos numéricos"
                                 required
                                 readOnly={isViewOnly}
                             />

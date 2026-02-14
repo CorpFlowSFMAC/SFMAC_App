@@ -16,7 +16,7 @@ interface TechnicianDrawerProps {
 const STEPS = [
     { id: 1, label: "Perfil & Identidad", icon: User },
     { id: 2, label: "Skills & Zona", icon: Wrench },
-    { id: 3, label: "Bóveda Bancaria", icon: CreditCard }
+    { id: 3, label: "BÓveda Bancaria", icon: CreditCard }
 ];
 
 // 🔧 ESPECIALIDADES DESDE SERVICE_TYPES (Sincronizado con tickets)
@@ -79,7 +79,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
     useEffect(() => {
         if (technician) {
-            // Lógica de extracción para técnicos antiguos que solo tienen 'name'
+            // LÓgica de extracción para técnicos antiguos que solo tienen 'name'
             let nombre = technician.first_name || technician.nombre || "";
             let apellido = technician.last_name || technician.apellido || "";
 
@@ -386,10 +386,10 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                         </div>
                     )}
 
-                    {/* PASO 3: Bóveda Bancaria */}
+                    {/* PASO 3: BÓveda Bancaria */}
                     {currentStep === 3 && (
                         <div className={styles.stepContent}>
-                            <h3 className={styles.stepTitle}>💳 Bóveda Bancaria</h3>
+                            <h3 className={styles.stepTitle}>💳 BÓveda Bancaria</h3>
 
                             {/* Premium Preview & Selector Row */}
                             <div className={styles.bankPreviewRow}>
@@ -511,7 +511,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
 
                                 <div className={styles.walletsSection}>
-                                    <div className={styles.sectionLabelMini}>Ecosistema de Pago Móvil</div>
+                                    <div className={styles.sectionLabelMini}>Ecosistema de Pago MÓvil</div>
                                     <div className={styles.walletsRow}>
                                         <div className={`${styles.walletMiniCard} ${formData.yape ? styles.yapeActive : ''}`}>
                                             <div className={styles.walletBrand} style={{ background: '#7C3AED' }}>Y</div>
