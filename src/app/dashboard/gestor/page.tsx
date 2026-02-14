@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle } from "lucide-react";
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
 import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
@@ -70,28 +70,34 @@ export default function GestorDashboard() {
 
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Estadísticas rápidas usando el flujo operativo real
-    const stats = {
-        total: tickets.length,
-        nuevos: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "nuevo").length,
-        enProceso: tickets.filter((t: any) => {
+    // Estadísticas rápidas usando el flujo operativo real - MEMOIZED
+    const stats = useMemo(() => {
+        return {
+            total: tickets.length,
+            nuevos: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "nuevo").length,
+            enProceso: tickets.filter((t: any) => {
+                const sid = normalizeStateId(t.estadoId);
+                return !["nuevo", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+            }).length,
+            completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
+        };
+    }, [tickets]);
+
+
+    const filteredTickets = useMemo(() => {
+        const search = searchTerm.toLowerCase();
+        return tickets.filter((t: any) => {
             const sid = normalizeStateId(t.estadoId);
-            return !["nuevo", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
-        }).length,
-        completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
-    };
+            const isClosed = sid === "ticket_cerrado";
+            const matchesSearch =
+                (t.cliente?.nombre || "").toLowerCase().includes(search) ||
+                (t.descripcionProblema || "").toLowerCase().includes(search) ||
+                (t.numeroTicketCliente || "").toLowerCase().includes(search);
 
-
-    const filteredTickets = tickets.filter((t: any) => {
-        const isClosed = normalizeStateId(t.estadoId) === "ticket_cerrado";
-        const matchesSearch =
-            t.cliente?.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            t.descripcionProblema?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            t.numeroTicketCliente?.toLowerCase().includes(searchTerm.toLowerCase());
-
-        if (viewMode === "active") return !isClosed && matchesSearch;
-        return isClosed && matchesSearch;
-    });
+            if (viewMode === "active") return !isClosed && matchesSearch;
+            return isClosed && matchesSearch;
+        });
+    }, [tickets, searchTerm, viewMode]);
 
     return (
         <div className={styles.page}>
@@ -164,7 +170,10 @@ export default function GestorDashboard() {
             <div className={styles.kanbanFlow}>
                 {TICKET_STATES.filter(s => s.order <= 13).map((estado, index, array) => {
                     const IconComponent = estado.icon;
-                    const ticketsEnEstado = tickets.filter((t: any) => normalizeStateId(t.estadoId) === estado.id).length;
+                    // Optimizar búsqueda de tickets por estado
+                    const ticketsEnEstado = tickets.reduce((count, t) =>
+                        normalizeStateId(t.estadoId) === estado.id ? count + 1 : count, 0
+                    );
 
                     return (
                         <div key={estado.id} className={styles.flowContainer}>
