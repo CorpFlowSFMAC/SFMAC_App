@@ -61,8 +61,9 @@ FORMATO REQUERIDO:
         }
 
         // --- LLAMADA DIRECTA A LA API (BYPASS SDK) ---
-        // Usamos gemini-2.0-flash ya que gemini-1.5-flash no aparece disponible para esta API KEY
-        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        // Intentamos usar gemini-1.5-flash ya que 2.0-flash ha excedido la cuota
+        const modelName = "gemini-1.5-flash";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
         const apiResponse = await fetch(apiUrl, {
             method: 'POST',
