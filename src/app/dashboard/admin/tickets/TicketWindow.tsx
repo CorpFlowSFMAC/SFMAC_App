@@ -98,7 +98,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si está aprobada
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null); // Null forces explicit selection
-    const [userRole, setUserRole] = useState<string | null>(null);
+    // ★ FIX LOOP: Inicialización SÍNCRONA del userRole para evitar que el primer
+    // syncToSupabase dispare con isAdmin=false y revierta el status_id al valor antiguo del servidor.
+    const [userRole, setUserRole] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') return localStorage.getItem('userRole');
+        return null;
+    });
 
     // Toast Notification System
     const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
@@ -184,17 +189,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 const PRE_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
                 const corregidoId2 = (visitConf2 && PRE_STATES.includes(rawId2)) ? 'en_inspeccion' : rawId2;
 
-                setTicketData((prev: any) => ({
-                    ...prev, ...fullTicket, ...meta,
-                    metadata: meta,
-                    estadoId: corregidoId2,
-                    status_id: corregidoId2,
-                    adelantoPagado: meta.adelantoPagado ?? prev.adelantoPagado ?? false,
-                    visitPaymentConfirmed: visitConf2,
-                    solicitudAdelanto: meta.solicitudAdelanto ?? null,
-                    solicitudPagoVisita: visitConf2 ? null : (meta.solicitudPagoVisita ?? null),
-                    historialPagosTecnico: meta.historialPagosTecnico ?? prev.historialPagosTecnico ?? [],
-                }));
+                setTicketData((prev: any) => {
+                    // FIX LOOP: nunca retroceder el estadoId local con un estado del servidor menos avanzado.
+                    const E2_ORDER: Record<string, number> = {
+                        'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
+                        'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
+                        'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
+                        'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
+                        'ticket_cerrado': 12
+                    };
+                    const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
+                    const prevOrder = E2_ORDER[prev.estadoId] ?? 0;
+                    const finalEstadoId = incomingOrder >= prevOrder ? corregidoId2 : prev.estadoId;
+                    return {
+                        ...prev, ...fullTicket, ...meta,
+                        metadata: meta,
+                        estadoId: finalEstadoId,
+                        status_id: finalEstadoId,
+                        adelantoPagado: meta.adelantoPagado ?? prev.adelantoPagado ?? false,
+                        visitPaymentConfirmed: visitConf2,
+                        solicitudAdelanto: meta.solicitudAdelanto ?? null,
+                        solicitudPagoVisita: visitConf2 ? null : (meta.solicitudPagoVisita ?? null),
+                        historialPagosTecnico: meta.historialPagosTecnico ?? prev.historialPagosTecnico ?? [],
+                    };
+                });
             } catch (err) {
                 console.error('Error refetching ticket after Realtime status change:', err);
             }
@@ -237,11 +255,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         if (ticket?.evidenciasEjecucion) setEvidenciasEjecucion(ticket.evidenciasEjecucion);
     }, [serverAdelantoPagado, serverVisitPaymentConfirmed, serverHistorialLen]);
 
+    // userRole ya se inicializa síncronamente arriba. Este efecto solo mantiene
+    // sincronía si el rol cambia en tiempo de ejecución (ej: re-login).
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            setUserRole(localStorage.getItem("userRole"));
+            const role = localStorage.getItem('userRole');
+            if (role !== userRole) setUserRole(role);
         }
-    }, []);
+    }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
     // Estados para Ejecución (Paso 11)
     const [gastos, setGastos] = useState<any[]>(ticketData.gastos || []);
@@ -332,8 +353,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const sourceForPayments = isAdmin ? businessData : ticket;
         const sourceMetadata = isAdmin ? businessData : (ticket.metadata || {});
 
+        // FIX LOOP: NUNCA escribir un status_id menos avanzado que el que ya tiene Supabase.
+        // Siempre ganamos si avanzamos (localOrder >= serverOrder). Si hay regresion local, respetamos el servidor.
+        const STATE_ORDER: Record<string, number> = {
+            'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
+            'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
+            'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
+            'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
+            'ticket_cerrado': 12
+        };
+        const localStateOrder = STATE_ORDER[businessData.estadoId] ?? 0;
+        const serverStateOrder = STATE_ORDER[ticket.status_id] ?? 0;
+        const resolvedStatusId = localStateOrder >= serverStateOrder ? businessData.estadoId : ticket.status_id;
+
         const updates: any = {
-            status_id: isAdmin ? businessData.estadoId : (ticket.status_id || businessData.estadoId),
+            status_id: resolvedStatusId,
             description: businessData.descripcionProblema, // Gestora edita esto
             client_ticket_number: businessData.numeroTicketCliente, // Gestora edita esto
             diagnosis: businessData.diagnostico, // Gestora edita esto
@@ -452,8 +486,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const visitaCost = parseFloat(assignmentData.costoVisita || 0);
         const hasVisitCost = visitaCost > 0;
 
-        // Determinar nuevo estado
-        const newEstadoId = (ticketData.estadoId === 'nuevo' || ticketData.estadoId === 'borrador')
+        // Determinar nuevo estado: avanzar desde cualquier estado pre-inspeccion
+        const PRE_ASSIGNMENT_STATES = ['nuevo', 'borrador', 'pendiente', 'tecnico_asignado'];
+        const newEstadoId = PRE_ASSIGNMENT_STATES.includes(ticketData.estadoId)
             ? (hasVisitCost ? 'esperando_pago_visita' : 'en_inspeccion')
             : ticketData.estadoId;
 
