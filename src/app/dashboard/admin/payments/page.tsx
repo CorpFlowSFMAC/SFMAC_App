@@ -797,7 +797,12 @@ export default function PaymentsPage() {
                                                                             <span style={{ fontSize: '0.78rem', color: '#475569' }}>{dep.tipo || 'Depósito'}</span>
                                                                             <strong style={{ fontSize: '1.05rem', color: '#1E293B', fontFamily: 'monospace' }}>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
                                                                             {dep.voucherRef && (
-                                                                                <button onClick={() => setShowVoucher(dep.voucherRef)}
+                                                                                <button onClick={() => {
+                                                                                    const src = dep.voucherRef?.startsWith('data:image')
+                                                                                        ? dep.voucherRef
+                                                                                        : localStorage.getItem(dep.voucherRef) || dep.voucherRef || '';
+                                                                                    if (src) setShowVoucher(src);
+                                                                                }}
                                                                                     className={styles.viewVoucherBtn}
                                                                                     style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
                                                                                     <Eye size={12} /> Ver Voucher

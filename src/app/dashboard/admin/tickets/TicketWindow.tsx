@@ -5,7 +5,8 @@ import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2 } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
-import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar } from "./TicketSummary";
+import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar } from "./TicketSummary";
+
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { ticketsAPI, branchesAPI } from "@/lib/supabase-api";
@@ -1234,6 +1235,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                             <QuoteAssistantBar ticket={ticketData} />
                             <QuotationInfoBar ticket={ticketData} />
                             <FinancialLiquidationBar ticket={ticketData} />
+                            <PaymentHistoryBar ticket={ticketData} />
                             <UnifiedEvidenceBar ticket={ticketData} />
                             <DocumentationSummaryBar ticket={ticketData} />
                         </div>

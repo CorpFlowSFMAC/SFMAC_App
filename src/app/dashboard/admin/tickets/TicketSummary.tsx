@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X } from "lucide-react";
+import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -941,7 +941,11 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                                 </span>
                                 {(p.voucher || p.voucherRef) && (
                                     <button
-                                        onClick={() => setViewingVoucher(p.voucher || localStorage.getItem(p.voucherRef))}
+                                        onClick={() => {
+                                            const src = p.voucher
+                                                || (p.voucherRef?.startsWith('data:image') ? p.voucherRef : localStorage.getItem(p.voucherRef) || p.voucherRef || '');
+                                            if (src) setViewingVoucher(src);
+                                        }}
                                         style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#6366F1' }}
                                         title="Ver Voucher"
                                     >
@@ -1014,6 +1018,207 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT HISTORY BAR — visible para Admin Y Gestora
+// Muestra todos los pagos confirmados por el admin con vouchers
+// ─────────────────────────────────────────────────────────────────────────────
+export function PaymentHistoryBar({ ticket }: { ticket: any }) {
+    const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
+
+    const pagos: any[] = ticket.historialPagosTecnico || [];
+    if (pagos.length === 0) return null;
+
+    const totalPagado = pagos.reduce((sum: number, p: any) => sum + (p.monto || 0), 0);
+
+    const getTipoBadge = (tipo: string) => {
+        const map: Record<string, { bg: string; color: string; label: string }> = {
+            'Adelanto': { bg: '#DBEAFE', color: '#1D4ED8', label: 'Adelanto' },
+            'Refuerzo': { bg: '#FEF3C7', color: '#92400E', label: 'Refuerzo' },
+            'Liquidación Final': { bg: '#D1FAE5', color: '#065F46', label: 'Liquidación' },
+            'Movilidad / Visita': { bg: '#EDE9FE', color: '#5B21B6', label: 'Movilidad' },
+        };
+        return map[tipo] || { bg: '#F1F5F9', color: '#475569', label: tipo || 'Pago' };
+    };
+
+    const resolveVoucher = (p: any): string => {
+        if (p.voucher && p.voucher.startsWith('data:image')) return p.voucher;
+        if (p.voucherRef) {
+            if (p.voucherRef.startsWith('data:image')) return p.voucherRef;
+            return localStorage.getItem(p.voucherRef) || p.voucherRef || '';
+        }
+        return '';
+    };
+
+    return (
+        <div
+            className={styles.infoBar}
+            style={{
+                background: 'linear-gradient(to right, #F0FDF4, white)',
+                '--bar-accent-color': '#10B981',
+            } as any}
+        >
+            {/* Header */}
+            <div className={styles.titleSection}>
+                <div className={styles.titleIcon} style={{ background: '#10B981' }}>
+                    <Banknote size={18} />
+                </div>
+                <div className={styles.titleText}>
+                    <h3 style={{ color: '#065F46' }}>Pagos al Técnico</h3>
+                    <span style={{ color: '#059669' }}>
+                        {pagos.length} depósito{pagos.length !== 1 ? 's' : ''} confirmado{pagos.length !== 1 ? 's' : ''}
+                    </span>
+                </div>
+            </div>
+
+            <div className={styles.verticalDivider} />
+
+            {/* Lista de pagos */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {pagos.map((p: any, idx: number) => {
+                    const badge = getTipoBadge(p.tipo);
+                    const voucherSrc = resolveVoucher(p);
+                    return (
+                        <div
+                            key={p.id || idx}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '6px 10px',
+                                background: 'white',
+                                borderRadius: '8px',
+                                border: '1px solid #E2E8F0',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                            }}
+                        >
+                            {/* Número */}
+                            <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', minWidth: '16px' }}>
+                                {idx + 1}
+                            </span>
+
+                            {/* Badge tipo */}
+                            <span style={{
+                                fontSize: '9px', fontWeight: 800,
+                                background: badge.bg, color: badge.color,
+                                padding: '2px 7px', borderRadius: '999px',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                {badge.label}
+                            </span>
+
+                            {/* Monto */}
+                            <span style={{ fontSize: '12px', fontWeight: 900, color: '#065F46' }}>
+                                S/ {(p.monto || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            </span>
+
+                            {/* Fecha */}
+                            {p.fecha && (
+                                <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 600 }}>
+                                    {new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                </span>
+                            )}
+
+                            {/* Referencia */}
+                            {p.referencia && (
+                                <span style={{ fontSize: '10px', color: '#64748B', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {p.referencia}
+                                </span>
+                            )}
+
+                            {/* Voucher button */}
+                            {voucherSrc && (
+                                <button
+                                    onClick={() => setViewingVoucher(voucherSrc)}
+                                    title="Ver comprobante"
+                                    style={{
+                                        background: '#EEF2FF',
+                                        border: '1px solid #C7D2FE',
+                                        borderRadius: '6px',
+                                        padding: '3px 8px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        color: '#4F46E5',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <Eye size={11} />
+                                    <span>Voucher</span>
+                                </button>
+                            )}
+
+                            {/* Sin voucher */}
+                            {!voucherSrc && (
+                                <span style={{ fontSize: '9px', color: '#CBD5E1', fontStyle: 'italic' }}>sin comprobante</span>
+                            )}
+
+                            <CheckCircle2 size={12} color="#10B981" style={{ flexShrink: 0 }} />
+                        </div>
+                    );
+                })}
+
+                {/* Total */}
+                <div style={{
+                    display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+                    gap: '8px', paddingTop: '4px', borderTop: '1px dashed #BBF7D0', marginTop: '2px'
+                }}>
+                    <TrendingUp size={12} color="#059669" />
+                    <span style={{ fontSize: '11px', color: '#059669', fontWeight: 700 }}>Total transferido:</span>
+                    <span style={{ fontSize: '13px', fontWeight: 900, color: '#065F46' }}>
+                        S/ {totalPagado.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    </span>
+                </div>
+            </div>
+
+            {/* Lightbox voucher */}
+            {viewingVoucher && (
+                <div
+                    style={{
+                        position: 'fixed', inset: 0,
+                        background: 'rgba(0,0,0,0.88)',
+                        zIndex: 1000000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'zoom-out',
+                        backdropFilter: 'blur(4px)',
+                    }}
+                    onClick={() => setViewingVoucher(null)}
+                >
+                    <div
+                        style={{ position: 'relative', maxWidth: '88vw', maxHeight: '88vh' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <img
+                            src={viewingVoucher}
+                            alt="Comprobante de pago"
+                            style={{
+                                maxWidth: '100%', maxHeight: '85vh',
+                                borderRadius: '14px',
+                                boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+                            }}
+                        />
+                        <button
+                            style={{
+                                position: 'absolute', top: '-18px', right: '-18px',
+                                background: 'white', border: 'none', borderRadius: '50%',
+                                width: '38px', height: '38px',
+                                cursor: 'pointer', display: 'flex',
+                                alignItems: 'center', justifyContent: 'center',
+                                boxShadow: '0 4px 15px rgba(0,0,0,0.35)',
+                            }}
+                            onClick={() => setViewingVoucher(null)}
+                        >
+                            <X size={22} color="#1E293B" />
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 interface TicketSummaryProps {
     ticket: any;
     onProceed: () => void;
@@ -1035,6 +1240,7 @@ export function TicketSummary({ ticket, onProceed }: TicketSummaryProps) {
             <QuoteAssistantBar ticket={ticket} />
             <QuotationInfoBar ticket={ticket} />
             <FinancialLiquidationBar ticket={ticket} />
+            <PaymentHistoryBar ticket={ticket} />
             <UnifiedEvidenceBar ticket={ticket} />
             <DocumentationSummaryBar ticket={ticket} />
 
