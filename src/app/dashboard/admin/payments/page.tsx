@@ -1,29 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
-    Wallet,
-    Search,
-    Filter,
-    History,
-    CheckCircle2,
-    Clock,
-    ArrowUpRight,
-    DollarSign,
-    CreditCard,
-    ChevronDown,
-    ChevronUp,
-    FileText,
-    Calculator,
-    AlertCircle,
-    TrendingUp,
-    CalendarDays,
-    Building2,
-    User,
-    Smartphone,
-    Upload,
-    Eye,
-    X
+    Wallet, History, CheckCircle2, Clock, ArrowUpRight,
+    DollarSign, CreditCard, ChevronDown, ChevronUp,
+    TrendingUp, Building2, User, Smartphone, Upload, Eye, X,
+    AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw
 } from "lucide-react";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
@@ -54,7 +36,7 @@ interface PaymentTicketGroup {
         plin?: string;
     };
     montoPactado: number;
-    montoAdelantado: number; // Total Pagado
+    montoAdelantado: number;
     saldoPendiente: number;
     items: PaymentItem[];
     historialDepositos: any[];
@@ -63,11 +45,35 @@ interface PaymentTicketGroup {
 }
 
 // ─────────────────────────────────────────────────────────
+// Helper: normaliza la clave de mes en formato "YYYY-MM" para
+// evitar inconsistencias de toLocaleString entre entornos/navegadores
+// ─────────────────────────────────────────────────────────
+function getMonthKey(dateStr: string): string {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'invalido';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+}
+
+// Formatea clave YYYY-MM como "Febrero 2026" en español
+function formatMonthKey(key: string): string {
+    const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const [y, m] = key.split('-');
+    const idx = parseInt(m, 10) - 1;
+    return `${MONTHS[idx] || m} ${y}`;
+}
+
+function getCurrentMonthKey(): string {
+    return getMonthKey(new Date().toISOString());
+}
+
+// ─────────────────────────────────────────────────────────
 // Helper: extrae campos de pago del metadata y del ticket
 // ─────────────────────────────────────────────────────────
 function flattenTicketForPayments(t: any) {
     if (!t) return t;
-    // metadata puede tener anidamiento doble (bug conocido de migración)
     let meta = t.metadata || {};
     while (meta.metadata && typeof meta.metadata === "object") {
         meta = { ...meta, ...meta.metadata };
@@ -75,13 +81,11 @@ function flattenTicketForPayments(t: any) {
     }
     return {
         ...t,
-        // Exponer campos de pago al nivel raíz del objeto
         estadoId: normalizeStateId(t.status_id || meta.estadoId || "nuevo"),
         numeroTicketCliente: t.client_ticket_number || meta.numeroTicketCliente || "",
         costoManoObra: parseFloat(t.labor_cost ?? meta.costoManoObra ?? 0),
         costoMateriales: parseFloat(t.materials_cost ?? meta.costoMateriales ?? 0),
         costoVisita: parseFloat(t.visit_cost ?? meta.costoVisita ?? meta.costoPasaje ?? 0),
-        // Campos que viven SOLO en metadata:
         solicitudAdelanto: meta.solicitudAdelanto ?? null,
         solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
         solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
@@ -108,19 +112,12 @@ function flattenTicketForPayments(t: any) {
             yape: t.technicians?.yape_number || meta.tecnico?.yape,
             plin: t.technicians?.plin_number || meta.tecnico?.plin,
         },
-        cliente: {
-            nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente',
-        },
-        sede: {
-            nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede',
-        },
+        cliente: { nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente' },
+        sede: { nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede' },
     };
 }
 
 export default function PaymentsPage() {
-    // ⚡ FUENTE PROPIA CON METADATA: el contexto global usa getSummaryAll() sin metadata.
-    // El módulo de pagos necesita metadata completa (solicitudes, historiales de pago).
-    // Por eso tiene su propio fetch + canal Realtime independiente.
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -136,33 +133,23 @@ export default function PaymentsPage() {
         }
     }, []);
 
-    // Carga inicial
     useEffect(() => { fetchPaymentTickets(); }, [fetchPaymentTickets]);
 
-    // ⚡ Suscripción Realtime propia del módulo de pagos
-    // Cuando la Gestora guarda una solicitud de pago, el metadata del ticket cambia
-    // en Supabase → el canal dispara → refetch con metadata → aparece en pantalla.
     useEffect(() => {
         const channel = supabase
             .channel('payments:tickets_realtime')
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'tickets' },
-                () => {
-                    // Re-fetch completo para obtener metadata actualizado
-                    fetchPaymentTickets();
-                }
+                () => { fetchPaymentTickets(); }
             )
             .subscribe();
-
         return () => { supabase.removeChannel(channel); };
     }, [fetchPaymentTickets]);
 
     const refresh = fetchPaymentTickets;
 
-    // Función de actualización local: actualiza Supabase y re-fetcha
     const updateTicket = React.useCallback(async (id: string, updates: any) => {
         const updated = await ticketsAPI.update(id, updates);
-        // El canal Realtime disparará el re-fetch automáticamente
         return updated;
     }, []);
 
@@ -175,52 +162,50 @@ export default function PaymentsPage() {
         voucher?: string | null;
         message: string;
     } | null>(null);
-    const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
     const [showVoucher, setShowVoucher] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
-    const [userRole, setUserRole] = useState<string | null>(null);
+    // ★ FIX: monthlyTotals usa claves YYYY-MM (no locale) para evitar inconsistencias
+    const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
 
-    useEffect(() => {
-        const role = localStorage.getItem("userRole");
-        setUserRole(role);
-    }, []);
+    const [userRole, setUserRole] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') return localStorage.getItem('userRole');
+        return null;
+    });
 
-    // 🔄 Procesar tickets a grupos de pago cuando cambia la lista
     useEffect(() => {
         if (tickets.length > 0) {
             processTicketsToGroups(tickets);
         } else if (!loading) {
             setPaymentGroups([]);
+            setMonthlyTotals({});
         }
     }, [tickets, loading]);
 
     if (userRole && userRole !== 'admin') {
         return (
-            <div className={styles.emptyState} style={{ height: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ height: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '1rem' }}>
                 <AlertCircle size={64} color="#EF4444" />
-                <h1 style={{ marginTop: '1rem', color: '#1E293B' }}>Acceso Restringido</h1>
-                <p style={{ color: '#64748B', maxWidth: '400px', textAlign: 'center', marginTop: '0.5rem' }}>
-                    Lo sentimos, este módulo de Tesorería es de uso exclusivo para el Administrador de SINFIMAC.
+                <h1 style={{ color: '#1E293B' }}>Acceso Restringido</h1>
+                <p style={{ color: '#64748B', maxWidth: '400px', textAlign: 'center' }}>
+                    Este módulo de Tesorería es de uso exclusivo para el Administrador de SINFIMAC.
                 </p>
-                <button
-                    onClick={() => window.location.href = '/dashboard/gestor'}
-                    style={{ marginTop: '2rem', padding: '12px 24px', background: '#3B82F6', color: 'white', borderRadius: '12px', border: 'none', fontWeight: 800, cursor: 'pointer' }}
-                >
+                <button onClick={() => window.location.href = '/dashboard/gestor'}
+                    style={{ padding: '12px 24px', background: '#3B82F6', color: 'white', borderRadius: '12px', border: 'none', fontWeight: 800, cursor: 'pointer' }}>
                     Volver al Panel Operativo
                 </button>
             </div>
         );
     }
 
+    // ★ FIX CORE: Calcula totales mensuales usando claves YYYY-MM
     const calculateMonthlyTotalsFromTickets = (allTickets: any[]) => {
         const totals: { [key: string]: number } = {};
         allTickets.forEach(ticket => {
             (ticket.historialPagosTecnico || []).forEach((p: any) => {
                 if (p.monto && p.fecha && p.estado !== 'anulado') {
-                    const date = new Date(p.fecha);
-                    const k = date.toLocaleString('es-PE', { month: 'long', year: 'numeric' });
-                    const formattedKey = k.charAt(0).toUpperCase() + k.slice(1);
-                    totals[formattedKey] = (totals[formattedKey] || 0) + p.monto;
+                    const key = getMonthKey(p.fecha);
+                    totals[key] = (totals[key] || 0) + parseFloat(p.monto);
                 }
             });
         });
@@ -237,8 +222,6 @@ export default function PaymentsPage() {
                 const costoManoObra = parseFloat(ticket.costoManoObra || 0);
                 const costoMateriales = parseFloat(ticket.costoMateriales || 0);
                 const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
-
-                // ★ FIX: El monto pactado total debe incluir MO + MATERIALES + VISITA/PASAJES
                 const montoPactadoBase = costoManoObra + costoMateriales + visitCost;
 
                 const pagos = ticket.historialPagosTecnico || [];
@@ -250,7 +233,6 @@ export default function PaymentsPage() {
                     return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
                 })?.voucherRef;
 
-                // techData ya está normalizado por flattenTicketForPayments al nivel raíz
                 const techData = {
                     id: ticket.tecnico?.id,
                     nombre: ticket.tecnico?.nombre || 'Sin asignar',
@@ -268,15 +250,13 @@ export default function PaymentsPage() {
                 if (isRelevantForAdelanto || ticket.adelantoPagado || ticket.solicitudAdelanto) {
                     const pct = ticket.solicitudAdelanto?.porcentaje || ticket.porcentajeAdelanto || 0.5;
                     const adelantoMonto = ticket.solicitudAdelanto?.monto || (montoPactadoBase * pct);
-                    const adelantoRealizado = ticket.adelantoPagado;
-
-                    if (adelantoMonto > 0 || adelantoRealizado) {
+                    if (adelantoMonto > 0 || ticket.adelantoPagado) {
                         items.push({
                             id: `${ticket.id}_adelanto`,
                             tipo: 'Adelanto',
                             monto: adelantoMonto,
-                            estado: adelantoRealizado ? 'pagado' : 'pendiente',
-                            fecha: ticket.solicitudAdelanto?.fecha || ticket.fechaAprobacion || ticket.fechaAprobacionCotizacion || new Date().toISOString()
+                            estado: ticket.adelantoPagado ? 'pagado' : 'pendiente',
+                            fecha: ticket.solicitudAdelanto?.fecha || ticket.fechaAprobacion || new Date().toISOString()
                         });
                     }
                 }
@@ -295,41 +275,35 @@ export default function PaymentsPage() {
                 // 3. Liquidación Final
                 const hasSolicitudLiquidacion = !!ticket.solicitudLiquidacion;
                 const isRelevantForFinal = ['documentacion_enviada', 'por_liquidar', 'ticket_cerrado'].includes(ticket.estadoId);
-
                 if (isRelevantForFinal || hasSolicitudLiquidacion) {
                     const saldoReal = montoPactadoBase - totalPagado;
                     const pagoFinal = pagos.find((p: any) => p.referencia?.includes("Liquidación") || p.tipo === "Liquidación Final");
-
                     const montoSolicitadoFinal = ticket.solicitudLiquidacion?.monto || (ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal);
-
                     if (montoSolicitadoFinal > 0 || ticket.estadoId === 'ticket_cerrado' || hasSolicitudLiquidacion) {
                         items.push({
                             id: `${ticket.id}_final`,
                             tipo: 'Liquidación Final',
                             monto: montoSolicitadoFinal,
                             estado: ticket.estadoId === 'ticket_cerrado' ? 'pagado' : 'pendiente',
-                            fecha: ticket.solicitudLiquidacion?.fecha || ticket.fechaValidacionDocumental || ticket.fechaPagoFinal || new Date().toISOString()
+                            fecha: ticket.solicitudLiquidacion?.fecha || ticket.fechaValidacionDocumental || new Date().toISOString()
                         });
                     }
                 }
 
-                // 4. Pago de Visita / Movilidad
+                // 4. Movilidad / Visita
                 if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed || ticket.costoPasaje) {
                     const montoVisita = parseFloat(ticket.solicitudPagoVisita?.monto || ticket.costoVisita || ticket.costoPasaje || 0);
-                    const itemVisita = {
-                        id: `${ticket.id}_visita`,
-                        tipo: 'Movilidad / Visita' as const,
-                        monto: montoVisita,
-                        estado: ticket.visitPaymentConfirmed ? 'pagado' : 'pendiente' as 'pendiente' | 'pagado',
-                        fecha: ticket.solicitudPagoVisita?.fecha || ticket.fechaPagoVisita || ticket.fechaAsignacion || new Date().toISOString()
-                    };
-
-                    if (itemVisita.monto > 0) {
-                        items.push(itemVisita);
+                    if (montoVisita > 0) {
+                        items.push({
+                            id: `${ticket.id}_visita`,
+                            tipo: 'Movilidad / Visita' as const,
+                            monto: montoVisita,
+                            estado: ticket.visitPaymentConfirmed ? 'pagado' : 'pendiente' as 'pendiente' | 'pagado',
+                            fecha: ticket.solicitudPagoVisita?.fecha || ticket.fechaPagoVisita || ticket.fechaAsignacion || new Date().toISOString()
+                        });
                     }
                 }
 
-                // Siempre incluir si hay items O si hay historial de depósitos (para no perder el registro)
                 if (items.length > 0 || pagos.length > 0) {
                     allGroups.push({
                         ticketId: ticket.id,
@@ -340,26 +314,22 @@ export default function PaymentsPage() {
                         montoPactado: montoPactadoBase,
                         montoAdelantado: totalPagado,
                         saldoPendiente: montoPactadoBase - totalPagado,
-                        items: items,
+                        items,
                         historialDepositos: pagos,
                         costoVisita: visitCost,
-                        voucherVisita: voucherVisita
+                        voucherVisita
                     });
                 }
-
             } catch (e) {
                 console.error("Error processing ticket for payments:", e);
             }
         });
 
-        // Ordenar
         allGroups.sort((a, b) => {
             const hasPendingA = a.items.some(i => i.estado === 'pendiente');
             const hasPendingB = b.items.some(i => i.estado === 'pendiente');
             if (hasPendingA !== hasPendingB) return hasPendingA ? -1 : 1;
-            const lastDateA = a.items.reduce((max, i) => i.fecha > max ? i.fecha : max, "");
-            const lastDateB = b.items.reduce((max, i) => i.fecha > max ? i.fecha : max, "");
-            return new Date(lastDateB).getTime() - new Date(lastDateA).getTime();
+            return 0;
         });
 
         setPaymentGroups(allGroups);
@@ -369,22 +339,15 @@ export default function PaymentsPage() {
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
         let freshTicket: any;
         try {
-            // 🛡️ FRESH FETCH: Obtener datos frescos de la BD para evitar sobreescrituras pÓstumas
             freshTicket = await ticketsAPI.getById(group.ticketId);
         } catch (err) {
-            console.error("Error fetching fresh ticket for payment:", err);
-            // Fallback al estado local si falla la red (riesgoso pero necesario)
             freshTicket = tickets.find(t => t.id === group.ticketId);
         }
-
         if (!freshTicket) return;
 
-        // Base metadata from source of truth
         const baseMetadata = freshTicket.metadata || {};
-
-        const paymentId = Date.now().toString();
         const nuevoPago = {
-            id: paymentId,
+            id: Date.now().toString(),
             monto: item.monto,
             fecha: new Date().toISOString(),
             tipo: item.tipo,
@@ -393,26 +356,15 @@ export default function PaymentsPage() {
             voucherRef: voucherBase64
         };
 
-        // Actualizar historial en metadata
         const historialPagosTecnico = [...(baseMetadata.historialPagosTecnico || []), nuevoPago];
-
-        // Construir nuevo metadata preservando TODO lo que ya existía (Merge Strategy)
-        const newMetadata = {
-            ...baseMetadata,
-            historialPagosTecnico
-        };
-
-        const updates: any = {
-            metadata: newMetadata
-        };
+        const newMetadata: any = { ...baseMetadata, historialPagosTecnico };
+        const updates: any = { metadata: newMetadata };
 
         if (item.tipo === 'Adelanto') {
             updates.status_id = 'en_ejecucion';
             newMetadata.estadoId = 'en_ejecucion';
             updates.execution_date = new Date().toISOString();
             newMetadata.fechaInicioEjecucion = updates.execution_date;
-
-            // 🔥 CRÍTICO: Bandera explícita
             newMetadata.adelantoPagado = true;
             newMetadata.fechaPagoAdelanto = updates.execution_date;
             newMetadata.solicitudAdelanto = null;
@@ -425,8 +377,7 @@ export default function PaymentsPage() {
             newMetadata.fechaPagoFinal = updates.closure_date;
             newMetadata.solicitudLiquidacion = null;
         } else if (item.tipo === 'Movilidad / Visita') {
-            // ★ FIX: Avanzar a en_inspeccion desde CUALQUIER estado pre-inspección
-            const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador'];
+            const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
             if (preInspectionStates.includes(freshTicket.status_id)) {
                 updates.status_id = 'en_inspeccion';
                 newMetadata.estadoId = 'en_inspeccion';
@@ -440,7 +391,7 @@ export default function PaymentsPage() {
             await updateTicket(group.ticketId, updates);
             await refresh();
         } catch (err) {
-            console.error("Error confirming payment in Supabase:", err);
+            console.error("Error confirming payment:", err);
             alert("Error al procesar el pago. Por favor intente de nuevo.");
         }
     };
@@ -451,90 +402,204 @@ export default function PaymentsPage() {
         return localStorage.getItem(ref) || "";
     };
 
+    // ─── Métricas ──────────────────────────────────────────────
+    const currentMonthKey = getCurrentMonthKey();
+    const egresosEsteMes = monthlyTotals[currentMonthKey] || 0;
+    const totalPagadoHistorico = Object.values(monthlyTotals).reduce((s, v) => s + v, 0);
+
+    const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente').length, 0);
+    const totalPendingAmount = paymentGroups.reduce((acc, g) =>
+        acc + g.items.filter(i => i.estado === 'pendiente').reduce((s, i) => s + i.monto, 0), 0);
+
     const filteredGroups = paymentGroups.filter(g => {
         if (filter === 'todos') return true;
-        if (filter === 'pendiente') {
-            return g.items.some(i => i.estado === 'pendiente');
-        }
-        if (filter === 'pagado') {
-            // Un grupo se considera pagado si tiene items pagados O si tiene historial de depósitos
-            return g.items.some(i => i.estado === 'pagado') || g.historialDepositos.length > 0;
-        }
+        if (filter === 'pendiente') return g.items.some(i => i.estado === 'pendiente');
+        if (filter === 'pagado') return g.items.some(i => i.estado === 'pagado') || g.historialDepositos.length > 0;
         return false;
     });
 
-    const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente').length, 0);
-    const totalPendingAmount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente').reduce((sum, i) => sum + i.monto, 0), 0);
+    const TIPO_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
+        'Adelanto': { color: '#2563EB', bg: '#EFF6FF', label: 'Adelanto' },
+        'Refuerzo': { color: '#B45309', bg: '#FEF3C7', label: 'Refuerzo' },
+        'Liquidación Final': { color: '#047857', bg: '#ECFDF5', label: 'Liquidación' },
+        'Movilidad / Visita': { color: '#7C3AED', bg: '#F5F3FF', label: 'Movilidad' },
+    };
 
     return (
         <div className={styles.paymentsContainer}>
-            <header className={styles.header}>
-                <div className={styles.titleSection}>
-                    <h1>Módulo de Pagos y Tesorería</h1>
-                    <p>Gestión centralizada de transferencias y control financiero.</p>
+
+            {/* ─── HEADER PREMIUM ──────────────────────────────── */}
+            <header style={{
+                background: 'linear-gradient(135deg, #0F172A 0%, #1E3A5F 50%, #0EA5E9 100%)',
+                borderRadius: '20px',
+                padding: '28px 32px',
+                marginBottom: '28px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: '0 20px 40px -12px rgba(14,165,233,0.35)'
+            }}>
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+                        <div style={{ width: 42, height: 42, background: 'rgba(255,255,255,0.15)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Banknote size={22} color="white" />
+                        </div>
+                        <h1 style={{ margin: 0, fontSize: '1.7rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em' }}>
+                            Módulo de Pagos y Tesorería
+                        </h1>
+                    </div>
+                    <p style={{ margin: 0, color: 'rgba(255,255,255,0.65)', fontSize: '0.92rem' }}>
+                        Gestión centralizada de transferencias · Control financiero en tiempo real
+                    </p>
                 </div>
+                <button
+                    onClick={async () => { setRefreshing(true); await refresh(); setRefreshing(false); }}
+                    style={{
+                        background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '12px', padding: '10px 18px', color: 'white', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.85rem',
+                        backdropFilter: 'blur(8px)', transition: 'all 0.2s'
+                    }}
+                >
+                    <RefreshCw size={16} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                    Actualizar
+                </button>
             </header>
 
-            <div className={styles.statsRow}>
-                <div className={styles.statCard}>
-                    <div className={`${styles.statIcon} ${styles.blueIcon}`}><Wallet size={24} /></div>
-                    <div className={styles.statInfo}>
-                        <span className={styles.statLabel}>Pendientes de Pago</span>
-                        <span className={styles.statValue}>{pendingCount}</span>
+            {/* ─── STAT CARDS ──────────────────────────────────── */}
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '16px',
+                marginBottom: '28px'
+            }}>
+                {/* Pendientes de Pago */}
+                <div style={{
+                    background: 'white', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #FEE2E2', boxShadow: '0 4px 12px rgba(239,68,68,0.08)',
+                    display: 'flex', alignItems: 'center', gap: '16px'
+                }}>
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#FEE2E2,#FECACA)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Clock size={22} color="#DC2626" />
+                    </div>
+                    <div>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pendientes de Pago</p>
+                        <p style={{ margin: '4px 0 0', fontSize: '2rem', fontWeight: 900, color: '#DC2626', lineHeight: 1 }}>{pendingCount}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>solicitudes activas</p>
                     </div>
                 </div>
-                <div className={styles.statCard}>
-                    <div className={`${styles.statIcon} ${styles.greenIcon}`}><DollarSign size={24} /></div>
-                    <div className={styles.statInfo}>
-                        <span className={styles.statLabel}>Monto por Desembolsar</span>
-                        <span className={styles.statValue}>S/ {totalPendingAmount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+
+                {/* Monto por Desembolsar */}
+                <div style={{
+                    background: 'white', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #DBEAFE', boxShadow: '0 4px 12px rgba(37,99,235,0.08)',
+                    display: 'flex', alignItems: 'center', gap: '16px'
+                }}>
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#DBEAFE,#BFDBFE)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <DollarSign size={22} color="#2563EB" />
+                    </div>
+                    <div>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Por Desembolsar</p>
+                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>
+                            S/ {totalPendingAmount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>monto pendiente total</p>
                     </div>
                 </div>
-                <div className={styles.statCard}>
-                    <div className={`${styles.statIcon} ${styles.purpleIcon}`}><TrendingUp size={24} /></div>
-                    <div className={styles.statInfo}>
-                        <span className={styles.statLabel}>Egresos del Mes</span>
-                        <span className={styles.statValue}>
-                            S/ {(monthlyTotals[new Date().toLocaleString('es-PE', { month: 'long', year: 'numeric' }).charAt(0).toUpperCase() + new Date().toLocaleString('es-PE', { month: 'long', year: 'numeric' }).slice(1)] || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                        </span>
+
+                {/* Egresos del Mes ACTUAL — ★ FIX: usa clave YYYY-MM */}
+                <div style={{
+                    background: 'white', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #D1FAE5', boxShadow: '0 4px 12px rgba(5,150,105,0.08)',
+                    display: 'flex', alignItems: 'center', gap: '16px'
+                }}>
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#D1FAE5,#A7F3D0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CalendarCheck size={22} color="#059669" />
+                    </div>
+                    <div>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            Egresos {formatMonthKey(currentMonthKey)}
+                        </p>
+                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#059669', lineHeight: 1 }}>
+                            S/ {egresosEsteMes.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>pagado al técnico este mes</p>
+                    </div>
+                </div>
+
+                {/* Total Histórico */}
+                <div style={{
+                    background: 'white', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #EDE9FE', boxShadow: '0 4px 12px rgba(124,58,237,0.08)',
+                    display: 'flex', alignItems: 'center', gap: '16px'
+                }}>
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#EDE9FE,#DDD6FE)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <BarChart3 size={22} color="#7C3AED" />
+                    </div>
+                    <div>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Histórico</p>
+                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#7C3AED', lineHeight: 1 }}>
+                            S/ {totalPagadoHistorico.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>acumulado total de pagos</p>
                     </div>
                 </div>
             </div>
 
+            {/* ─── TABLA PRINCIPAL ─────────────────────────────── */}
             <div className={styles.tableCard}>
                 <div className={styles.tableHeader}>
-                    <h2><Clock size={18} /> Peticiones de Fondos</h2>
-                    <div className={styles.pills}>
-                        <div className={`${styles.pill} ${filter === 'todos' ? styles.pillActive : ''}`} onClick={() => setFilter('todos')}>Todos</div>
-                        <div className={`${styles.pill} ${filter === 'pendiente' ? styles.pillActive : ''}`} onClick={() => setFilter('pendiente')}>Pendientes</div>
-                        <div className={`${styles.pill} ${filter === 'pagado' ? styles.pillActive : ''}`} onClick={() => setFilter('pagado')}>Pagados</div>
+                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E293B' }}>
+                        <Wallet size={18} color="#3B82F6" />
+                        Peticiones de Fondos
+                        <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
+                            {filteredGroups.length} registros
+                        </span>
+                    </h2>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {(['todos', 'pendiente', 'pagado'] as const).map(f => (
+                            <button key={f} onClick={() => setFilter(f)}
+                                style={{
+                                    padding: '7px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                                    fontWeight: 700, fontSize: '0.8rem', transition: 'all 0.2s',
+                                    background: filter === f ? '#3B82F6' : '#F1F5F9',
+                                    color: filter === f ? 'white' : '#64748B',
+                                    boxShadow: filter === f ? '0 4px 10px rgba(59,130,246,0.3)' : 'none'
+                                }}>
+                                {f.charAt(0).toUpperCase() + f.slice(1)}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
                 <div className={styles.tableBody}>
                     {loading ? (
-                        <div className={styles.emptyState}>
-                            <Clock size={48} className={styles.pulseAnimation} />
-                            <p>Cargando peticiones de fondos desde la nube...</p>
+                        <div className={styles.emptyState} style={{ padding: '60px 20px' }}>
+                            <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s ease-in-out infinite' }}>
+                                <Clock size={28} color="#3B82F6" />
+                            </div>
+                            <p style={{ color: '#64748B', fontWeight: 600 }}>Cargando datos desde Supabase...</p>
                         </div>
                     ) : (
                         <table className={styles.paymentsTable}>
                             <thead>
                                 <tr>
-                                    <th style={{ width: '20%' }}># TICKET CLIENTE / SEDE</th>
-                                    <th style={{ width: '25%' }}>BENEFICIARIO (TÉCNICO)</th>
-                                    <th style={{ width: '20%' }}>ESTADO FINANCIERO</th>
-                                    <th style={{ width: '25%' }}>SOLICITUD ACTUAL</th>
-                                    <th style={{ width: '10%' }}>ACCIONES</th>
+                                    <th style={{ width: '20%' }}># Ticket / Sede</th>
+                                    <th style={{ width: '25%' }}>Beneficiario (Técnico)</th>
+                                    <th style={{ width: '20%' }}>Estado Financiero</th>
+                                    <th style={{ width: '25%' }}>Solicitud Actual</th>
+                                    <th style={{ width: '10%', textAlign: 'center' }}>Acción</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredGroups.length === 0 ? (
                                     <tr>
                                         <td colSpan={5}>
-                                            <div className={styles.emptyState}>
-                                                <AlertCircle size={48} />
-                                                <p>No hay solicitudes en esta categoría.</p>
+                                            <div className={styles.emptyState} style={{ padding: '60px 20px' }}>
+                                                <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <CheckCircle2 size={32} color="#10B981" />
+                                                </div>
+                                                <p style={{ color: '#64748B', fontWeight: 600 }}>No hay solicitudes en esta categoría.</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -542,154 +607,169 @@ export default function PaymentsPage() {
                                     filteredGroups.map((group) => (
                                         <React.Fragment key={group.ticketId}>
                                             <tr className={`${styles.paymentRow} ${group.items.some(i => i.estado === 'pendiente') ? styles.rowPending : styles.rowPaid}`}>
+
+                                                {/* Col 1: Ticket */}
                                                 <td>
-                                                    <div className={styles.ticketCell}>
-                                                        <span className={styles.ticketId}>{group.ticketNum}</span>
-                                                        <div className={styles.clientInfo}>
-                                                            <Building2 size={12} />
-                                                            <strong>{group.cliente}</strong>
-                                                            <span className={styles.sedeText}>({group.sede})</span>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <span style={{ fontFamily: 'monospace', fontWeight: 900, color: '#2563EB', background: '#EFF6FF', padding: '3px 10px', borderRadius: '6px', fontSize: '0.85rem', width: 'fit-content' }}>
+                                                            {group.ticketNum}
+                                                        </span>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem' }}>
+                                                            <Building2 size={11} color="#3B82F6" />
+                                                            <strong style={{ color: '#1E293B' }}>{group.cliente}</strong>
                                                         </div>
+                                                        <span style={{ color: '#64748B', fontSize: '0.78rem', paddingLeft: '16px' }}>{group.sede}</span>
                                                     </div>
                                                 </td>
-                                                <td>
-                                                    <div className={styles.techCell}>
-                                                        <div className={styles.techNameRow}>
-                                                            <User size={14} />
-                                                            <span>{group.tecnico.nombre}</span>
-                                                        </div>
-                                                        <div className={styles.bankDetailBox}>
-                                                            <div className={styles.bankRow} style={{ justifyContent: 'space-between', width: '100%' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                    <CreditCard size={12} />
-                                                                    <span className={styles.bankName}>{group.tecnico.banco}</span>
-                                                                </div>
-                                                                {(group.tecnico.yape || group.tecnico.plin) && (
-                                                                    <div className={styles.walletRow} style={{ gap: '4px' }}>
-                                                                        {group.tecnico.yape && <span className={styles.walletBadgeYape}><Smartphone size={10} /> {group.tecnico.yape}</span>}
-                                                                        {group.tecnico.plin && <span className={styles.walletBadgePlin}><Smartphone size={10} /> {group.tecnico.plin}</span>}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className={styles.accountNumbers}>
-                                                                <span>CTA: {group.tecnico.numeroCuenta || '---'}</span>
-                                                                {group.tecnico.cci && <span>CCI: {group.tecnico.cci}</span>}
-                                                            </div>
 
-                                                            {/* Visualización de Costo de Visita y Voucher */}
+                                                {/* Col 2: Técnico */}
+                                                <td>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, color: '#1F2937', fontSize: '0.88rem' }}>
+                                                            <User size={13} color="#7C3AED" />
+                                                            {group.tecnico.nombre}
+                                                        </div>
+                                                        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '7px 9px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>
+                                                                    <CreditCard size={11} />
+                                                                    {group.tecnico.banco}
+                                                                </div>
+                                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                                    {group.tecnico.yape && <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: '8px' }}>Yape {group.tecnico.yape}</span>}
+                                                                    {group.tecnico.plin && <span style={{ background: '#0EA5E9', color: 'white', fontSize: '0.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: '8px' }}>Plin {group.tecnico.plin}</span>}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: '#64748B' }}>
+                                                                <div>CTA: {group.tecnico.numeroCuenta}</div>
+                                                                {group.tecnico.cci && group.tecnico.cci !== '---' && <div>CCI: {group.tecnico.cci}</div>}
+                                                            </div>
                                                             {group.costoVisita && group.costoVisita > 0 && (
-                                                                <div className={styles.visitCostRow}>
-                                                                    <div className={styles.visitLabelRow}>
-                                                                        <ArrowUpRight size={12} />
-                                                                        <span>Costo Visita: <strong>S/ {group.costoVisita.toFixed(2)}</strong></span>
-                                                                    </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.73rem', color: '#7C3AED', fontWeight: 700, borderTop: '1px dashed #E2E8F0', paddingTop: '4px' }}>
+                                                                    <ArrowUpRight size={11} />
+                                                                    Visita: S/ {group.costoVisita.toFixed(2)}
                                                                     {group.voucherVisita && (
-                                                                        <div className={styles.voucherThumbBox}>
-                                                                            <img
-                                                                                src={getVoucherSrc(group.voucherVisita)}
-                                                                                alt="Voucher Visita"
-                                                                                className={styles.miniVoucher}
-                                                                                onClick={() => setShowVoucher(getVoucherSrc(group.voucherVisita))}
-                                                                            />
-                                                                            <div className={styles.zoomPulse}></div>
-                                                                        </div>
+                                                                        <button onClick={() => setShowVoucher(getVoucherSrc(group.voucherVisita))}
+                                                                            style={{ marginLeft: '4px', background: '#EDE9FE', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 5px', display: 'flex', alignItems: 'center', gap: '3px', color: '#7C3AED', fontSize: '0.65rem' }}>
+                                                                            <Eye size={10} /> Ver
+                                                                        </button>
                                                                     )}
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </div>
                                                 </td>
+
+                                                {/* Col 3: Estado Financiero */}
                                                 <td>
-                                                    <div className={styles.financialGridCompact}>
-                                                        <div className={styles.finRowCompact}>
-                                                            <span className={styles.finLabelCompact}>PACTADO TOTAL</span>
-                                                            <span className={styles.finValueCompact} style={{ color: '#0F172A' }}>S/ {group.montoPactado.toFixed(2)}</span>
+                                                    <div style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                                                            <span style={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.68rem' }}>Pactado Total</span>
+                                                            <span style={{ fontWeight: 800, color: '#0F172A', fontFamily: 'monospace' }}>S/ {group.montoPactado.toFixed(2)}</span>
                                                         </div>
-                                                        <div className={styles.finRowCompact}>
-                                                            <span className={styles.finLabelCompact}>PAGADO PREVIO</span>
-                                                            <span className={styles.finValueCompact} style={{ color: '#059669' }}>- S/ {group.montoAdelantado.toFixed(2)}</span>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                                                            <span style={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.68rem' }}>Pagado Previo</span>
+                                                            <span style={{ fontWeight: 800, color: '#059669', fontFamily: 'monospace' }}>- S/ {group.montoAdelantado.toFixed(2)}</span>
                                                         </div>
-                                                        <div className={`${styles.finRowCompact} ${styles.finRowTotal}`}>
-                                                            <span className={styles.finLabelCompact}>SALDO PENDIENTE</span>
-                                                            <span className={styles.finValueCompact} style={{ color: group.saldoPendiente < 0 ? '#DC2626' : '#2563EB' }}>
+                                                        <div style={{ borderTop: '2px dashed #CBD5E1', paddingTop: '5px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                                                            <span style={{ color: '#64748B', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.68rem' }}>Saldo Pendiente</span>
+                                                            <span style={{ fontWeight: 900, color: group.saldoPendiente <= 0 ? '#059669' : '#2563EB', fontFamily: 'monospace' }}>
                                                                 S/ {group.saldoPendiente.toFixed(2)}
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </td>
+
+                                                {/* Col 4: Solicitud Actual */}
                                                 <td>
-                                                    <div className={styles.requestsContainer}>
-                                                        {group.items.map((item) => (
-                                                            <div key={item.id} className={styles.requestItemRow} style={{ marginBottom: '8px', padding: '6px', border: '1px solid #E2E8F0', borderRadius: '6px', background: item.estado === 'pendiente' ? '#FEF3C7' : '#F0FDF4' }}>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                                                    <span className={`${styles.typeBadge} ${item.tipo === 'Adelanto' ? styles.typeAdvance : item.tipo === 'Refuerzo' ? styles.typeReinforcement : styles.typeFinal}`}>
-                                                                        {item.tipo}
-                                                                    </span>
-                                                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F172A' }}>S/ {item.monto.toFixed(2)}</span>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        {group.items.map((item) => {
+                                                            const cfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F8FAFC', label: item.tipo };
+                                                            return (
+                                                                <div key={item.id} style={{
+                                                                    background: item.estado === 'pendiente' ? '#FFFBEB' : '#F0FDF4',
+                                                                    border: `1px solid ${item.estado === 'pendiente' ? '#FCD34D' : '#86EFAC'}`,
+                                                                    borderRadius: '8px', padding: '7px 9px'
+                                                                }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                                                                        <span style={{ background: cfg.bg, color: cfg.color, fontSize: '0.65rem', fontWeight: 800, padding: '2px 7px', borderRadius: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                                            {cfg.label}
+                                                                        </span>
+                                                                        <span style={{ fontSize: '0.8rem', fontWeight: 900, color: '#0F172A', fontFamily: 'monospace' }}>
+                                                                            S/ {item.monto.toFixed(2)}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>
+                                                                            {new Date(item.fecha).toLocaleDateString('es-PE')}
+                                                                        </span>
+                                                                        <span style={{
+                                                                            fontSize: '0.62rem', fontWeight: 800,
+                                                                            color: item.estado === 'pendiente' ? '#D97706' : '#166534',
+                                                                            background: item.estado === 'pendiente' ? '#FEF3C7' : '#DCFCE7',
+                                                                            padding: '1px 6px', borderRadius: '4px'
+                                                                        }}>
+                                                                            {item.estado === 'pendiente' ? '⏳ PENDIENTE' : '✓ PAGADO'}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                    <span style={{ fontSize: '0.65rem', color: '#64748B' }}>{new Date(item.fecha).toLocaleDateString('es-PE')}</span>
-                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: item.estado === 'pendiente' ? '#D97706' : '#166534' }}>
-                                                                        {item.estado === 'pendiente' ? 'PENDIENTE' : 'PAGADO'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 </td>
+
+                                                {/* Col 5: Acciones */}
                                                 <td>
-                                                    <div className={styles.actionsCell}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
                                                         {group.items.filter(i => i.estado === 'pendiente').map((item) => (
-                                                            <div key={`action-${item.id}`} style={{ marginBottom: '8px' }}>
-                                                                <label className={styles.uploadVoucherBtn} style={{ background: '#3B82F6', color: 'white', padding: '6px 10px', borderRadius: '6px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginBottom: '4px', justifyContent: 'center' }}>
-                                                                    <Upload size={14} />
-                                                                    <span>PAGAR: {item.tipo.split(' ')[0]}</span>
-                                                                    <input
-                                                                        type="file"
-                                                                        accept="image/*"
-                                                                        style={{ display: 'none' }}
+                                                            <div key={`action-${item.id}`} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                <label style={{
+                                                                    background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                                                                    color: 'white', padding: '7px 10px', borderRadius: '8px',
+                                                                    fontSize: '0.7rem', display: 'flex', alignItems: 'center',
+                                                                    gap: '5px', cursor: 'pointer', justifyContent: 'center',
+                                                                    fontWeight: 800, boxShadow: '0 4px 10px rgba(37,99,235,0.25)'
+                                                                }}>
+                                                                    <Upload size={12} />
+                                                                    Con Voucher
+                                                                    <input type="file" accept="image/*" style={{ display: 'none' }}
                                                                         onChange={(e) => {
-                                                                            if (e.target.files && e.target.files[0]) {
-                                                                                const file = e.target.files[0];
+                                                                            if (e.target.files?.[0]) {
                                                                                 const reader = new FileReader();
-                                                                                reader.onloadend = () => {
-                                                                                    setPendingConfirmation({
-                                                                                        group,
-                                                                                        item,
-                                                                                        voucher: reader.result as string,
-                                                                                        message: `¿Confirmar depÓsito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
-                                                                                    });
-                                                                                };
-                                                                                reader.readAsDataURL(file);
+                                                                                reader.onloadend = () => setPendingConfirmation({
+                                                                                    group, item,
+                                                                                    voucher: reader.result as string,
+                                                                                    message: `¿Confirmar depósito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
+                                                                                });
+                                                                                reader.readAsDataURL(e.target.files[0]);
                                                                             }
-                                                                        }}
-                                                                    />
+                                                                        }} />
                                                                 </label>
-                                                                <button
-                                                                    style={{ border: '1px solid #E2E8F0', background: 'white', color: '#64748B', padding: '4px 8px', borderRadius: '6px', fontSize: '0.7rem', cursor: 'pointer', width: '100%' }}
-                                                                    onClick={() => {
-                                                                        setPendingConfirmation({
-                                                                            group,
-                                                                            item,
-                                                                            message: `¿Confirmar transferencia directa de S/ ${item.monto.toFixed(2)} a ${group.tecnico.nombre}?`
-                                                                        });
-                                                                    }}
-                                                                >
-                                                                    Pagar directo
+                                                                <button onClick={() => setPendingConfirmation({
+                                                                    group, item,
+                                                                    message: `¿Confirmar transferencia directa de S/ ${item.monto.toFixed(2)} a ${group.tecnico.nombre}?`
+                                                                })}
+                                                                    style={{
+                                                                        border: '1px solid #E2E8F0', background: 'white',
+                                                                        color: '#475569', padding: '5px 8px', borderRadius: '7px',
+                                                                        fontSize: '0.7rem', cursor: 'pointer', fontWeight: 700,
+                                                                        transition: 'all 0.2s'
+                                                                    }}>
+                                                                    Pagar Directo
                                                                 </button>
                                                             </div>
                                                         ))}
                                                         {group.items.every(i => i.estado === 'pagado') && (
-                                                            <div style={{ textAlign: 'center', padding: '8px' }}>
-                                                                <CheckCircle2 size={20} color="#22C55E" style={{ margin: '0 auto' }} />
-                                                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#15803D', display: 'block' }}>COMPLETADO</span>
+                                                            <div style={{ textAlign: 'center', padding: '8px 4px' }}>
+                                                                <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
+                                                                    <CheckCircle2 size={18} color="#22C55E" />
+                                                                </div>
+                                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803D', display: 'block' }}>COMPLETADO</span>
                                                                 {group.historialDepositos.length > 0 && (
-                                                                    <button
-                                                                        className={styles.historyToggle}
-                                                                        style={{ marginTop: '4px' }}
-                                                                        onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}
-                                                                    >
-                                                                        {expandedHistory === group.ticketId ? <ChevronUp size={16} /> : <History size={16} />}
+                                                                    <button className={styles.historyToggle}
+                                                                        style={{ marginTop: '6px', width: '100%' }}
+                                                                        onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}>
+                                                                        {expandedHistory === group.ticketId ? <ChevronUp size={14} /> : <History size={14} />}
                                                                     </button>
                                                                 )}
                                                             </div>
@@ -697,39 +777,29 @@ export default function PaymentsPage() {
                                                     </div>
                                                 </td>
                                             </tr>
+
+                                            {/* Historial expandido */}
                                             {expandedHistory === group.ticketId && (
                                                 <tr className={styles.historyRow}>
                                                     <td colSpan={5}>
                                                         <div className={styles.historyContainer}>
-                                                            <h4>Historial de Transferencias - Ticket {group.ticketNum}</h4>
+                                                            <h4 style={{ margin: '0 0 16px', color: '#475569', fontSize: '0.85rem', textTransform: 'uppercase', fontWeight: 800 }}>
+                                                                📋 Historial de Transferencias — Ticket {group.ticketNum}
+                                                            </h4>
                                                             <div className={styles.historyGrid}>
                                                                 {group.historialDepositos.map((dep, idx) => (
                                                                     <div key={idx} className={styles.historyCard}>
                                                                         <div className={styles.historyHeader}>
                                                                             <span className={styles.historyIndex}>#{idx + 1}</span>
-                                                                            <span className={styles.historyDate}>{new Date(dep.fecha).toLocaleString()}</span>
+                                                                            <span className={styles.historyDate}>{new Date(dep.fecha).toLocaleString('es-PE')}</span>
                                                                         </div>
                                                                         <div className={styles.historyBody}>
-                                                                            <span>{dep.tipo || 'DepÓsito'}</span>
-                                                                            <strong>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
+                                                                            <span style={{ fontSize: '0.78rem', color: '#475569' }}>{dep.tipo || 'Depósito'}</span>
+                                                                            <strong style={{ fontSize: '1.05rem', color: '#1E293B', fontFamily: 'monospace' }}>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
                                                                             {dep.voucherRef && (
-                                                                                <button
+                                                                                <button onClick={() => setShowVoucher(dep.voucherRef)}
                                                                                     className={styles.viewVoucherBtn}
-                                                                                    style={{
-                                                                                        marginTop: '8px',
-                                                                                        display: 'flex',
-                                                                                        alignItems: 'center',
-                                                                                        gap: '4px',
-                                                                                        padding: '4px 8px',
-                                                                                        background: '#F1F5F9',
-                                                                                        border: '1px solid #E2E8F0',
-                                                                                        borderRadius: '4px',
-                                                                                        fontSize: '0.7rem',
-                                                                                        cursor: 'pointer',
-                                                                                        color: '#475569'
-                                                                                    }}
-                                                                                    onClick={() => setShowVoucher(dep.voucherRef)}
-                                                                                >
+                                                                                    style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
                                                                                     <Eye size={12} /> Ver Voucher
                                                                                 </button>
                                                                             )}
@@ -750,18 +820,15 @@ export default function PaymentsPage() {
                 </div>
             </div>
 
+            {/* Voucher Lightbox */}
             {showVoucher && (
-                <div
-                    style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
-                    onClick={() => setShowVoucher(null)}
-                >
+                <div onClick={() => setShowVoucher(null)}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
                     <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
-                        <img src={showVoucher} alt="Voucher" style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
-                        <button
-                            style={{ position: 'absolute', top: '-15px', right: '-15px', background: 'white', border: 'none', borderRadius: '50%', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.3)' }}
-                            onClick={() => setShowVoucher(null)}
-                        >
-                            <X size={20} />
+                        <img src={showVoucher} alt="Voucher" style={{ width: '100%', height: 'auto', borderRadius: '12px', boxShadow: '0 25px 50px rgba(0,0,0,0.5)' }} />
+                        <button onClick={() => setShowVoucher(null)}
+                            style={{ position: 'absolute', top: '-14px', right: '-14px', width: 32, height: 32, borderRadius: '50%', background: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+                            <X size={18} />
                         </button>
                     </div>
                 </div>
@@ -772,16 +839,11 @@ export default function PaymentsPage() {
                 <div className={styles.modalOverlay}>
                     <div className={styles.modalContent}>
                         <div className={styles.modalHeader}>
-                            <div className={styles.modalIcon}>
-                                <CreditCard size={32} />
-                            </div>
+                            <div className={styles.modalIcon}><CreditCard size={32} /></div>
                             <h3>Confirmar Transacción</h3>
                         </div>
                         <div className={styles.modalBody}>
-                            <p className={styles.modalText}>
-                                {pendingConfirmation.message}
-                            </p>
-
+                            <p className={styles.modalText}>{pendingConfirmation.message}</p>
                             <div className={styles.confirmationDetails}>
                                 <div className={styles.detailRow}>
                                     <span className={styles.detailLabel}>Ticket:</span>
@@ -802,25 +864,12 @@ export default function PaymentsPage() {
                                     </span>
                                 </div>
                             </div>
-
                             <div className={styles.modalFooter}>
-                                <button
-                                    className={styles.cancelBtn}
-                                    onClick={() => setPendingConfirmation(null)}
-                                >
-                                    CANCELAR
-                                </button>
-                                <button
-                                    className={styles.confirmBtn}
-                                    onClick={() => {
-                                        handleConfirmPayment(
-                                            pendingConfirmation.group,
-                                            pendingConfirmation.item,
-                                            pendingConfirmation.voucher
-                                        );
-                                        setPendingConfirmation(null);
-                                    }}
-                                >
+                                <button className={styles.cancelBtn} onClick={() => setPendingConfirmation(null)}>CANCELAR</button>
+                                <button className={styles.confirmBtn} onClick={() => {
+                                    handleConfirmPayment(pendingConfirmation.group, pendingConfirmation.item, pendingConfirmation.voucher);
+                                    setPendingConfirmation(null);
+                                }}>
                                     CONFIRMAR PAGO
                                 </button>
                             </div>
@@ -828,6 +877,8 @@ export default function PaymentsPage() {
                     </div>
                 </div>
             )}
+
+            <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
         </div>
     );
 }
