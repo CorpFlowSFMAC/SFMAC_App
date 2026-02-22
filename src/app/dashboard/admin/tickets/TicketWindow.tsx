@@ -124,14 +124,25 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     meta = { ...meta, ...meta.metadata };
                     delete meta.metadata;
                 }
+                const rawEstadoId = normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo');
+                const visitConfirmed = meta.visitPaymentConfirmed ?? false;
+
+                // ★ FIX AUTO-AVANCE: Si el pago de visita fue confirmado pero el estado quedó
+                // atascado en 'esperando_pago_visita', avanzamos de inmediato a 'en_inspeccion'.
+                const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
+                const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
+                    ? 'en_inspeccion'
+                    : rawEstadoId;
+
                 setTicketData((prev: any) => ({
                     ...prev, ...fullTicket, ...meta,
                     metadata: meta,
-                    estadoId: normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo'),
+                    estadoId: corregidoEstadoId,
+                    status_id: corregidoEstadoId,
                     adelantoPagado: meta.adelantoPagado ?? false,
-                    visitPaymentConfirmed: meta.visitPaymentConfirmed ?? false,
+                    visitPaymentConfirmed: visitConfirmed,
                     solicitudAdelanto: meta.solicitudAdelanto ?? null,
-                    solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+                    solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
                     historialPagosTecnico: meta.historialPagosTecnico ?? [],
                 }));
             } catch (err) {
@@ -168,14 +179,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     meta = { ...meta, ...meta.metadata };
                     delete meta.metadata;
                 }
+                const rawId2 = normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo');
+                const visitConf2 = meta.visitPaymentConfirmed ?? false;
+                const PRE_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
+                const corregidoId2 = (visitConf2 && PRE_STATES.includes(rawId2)) ? 'en_inspeccion' : rawId2;
+
                 setTicketData((prev: any) => ({
                     ...prev, ...fullTicket, ...meta,
                     metadata: meta,
-                    estadoId: normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo'),
+                    estadoId: corregidoId2,
+                    status_id: corregidoId2,
                     adelantoPagado: meta.adelantoPagado ?? prev.adelantoPagado ?? false,
-                    visitPaymentConfirmed: meta.visitPaymentConfirmed ?? prev.visitPaymentConfirmed ?? false,
+                    visitPaymentConfirmed: visitConf2,
                     solicitudAdelanto: meta.solicitudAdelanto ?? null,
-                    solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+                    solicitudPagoVisita: visitConf2 ? null : (meta.solicitudPagoVisita ?? null),
                     historialPagosTecnico: meta.historialPagosTecnico ?? prev.historialPagosTecnico ?? [],
                 }));
             } catch (err) {
@@ -1300,83 +1317,93 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && (
-                                        <div className={styles.stepPlaceholder}>
-                                            <div className={styles.advanceRequestCard}>
-                                                <div className={styles.advanceHeader}>
-                                                    <div className={styles.titleIcon} style={{ background: '#F59E0B' }}>
-                                                        <Coins size={20} />
-                                                    </div>
-                                                    <div className={styles.advanceTitleGroup}>
-                                                        <h4>ORDEN DE PAGO: VISITA TÓ‰CNICA</h4>
-                                                        <span>Requiere confirmación de Gerencia</span>
-                                                    </div>
-                                                    <div className={styles.advanceAmountBadge}>
-                                                        S/ {parseFloat(ticketData.costoVisita || 0).toFixed(2)}
-                                                    </div>
-                                                </div>
-
-                                                <div className={styles.techBankDetails}>
-                                                    <div className={styles.bankRow}>
-                                                        <strong>Técnico:</strong>
-                                                        <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
-                                                    </div>
-                                                    <div className={styles.bankRow}>
-                                                        <strong>Banco:</strong>
-                                                        <span>{ticketData.tecnico?.banco || '---'}</span>
-                                                    </div>
-                                                    <div className={styles.bankRow}>
-                                                        <strong>Nº Cuenta:</strong>
-                                                        <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
-                                                    </div>
-                                                    <div className={styles.bankRow}>
-                                                        <strong>CCI:</strong>
-                                                        <span>{ticketData.tecnico?.cci || '---'}</span>
-                                                    </div>
-                                                    {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
-                                                        <div className={styles.bankRow} style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
-                                                            <strong>Billeteras:</strong>
-                                                            <div style={{ display: 'flex', gap: '10px' }}>
-                                                                {ticketData.tecnico?.yape && <span style={{ color: '#7C3AED' }}>Yape: {ticketData.tecnico.yape}</span>}
-                                                                {ticketData.tecnico?.plin && <span style={{ color: '#00D1FF' }}>Plin: {ticketData.tecnico.plin}</span>}
-                                                            </div>
+                                    {/* ★ ORDEN DE PAGO DE VISITA: Solo en el paso exacto donde corresponde.
+                                         La condición es ESTRICTA:
+                                         1. El estadoId debe ser 'esperando_pago_visita' Y
+                                         2. visitPaymentConfirmed debe ser falso Y
+                                         3. El ticket no debe haber avanzado más allá (ningún estado post-inspección)
+                                    */}
+                                    {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && !([
+                                        'en_inspeccion', 'visita_realizada', 'en_cotizacion',
+                                        'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion',
+                                        'documentacion_enviada', 'por_liquidar', 'pago_realizado', 'ticket_cerrado'
+                                    ].includes(ticketData.estadoId)) && (
+                                            <div className={styles.stepPlaceholder}>
+                                                <div className={styles.advanceRequestCard}>
+                                                    <div className={styles.advanceHeader}>
+                                                        <div className={styles.titleIcon} style={{ background: '#F59E0B' }}>
+                                                            <Coins size={20} />
                                                         </div>
-                                                    )}
-                                                </div>
+                                                        <div className={styles.advanceTitleGroup}>
+                                                            <h4>ORDEN DE PAGO: VISITA TÓ‰CNICA</h4>
+                                                            <span>Requiere confirmación de Gerencia</span>
+                                                        </div>
+                                                        <div className={styles.advanceAmountBadge}>
+                                                            S/ {parseFloat(ticketData.costoVisita || 0).toFixed(2)}
+                                                        </div>
+                                                    </div>
 
-                                                {userRole === 'admin' ? (
-                                                    <button className={styles.confirmAdvanceBtn} onClick={handleConfirmVisitPayment}>
-                                                        <CheckCircle size={18} />
-                                                        <span>
-                                                            CONFIRMAR DEPÓSITO VISITA
-                                                            {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
-                                                        </span>
-                                                    </button>
-                                                ) : (
-                                                    !ticketData.solicitudPagoVisita ? (
-                                                        <button
-                                                            className={styles.sendReportBtnOptimistic}
-                                                            onClick={handleRequestVisitPayment}
-                                                            style={{ width: '100%', marginTop: '12px', background: '#3B82F6', justifyContent: 'center' }}
-                                                        >
-                                                            <Send size={18} />
-                                                            <span>SOLICITAR PAGO A GERENCIA</span>
+                                                    <div className={styles.techBankDetails}>
+                                                        <div className={styles.bankRow}>
+                                                            <strong>Técnico:</strong>
+                                                            <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
+                                                        </div>
+                                                        <div className={styles.bankRow}>
+                                                            <strong>Banco:</strong>
+                                                            <span>{ticketData.tecnico?.banco || '---'}</span>
+                                                        </div>
+                                                        <div className={styles.bankRow}>
+                                                            <strong>Nº Cuenta:</strong>
+                                                            <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
+                                                        </div>
+                                                        <div className={styles.bankRow}>
+                                                            <strong>CCI:</strong>
+                                                            <span>{ticketData.tecnico?.cci || '---'}</span>
+                                                        </div>
+                                                        {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
+                                                            <div className={styles.bankRow} style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
+                                                                <strong>Billeteras:</strong>
+                                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                                    {ticketData.tecnico?.yape && <span style={{ color: '#7C3AED' }}>Yape: {ticketData.tecnico.yape}</span>}
+                                                                    {ticketData.tecnico?.plin && <span style={{ color: '#00D1FF' }}>Plin: {ticketData.tecnico.plin}</span>}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {userRole === 'admin' ? (
+                                                        <button className={styles.confirmAdvanceBtn} onClick={handleConfirmVisitPayment}>
+                                                            <CheckCircle size={18} />
+                                                            <span>
+                                                                CONFIRMAR DEPÓSITO VISITA
+                                                                {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
+                                                            </span>
                                                         </button>
                                                     ) : (
-                                                        <div className={styles.waitingForManager}>
-                                                            <Clock size={24} color="#3B82F6" />
-                                                            <span style={{ fontSize: '1.1rem' }}>¡ SOLICITUD ENVIADA !</span>
-                                                            <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Estamos gestionando el pago de la visita con Gerencia.</span>
-                                                        </div>
-                                                    )
-                                                )}
+                                                        !ticketData.solicitudPagoVisita ? (
+                                                            <button
+                                                                className={styles.sendReportBtnOptimistic}
+                                                                onClick={handleRequestVisitPayment}
+                                                                style={{ width: '100%', marginTop: '12px', background: '#3B82F6', justifyContent: 'center' }}
+                                                            >
+                                                                <Send size={18} />
+                                                                <span>SOLICITAR PAGO A GERENCIA</span>
+                                                            </button>
+                                                        ) : (
+                                                            <div className={styles.waitingForManager}>
+                                                                <Clock size={24} color="#3B82F6" />
+                                                                <span style={{ fontSize: '1.1rem' }}>¡ SOLICITUD ENVIADA !</span>
+                                                                <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Estamos gestionando el pago de la visita con Gerencia.</span>
+                                                            </div>
+                                                        )
+                                                    )}
 
-                                                <div className={styles.bankNote}>
-                                                    * Solo el Administrador puede confirmar depÓsitos bancarios.
+                                                    <div className={styles.bankNote}>
+                                                        * Solo el Administrador puede confirmar depÓsitos bancarios.
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
                                     {(ticketData.estadoId === "en_inspeccion" || (ticketData.estadoId === "esperando_pago_visita" && ticketData.visitPaymentConfirmed)) && (
                                         <div className={styles.stepPlaceholder}>
