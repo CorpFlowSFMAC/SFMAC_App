@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { User, MapPin, Zap, DollarSign, RefreshCw, CheckCircle2, AlertTriangle, Phone } from "lucide-react";
 import styles from "./TechnicianAssignment.module.css";
-import { useTechnicians } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
 import { getServiceById, SKILL_ICONS } from "@/lib/serviceTypes";
 
 interface TechnicianAssignmentProps {
@@ -12,7 +12,7 @@ interface TechnicianAssignmentProps {
 }
 
 export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAssignmentProps) {
-    const { technicians, loading } = useTechnicians();
+    const { technicians, loadingTechnicians: loading } = useAppData();
     const [selectedTech, setSelectedTech] = useState<any>(ticket.tecnicoAsignado || null);
     const [costoPasaje, setCostoPasaje] = useState<number>(ticket.costoPasaje || 0);
     const [showReassign, setShowReassign] = useState(false);

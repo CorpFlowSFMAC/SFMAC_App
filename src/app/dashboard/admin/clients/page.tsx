@@ -5,11 +5,11 @@ import { Plus, Search, Building2, MapPin, TrendingUp, Sparkles, Trash2, Pencil }
 import { useRouter } from "next/navigation";
 import styles from "./clients.module.css";
 import ClientDrawer from "./ClientDrawer";
-import { useClients } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
 
 export default function ClientsPage() {
     const router = useRouter();
-    const { clients, loading, createClient: createClientAPI, updateClient: updateClientAPI, deleteClient: deleteClientAPI } = useClients();
+    const { clients, loadingClients: loading, createClient: createClientAPI, updateClient: updateClientAPI, deleteClient: deleteClientAPI } = useAppData();
     const [searchTerm, setSearchTerm] = useState("");
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editClient, setEditClient] = useState<any>(null);

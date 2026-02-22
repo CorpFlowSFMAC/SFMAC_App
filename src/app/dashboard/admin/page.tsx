@@ -9,12 +9,12 @@ import {
 import Link from "next/link";
 import styles from "./admin.module.css";
 import { normalizeStateId } from "@/lib/ticketStates";
-import { useTickets, useTechnicians } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
 
 export default function AdminDashboard() {
-    // Usar hooks de Supabase en lugar de localStorage
-    const { tickets, loading: loadingTickets } = useTickets();
-    const { technicians, loading: loadingTechs } = useTechnicians();
+    // Usar contexto global de datos (Realtime compartido entre módulos)
+    const { tickets, loadingTickets, technicians, loadingTechnicians } = useAppData();
+    const loading = loadingTickets || loadingTechnicians;
     const [isMounted, setIsMounted] = useState(false);
     const [userRole, setUserRole] = useState<string | null>(null);
 

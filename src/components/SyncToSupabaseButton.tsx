@@ -8,10 +8,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xqnghcdndqicqofnxvuf.supabase.co';
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_DHL-l6BH0dVVfvNFYG9kdQ_18F8SeL3';
+import { supabase } from '@/lib/supabase';
 
 export default function SyncToSupabaseButton() {
     const [syncing, setSyncing] = useState(false);
@@ -56,7 +53,7 @@ export default function SyncToSupabaseButton() {
         setResults(null);
 
         try {
-            const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+            // Usar el cliente unificado
 
             // 1. Leer datos de localStorage
             setProgress('📦 Leyendo datos de localStorage...');

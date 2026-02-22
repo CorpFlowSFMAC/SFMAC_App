@@ -5,7 +5,7 @@ import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, M
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
 import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
 import styles from "@/app/dashboard/admin/tickets/page.module.css";
-import { useTickets } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
 import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 
@@ -53,9 +53,12 @@ const useTicketAge = (createdAt: string) => {
 };
 
 export default function GestorDashboard() {
-    const { tickets, loading, createTicket, updateTicket } = useTickets();
+    const { tickets, loadingTickets: loading, createTicket, updateTicket } = useAppData();
     const [showWizard, setShowWizard] = useState(false);
-    const [openTickets, setOpenTickets] = useState<any[]>([]);
+    // ★ FIX CRÍTICO: Guardamos solo los IDs de tickets abiertos.
+    // Al renderizar, buscamos el ticket FRESCO del contexto para que TicketWindow
+    // reciba la versión actualizada via Realtime (y no el snapshot del momento del click).
+    const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
     const [viewMode, setViewMode] = useState<"active" | "closed">("active");
 
     const handleCreateTicket = async (ticketData: any) => {
@@ -249,8 +252,8 @@ export default function GestorDashboard() {
                                             service={service}
                                             ServiceIcon={service?.icon}
                                             onTicketClick={() => {
-                                                if (!openTickets.find(t => t.id === ticket.id)) {
-                                                    setOpenTickets([...openTickets, ticket]);
+                                                if (!openTicketIds.includes(ticket.id)) {
+                                                    setOpenTicketIds([...openTicketIds, ticket.id]);
                                                 }
                                             }}
                                         />
@@ -276,8 +279,8 @@ export default function GestorDashboard() {
                                                 key={ticket.id}
                                                 ticket={ticket}
                                                 onTicketClick={() => {
-                                                    if (!openTickets.find(t => t.id === ticket.id)) {
-                                                        setOpenTickets([...openTickets, ticket]);
+                                                    if (!openTicketIds.includes(ticket.id)) {
+                                                        setOpenTicketIds([...openTicketIds, ticket.id]);
                                                     }
                                                 }}
                                             />
@@ -300,15 +303,20 @@ export default function GestorDashboard() {
             }
 
             {
-                openTickets.map((ticket, index) => (
-                    <TicketWindow
-                        key={ticket.id}
-                        ticket={ticket}
-                        index={index}
-                        onUpdate={updateTicket}
-                        onClose={() => setOpenTickets(openTickets.filter(t => t.id !== ticket.id))}
-                    />
-                ))
+                openTicketIds.map((ticketId, index) => {
+                    // ★ FIX: Buscar el ticket FRESCO del contexto (no el snapshot del click)
+                    const liveTicket = tickets.find((t: any) => t.id === ticketId);
+                    if (!liveTicket) return null; // El ticket fue eliminado
+                    return (
+                        <TicketWindow
+                            key={ticketId}
+                            ticket={liveTicket}
+                            index={index}
+                            onUpdate={updateTicket}
+                            onClose={() => setOpenTicketIds(openTicketIds.filter((id: string) => id !== ticketId))}
+                        />
+                    );
+                })
             }
         </div >
     );

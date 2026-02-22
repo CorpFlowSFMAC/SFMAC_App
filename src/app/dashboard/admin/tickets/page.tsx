@@ -7,7 +7,7 @@ import TicketWindow from "./TicketWindow";
 import styles from "./page.module.css";
 import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
-import { useTickets } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
 
 // Hook para calcular tiempo transcurrido
 const useTicketAge = (createdAt: string) => {
@@ -53,11 +53,11 @@ const useTicketAge = (createdAt: string) => {
 };
 
 export default function TicketsPage() {
-    // Usar hooks de Supabase en lugar de localStorage
-    const { tickets, loading: loadingTickets, createTicket, updateTicket, refresh: refreshTickets } = useTickets();
+    // Usar contexto global de datos (Realtime compartido entre módulos)
+    const { tickets, loadingTickets, createTicket, updateTicket, refreshTickets } = useAppData();
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
-    const [viewMode, setViewMode] = useState<"active" | "closed">("active");
+    const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("triage");
 
 
     const handleCreateTicket = async (newTicket: any) => {
@@ -124,10 +124,11 @@ export default function TicketsPage() {
     const stats = React.useMemo(() => {
         return {
             total: tickets.length,
-            nuevos: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "nuevo").length,
+            borradores: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "borrador").length,
+            nuevos: tickets.filter((t: any) => ["nuevo", "pendiente"].includes(normalizeStateId(t.estadoId))).length,
             enProceso: tickets.filter((t: any) => {
                 const sid = normalizeStateId(t.estadoId);
-                return !["nuevo", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+                return !["borrador", "nuevo", "pendiente", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
             }).length,
             completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
         };
@@ -148,7 +149,8 @@ export default function TicketsPage() {
                 descripcion.includes(search) ||
                 tktCliente.includes(search);
 
-            if (viewMode === "active") return !isClosed && matchesSearch;
+            if (viewMode === "triage") return sid === "borrador" && matchesSearch;
+            if (viewMode === "active") return !["borrador", "ticket_cerrado"].includes(sid) && matchesSearch;
             return isClosed && matchesSearch;
         });
     }, [tickets, searchTerm, viewMode]);
@@ -161,14 +163,24 @@ export default function TicketsPage() {
                     <Sparkles className={styles.sparkleIcon} size={22} />
                     <div>
                         <h1 className={styles.pageTitle}>
-                            {viewMode === "active" ? "Tickets Activos" : "Historial de Tickets Cerrados"}
+                            {viewMode === "triage" ? "Bandeja de Triage" :
+                                viewMode === "active" ? "Tickets Activos" : "Historial de Tickets Cerrados"}
                         </h1>
                         <p className={styles.pageSubtitle}>
-                            {viewMode === "active" ? `${stats.total - stats.completados} activos` : `${stats.completados} cerrados`} • {stats.nuevos} nuevos
+                            {viewMode === "triage" ? `${stats.borradores} por clasificar` :
+                                viewMode === "active" ? `${stats.total - stats.completados - stats.borradores} activos` :
+                                    `${stats.completados} cerrados`} • {stats.nuevos} nuevos
                         </p>
                     </div>
                 </div>
                 <div className={styles.viewToggle}>
+                    <button
+                        className={`${styles.toggleBtn} ${viewMode === "triage" ? styles.toggleBtnActive : ""}`}
+                        onClick={() => setViewMode("triage")}
+                        style={{ borderLeft: 'none' }}
+                    >
+                        Triage {stats.borradores > 0 && <span className={styles.badgeCount}>{stats.borradores}</span>}
+                    </button>
                     <button
                         className={`${styles.toggleBtn} ${viewMode === "active" ? styles.toggleBtnActive : ""}`}
                         onClick={() => setViewMode("active")}
@@ -227,10 +239,10 @@ export default function TicketsPage() {
 
             {/* 🔄 BARRA KANBAN OPERATIVA (SINFIMAC) */}
             <div className={styles.kanbanFlow}>
-                {TICKET_STATES.filter(s => s.order <= 13).map((estado, index, array) => {
+                {TICKET_STATES.filter(s => s.order <= 13 && s.id !== "nuevo").map((estado, index, array) => {
                     const IconComponent = estado.icon;
                     // Optimizar búsqueda de tickets por estado
-                    const ticketsEnEstado = tickets.reduce((count, t) =>
+                    const ticketsEnEstado = tickets.reduce((count: number, t: any) =>
                         normalizeStateId(t.estadoId) === estado.id ? count + 1 : count, 0
                     );
 
@@ -354,7 +366,7 @@ export default function TicketsPage() {
                     // 🔥 FRESH DATA: Buscar la versión más reciente del ticket en el estado global (Realtime)
                     // Esto asegura que si el Admin confirma un pago, la Gestora lo vea reflejado al instante
                     // sin tener que cerrar y abrir el ticket, ya que 'tickets' se actualiza vía suscripción.
-                    const freshTicket = tickets.find(t => t.id === ticket.id) || ticket;
+                    const freshTicket = tickets.find((t: any) => t.id === ticket.id) || ticket;
 
                     return (
                         <TicketWindow

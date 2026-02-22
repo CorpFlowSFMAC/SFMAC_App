@@ -8,29 +8,97 @@ interface TicketStateNavigatorProps {
 }
 
 export default function TicketStateNavigator({ currentStateId }: TicketStateNavigatorProps) {
-    // Normalizar estados intermedios para la visualización en el tracker
-    const normalizedId = currentStateId === "esperando_pago_visita" ? "tecnico_asignado" : currentStateId;
-    const currentState = getStateById(normalizedId);
-    const currentOrder = currentState?.order || 1;
+    const isTriage = currentStateId === "borrador";
 
-    // Solo mostrar estados operativos principales (excluyendo estados finales y alternativos)
-    const mainStates = TICKET_STATES.filter(state =>
-        (state.tipo === "operativo" || state.tipo === "final") && state.order <= 12
-    );
+    // Normalizar: borrador -> nuevo para el tracker principal
+    const normalizedId = currentStateId === "esperando_pago_visita"
+        ? "tecnico_asignado"
+        : currentStateId === "borrador"
+            ? "borrador"   // lo mantenemos para resaltar el step de Triage
+            : currentStateId;
+
+    const currentState = getStateById(normalizedId);
+    const currentOrder = isTriage ? -1 : (currentState?.order || 1);
+
+    // Pasos del flujo principal (orden 1 en adelante), deduplicados
+    const seenOrders = new Set<number>();
+    const mainStates = TICKET_STATES.filter(state => {
+        if (state.id === "borrador") return false; // Triage se muestra aparte
+        if (state.id === "pendiente") return false; // alias de nuevo
+        if (state.tipo === "alerta") return false;
+        if (state.order > 12) return false;
+        if (seenOrders.has(state.order)) return false;
+        seenOrders.add(state.order);
+        return true;
+    }).sort((a, b) => a.order - b.order);
+
+    // Paso de Triage (solo para borrador)
+    const triageState = getStateById("borrador");
 
     return (
         <div className={styles.kanbanContainer}>
-            {/* Barra Kanban Horizontal Minimalista */}
             <div className={styles.kanbanFlow}>
-                {mainStates.map((state) => {
-                    const isActive = state.id === normalizedId;
-                    const isPast = state.order < currentOrder;
-                    const isFuture = state.order > currentOrder;
+
+                {/* Paso especial: TRIAGE */}
+                {triageState && (
+                    <div key="triage-step" className={styles.kanbanStepWrapper}>
+                        <div
+                            className={`${styles.kanbanStep} ${isTriage ? styles.active : styles.completed}`}
+                            style={{
+                                '--step-color': triageState.color,
+                                borderColor: isTriage ? triageState.color : '#10B981'
+                            } as any}
+                        >
+                            <div
+                                className={styles.stepIcon}
+                                style={{
+                                    background: isTriage ? triageState.color : '#10B981',
+                                    color: 'white'
+                                }}
+                            >
+                                {isTriage ? (
+                                    triageState.icon && <triageState.icon size={20} />
+                                ) : (
+                                    <span className={styles.checkmark}>✓</span>
+                                )}
+                            </div>
+                            <div className={styles.stepInfo}>
+                                <span className={styles.stepNumber}>⚡</span>
+                                <span
+                                    className={styles.stepName}
+                                    style={{ color: isTriage ? triageState.color : '#10B981' }}
+                                >
+                                    Triage
+                                </span>
+                            </div>
+                            {isTriage && (
+                                <div
+                                    className={styles.activePulse}
+                                    style={{ background: triageState.color }}
+                                />
+                            )}
+                        </div>
+
+                        {/* Conector hacia el flujo principal */}
+                        <div className={styles.connector}>
+                            <div
+                                className={styles.connectorLine}
+                                style={{ background: isTriage ? '#E5E7EB' : '#10B981' }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Flujo operativo principal */}
+                {mainStates.map((state, idx) => {
+                    const isActive = !isTriage && state.id === normalizedId;
+                    const isPast = !isTriage && state.order < currentOrder;
+                    const isFuture = isTriage || state.order > currentOrder;
                     const StateIcon = state.icon;
+                    const isLast = idx === mainStates.length - 1;
 
                     return (
                         <div key={state.id} className={styles.kanbanStepWrapper}>
-                            {/* Item del Kanban */}
                             <div
                                 className={`${styles.kanbanStep} ${isActive ? styles.active : ''} ${isPast ? styles.completed : ''} ${isFuture ? styles.future : ''}`}
                                 style={{
@@ -64,7 +132,7 @@ export default function TicketStateNavigator({ currentStateId }: TicketStateNavi
                                     </span>
                                 </div>
 
-                                {/* Indicador de estado actual con pulso */}
+                                {/* Pulso en estado activo */}
                                 {isActive && (
                                     <div
                                         className={styles.activePulse}
@@ -73,8 +141,8 @@ export default function TicketStateNavigator({ currentStateId }: TicketStateNavi
                                 )}
                             </div>
 
-                            {/* Conector (flecha) */}
-                            {state.order < 12 && (
+                            {/* Conector */}
+                            {!isLast && (
                                 <div className={styles.connector}>
                                     <div
                                         className={styles.connectorLine}
@@ -88,7 +156,6 @@ export default function TicketStateNavigator({ currentStateId }: TicketStateNavi
                     );
                 })}
             </div>
-
         </div>
     );
 }

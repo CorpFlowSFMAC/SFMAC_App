@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { X, Search, MapPin, Phone, Star, DollarSign, CheckCircle, RefreshCw } from "lucide-react";
-import { useTechnicians } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
 import { SKILL_ICONS, getServiceById } from "@/lib/serviceTypes";
 import { normalizeZone, areZonesCompatible, getZoneFullName } from "@/lib/zones";
 import styles from "./TechnicianDrawer.module.css";
@@ -16,7 +16,7 @@ interface TechnicianDrawerProps {
 }
 
 export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, onShowToast }: TechnicianDrawerProps) {
-    const { technicians, loading } = useTechnicians();
+    const { technicians, loadingTechnicians: loading } = useAppData();
     const [selectedTechnician, setSelectedTechnician] = useState<any>(null);
     const [costoVisita, setCostoVisita] = useState("");
     const [searchTerm, setSearchTerm] = useState("");

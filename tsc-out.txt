@@ -1,0 +1,2 @@
+﻿src/app/dashboard/admin/tickets/TicketWindow.tsx(113,26): error TS2686: 'React' refers to a UMD global, but the current file is a module. Consider adding an import instead.
+src/app/dashboard/admin/tickets/TicketWindow.tsx(148,33): error TS2686: 'React' refers to a UMD global, but the current file is a module. Consider adding an import instead.

@@ -25,9 +25,9 @@ import {
     Eye,
     X
 } from "lucide-react";
-import { useTickets } from "@/hooks/useSupabaseData";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
+import { supabase } from "@/lib/supabase";
 import styles from "./payments.module.css";
 
 interface PaymentItem {
@@ -62,9 +62,110 @@ interface PaymentTicketGroup {
     voucherVisita?: string | null;
 }
 
+// ─────────────────────────────────────────────────────────
+// Helper: extrae campos de pago del metadata y del ticket
+// ─────────────────────────────────────────────────────────
+function flattenTicketForPayments(t: any) {
+    if (!t) return t;
+    // metadata puede tener anidamiento doble (bug conocido de migración)
+    let meta = t.metadata || {};
+    while (meta.metadata && typeof meta.metadata === "object") {
+        meta = { ...meta, ...meta.metadata };
+        delete meta.metadata;
+    }
+    return {
+        ...t,
+        // Exponer campos de pago al nivel raíz del objeto
+        estadoId: normalizeStateId(t.status_id || meta.estadoId || "nuevo"),
+        numeroTicketCliente: t.client_ticket_number || meta.numeroTicketCliente || "",
+        costoManoObra: parseFloat(t.labor_cost ?? meta.costoManoObra ?? 0),
+        costoMateriales: parseFloat(t.materials_cost ?? meta.costoMateriales ?? 0),
+        costoVisita: parseFloat(t.visit_cost ?? meta.costoVisita ?? meta.costoPasaje ?? 0),
+        // Campos que viven SOLO en metadata:
+        solicitudAdelanto: meta.solicitudAdelanto ?? null,
+        solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
+        solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
+        solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+        historialPagosTecnico: meta.historialPagosTecnico ?? [],
+        adelantoPagado: meta.adelantoPagado ?? false,
+        visitPaymentConfirmed: meta.visitPaymentConfirmed ?? false,
+        porcentajeAdelanto: meta.porcentajeAdelanto ?? meta.solicitudAdelanto?.porcentaje ?? 0.5,
+        fechaAprobacion: meta.fechaAprobacion ?? meta.fechaAprobacionCotizacion ?? null,
+        fechaValidacionDocumental: meta.fechaValidacionDocumental ?? null,
+        fechaPagoFinal: meta.fechaPagoFinal ?? null,
+        fechaAsignacion: meta.fechaAsignacion ?? null,
+        costoPasaje: meta.costoPasaje ?? 0,
+        tecnico: {
+            id: t.technicians?.id || meta.tecnico?.id,
+            nombre: t.technicians?.name ||
+                (t.technicians?.first_name && t.technicians?.last_name
+                    ? `${t.technicians.first_name} ${t.technicians.last_name}`.trim()
+                    : t.technicians?.first_name || t.technicians?.last_name) ||
+                meta.tecnico?.nombre || 'Sin asignar',
+            banco: t.technicians?.bank_name || meta.tecnico?.banco || '---',
+            numeroCuenta: t.technicians?.account_number || meta.tecnico?.numeroCuenta || '---',
+            cci: t.technicians?.cci || meta.tecnico?.cci || '---',
+            yape: t.technicians?.yape_number || meta.tecnico?.yape,
+            plin: t.technicians?.plin_number || meta.tecnico?.plin,
+        },
+        cliente: {
+            nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente',
+        },
+        sede: {
+            nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede',
+        },
+    };
+}
+
 export default function PaymentsPage() {
-    // Para el módulo de pagos SÍ necesitamos los metadatos completos para ver el historial de pagos y vouchers
-    const { tickets, loading, updateTicket, refresh } = useTickets(undefined, undefined, true);
+    // ⚡ FUENTE PROPIA CON METADATA: el contexto global usa getSummaryAll() sin metadata.
+    // El módulo de pagos necesita metadata completa (solicitudes, historiales de pago).
+    // Por eso tiene su propio fetch + canal Realtime independiente.
+    const [tickets, setTickets] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchPaymentTickets = React.useCallback(async () => {
+        try {
+            setLoading(true);
+            const data = await ticketsAPI.getForPayments();
+            setTickets((data || []).map(flattenTicketForPayments));
+        } catch (err) {
+            console.error('[Payments] Error fetching tickets:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // Carga inicial
+    useEffect(() => { fetchPaymentTickets(); }, [fetchPaymentTickets]);
+
+    // ⚡ Suscripción Realtime propia del módulo de pagos
+    // Cuando la Gestora guarda una solicitud de pago, el metadata del ticket cambia
+    // en Supabase → el canal dispara → refetch con metadata → aparece en pantalla.
+    useEffect(() => {
+        const channel = supabase
+            .channel('payments:tickets_realtime')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'tickets' },
+                () => {
+                    // Re-fetch completo para obtener metadata actualizado
+                    fetchPaymentTickets();
+                }
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [fetchPaymentTickets]);
+
+    const refresh = fetchPaymentTickets;
+
+    // Función de actualización local: actualiza Supabase y re-fetcha
+    const updateTicket = React.useCallback(async (id: string, updates: any) => {
+        const updated = await ticketsAPI.update(id, updates);
+        // El canal Realtime disparará el re-fetch automáticamente
+        return updated;
+    }, []);
+
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
@@ -84,12 +185,14 @@ export default function PaymentsPage() {
         setUserRole(role);
     }, []);
 
-    // 🔄 Procesar tickets de Supabase a grupos de pago
+    // 🔄 Procesar tickets a grupos de pago cuando cambia la lista
     useEffect(() => {
         if (tickets.length > 0) {
             processTicketsToGroups(tickets);
+        } else if (!loading) {
+            setPaymentGroups([]);
         }
-    }, [tickets]);
+    }, [tickets, loading]);
 
     if (userRole && userRole !== 'admin') {
         return (
@@ -133,12 +236,13 @@ export default function PaymentsPage() {
 
                 const costoManoObra = parseFloat(ticket.costoManoObra || 0);
                 const costoMateriales = parseFloat(ticket.costoMateriales || 0);
-                const montoPactadoBase = costoManoObra + costoMateriales;
+                const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
+
+                // ★ FIX: El monto pactado total debe incluir MO + MATERIALES + VISITA/PASAJES
+                const montoPactadoBase = costoManoObra + costoMateriales + visitCost;
 
                 const pagos = ticket.historialPagosTecnico || [];
                 const totalPagado = pagos.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
-
-                const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
 
                 const voucherVisita = pagos.find((p: any) => {
                     const tipo = (p.tipo || "").toLowerCase();
@@ -146,14 +250,15 @@ export default function PaymentsPage() {
                     return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
                 })?.voucherRef;
 
+                // techData ya está normalizado por flattenTicketForPayments al nivel raíz
                 const techData = {
-                    id: ticket.tecnico?.id || ticket.metadata?.tecnico?.id,
-                    nombre: ticket.tecnico?.nombre || ticket.metadata?.tecnico?.nombre || ticket.tecnico?.name || 'Sin asignar',
-                    banco: ticket.tecnico?.banco || ticket.metadata?.tecnico?.banco || ticket.tecnico?.bank_name || '---',
-                    numeroCuenta: ticket.tecnico?.numeroCuenta || ticket.metadata?.tecnico?.numeroCuenta || ticket.tecnico?.account_number || '---',
-                    cci: ticket.tecnico?.cci || ticket.metadata?.tecnico?.cci || '---',
-                    yape: ticket.tecnico?.yape || ticket.metadata?.tecnico?.yape || ticket.tecnico?.yape_number,
-                    plin: ticket.tecnico?.plin || ticket.metadata?.tecnico?.plin || ticket.tecnico?.plin_number
+                    id: ticket.tecnico?.id,
+                    nombre: ticket.tecnico?.nombre || 'Sin asignar',
+                    banco: ticket.tecnico?.banco || '---',
+                    numeroCuenta: ticket.tecnico?.numeroCuenta || '---',
+                    cci: ticket.tecnico?.cci || '---',
+                    yape: ticket.tecnico?.yape,
+                    plin: ticket.tecnico?.plin
                 };
 
                 const items: PaymentItem[] = [];
@@ -224,7 +329,8 @@ export default function PaymentsPage() {
                     }
                 }
 
-                if (items.length > 0) {
+                // Siempre incluir si hay items O si hay historial de depósitos (para no perder el registro)
+                if (items.length > 0 || pagos.length > 0) {
                     allGroups.push({
                         ticketId: ticket.id,
                         ticketNum,
@@ -319,7 +425,9 @@ export default function PaymentsPage() {
             newMetadata.fechaPagoFinal = updates.closure_date;
             newMetadata.solicitudLiquidacion = null;
         } else if (item.tipo === 'Movilidad / Visita') {
-            if (freshTicket.status_id === 'esperando_pago_visita') {
+            // ★ FIX: Avanzar a en_inspeccion desde CUALQUIER estado pre-inspección
+            const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador'];
+            if (preInspectionStates.includes(freshTicket.status_id)) {
                 updates.status_id = 'en_inspeccion';
                 newMetadata.estadoId = 'en_inspeccion';
             }
@@ -345,7 +453,14 @@ export default function PaymentsPage() {
 
     const filteredGroups = paymentGroups.filter(g => {
         if (filter === 'todos') return true;
-        return g.items.some(i => i.estado === filter);
+        if (filter === 'pendiente') {
+            return g.items.some(i => i.estado === 'pendiente');
+        }
+        if (filter === 'pagado') {
+            // Un grupo se considera pagado si tiene items pagados O si tiene historial de depósitos
+            return g.items.some(i => i.estado === 'pagado') || g.historialDepositos.length > 0;
+        }
+        return false;
     });
 
     const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente').length, 0);
@@ -379,7 +494,9 @@ export default function PaymentsPage() {
                     <div className={`${styles.statIcon} ${styles.purpleIcon}`}><TrendingUp size={24} /></div>
                     <div className={styles.statInfo}>
                         <span className={styles.statLabel}>Egresos del Mes</span>
-                        <span className={styles.statValue}>S/ {(Object.values(monthlyTotals)[0] || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                        <span className={styles.statValue}>
+                            S/ {(monthlyTotals[new Date().toLocaleString('es-PE', { month: 'long', year: 'numeric' }).charAt(0).toUpperCase() + new Date().toLocaleString('es-PE', { month: 'long', year: 'numeric' }).slice(1)] || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        </span>
                     </div>
                 </div>
             </div>

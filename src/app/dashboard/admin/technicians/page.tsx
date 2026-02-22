@@ -5,12 +5,12 @@ import { Plus, Search, Users, Sparkles, Filter, Trash2, Wrench } from "lucide-re
 import { useRouter } from "next/navigation";
 import styles from "./technicians.module.css";
 import TechnicianDrawer from "./TechnicianDrawer";
-import { useTechnicians } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
 import { SKILL_ICONS, SKILL_COLORS, SERVICE_TYPES } from "@/lib/serviceTypes";
 
 export default function TechniciansPage() {
     const router = useRouter();
-    const { technicians, loading, createTechnician, updateTechnician, deleteTechnician } = useTechnicians();
+    const { technicians, loadingTechnicians: loading, createTechnician, updateTechnician, deleteTechnician } = useAppData();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterZone, setFilterZone] = useState("");
     const [filterSkill, setFilterSkill] = useState("");

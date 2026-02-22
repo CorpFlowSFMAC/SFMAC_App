@@ -1,9 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xqnghcdndqicqofnxvuf.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_DHL-l6BH0dVVfvNFYG9kdQ_18F8SeL3'
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+import { supabase } from './supabase'
 
 // ============================================
 // CLIENTS API
@@ -171,6 +166,7 @@ export const branchesAPI = {
         distrito: string;
         codigo_topaz: string;
         tipo: string;
+        codigo_cliente: string;
     }>) {
         const { data, error } = await supabase
             .from('branch_offices')
@@ -338,6 +334,19 @@ export const ticketsAPI = {
         const { data, error } = await supabase
             .from('tickets')
             .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, clients(*), branch_offices(*), technicians(*)')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data;
+    },
+
+    async getForPayments() {
+        // Para el módulo de pagos SÍ necesitamos metadata completa:
+        // solicitudAdelanto, solicitudPagoVisita, historialPagosTecnico, etc.
+        // viven dentro de la columna metadata JSON.
+        const { data, error } = await supabase
+            .from('tickets')
+            .select('id, status_id, service_type, description, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, client_id, branch_id, technician_id, metadata, clients(*), branch_offices(*), technicians(*)')
             .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -552,3 +561,4 @@ export const evidencesAPI = {
         if (error) throw error;
     }
 };
+

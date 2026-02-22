@@ -2,7 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const readline = require('readline');
 
 const SUPABASE_URL = 'https://xqnghcdndqicqofnxvuf.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_DHL-l6BH0dVVfvNFYG9kdQ_18F8SeL3';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxbmdoY2RuZHFpY3FvZm54dnVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxNTMyOTQsImV4cCI6MjA4NTcyOTI5NH0.QijT6mgGlaiCXdHW2BO4es0Rwx_QIgDPGPW61H3x54M';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Datos de ejemplo - REEMPLAZAR con tus datos reales de localStorage
@@ -241,3 +241,4 @@ console.log('⚠️  USANDO DATOS DE EJEMPLO');
 console.log('Para usar tus datos reales, exporta localStorage y pásalo como argumento\n');
 
 runMigration(SAMPLE_DATA);
+

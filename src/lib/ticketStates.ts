@@ -35,17 +35,41 @@ export interface TicketState {
 
 export const TICKET_STATES: TicketState[] = [
     {
-        id: "nuevo",
+        id: "borrador",
+        order: 0,
+        nombre: "Borrador de Triage",
+        nombreCorto: "Triage",
+        descripcion: "Ticket recibido vía correo, requiere validación y clasificación",
+        actor: "Sistema",
+        tipo: "operativo",
+        color: "#94A3B8",
+        icon: Clock,
+        transiciones: ["nuevo"],
+    },
+    {
+        id: "pendiente",
         order: 1,
-        nombre: "Nuevo Ticket",
+        nombre: "Nuevo / Pendiente de Asignación",
         nombreCorto: "Nuevo",
-        descripcion: "Ticket creado, pendiente de asignación",
+        descripcion: "Ticket activo, pendiente de asignar técnico",
         actor: "Gestora",
         tipo: "operativo",
         color: "#8B5CF6",
         icon: FileText,
         transiciones: ["tecnico_asignado"],
         accionesRequeridas: ["Asignar técnico según zona y especialidad"]
+    },
+    {
+        id: "nuevo",
+        order: 1,
+        nombre: "Nuevo Ticket",
+        nombreCorto: "Nuevo",
+        descripcion: "Ticket nuevo activo, pendiente de asignar técnico",
+        actor: "Gestora",
+        tipo: "operativo",
+        color: "#8B5CF6",
+        icon: FileText,
+        transiciones: ["tecnico_asignado"]
     },
     {
         id: "tecnico_asignado",
@@ -299,8 +323,10 @@ export const normalizeStateId = (stateId: any): string => {
         "11": "en_ejecucion", // Alias común
         "12": "ticket_cerrado",
         "13": "vencido",
+        "borrador": "borrador",
+        "pendiente": "pendiente",
         "nuevo": "nuevo",
-        "pend": "nuevo",
+        "pend": "pendiente",
         "cerrado": "ticket_cerrado"
     };
 

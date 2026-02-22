@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import {
     X, ChevronLeft, ChevronRight, Check, Search, MapPin, Building2,
-    Upload, Image as ImageIcon, FileText, Trash2, CheckCircle, Wrench, Users, Monitor
+    Upload, Image as ImageIcon, FileText, Trash2, CheckCircle, Wrench, Users, Monitor, Sparkles
 } from "lucide-react";
 import styles from "./CreateTicketWizard.module.css";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
-import { useClients, useBranches } from "@/hooks/useSupabaseData";
+import { useAppData } from "@/lib/AppDataContext";
+import { useBranches } from "@/hooks/useSupabaseData";
 
 interface CreateTicketWizardProps {
     onClose: () => void;
@@ -31,8 +32,8 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         fechaCreacion: new Date().toISOString(),
     });
 
-    // 🔗 INTEGRACIÓN CON SUPABASE
-    const { clients: rawClients, loading: loadingClients } = useClients();
+    // 🔗 INTEGRACIÓN CON CONTEXTO GLOBAL (Realtime compartido)
+    const { clients: rawClients, loadingClients } = useAppData();
     const { branches: allBranches, loading: loadingBranches } = useBranches();
 
     // Mapear clientes al formato esperado por el Wizard
@@ -40,7 +41,6 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         id: c.id.toString(),
         nombre: c.name || "Sin Nombre",
         ruc: c.ruc || "---",
-        prioridad: "Alta",
         color: c.color_aura || "#8B5CF6",
         logo: c.logo || null
     }));
@@ -48,6 +48,8 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
     const [searchTerm, setSearchTerm] = useState("");
     const [searchTermSede, setSearchTermSede] = useState("");
     const [isDraftRestored, setIsDraftRestored] = useState(false);
+    const [showRestoreDraft, setShowRestoreDraft] = useState(false);
+    const [draftData, setDraftData] = useState<any>(null);
 
     // Auto-guardar borrador
     useEffect(() => {
@@ -63,20 +65,44 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         return () => clearInterval(saveInterval);
     }, [currentStep, formData]);
 
-    // Restaurar borrador
+    // Restaurar borrador (Lógica no intrusiva)
     useEffect(() => {
         const savedDraft = localStorage.getItem("ticket_draft");
         if (savedDraft && !isDraftRestored) {
-            const draft = JSON.parse(savedDraft);
-            if (window.confirm(`Tienes un borrador del ${new Date(draft.timestamp).toLocaleString()}.\n¿Continuar?`)) {
-                setFormData(draft.data);
-                setCurrentStep(draft.step);
-            } else {
+            try {
+                const draft = JSON.parse(savedDraft);
+                const draftDate = new Date(draft.timestamp);
+                const now = new Date();
+                const diffHours = (now.getTime() - draftDate.getTime()) / (1000 * 60 * 60);
+
+                // Solo ofrecer restaurar si el borrador tiene menos de 24 horas
+                if (diffHours < 24) {
+                    setDraftData(draft);
+                    setShowRestoreDraft(true);
+                } else {
+                    // Si es muy viejo, lo eliminamos silenciosamente
+                    localStorage.removeItem("ticket_draft");
+                }
+            } catch (e) {
+                console.error("Error parsing draft:", e);
                 localStorage.removeItem("ticket_draft");
             }
             setIsDraftRestored(true);
         }
     }, [isDraftRestored]);
+
+    const handleRestoreDraft = () => {
+        if (draftData) {
+            setFormData(draftData.data);
+            setCurrentStep(draftData.step);
+            setShowRestoreDraft(false);
+        }
+    };
+
+    const handleDismissDraft = () => {
+        localStorage.removeItem("ticket_draft");
+        setShowRestoreDraft(false);
+    };
 
     // Tickets se manejan desde el componente padre
 
@@ -281,6 +307,24 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                                     autoFocus
                                 />
                             </div>
+
+                            {/* 💡 BANNER DE BORRADOR (No intrusivo) */}
+                            {showRestoreDraft && draftData && (
+                                <div className={styles.draftBanner}>
+                                    <div className={styles.draftInfo}>
+                                        <Sparkles size={18} />
+                                        <span>Tienes un borrador del {new Date(draftData.timestamp).toLocaleTimeString()}</span>
+                                    </div>
+                                    <div className={styles.draftActions}>
+                                        <button className={styles.restoreBtn} onClick={handleRestoreDraft}>
+                                            Recuperar
+                                        </button>
+                                        <button className={styles.dismissBtn} onClick={handleDismissDraft}>
+                                            Ignorar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             {clientes.length === 0 ? (
                                 <div className={styles.emptyMessage}>

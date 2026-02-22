@@ -8,8 +8,11 @@ import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar } from "./TicketSummary";
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
-import { ticketsAPI } from "@/lib/supabase-api";
+import { ticketsAPI, branchesAPI } from "@/lib/supabase-api";
+import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import styles from "./TicketWindow.module.css";
+
+const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
 
 interface TicketWindowProps {
     ticket: any;
@@ -105,79 +108,117 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
 
-    // 🔗 SINCRONIZACIÓN Y CARGA DE DATOS COMPLETOS
+    // 🔗 EFECTO 1: Carga completa al ABRIR el ticket (solo cuando cambia el ID)
+    // Hace getById() para obtener toda la metadata desde Supabase.
+    const hasLoadedRef = useRef<string | null>(null);
     useEffect(() => {
-        const fetchFullTicket = async () => {
-            if (ticket?.id) {
-                try {
-                    // Solo cargamos si no tenemos los metadatos o si queremos asegurar frescura
-                    // Al usar getSummaryAll en la lista, el objeto 'ticket' inicial no tiene metadatos pesados
-                    const fullTicket = await onUpdate ? await ticketsAPI.getById(ticket.id) : null;
-                    if (fullTicket) {
-                        setTicketData((prev: any) => ({
-                            ...prev,
-                            ...fullTicket,
-                            // Aseguramos que los metadatos se unan correctamente
-                            metadata: { ...(prev.metadata || {}), ...(fullTicket.metadata || {}) }
-                        }));
-                    }
-                } catch (err) {
-                    console.error("Error fetching full ticket data:", err);
+        if (!ticket?.id || hasLoadedRef.current === ticket.id) return;
+        hasLoadedRef.current = ticket.id;
+
+        const load = async () => {
+            try {
+                const fullTicket = await ticketsAPI.getById(ticket.id);
+                if (!fullTicket) return;
+                let meta = fullTicket.metadata || {};
+                while (meta.metadata && typeof meta.metadata === 'object') {
+                    meta = { ...meta, ...meta.metadata };
+                    delete meta.metadata;
                 }
+                setTicketData((prev: any) => ({
+                    ...prev, ...fullTicket, ...meta,
+                    metadata: meta,
+                    estadoId: normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo'),
+                    adelantoPagado: meta.adelantoPagado ?? false,
+                    visitPaymentConfirmed: meta.visitPaymentConfirmed ?? false,
+                    solicitudAdelanto: meta.solicitudAdelanto ?? null,
+                    solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+                    historialPagosTecnico: meta.historialPagosTecnico ?? [],
+                }));
+            } catch (err) {
+                console.error('Error fetching full ticket data:', err);
             }
         };
-
-        fetchFullTicket();
+        load();
     }, [ticket?.id]);
 
+    // 🔄 EFECTO 2: Detecta cambios de estado desde el SERVIDOR (Realtime via AppDataContext).
+    // Usa una ref para comparar el status_id anterior y solo refetchear cuando CAMBIÓ EXTERNAMENTE.
+    // ⚠️ CRÍTICO: NUNCA resetea el estado local al estado del servidor directamente.
+    // El refetch via getById() es la única fuente de verdad para actualizar ticketData.
+    const prevServerStatusRef = useRef<string | null>(null);
     useEffect(() => {
-        if (ticket) {
-            setTicketData((prev: any) => {
-                // Evitar ciclos infinitos comparando strings
-                if (JSON.stringify(prev) === JSON.stringify(ticket)) return prev;
-
-                // 🛠️¡ï¸ REGLA DE ORO DE FLUJO: Si el pago se confirma externamente,
-                // debemos DESTRUIR cualquier rastro de la solicitud antigua para desbloquear la UI.
-                const overrides: any = {};
-
-                // Caso 1: Adelanto Operativo (Paso 7 -> 8)
-                if (ticket.adelantoPagado) {
-                    overrides.solicitudAdelanto = null;
-                }
-
-                // Caso 2: Pago de Visita (Paso 2 -> 3)
-                if (ticket.visitPaymentConfirmed) {
-                    overrides.solicitudPagoVisita = null;
-                    // Forzar avance visual si estábamos atorados en "esperando pago"
-                    if (prev.estadoId === 'esperando_pago_visita' || ticket.estadoId === 'en_inspeccion') {
-                        overrides.estadoId = 'en_inspeccion';
-                    }
-                }
-
-                // Caso 3: Refuerzo Económico (Ejecución)
-                // Si existe una solicitud local, y vemos un pago de Refuerzo posterior en el server, LIMPIAR.
-                if (prev.solicitudAdelantoExtra) {
-                    const reqDate = new Date(prev.solicitudAdelantoExtra.fecha).getTime();
-                    const pagos = ticket.historialPagosTecnico || [];
-                    const isPaid = pagos.some((p: any) => {
-                        const isRefuerzo = p.tipo === 'Refuerzo' || p.referencia?.includes('Refuerzo') || p.referencia?.includes('Adelanto Adicional');
-                        const payDate = new Date(p.fecha).getTime();
-                        // Si el pago es posterior o igual a la solicitud, es su confirmación.
-                        return isRefuerzo && payDate >= reqDate;
-                    });
-
-                    if (isPaid) {
-                        overrides.solicitudAdelantoExtra = null;
-                    }
-                }
-
-                return { ...prev, ...ticket, ...overrides };
-            });
-            // Sincronizar estados dependientes
-            if (ticket.gastos) setGastos(ticket.gastos);
-            if (ticket.evidenciasEjecucion) setEvidenciasEjecucion(ticket.evidenciasEjecucion);
+        const serverStatus = ticket?.status_id || null;
+        // Ignorar si el status_id no cambió desde el server
+        if (serverStatus === prevServerStatusRef.current) return;
+        // Primera vez (abrir ticket) ya lo maneja el Efecto 1
+        if (prevServerStatusRef.current === null) {
+            prevServerStatusRef.current = serverStatus;
+            return;
         }
-    }, [ticket]);
+        // El status cambió en el servidor (Realtime) → hacer refetch completo
+        prevServerStatusRef.current = serverStatus;
+        if (!ticket?.id) return;
+
+        const refetch = async () => {
+            try {
+                const fullTicket = await ticketsAPI.getById(ticket.id);
+                if (!fullTicket) return;
+                let meta = fullTicket.metadata || {};
+                while (meta.metadata && typeof meta.metadata === 'object') {
+                    meta = { ...meta, ...meta.metadata };
+                    delete meta.metadata;
+                }
+                setTicketData((prev: any) => ({
+                    ...prev, ...fullTicket, ...meta,
+                    metadata: meta,
+                    estadoId: normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo'),
+                    adelantoPagado: meta.adelantoPagado ?? prev.adelantoPagado ?? false,
+                    visitPaymentConfirmed: meta.visitPaymentConfirmed ?? prev.visitPaymentConfirmed ?? false,
+                    solicitudAdelanto: meta.solicitudAdelanto ?? null,
+                    solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+                    historialPagosTecnico: meta.historialPagosTecnico ?? prev.historialPagosTecnico ?? [],
+                }));
+            } catch (err) {
+                console.error('Error refetching ticket after Realtime status change:', err);
+            }
+        };
+        refetch();
+    }, [ticket?.status_id, ticket?.id]);
+
+    // 💳 EFECTO 3: Aplica overrides de pagos confirmados desde el servidor.
+    // SOLO usa dependencias primitivas (no el objeto ticket completo) para evitar loops
+    // por referencias de objeto nuevas en cada render del componente padre.
+    const serverAdelantoPagado = ticket?.adelantoPagado ?? false;
+    const serverVisitPaymentConfirmed = ticket?.visitPaymentConfirmed ?? false;
+    const serverHistorialLen = ticket?.historialPagosTecnico?.length ?? 0;
+    useEffect(() => {
+        setTicketData((prev: any) => {
+            if (!prev) return prev;
+            const overrides: any = {};
+            if (serverAdelantoPagado) overrides.solicitudAdelanto = null;
+            if (serverVisitPaymentConfirmed) {
+                overrides.solicitudPagoVisita = null;
+                // ★ FIX: Avanzar desde CUALQUIER estado pre-inspección (no solo esperando_pago_visita)
+                const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita'];
+                if (preInspectionStates.includes(prev.estadoId)) {
+                    overrides.estadoId = 'en_inspeccion';
+                }
+            }
+            if (prev.solicitudAdelantoExtra && serverHistorialLen > 0) {
+                const reqDate = new Date(prev.solicitudAdelantoExtra.fecha).getTime();
+                const pagos = prev.historialPagosTecnico || [];
+                const isPaid = pagos.some((p: any) => {
+                    const isRefuerzo = p.tipo === 'Refuerzo' || p.referencia?.includes('Refuerzo');
+                    return isRefuerzo && new Date(p.fecha).getTime() >= reqDate;
+                });
+                if (isPaid) overrides.solicitudAdelantoExtra = null;
+            }
+            if (Object.keys(overrides).length === 0) return prev; // Sin cambios → no re-render
+            return { ...prev, ...overrides };
+        });
+        if (ticket?.gastos) setGastos(ticket.gastos);
+        if (ticket?.evidenciasEjecucion) setEvidenciasEjecucion(ticket.evidenciasEjecucion);
+    }, [serverAdelantoPagado, serverVisitPaymentConfirmed, serverHistorialLen]);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -208,6 +249,25 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // Estado para Cotización BCP
     const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizacionBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
+
+    // Estados para Triage de Mibanco
+    const [triageSedeId, setTriageSedeId] = useState("");
+    const [triageServiceType, setTriageServiceType] = useState("");
+    const [triageDescription, setTriageDescription] = useState("");
+    const [sedesMibanco, setSedesMibanco] = useState<any[]>([]);
+    const [loadingSedes, setLoadingSedes] = useState(false);
+
+    useEffect(() => {
+        if (ticketData.estadoId === 'borrador' && ticketData.client_id === MIBANCO_ID) {
+            setLoadingSedes(true);
+            // Inicializar descripción editable con la descripción actual
+            setTriageDescription(ticketData.description || ticketData.descripcionProblema || '');
+            branchesAPI.getByClient(MIBANCO_ID)
+                .then(data => setSedesMibanco(data))
+                .catch(err => console.error(err))
+                .finally(() => setLoadingSedes(false));
+        }
+    }, [ticketData.estadoId, ticketData.client_id]);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -371,22 +431,63 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     }, [ticket.id]);
 
 
-    const handleAssignment = (assignmentData: any) => {
-        // Actualizar el ticket con los datos de asignación
-        const updatedTicket = {
-            ...ticketData,
-            ...assignmentData,
-            // Si hay costo de visita > 0, requerimos pago de gerencia antes de inspección
-            // Si no hay costo, procedemos normal
-            estadoId: ticketData.estadoId === "nuevo"
-                ? (parseFloat(assignmentData.costoVisita || 0) > 0 ? "esperando_pago_visita" : "en_inspeccion")
-                : ticketData.estadoId
+    const handleAssignment = async (assignmentData: any) => {
+        const visitaCost = parseFloat(assignmentData.costoVisita || 0);
+        const hasVisitCost = visitaCost > 0;
+
+        // Determinar nuevo estado
+        const newEstadoId = (ticketData.estadoId === 'nuevo' || ticketData.estadoId === 'borrador')
+            ? (hasVisitCost ? 'esperando_pago_visita' : 'en_inspeccion')
+            : ticketData.estadoId;
+
+        // ★ FIX: Persistir en Supabase (antes solo era setTicketData local)
+        const dbUpdates: any = {
+            technician_id: assignmentData.tecnico?.id || null,
+            visit_cost: visitaCost,
+            status_id: newEstadoId,
+            metadata: {
+                ...ticketData.metadata,
+                tecnico: assignmentData.tecnico,
+                costoVisita: visitaCost,
+                fechaAsignacion: assignmentData.fechaAsignacion,
+                estadoId: newEstadoId,
+                // Crear solicitud de pago de visita si aplica
+                ...(hasVisitCost ? {
+                    solicitudPagoVisita: {
+                        monto: visitaCost,
+                        fecha: new Date().toISOString(),
+                        estado: 'pendiente'
+                    }
+                } : {})
+            }
         };
 
-        setTicketData(updatedTicket);
-        setShowAssignmentDrawer(false); // Cerrar el drawer
+        try {
+            if (onUpdate) {
+                await onUpdate(ticketData.id, dbUpdates);
+            } else {
+                await ticketsAPI.update(ticketData.id, dbUpdates);
+            }
+        } catch (err) {
+            console.error('Error persisting assignment to Supabase:', err);
+        }
 
-
+        // Actualizar estado local (optimistic)
+        setTicketData((prev: any) => ({
+            ...prev,
+            ...assignmentData,
+            estadoId: newEstadoId,
+            status_id: newEstadoId,
+            costoVisita: visitaCost,
+            ...(hasVisitCost ? {
+                solicitudPagoVisita: {
+                    monto: visitaCost,
+                    fecha: new Date().toISOString(),
+                    estado: 'pendiente'
+                }
+            } : {})
+        }));
+        setShowAssignmentDrawer(false);
     };
 
     const handleProceedToAssignment = () => {
@@ -632,6 +733,65 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             showToast("Petición Enviada", "Solicitud registrada. Esperando aprobación de Gerencia.", "info");
         } else {
             showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
+        }
+    };
+
+    const handleClasificarYActivar = async () => {
+        const finalSedeId = triageSedeId || ticketData.branch_id;
+        const codigoSedeExtraido = ticketData.metadata?.codigo_sede_extraido;
+
+        if (!triageServiceType) {
+            showToast("Campo requerido", "Por favor seleccione el tipo de servicio.", "error");
+            return;
+        }
+
+        if (!finalSedeId) {
+            showToast("Campo requerido", "Por favor vincule el ticket a una sede real.", "error");
+            return;
+        }
+
+        try {
+            // 1. Self-Learning: Guardar codigo_sede en la sede seleccionada
+            if (finalSedeId && codigoSedeExtraido) {
+                await branchesAPI.update(finalSedeId, {
+                    codigo_cliente: codigoSedeExtraido
+                });
+            }
+
+            // 2. Actualizar ticket en la BD - pasa a 'nuevo' para iniciar flujo estándar
+            const dbUpdates = {
+                branch_id: finalSedeId,
+                service_type: triageServiceType,
+                description: triageDescription || ticketData.description || '',
+                status_id: 'nuevo', // ✅ Inicia el flujo operativo estándar
+                metadata: {
+                    ...ticketData.metadata,
+                    triage_completado: true,
+                    fecha_triage: new Date().toISOString()
+                }
+            };
+
+            // 3. Guardar en Supabase
+            await ticketsAPI.update(ticketData.id, dbUpdates);
+
+            // 4. Actualizar estado local de UI
+            const localUpdates = {
+                ...dbUpdates,
+                estadoId: 'nuevo',
+                descripcionProblema: dbUpdates.description,
+                // ★ FIX: InfoBarBase lee 'tipoServicio', no 'service_type'
+                tipoServicio: triageServiceType,
+            };
+
+            if (onUpdate) {
+                await onUpdate(ticketData.id, dbUpdates);
+            }
+
+            setTicketData((prev: any) => ({ ...prev, ...localUpdates }));
+            showToast("✅ Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
+        } catch (error: any) {
+            console.error("Error en triage:", error);
+            showToast("Error al Clasificar", `Detalle: ${error?.message || 'Error desconocido'}`, "error");
         }
     };
 
@@ -932,10 +1092,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 )}
                                 <div className={styles.titleInfo}>
                                     <h3>
-                                        {ticket.numeroTicketCliente
-                                            ? ticket.numeroTicketCliente
-                                            : `Ticket #${ticket.id.slice(-6)}`
-                                        } (Nego MOD)
+                                        {ticketData.metadata?.titulo ||
+                                            (ticketData.numeroTicketCliente
+                                                ? ticketData.numeroTicketCliente
+                                                : `Ticket #${ticketData.id.slice(-6)}`)
+                                        }
                                     </h3>
                                     <span>{ticket.cliente?.nombre || 'Sin cliente'}</span>
                                 </div>
@@ -1028,6 +1189,105 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         <div className={styles.operationalArea}>
                             {children || (
                                 <>
+                                    {ticketData.estadoId === "borrador" && (
+                                        <div className={styles.triageBox}>
+                                            <div className={styles.triageHeader}>
+                                                <Sparkles size={24} color="#8B5CF6" />
+                                                <div style={{ textAlign: 'left' }}>
+                                                    <h3 className={styles.triageTitle}>Bandeja de Triage - Mibanco</h3>
+                                                    <p className={styles.triageSubtitle}>Clasificación y Validación de Ticket Automático</p>
+                                                </div>
+                                            </div>
+
+                                            <div className={styles.triageForm}>
+                                                {/* CAMPO EDITABLE: Descripción del Problema */}
+                                                <div className={styles.triageField}>
+                                                    <label>✏️ Descripción del Problema (Editable):</label>
+                                                    <textarea
+                                                        value={triageDescription}
+                                                        onChange={(e) => setTriageDescription(e.target.value)}
+                                                        className={styles.triageSelect}
+                                                        rows={4}
+                                                        placeholder="Describa el problema reportado..."
+                                                        style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: '0.9rem', fontWeight: 500 }}
+                                                    />
+                                                </div>
+
+                                                {/* CAMPO SOLO LECTURA: Sede Reportada por Banco */}
+                                                <div className={styles.triageField}>
+                                                    <label>🏦 Sede Reportada por Banco:</label>
+                                                    <div className={styles.readonlyValue}>
+                                                        {ticketData.sede_reportada_cliente || ticketData.metadata?.codigo_sede_extraido || "No especificada"}
+                                                    </div>
+                                                </div>
+
+                                                {!ticketData.branch_id && !triageSedeId && (
+                                                    <div className={styles.triageAlert}>
+                                                        <AlertTriangle size={16} />
+                                                        <span>Sede no mapeada automáticamente. Seleccione manualmente para entrenar al sistema.</span>
+                                                    </div>
+                                                )}
+
+                                                {/* VINCULAR A SEDE REAL */}
+                                                <div className={styles.triageField}>
+                                                    <label>🏢 Vincular a Sede Real:</label>
+                                                    {ticketData.branch_id ? (
+                                                        // ★ FIX: Sede ya consolidada — bloquear modificación
+                                                        <div className={styles.readonlyValue} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span>🔒</span>
+                                                            <span style={{ fontWeight: 700, color: '#1E293B' }}>
+                                                                {sedesMibanco.find((s: any) => s.id === ticketData.branch_id)?.name
+                                                                    || ticketData.sede?.nombre
+                                                                    || ticketData.branch_id}
+                                                            </span>
+                                                            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>(agencia ya consolidada — no modificable)</span>
+                                                        </div>
+                                                    ) : (
+                                                        <select
+                                                            value={triageSedeId}
+                                                            onChange={(e) => setTriageSedeId(e.target.value)}
+                                                            className={styles.triageSelect}
+                                                            disabled={loadingSedes}
+                                                        >
+                                                            <option value="">{loadingSedes ? 'Cargando sedes...' : 'Seleccione una sede...'}</option>
+                                                            {sedesMibanco.map((sede: any) => (
+                                                                <option key={sede.id} value={sede.id}>
+                                                                    {sede.name}{sede.address ? ` - ${sede.address}` : ''}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </div>
+
+                                                {/* TIPO DE SERVICIO - Desde módulo de Técnicos */}
+                                                <div className={styles.triageField}>
+                                                    <label>🔧 Tipo de Servicio (según catálogo de técnicos):</label>
+                                                    <select
+                                                        value={triageServiceType}
+                                                        onChange={(e) => setTriageServiceType(e.target.value)}
+                                                        className={styles.triageSelect}
+                                                    >
+                                                        <option value="">Seleccione el tipo de servicio...</option>
+                                                        {SERVICE_TYPES.map(st => (
+                                                            <option key={st.id} value={st.id}>
+                                                                {st.nombre}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                <button
+                                                    className={styles.triageActionBtn}
+                                                    onClick={handleClasificarYActivar}
+                                                    disabled={!triageServiceType || (!triageSedeId && !ticketData.branch_id)}
+                                                >
+                                                    <CheckCircle size={18} />
+                                                    <span>Clasificar y Activar Ticket</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {ticketData.estadoId === "nuevo" && (
                                         <div className={styles.stepActions}>
                                             <p className={styles.stepHint}>
