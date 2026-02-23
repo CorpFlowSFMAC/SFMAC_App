@@ -202,6 +202,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
                     const prevOrder = E2_ORDER[prev.estadoId] ?? 0;
                     const finalEstadoId = incomingOrder >= prevOrder ? corregidoId2 : prev.estadoId;
+                    // ★ FIX: Merge de pagos por ID — nunca perdemos pagos del array local ni del servidor
+                    const serverPagos2: any[] = meta.historialPagosTecnico || [];
+                    const localPagos2: any[] = prev.historialPagosTecnico || [];
+                    const mergedById2 = new Map<string, any>();
+                    [...localPagos2, ...serverPagos2].forEach((p: any) => { if (p?.id) mergedById2.set(p.id, p); });
+                    const mergedPagos2 = mergedById2.size > 0 ? Array.from(mergedById2.values()) : serverPagos2;
+
                     return {
                         ...prev, ...fullTicket, ...meta,
                         metadata: meta,
@@ -211,7 +218,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         visitPaymentConfirmed: visitConf2,
                         solicitudAdelanto: meta.solicitudAdelanto ?? null,
                         solicitudPagoVisita: visitConf2 ? null : (meta.solicitudPagoVisita ?? null),
-                        historialPagosTecnico: meta.historialPagosTecnico ?? prev.historialPagosTecnico ?? [],
+                        historialPagosTecnico: mergedPagos2,
                     };
                 });
             } catch (err) {
@@ -224,9 +231,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // 💳 EFECTO 3: Aplica overrides de pagos confirmados desde el servidor.
     // SOLO usa dependencias primitivas (no el objeto ticket completo) para evitar loops
     // por referencias de objeto nuevas en cada render del componente padre.
-    const serverAdelantoPagado = ticket?.adelantoPagado ?? false;
-    const serverVisitPaymentConfirmed = ticket?.visitPaymentConfirmed ?? false;
-    const serverHistorialLen = ticket?.historialPagosTecnico?.length ?? 0;
+    const serverAdelantoPagado = ticket?.adelantoPagado ?? ticket?.metadata?.adelantoPagado ?? false;
+    const serverVisitPaymentConfirmed = ticket?.visitPaymentConfirmed ?? ticket?.metadata?.visitPaymentConfirmed ?? false;
+    // Usa la longitud del historial tanto del nivel raíz como del metadata
+    const serverHistorialLen = Math.max(
+        ticket?.historialPagosTecnico?.length ?? 0,
+        ticket?.metadata?.historialPagosTecnico?.length ?? 0
+    );
     useEffect(() => {
         setTicketData((prev: any) => {
             if (!prev) return prev;
@@ -388,7 +399,22 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 // Forzar campos críticos desde el servidor si no soy Admin
                 adelantoPagado: isAdmin ? businessData.adelantoPagado : sourceMetadata.adelantoPagado,
                 fechaPagoAdelanto: isAdmin ? businessData.fechaPagoAdelanto : sourceMetadata.fechaPagoAdelanto,
-                historialPagosTecnico: isAdmin ? businessData.historialPagosTecnico : sourceMetadata.historialPagosTecnico,
+                // ★★★ FIX RACE CONDITION: SIEMPRE usar el historial MÁS LARGO entre local y servidor.
+                // Los pagos son append-only: el array más largo es SIEMPRE el más completo.
+                // Esto evita que syncToSupabase() destructivamente sobreescriba pagos confirmados
+                // desde payments/page.tsx mientras TicketWindow tenía estado local desactualizado.
+                historialPagosTecnico: (() => {
+                    const localPagos: any[] = isAdmin
+                        ? (businessData.historialPagosTecnico || [])
+                        : (sourceMetadata.historialPagosTecnico || []);
+                    const serverPagos: any[] = ticket.historialPagosTecnico || ticket.metadata?.historialPagosTecnico || [];
+                    // Merge: unión por ID para no perder ningún pago
+                    const allById = new Map<string, any>();
+                    [...localPagos, ...serverPagos].forEach(p => {
+                        if (p?.id) allById.set(p.id, p);
+                    });
+                    return allById.size > 0 ? Array.from(allById.values()) : localPagos;
+                })(),
                 visitPaymentConfirmed: isAdmin ? businessData.visitPaymentConfirmed : sourceMetadata.visitPaymentConfirmed,
                 fechaPagoVisita: isAdmin ? businessData.fechaPagoVisita : sourceMetadata.fechaPagoVisita,
 

@@ -449,6 +449,69 @@ export const ticketsAPI = {
         return data;
     },
 
+    // ★★★ PAYMENT-SAFE UPDATE ★★★
+    // Uso exclusivo del módulo de pagos cuando se confirma un depósito.
+    // A diferencia de update() — que sobreescribe toda la metadata —
+    // esta función SIEMPRE:
+    //   1. Lee la metadata actual del servidor (fuente de verdad)
+    //   2. Hace un merge profundo del historialPagosTecnico (append-only, nunca destruye)
+    //   3. Solo actualiza los campos de pago relevantes
+    // Esto evita la race condition donde TicketWindow.syncToSupabase() borra pagos recién confirmados.
+    async updatePaymentSafe(id: string, newPago: {
+        id: string;
+        monto: number;
+        fecha: string;
+        tipo: string;
+        estado: string;
+        referencia: string;
+        voucherRef?: string | null;
+    }, additionalUpdates: {
+        status_id?: string;
+        execution_date?: string;
+        closure_date?: string;
+        metadataFields?: Record<string, any>;
+    } = {}) {
+        // 1. Leer metadata actual del servidor — es la única fuente de verdad
+        const { data: current, error: fetchErr } = await supabase
+            .from('tickets')
+            .select('metadata, status_id')
+            .eq('id', id)
+            .single();
+
+        if (fetchErr) throw fetchErr;
+
+        const serverMeta = current?.metadata || {};
+
+        // 2. Merge del historial: nunca pisamos pagos existentes
+        const existingPagos: any[] = serverMeta.historialPagosTecnico || [];
+        // Evitar duplicados en caso de doble-click
+        const alreadyExists = existingPagos.some((p: any) => p.id === newPago.id);
+        const mergedPagos = alreadyExists ? existingPagos : [...existingPagos, newPago];
+
+        // 3. Metadata final: merge del servidor + cambios de pago
+        const newMetadata = {
+            ...serverMeta,
+            ...additionalUpdates.metadataFields,
+            historialPagosTecnico: mergedPagos,
+        };
+
+        // 4. Preparar updates de columnas
+        const updates: any = { metadata: newMetadata };
+        if (additionalUpdates.status_id) updates.status_id = additionalUpdates.status_id;
+        if (additionalUpdates.execution_date) updates.execution_date = additionalUpdates.execution_date;
+        if (additionalUpdates.closure_date) updates.closure_date = additionalUpdates.closure_date;
+
+        const { data, error } = await supabase
+            .from('tickets')
+            .update(updates)
+            .eq('id', id)
+            .select('id, status_id, metadata')
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
     async delete(id: string) {
         const { error } = await supabase
             .from('tickets')

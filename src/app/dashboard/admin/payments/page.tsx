@@ -337,62 +337,75 @@ export default function PaymentsPage() {
     };
 
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
-        let freshTicket: any;
-        try {
-            freshTicket = await ticketsAPI.getById(group.ticketId);
-        } catch (err) {
-            freshTicket = tickets.find(t => t.id === group.ticketId);
-        }
-        if (!freshTicket) return;
+        // Generar un ID único y determinista para el pago
+        // (evita duplicados si hay doble-click o re-render)
+        const pagoId = `pago_${group.ticketId}_${item.tipo.replace(/\s/g, '_')}_${Date.now()}`;
 
-        const baseMetadata = freshTicket.metadata || {};
         const nuevoPago = {
-            id: Date.now().toString(),
+            id: pagoId,
             monto: item.monto,
             fecha: new Date().toISOString(),
             tipo: item.tipo,
             estado: 'pagado',
             referencia: `Transferencia Web - ${item.tipo}`,
-            voucherRef: voucherBase64
+            voucherRef: voucherBase64 || null,
         };
 
-        const historialPagosTecnico = [...(baseMetadata.historialPagosTecnico || []), nuevoPago];
-        const newMetadata: any = { ...baseMetadata, historialPagosTecnico };
-        const updates: any = { metadata: newMetadata };
+        // Campos adicionales de metadata y columnas que cambian según tipo de pago
+        const additionalUpdates: any = { metadataFields: {} };
 
         if (item.tipo === 'Adelanto') {
-            updates.status_id = 'en_ejecucion';
-            newMetadata.estadoId = 'en_ejecucion';
-            updates.execution_date = new Date().toISOString();
-            newMetadata.fechaInicioEjecucion = updates.execution_date;
-            newMetadata.adelantoPagado = true;
-            newMetadata.fechaPagoAdelanto = updates.execution_date;
-            newMetadata.solicitudAdelanto = null;
+            additionalUpdates.status_id = 'en_ejecucion';
+            additionalUpdates.execution_date = new Date().toISOString();
+            additionalUpdates.metadataFields = {
+                estadoId: 'en_ejecucion',
+                fechaInicioEjecucion: additionalUpdates.execution_date,
+                adelantoPagado: true,
+                fechaPagoAdelanto: additionalUpdates.execution_date,
+                solicitudAdelanto: null,
+            };
         } else if (item.tipo === 'Refuerzo') {
-            newMetadata.solicitudAdelantoExtra = null;
+            additionalUpdates.metadataFields = {
+                solicitudAdelantoExtra: null,
+            };
         } else if (item.tipo === 'Liquidación Final') {
-            updates.status_id = 'ticket_cerrado';
-            newMetadata.estadoId = 'ticket_cerrado';
-            updates.closure_date = new Date().toISOString();
-            newMetadata.fechaPagoFinal = updates.closure_date;
-            newMetadata.solicitudLiquidacion = null;
+            additionalUpdates.status_id = 'ticket_cerrado';
+            additionalUpdates.closure_date = new Date().toISOString();
+            additionalUpdates.metadataFields = {
+                estadoId: 'ticket_cerrado',
+                fechaPagoFinal: additionalUpdates.closure_date,
+                solicitudLiquidacion: null,
+            };
         } else if (item.tipo === 'Movilidad / Visita') {
-            const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
-            if (preInspectionStates.includes(freshTicket.status_id)) {
-                updates.status_id = 'en_inspeccion';
-                newMetadata.estadoId = 'en_inspeccion';
-            }
-            newMetadata.visitPaymentConfirmed = true;
-            newMetadata.fechaPagoVisita = new Date().toISOString();
-            newMetadata.solicitudPagoVisita = null;
+            // Leer estado actual del ticket para decidir si avanzar status
+            // updatePaymentSafe lee la metadata fresca, pero no sabemos el status_id aquí.
+            // Hacemos un fetch ligero para verificar el status antes de decidir.
+            try {
+                const { data: currentRow } = await (supabase as any)
+                    .from('tickets')
+                    .select('status_id')
+                    .eq('id', group.ticketId)
+                    .single();
+                const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
+                if (currentRow && preInspectionStates.includes(currentRow.status_id)) {
+                    additionalUpdates.status_id = 'en_inspeccion';
+                }
+            } catch (_) { /* si falla, no avanzamos estado */ }
+            additionalUpdates.metadataFields = {
+                visitPaymentConfirmed: true,
+                fechaPagoVisita: new Date().toISOString(),
+                solicitudPagoVisita: null,
+            };
         }
 
         try {
-            await updateTicket(group.ticketId, updates);
+            // ★ updatePaymentSafe: lee servidor → merge → escribe. Nunca destruye pagos existentes.
+            await ticketsAPI.updatePaymentSafe(group.ticketId, nuevoPago, additionalUpdates);
+            // Refrescar la lista de pagos para reflejar el nuevo estado
             await refresh();
         } catch (err) {
-            console.error("Error confirming payment:", err);
-            alert("Error al procesar el pago. Por favor intente de nuevo.");
+            console.error('[Payments] Error confirming payment:', err);
+            alert('Error al procesar el pago. Por favor intente de nuevo.');
         }
     };
 
