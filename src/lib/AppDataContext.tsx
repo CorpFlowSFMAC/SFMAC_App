@@ -3,124 +3,23 @@
 import React, {
     createContext,
     useContext,
-    useState,
-    useEffect,
     useCallback,
-    useRef,
+    useEffect,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { clientsAPI, techniciansAPI, ticketsAPI } from "@/lib/supabase-api";
 import { normalizeStateId } from "@/lib/ticketStates";
+import {
+    useTickets,
+    useClients as useClientsQuery,
+    useTechnicians as useTechniciansQuery,
+    queryKeys,
+    normalizeTicket,
+} from "@/lib/useQueryHooks";
 
 // ─────────────────────────────────────────────
-// NORMALIZACIÓN DE TICKET (igual que en el hook)
-// ─────────────────────────────────────────────
-const normalizeTicket = (t: any) => {
-    if (!t) return null;
-
-    let realMetadata = t.metadata || {};
-    while (realMetadata.metadata && typeof realMetadata.metadata === "object") {
-        realMetadata = { ...realMetadata, ...realMetadata.metadata };
-        delete realMetadata.metadata;
-    }
-
-    const clienteRaw = t.clients || t.cliente || realMetadata.cliente;
-    const cliente = clienteRaw
-        ? {
-            ...clienteRaw,
-            nombre: clienteRaw.name || clienteRaw.nombre || "Sin Nombre",
-            color: clienteRaw.color_aura || clienteRaw.color || "#8B5CF6",
-        }
-        : null;
-
-    const sedeRaw = t.branch_offices || t.sede || realMetadata.sede;
-    const sede = sedeRaw
-        ? {
-            ...sedeRaw,
-            nombre: sedeRaw.name || sedeRaw.nombre || "Sin Sede",
-            direccion: sedeRaw.address || sedeRaw.direccion || "Sin dirección",
-            zona: sedeRaw.zone || sedeRaw.zona || "PAN PERÚ",
-            departamento: sedeRaw.departamento || realMetadata.departamento,
-            provincia: sedeRaw.provincia || realMetadata.provincia,
-            distrito: sedeRaw.distrito || realMetadata.distrito,
-        }
-        : null;
-
-    let tecnicoRaw = t.technicians || t.tecnico || realMetadata.tecnico;
-    if (Array.isArray(tecnicoRaw)) tecnicoRaw = tecnicoRaw[0];
-
-    let tecnico = null;
-    if (tecnicoRaw) {
-        const firstName = tecnicoRaw.first_name || tecnicoRaw.nombre || "";
-        const lastName = tecnicoRaw.last_name || tecnicoRaw.apellido || "";
-        const fullName =
-            tecnicoRaw.name ||
-            (firstName && lastName
-                ? `${firstName} ${lastName}`.trim()
-                : firstName || lastName);
-        tecnico = {
-            ...tecnicoRaw,
-            id: tecnicoRaw.id,
-            nombre: fullName || "Sin Técnico",
-            banco: tecnicoRaw.bank_name || tecnicoRaw.banco || "---",
-            numeroCuenta:
-                tecnicoRaw.account_number || tecnicoRaw.numeroCuenta || "---",
-            cci: tecnicoRaw.cci || tecnicoRaw.cci_number || "---",
-            yape:
-                tecnicoRaw.yape_number || tecnicoRaw.yape || tecnicoRaw.phone,
-            plin:
-                tecnicoRaw.plin_number || tecnicoRaw.plin || tecnicoRaw.phone,
-        };
-    }
-
-    return {
-        ...t,
-        estadoId: normalizeStateId(
-            t.status_id || t.estadoId || realMetadata.estadoId || "nuevo"
-        ),
-        descripcionProblema:
-            t.description ||
-            t.descripcionProblema ||
-            realMetadata.descripcionProblema ||
-            "",
-        numeroTicketCliente:
-            t.client_ticket_number ||
-            t.numeroTicketCliente ||
-            realMetadata.numeroTicketCliente ||
-            "",
-        fechaCreacion:
-            t.created_at || t.fechaCreacion || realMetadata.fechaCreacion,
-        createdAt:
-            t.created_at || t.createdAt || t.fechaCreacion || realMetadata.createdAt,
-        costoManoObra:
-            t.labor_cost || t.costoManoObra || realMetadata.costoManoObra || 0,
-        costoMateriales:
-            t.materials_cost ||
-            t.costoMateriales ||
-            realMetadata.costoMateriales ||
-            0,
-        costoVisita:
-            t.visit_cost || t.costoVisita || realMetadata.costoVisita || 0,
-        montoFinal:
-            t.total_quoted_amount ||
-            t.montoFinal ||
-            realMetadata.montoFinal ||
-            0,
-        cliente,
-        sede,
-        tecnico,
-        tipoServicio:
-            t.service_type || t.tipoServicio || realMetadata.tipoServicio,
-        creadoPor: t.created_by || t.creadoPor || realMetadata.creadoPor,
-        diagnostico:
-            t.diagnosis || t.diagnostico || realMetadata.diagnostico,
-        metadata: realMetadata,
-        ...realMetadata,
-    };
-};
-
-// ─────────────────────────────────────────────
-// TIPOS DEL CONTEXTO
+// TIPOS DEL CONTEXTO (misma interfaz pública de siempre)
 // ─────────────────────────────────────────────
 interface AppDataContextType {
     // Clients
@@ -151,71 +50,44 @@ interface AppDataContextType {
 const AppDataContext = createContext<AppDataContextType | null>(null);
 
 // ─────────────────────────────────────────────
-// PROVIDER
+// PROVIDER — Ahora usa TanStack Query internamente
+// pero mantiene la misma API para no romper consumidores
 // ─────────────────────────────────────────────
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-    // ── Clients ──────────────────────────────
-    const [clients, setClients] = useState<any[]>([]);
-    const [loadingClients, setLoadingClients] = useState(true);
+    const queryClient = useQueryClient();
 
-    const fetchClients = useCallback(async () => {
-        try {
-            setLoadingClients(true);
-            const data = await clientsAPI.getAll();
-            setClients(data || []);
-        } catch (err) {
-            console.error("[AppData] Error fetching clients:", err);
-        } finally {
-            setLoadingClients(false);
-        }
-    }, []);
+    // ── Queries ──────────────────────────────
+    const {
+        data: tickets = [],
+        isLoading: loadingTickets,
+    } = useTickets();
 
-    // ── Technicians ──────────────────────────
-    const [technicians, setTechnicians] = useState<any[]>([]);
-    const [loadingTechnicians, setLoadingTechnicians] = useState(true);
+    const {
+        data: clients = [],
+        isLoading: loadingClients,
+    } = useClientsQuery();
 
-    const fetchTechnicians = useCallback(async () => {
-        try {
-            setLoadingTechnicians(true);
-            const data = await techniciansAPI.getAll();
-            setTechnicians(data || []);
-        } catch (err) {
-            console.error("[AppData] Error fetching technicians:", err);
-        } finally {
-            setLoadingTechnicians(false);
-        }
-    }, []);
+    const {
+        data: technicians = [],
+        isLoading: loadingTechnicians,
+    } = useTechniciansQuery();
 
-    // ── Tickets ──────────────────────────────
-    const [tickets, setTickets] = useState<any[]>([]);
-    const [loadingTickets, setLoadingTickets] = useState(true);
+    // ── Refresh = invalidar caché → TanStack refetch automáticamente ──
+    const refreshTickets = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+    }, [queryClient]);
 
-    const fetchTickets = useCallback(async () => {
-        try {
-            setLoadingTickets(true);
-            const data = await ticketsAPI.getSummaryAll();
-            setTickets((data || []).map(normalizeTicket));
-        } catch (err) {
-            console.error("[AppData] Error fetching tickets:", err);
-        } finally {
-            setLoadingTickets(false);
-        }
-    }, []);
+    const refreshClients = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
+    }, [queryClient]);
 
-    // ── Carga inicial ─────────────────────────
+    const refreshTechnicians = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.technicians.all });
+    }, [queryClient]);
+
+    // ── Suscripciones Realtime → invalidan caché TanStack ──
     useEffect(() => {
-        fetchClients();
-        fetchTechnicians();
-        fetchTickets();
-    }, [fetchClients, fetchTechnicians, fetchTickets]);
-
-    // ── Suscripciones Realtime Supabase ──────
-    // Usamos ref para acceder a la última versión de fetchTickets sin recrear el canal
-    const fetchTicketsRef = useRef(fetchTickets);
-    fetchTicketsRef.current = fetchTickets;
-
-    useEffect(() => {
-        // ─ Canal: CLIENTES
+        // ─ Canal: CLIENTES → inserción/actualización/borrado directo en caché
         const clientsChannel = supabase
             .channel("appdata:clients")
             .on(
@@ -223,25 +95,38 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 { event: "*", schema: "public", table: "clients" },
                 (payload) => {
                     if (payload.eventType === "INSERT") {
-                        setClients((prev) => {
-                            const exists = prev.some(
-                                (c) => c.id === (payload.new as any).id
-                            );
-                            return exists ? prev : [...prev, payload.new];
-                        });
+                        queryClient.setQueryData(
+                            queryKeys.clients.all,
+                            (old: any[] | undefined) => {
+                                if (!old) return old;
+                                const exists = old.some(
+                                    (c) => c.id === (payload.new as any).id
+                                );
+                                return exists ? old : [...old, payload.new];
+                            }
+                        );
                     } else if (payload.eventType === "UPDATE") {
-                        setClients((prev) =>
-                            prev.map((c) =>
-                                c.id === (payload.new as any).id
-                                    ? { ...c, ...payload.new }
-                                    : c
-                            )
+                        queryClient.setQueryData(
+                            queryKeys.clients.all,
+                            (old: any[] | undefined) =>
+                                old
+                                    ? old.map((c) =>
+                                        c.id === (payload.new as any).id
+                                            ? { ...c, ...payload.new }
+                                            : c
+                                    )
+                                    : old
                         );
                     } else if (payload.eventType === "DELETE") {
-                        setClients((prev) =>
-                            prev.filter(
-                                (c) => c.id !== (payload.old as any).id
-                            )
+                        queryClient.setQueryData(
+                            queryKeys.clients.all,
+                            (old: any[] | undefined) =>
+                                old
+                                    ? old.filter(
+                                        (c) =>
+                                            c.id !== (payload.old as any).id
+                                    )
+                                    : old
                         );
                     }
                 }
@@ -256,25 +141,38 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 { event: "*", schema: "public", table: "technicians" },
                 (payload) => {
                     if (payload.eventType === "INSERT") {
-                        setTechnicians((prev) => {
-                            const exists = prev.some(
-                                (t) => t.id === (payload.new as any).id
-                            );
-                            return exists ? prev : [...prev, payload.new];
-                        });
+                        queryClient.setQueryData(
+                            queryKeys.technicians.all,
+                            (old: any[] | undefined) => {
+                                if (!old) return old;
+                                const exists = old.some(
+                                    (t) => t.id === (payload.new as any).id
+                                );
+                                return exists ? old : [...old, payload.new];
+                            }
+                        );
                     } else if (payload.eventType === "UPDATE") {
-                        setTechnicians((prev) =>
-                            prev.map((t) =>
-                                t.id === (payload.new as any).id
-                                    ? { ...t, ...payload.new }
-                                    : t
-                            )
+                        queryClient.setQueryData(
+                            queryKeys.technicians.all,
+                            (old: any[] | undefined) =>
+                                old
+                                    ? old.map((t) =>
+                                        t.id === (payload.new as any).id
+                                            ? { ...t, ...payload.new }
+                                            : t
+                                    )
+                                    : old
                         );
                     } else if (payload.eventType === "DELETE") {
-                        setTechnicians((prev) =>
-                            prev.filter(
-                                (t) => t.id !== (payload.old as any).id
-                            )
+                        queryClient.setQueryData(
+                            queryKeys.technicians.all,
+                            (old: any[] | undefined) =>
+                                old
+                                    ? old.filter(
+                                        (t) =>
+                                            t.id !== (payload.old as any).id
+                                    )
+                                    : old
                         );
                     }
                 }
@@ -289,61 +187,92 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 { event: "*", schema: "public", table: "tickets" },
                 async (payload) => {
                     if (payload.eventType === "INSERT") {
-                        // Para INSERTs recargamos para traer las relaciones (cliente, sede, técnico)
-                        fetchTicketsRef.current();
+                        // Para INSERTs → invalidar para traer las relaciones
+                        queryClient.invalidateQueries({
+                            queryKey: queryKeys.tickets.all,
+                        });
                     } else if (payload.eventType === "UPDATE") {
-                        // ⚠️ CRÍTICO: payload.new de postgres_changes NO incluye columnas JSONB
-                        // grandes como 'metadata' (llegan null/vacías).
-                        // Si hacemos merge superficial con payload.new, destruimos la metadata
-                        // (solicitudAdelanto, historialPagosTecnico, estadoId real, etc.).
-                        // Solución: hacer getById() completo para obtener el ticket fresco con metadata.
+                        // ⚠️ CRÍTICO: postgres_changes NO incluye JSONB grandes
+                        // → Hacer getById() y actualizar en caché TanStack
                         const ticketId = (payload.new as any).id;
                         if (!ticketId) return;
                         try {
-                            const freshTicket = await ticketsAPI.getById(ticketId);
+                            const freshTicket =
+                                await ticketsAPI.getById(ticketId);
                             if (freshTicket) {
-                                const normalized = normalizeTicket(freshTicket);
-                                setTickets((prev) =>
-                                    prev.map((t) => t.id === ticketId ? normalized : t)
+                                const normalized =
+                                    normalizeTicket(freshTicket);
+                                queryClient.setQueryData(
+                                    queryKeys.tickets.summary(),
+                                    (old: any[] | undefined) =>
+                                        old
+                                            ? old.map((t) =>
+                                                t.id === ticketId
+                                                    ? normalized
+                                                    : t
+                                            )
+                                            : old
+                                );
+                                // También actualizar el detalle si está cacheado
+                                queryClient.setQueryData(
+                                    queryKeys.tickets.detail(ticketId),
+                                    normalized
                                 );
                             }
                         } catch (err) {
-                            console.warn("[AppData] No se pudo refetch ticket, usando merge superficial:", err);
-                            // Fallback seguro: solo actualizar status_id del payload (no tocar metadata)
-                            setTickets((prev) =>
-                                prev.map((t) => {
-                                    if (t.id !== ticketId) return t;
-                                    const pNew = payload.new as any;
-                                    const statusId = pNew.status_id;
-                                    if (!statusId) return t;
-                                    return normalizeTicket({
-                                        ...t,
-                                        status_id: statusId,
-                                        estadoId: normalizeStateId(statusId),
-                                    });
-                                })
+                            console.warn(
+                                "[AppData] No pudo refetch ticket, merge superficial:",
+                                err
                             );
+                            const pNew = payload.new as any;
+                            const statusId = pNew.status_id;
+                            if (statusId) {
+                                queryClient.setQueryData(
+                                    queryKeys.tickets.summary(),
+                                    (old: any[] | undefined) =>
+                                        old
+                                            ? old.map((t) => {
+                                                if (t.id !== ticketId)
+                                                    return t;
+                                                return normalizeTicket({
+                                                    ...t,
+                                                    status_id: statusId,
+                                                    estadoId:
+                                                        normalizeStateId(
+                                                            statusId
+                                                        ),
+                                                });
+                                            })
+                                            : old
+                                );
+                            }
                         }
                     } else if (payload.eventType === "DELETE") {
-                        setTickets((prev) =>
-                            prev.filter(
-                                (t) => t.id !== (payload.old as any).id
-                            )
+                        queryClient.setQueryData(
+                            queryKeys.tickets.summary(),
+                            (old: any[] | undefined) =>
+                                old
+                                    ? old.filter(
+                                        (t) =>
+                                            t.id !== (payload.old as any).id
+                                    )
+                                    : old
                         );
                     }
                 }
             )
             .subscribe();
 
-        // ─ Canal: BRANCH_OFFICES (sedes) → actualiza totales de clientes
+        // ─ Canal: BRANCH_OFFICES → actualiza clientes
         const branchesChannel = supabase
             .channel("appdata:branches")
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "branch_offices" },
                 () => {
-                    // Cuando hay cambio en sedes, refrescar clientes para actualizar totalBranches
-                    fetchClients();
+                    queryClient.invalidateQueries({
+                        queryKey: queryKeys.clients.all,
+                    });
                 }
             )
             .subscribe();
@@ -354,79 +283,155 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             supabase.removeChannel(ticketsChannel);
             supabase.removeChannel(branchesChannel);
         };
-    }, [fetchClients]);
+    }, [queryClient]);
 
     // ── CRUD: Clients ─────────────────────────
-    const createClient = useCallback(async (data: any) => {
-        const created = await clientsAPI.create(data);
-        // La suscripción Realtime actualizará el estado automáticamente
-        return created;
-    }, []);
+    const createClient = useCallback(
+        async (data: any) => {
+            const created = await clientsAPI.create(data);
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.clients.all,
+            });
+            return created;
+        },
+        [queryClient]
+    );
 
-    const updateClient = useCallback(async (id: string, updates: any) => {
-        const updated = await clientsAPI.update(id, updates);
-        return updated;
-    }, []);
+    const updateClient = useCallback(
+        async (id: string, updates: any) => {
+            const updated = await clientsAPI.update(id, updates);
+            queryClient.setQueryData(
+                queryKeys.clients.all,
+                (old: any[] | undefined) =>
+                    old
+                        ? old.map((c) =>
+                            c.id === id ? { ...c, ...updated } : c
+                        )
+                        : old
+            );
+            return updated;
+        },
+        [queryClient]
+    );
 
-    const deleteClient = useCallback(async (id: string) => {
-        await clientsAPI.delete(id);
-    }, []);
+    const deleteClient = useCallback(
+        async (id: string) => {
+            await clientsAPI.delete(id);
+            queryClient.setQueryData(
+                queryKeys.clients.all,
+                (old: any[] | undefined) =>
+                    old ? old.filter((c) => c.id !== id) : old
+            );
+        },
+        [queryClient]
+    );
 
     // ── CRUD: Technicians ─────────────────────
-    const createTechnician = useCallback(async (data: any) => {
-        const created = await techniciansAPI.create(data);
-        return created;
-    }, []);
+    const createTechnician = useCallback(
+        async (data: any) => {
+            const created = await techniciansAPI.create(data);
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.technicians.all,
+            });
+            return created;
+        },
+        [queryClient]
+    );
 
-    const updateTechnician = useCallback(async (id: string, updates: any) => {
-        const updated = await techniciansAPI.update(id, updates);
-        return updated;
-    }, []);
+    const updateTechnician = useCallback(
+        async (id: string, updates: any) => {
+            const updated = await techniciansAPI.update(id, updates);
+            queryClient.setQueryData(
+                queryKeys.technicians.all,
+                (old: any[] | undefined) =>
+                    old
+                        ? old.map((t) =>
+                            t.id === id ? { ...t, ...updated } : t
+                        )
+                        : old
+            );
+            return updated;
+        },
+        [queryClient]
+    );
 
-    const deleteTechnician = useCallback(async (id: string) => {
-        await techniciansAPI.delete(id);
-    }, []);
+    const deleteTechnician = useCallback(
+        async (id: string) => {
+            await techniciansAPI.delete(id);
+            queryClient.setQueryData(
+                queryKeys.technicians.all,
+                (old: any[] | undefined) =>
+                    old ? old.filter((t) => t.id !== id) : old
+            );
+        },
+        [queryClient]
+    );
 
     // ── CRUD: Tickets ─────────────────────────
-    const createTicket = useCallback(async (data: any) => {
-        const created = await ticketsAPI.create(data);
-        const normalized = normalizeTicket(created);
-        // La suscripción Realtime hará el fetch completo al detectar INSERT
-        return normalized;
-    }, []);
+    const createTicket = useCallback(
+        async (data: any) => {
+            const created = await ticketsAPI.create(data);
+            const normalized = normalizeTicket(created);
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.tickets.all,
+            });
+            return normalized;
+        },
+        [queryClient]
+    );
 
-    const updateTicket = useCallback(async (id: string, updates: any) => {
-        const updated = await ticketsAPI.update(id, updates);
-        const normalized = normalizeTicket(updated);
-        setTickets((prev) =>
-            prev.map((t) => (t.id === id ? normalized : t))
-        );
-        return normalized;
-    }, []);
+    const updateTicket = useCallback(
+        async (id: string, updates: any) => {
+            const updated = await ticketsAPI.update(id, updates);
+            const normalized = normalizeTicket(updated);
+            // Update en caché TanStack inmediato
+            queryClient.setQueryData(
+                queryKeys.tickets.summary(),
+                (old: any[] | undefined) =>
+                    old
+                        ? old.map((t) => (t.id === id ? normalized : t))
+                        : old
+            );
+            // También actualizar detalle si está cacheado
+            queryClient.setQueryData(
+                queryKeys.tickets.detail(id),
+                normalized
+            );
+            return normalized;
+        },
+        [queryClient]
+    );
 
-    const deleteTicket = useCallback(async (id: string) => {
-        await ticketsAPI.delete(id);
-        setTickets((prev) => prev.filter((t) => t.id !== id));
-    }, []);
+    const deleteTicket = useCallback(
+        async (id: string) => {
+            await ticketsAPI.delete(id);
+            queryClient.setQueryData(
+                queryKeys.tickets.summary(),
+                (old: any[] | undefined) =>
+                    old ? old.filter((t) => t.id !== id) : old
+            );
+        },
+        [queryClient]
+    );
 
     return (
         <AppDataContext.Provider
             value={{
                 clients,
                 loadingClients,
-                refreshClients: fetchClients,
+                refreshClients,
                 createClient,
                 updateClient,
                 deleteClient,
                 technicians,
                 loadingTechnicians,
-                refreshTechnicians: fetchTechnicians,
+                refreshTechnicians,
                 createTechnician,
                 updateTechnician,
                 deleteTechnician,
                 tickets,
                 loadingTickets,
-                refreshTickets: fetchTickets,
+                refreshTickets,
                 createTicket,
                 updateTicket,
                 deleteTicket,

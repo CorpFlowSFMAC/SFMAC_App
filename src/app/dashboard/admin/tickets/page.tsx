@@ -8,6 +8,9 @@ import styles from "./page.module.css";
 import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 import { useAppData } from "@/lib/AppDataContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { prefetchTickets } from "@/lib/useQueryHooks";
+
 
 // Hook para calcular tiempo transcurrido
 const useTicketAge = (createdAt: string) => {
@@ -55,6 +58,7 @@ const useTicketAge = (createdAt: string) => {
 export default function TicketsPage() {
     // Usar contexto global de datos (Realtime compartido entre módulos)
     const { tickets, loadingTickets, createTicket, updateTicket, refreshTickets } = useAppData();
+    const queryClient = useQueryClient();
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("triage");
@@ -177,6 +181,7 @@ export default function TicketsPage() {
                     <button
                         className={`${styles.toggleBtn} ${viewMode === "triage" ? styles.toggleBtnActive : ""}`}
                         onClick={() => setViewMode("triage")}
+                        onMouseEnter={() => prefetchTickets(queryClient)}
                         style={{ borderLeft: 'none' }}
                     >
                         Triage {stats.borradores > 0 && <span className={styles.badgeCount}>{stats.borradores}</span>}
@@ -184,12 +189,14 @@ export default function TicketsPage() {
                     <button
                         className={`${styles.toggleBtn} ${viewMode === "active" ? styles.toggleBtnActive : ""}`}
                         onClick={() => setViewMode("active")}
+                        onMouseEnter={() => prefetchTickets(queryClient)}
                     >
                         En Proceso
                     </button>
                     <button
                         className={`${styles.toggleBtn} ${viewMode === "closed" ? styles.toggleBtnActive : ""}`}
                         onClick={() => setViewMode("closed")}
+                        onMouseEnter={() => prefetchTickets(queryClient)}
                     >
                         Cerrados
                     </button>
@@ -247,7 +254,11 @@ export default function TicketsPage() {
                     );
 
                     return (
-                        <div key={estado.id} className={styles.flowContainer}>
+                        <div
+                            key={estado.id}
+                            className={styles.flowContainer}
+                            onMouseEnter={() => prefetchTickets(queryClient)}
+                        >
                             <div
                                 className={styles.flowStep}
                                 style={{ '--step-color': estado.color } as any}
