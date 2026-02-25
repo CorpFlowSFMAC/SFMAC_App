@@ -222,16 +222,13 @@ export default function PaymentsPage() {
                 const costoManoObra = parseFloat(ticket.costoManoObra || 0);
                 const costoMateriales = parseFloat(ticket.costoMateriales || 0);
                 const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
-                const montoPactadoBase = costoManoObra + costoMateriales + visitCost;
+
+                // ★ FIX: Separar costo de trabajo de movilidad para cálculos limpios
+                const jobCostBase = costoManoObra + costoMateriales;
+                const totalPactadoInclVisita = jobCostBase + visitCost;
 
                 const pagos = ticket.historialPagosTecnico || [];
-                const totalPagado = pagos.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
-
-                const voucherVisita = pagos.find((p: any) => {
-                    const tipo = (p.tipo || "").toLowerCase();
-                    const ref = (p.referencia || "").toLowerCase();
-                    return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
-                })?.voucherRef;
+                const totalPagadoArray = pagos.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
 
                 const techData = {
                     id: ticket.tecnico?.id,
@@ -245,11 +242,13 @@ export default function PaymentsPage() {
 
                 const items: PaymentItem[] = [];
 
-                // 1. Adelanto
+                // 1. Adelanto (Baseado SOLAMENTE en Mano de Obra + Materiales, no incluye visita)
                 const isRelevantForAdelanto = ['cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar'].includes(ticket.estadoId);
                 if (isRelevantForAdelanto || ticket.adelantoPagado || ticket.solicitudAdelanto) {
                     const pct = ticket.solicitudAdelanto?.porcentaje || ticket.porcentajeAdelanto || 0.5;
-                    const adelantoMonto = ticket.solicitudAdelanto?.monto || (montoPactadoBase * pct);
+                    // El monto del adelanto es el % del trabajo. Si el usuario ya lo pidió manual, se usa ese.
+                    const adelantoMonto = ticket.solicitudAdelanto?.monto || (jobCostBase * pct);
+
                     if (adelantoMonto > 0 || ticket.adelantoPagado) {
                         items.push({
                             id: `${ticket.id}_adelanto`,
@@ -276,7 +275,7 @@ export default function PaymentsPage() {
                 const hasSolicitudLiquidacion = !!ticket.solicitudLiquidacion;
                 const isRelevantForFinal = ['documentacion_enviada', 'por_liquidar', 'ticket_cerrado'].includes(ticket.estadoId);
                 if (isRelevantForFinal || hasSolicitudLiquidacion) {
-                    const saldoReal = montoPactadoBase - totalPagado;
+                    const saldoReal = totalPactadoInclVisita - totalPagadoArray;
                     const pagoFinal = pagos.find((p: any) => p.referencia?.includes("Liquidación") || p.tipo === "Liquidación Final");
                     const montoSolicitadoFinal = ticket.solicitudLiquidacion?.monto || (ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal);
                     if (montoSolicitadoFinal > 0 || ticket.estadoId === 'ticket_cerrado' || hasSolicitudLiquidacion) {
@@ -291,8 +290,8 @@ export default function PaymentsPage() {
                 }
 
                 // 4. Movilidad / Visita
-                if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed || ticket.costoPasaje) {
-                    const montoVisita = parseFloat(ticket.solicitudPagoVisita?.monto || ticket.costoVisita || ticket.costoPasaje || 0);
+                if (ticket.solicitudPagoVisita || ticket.visitPaymentConfirmed || visitCost > 0) {
+                    const montoVisita = visitCost;
                     if (montoVisita > 0) {
                         items.push({
                             id: `${ticket.id}_visita`,
@@ -311,13 +310,13 @@ export default function PaymentsPage() {
                         cliente: ticket.cliente?.nombre || 'Cliente',
                         sede: ticket.sede?.nombre || 'Sede',
                         tecnico: techData,
-                        montoPactado: montoPactadoBase,
-                        montoAdelantado: totalPagado,
-                        saldoPendiente: montoPactadoBase - totalPagado,
+                        montoPactado: totalPactadoInclVisita,
+                        montoAdelantado: totalPagadoArray,
+                        saldoPendiente: totalPactadoInclVisita - totalPagadoArray,
                         items,
                         historialDepositos: pagos,
                         costoVisita: visitCost,
-                        voucherVisita
+                        voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef
                     });
                 }
             } catch (e) {

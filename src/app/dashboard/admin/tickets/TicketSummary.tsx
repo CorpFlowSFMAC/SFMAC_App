@@ -876,16 +876,18 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
     if (!ticket.montoFinal && !ticket.montoTotalCotizado && !ticket.costoManoObra) return null;
 
-    const costoReferencia = (parseFloat(ticket.costoManoObra || 0) + parseFloat(ticket.costoMateriales || 0));
+    // ★ FIX: El costo de referencia para el técnico DEBE incluir la visita si se le paga a él
+    const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || 0);
+    const costoReferencia = (parseFloat(ticket.costoManoObra || 0) + parseFloat(ticket.costoMateriales || 0) + visitCost);
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
 
     // Sumar todos los depÓsitos realizados al técnico
-    const totalPagadoTecnico = (ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+    const totalPagadoTecnico = (ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + (p.monto || 0), 0);
     const montoAdelanto = totalPagadoTecnico || ticket.montoAdelanto || 0;
     const pctReal = (montoAdelanto / (costoReferencia || 1)) * 100;
 
-    // RECTIFICACIÓN: El saldo pendiente es sobre lo que se le debe pagar al TÉCNICO (Costo Referencia)
-    const montoSaldo = costoReferencia - totalPagadoTecnico;
+    // RECTIFICACIÓN: El saldo pendiente es sobre lo que se le debe pagar al TÉCNICO
+    const montoSaldo = Math.max(0, costoReferencia - totalPagadoTecnico);
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
     const visibleStates = [
