@@ -396,32 +396,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
             metadata: {
                 ...businessData,
-                // Forzar campos críticos desde el servidor si no soy Admin
-                adelantoPagado: isAdmin ? businessData.adelantoPagado : sourceMetadata.adelantoPagado,
-                fechaPagoAdelanto: isAdmin ? businessData.fechaPagoAdelanto : sourceMetadata.fechaPagoAdelanto,
-                // ★★★ FIX RACE CONDITION: SIEMPRE usar el historial MÁS LARGO entre local y servidor.
-                // Los pagos son append-only: el array más largo es SIEMPRE el más completo.
-                // Esto evita que syncToSupabase() destructivamente sobreescriba pagos confirmados
-                // desde payments/page.tsx mientras TicketWindow tenía estado local desactualizado.
+                // ★★★ FIX UNIDIRECIONAL: Si alguien (Servidor o Local) dice que está pagado, SE QUEDA PAGADO.
+                // Esto protege contra estados locales stale de la Gestora/Admin. 
+                adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
+                fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
+
+                // ★★★ MERGE DE HISTORIAL: Unión por ID para no perder ningún depósito.
                 historialPagosTecnico: (() => {
-                    const localPagos: any[] = isAdmin
-                        ? (businessData.historialPagosTecnico || [])
-                        : (sourceMetadata.historialPagosTecnico || []);
-                    const serverPagos: any[] = ticket.historialPagosTecnico || ticket.metadata?.historialPagosTecnico || [];
-                    // Merge: unión por ID para no perder ningún pago
-                    const allById = new Map<string, any>();
-                    [...localPagos, ...serverPagos].forEach(p => {
+                    const localPagos = businessData.historialPagosTecnico || [];
+                    const serverPagos = ticket.historialPagosTecnico || ticket.metadata?.historialPagosTecnico || [];
+                    const allById = new Map();
+                    [...serverPagos, ...localPagos].forEach(p => {
                         if (p?.id) allById.set(p.id, p);
                     });
-                    return allById.size > 0 ? Array.from(allById.values()) : localPagos;
+                    return Array.from(allById.values());
                 })(),
-                visitPaymentConfirmed: isAdmin ? businessData.visitPaymentConfirmed : sourceMetadata.visitPaymentConfirmed,
-                fechaPagoVisita: isAdmin ? businessData.fechaPagoVisita : sourceMetadata.fechaPagoVisita,
 
-                solicitudAdelanto: ticket.adelantoPagado ? null : businessData.solicitudAdelanto,
-                solicitudPagoVisita: ticket.visitPaymentConfirmed ? null : businessData.solicitudPagoVisita,
+                visitPaymentConfirmed: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed || false),
+                fechaPagoVisita: (businessData.fechaPagoVisita || sourceMetadata.fechaPagoVisita),
 
-                tecnico: tecnico // Preservamos datos del técnico en metadata para redundancia UI
+                // Limpieza de solicitudes: si ya está pagado en cualquier punto, la solicitud DEBE morir
+                solicitudAdelanto: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado) ? null : businessData.solicitudAdelanto,
+                solicitudPagoVisita: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed) ? null : businessData.solicitudPagoVisita,
+
+                tecnico: tecnico // Preservamos datos del técnico
             }
         };
 

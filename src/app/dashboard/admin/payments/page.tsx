@@ -79,6 +79,16 @@ function flattenTicketForPayments(t: any) {
         meta = { ...meta, ...meta.metadata };
         delete meta.metadata;
     }
+    const history = meta.historialPagosTecnico || [];
+    const hasPaidMobility = history.some((p: any) =>
+        p.tipo === 'Movilidad / Visita' ||
+        (p.referencia && (p.referencia.toLowerCase().includes("visita") || p.referencia.toLowerCase().includes("movilidad")))
+    );
+    const hasPaidAdelanto = history.some((p: any) =>
+        p.tipo === 'Adelanto' ||
+        (p.referencia && p.referencia.toLowerCase().includes("adelanto"))
+    );
+
     return {
         ...t,
         estadoId: normalizeStateId(t.status_id || meta.estadoId || "nuevo"),
@@ -90,9 +100,9 @@ function flattenTicketForPayments(t: any) {
         solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
         solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
         solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
-        historialPagosTecnico: meta.historialPagosTecnico ?? [],
-        adelantoPagado: meta.adelantoPagado ?? false,
-        visitPaymentConfirmed: meta.visitPaymentConfirmed ?? false,
+        historialPagosTecnico: history,
+        adelantoPagado: meta.adelantoPagado || hasPaidAdelanto || false,
+        visitPaymentConfirmed: meta.visitPaymentConfirmed || hasPaidMobility || false,
         porcentajeAdelanto: meta.porcentajeAdelanto ?? meta.solicitudAdelanto?.porcentaje ?? 0.5,
         fechaAprobacion: meta.fechaAprobacion ?? meta.fechaAprobacionCotizacion ?? null,
         fechaValidacionDocumental: meta.fechaValidacionDocumental ?? null,
