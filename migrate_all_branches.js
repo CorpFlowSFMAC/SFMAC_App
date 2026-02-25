@@ -109,15 +109,19 @@ async function migrate() {
     for (const line of dataLines) {
         const parts = line.split(';');
 
-        // Validar que tenga datos mínimos
+        // Validar que tenga datos mínimos (Agencia y Dirección son partes[2] and [3])
         if (parts.length < 8 || !parts[2] || !parts[3]) {
             skipped++;
             continue;
         }
 
+        const tipo = parts[0]?.trim() || '';
+        const codigo_topaz = parts[1]?.trim() || '';
         const name = parts[2].trim();
         const address = parts[3].trim();
-        const departamento = parts[6] ? parts[6].trim() : 'Lima';
+        const distrito = parts[5]?.trim() || '';
+        const provincia = parts[6]?.trim() || '';
+        const departamento = parts[7]?.trim() || 'Lima';
         const zone = getZone(departamento);
 
         if (name && address) {
@@ -125,7 +129,12 @@ async function migrate() {
                 client_id: clientId,
                 name: name,
                 address: address,
-                zone: zone
+                zone: zone,
+                distrito: distrito,
+                provincia: provincia,
+                departamento: departamento,
+                codigo_topaz: codigo_topaz,
+                tipo: tipo
             });
         } else {
             skipped++;
