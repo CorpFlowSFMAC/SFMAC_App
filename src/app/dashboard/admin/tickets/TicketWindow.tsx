@@ -854,12 +854,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             await ticketsAPI.update(ticketData.id, dbUpdates);
 
             // 4. Actualizar estado local de UI
+            const selectedSede = sedesMibanco.find(s => s.id === finalSedeId);
+            const normalizedSede = selectedSede ? {
+                ...selectedSede,
+                nombre: selectedSede.name || selectedSede.nombre || "Sin Sede",
+                direccion: selectedSede.address || selectedSede.direccion || "Sin dirección"
+            } : null;
+
             const localUpdates = {
                 ...dbUpdates,
                 estadoId: 'nuevo',
                 descripcionProblema: dbUpdates.description,
                 // ★ FIX: InfoBarBase lee 'tipoServicio', no 'service_type'
                 tipoServicio: triageServiceType,
+                sede: normalizedSede, // ✅ FIX: Actualizar objeto sede local
             };
 
             if (onUpdate) {
