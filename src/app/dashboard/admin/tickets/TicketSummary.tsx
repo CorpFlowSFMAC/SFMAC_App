@@ -647,8 +647,8 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
                 <span className={styles.infoLabel}>Rentabilidad</span>
                 <div style={{
                     padding: '2px 8px',
-                    background: margin >= 80 ? '#DCFCE7' : margin >= 70 ? '#FEF3C7' : '#FEE2E2',
-                    color: margin >= 80 ? '#166534' : margin >= 70 ? '#92400E' : '#991B1B',
+                    background: margin >= 55 ? '#DCFCE7' : margin >= 45 ? '#FEF3C7' : '#FEE2E2',
+                    color: margin >= 55 ? '#166534' : margin >= 45 ? '#92400E' : '#991B1B',
                     borderRadius: '12px',
                     fontSize: '11px',
                     fontWeight: '800',

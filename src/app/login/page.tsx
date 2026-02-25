@@ -29,6 +29,23 @@ export default function LoginPage() {
         setQuote(randomQuote);
     }, []);
 
+    const handleMicrosoftLogin = async () => {
+        setIsLoading(true);
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'azure',
+                options: {
+                    scopes: 'openid profile email',
+                    redirectTo: `${window.location.origin}/dashboard`
+                }
+            });
+            if (error) throw error;
+        } catch (err: any) {
+            setError(err.message || "Error al conectar con Microsoft.");
+            setIsLoading(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
@@ -139,6 +156,25 @@ export default function LoginPage() {
                                 )}
                             </button>
                         </form>
+
+                        <div className={styles.divider}>
+                            <span>O CONTINUAR CON</span>
+                        </div>
+
+                        <button
+                            type="button"
+                            className={styles.microsoftBtn}
+                            onClick={handleMicrosoftLogin}
+                            disabled={isLoading}
+                        >
+                            <svg className={styles.microsoftIcon} viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+                                <path d="m.3 0h9.7v9.7h-9.7z" fill="#f25022" />
+                                <path d="m11 0h9.7v9.7h-9.7z" fill="#7fba00" />
+                                <path d="m.3 11h9.7v9.7h-9.7z" fill="#00a4ef" />
+                                <path d="m11 11h9.7v9.7h-9.7z" fill="#ffb900" />
+                            </svg>
+                            ACCESO CORPORATIVO (AZURE AD)
+                        </button>
                     </div>
                 </div>
             </div>

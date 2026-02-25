@@ -7,12 +7,65 @@ import {
     Download, Filter, User, DollarSign
 } from "lucide-react";
 import styles from "./reportes.module.css";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId, TICKET_STATES } from "@/lib/ticketStates";
 
+// Componentes Visuales Minimalistas (SVG)
+const PieChartSVG = ({ data, colors }: { data: number[], colors: string[] }) => {
+    const total = data.reduce((a, b) => a + b, 0);
+    let cumulativePercent = 0;
+
+    function getCoordinatesForPercent(percent: number) {
+        const x = Math.cos(2 * Math.PI * percent);
+        const y = Math.sin(2 * Math.PI * percent);
+        return [x, y];
+    }
+
+    return (
+        <svg viewBox="-1 -1 2 2" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+            {data.map((value, i) => {
+                if (value === 0) return null;
+                const [startX, startY] = getCoordinatesForPercent(cumulativePercent);
+                const percent = value / total;
+                cumulativePercent += percent;
+                const [endX, endY] = getCoordinatesForPercent(cumulativePercent);
+                const largeArcFlag = percent > 0.5 ? 1 : 0;
+                const pathData = [
+                    `M ${startX} ${startY}`,
+                    `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                    `L 0 0`,
+                ].join(' ');
+                return <path key={i} d={pathData} fill={colors[i]} />;
+            })}
+        </svg>
+    );
+};
+
+const BarChartSVG = ({ data, labels, color }: { data: number[], labels: string[], color: string }) => {
+    const max = Math.max(...data, 1);
+    return (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '120px', padding: '10px 0' }}>
+            {data.map((v, i) => (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    <div
+                        style={{
+                            width: '100%',
+                            height: `${(v / max) * 100}%`,
+                            background: color,
+                            borderRadius: '4px 4px 0 0',
+                            minHeight: '2px',
+                            transition: 'height 0.6s ease'
+                        }}
+                    />
+                    <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>{labels[i]}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 export default function ReportesPage() {
-    const [tickets] = useLocalStorage("tickets", []);
-    const [technicians] = useLocalStorage("technicians", []);
+    const { tickets, technicians } = useAppData();
     const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month" | "all">("month");
     const [selectedMetric, setSelectedMetric] = useState<"sla" | "volume" | "efficiency" | "finance">("sla");
 
@@ -71,9 +124,8 @@ export default function ReportesPage() {
         const tecnicosMap: any = {};
 
         tickets.forEach((ticket: any) => {
-            if (!ticket.tecnicoNombre) return;
-
-            const tecnico = ticket.tecnicoNombre;
+            const tecnico = ticket.tecnico?.nombre;
+            if (!tecnico) return;
 
             if (!tecnicosMap[tecnico]) {
                 tecnicosMap[tecnico] = {
@@ -146,26 +198,59 @@ export default function ReportesPage() {
         };
     }, [tickets, ticketsRiesgo]);
 
-    // 🎯 Métricas Financieras (Rentabilidad)
+    // 🎯 Métricas Financieras (Rentabilidad y Flujo)
     const finanzas = useMemo(() => {
         let ingresosTotales = 0;
         let costosTotales = 0;
+        let montosPedidos = 0;
         let ticketsCerradosCount = 0;
 
         tickets.forEach((t: any) => {
-            if (normalizeStateId(t.estadoId) === "ticket_cerrado") {
+            const sid = normalizeStateId(t.estadoId);
+            const ingreso = (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0));
+            const pagado = (t.historialPagosTecnico || t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+
+            // Montos que "pide" la gestora (basado en solicitudes en metadata)
+            const pedido = (t.solicitudAdelanto?.monto || 0) + (t.solicitudPagoVisita ? parseFloat(t.costoVisita || 0) : 0) + (t.solicitudLiquidacion?.monto || 0);
+            montosPedidos += pedido;
+
+            if (sid === "ticket_cerrado") {
                 ticketsCerradosCount++;
-                const ingreso = (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0));
-                const costo = (t.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
                 ingresosTotales += ingreso;
-                costosTotales += costo;
+                costosTotales += pagado;
+            } else if (pagado > 0) {
+                // También contar costos de tickets en proceso
+                costosTotales += pagado;
             }
         });
 
         const utilidad = ingresosTotales - costosTotales;
         const margen = ingresosTotales > 0 ? (utilidad / ingresosTotales) * 100 : 0;
 
-        return { ingresosTotales, costosTotales, utilidad, margen, ticketsCerradosCount };
+        return { ingresosTotales, costosTotales, montosPedidos, utilidad, margen, ticketsCerradosCount };
+    }, [tickets]);
+
+    // 🎯 Datos para Históricos (meses)
+    const historicoMensual = useMemo(() => {
+        const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        const data = new Array(12).fill(0);
+        const pagos = new Array(12).fill(0);
+
+        tickets.forEach((t: any) => {
+            const date = new Date(t.createdAt || t.created_at);
+            const mes = date.getMonth();
+            data[mes]++;
+
+            const pagado = (t.historialPagosTecnico || t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+            pagos[mes] += pagado;
+        });
+
+        // Solo mostrar meses con actividad
+        return {
+            labels: meses,
+            tickets: data,
+            pagos: pagos
+        };
     }, [tickets]);
 
     const [userRole, setUserRole] = useState<string | null>(null);
@@ -177,9 +262,11 @@ export default function ReportesPage() {
 
     function calcularHorasTranscurridas(ticket: any): number {
         const ahora = new Date().getTime();
-        const inicio = new Date(ticket.fechaInicioSLA).getTime();
+        const fechaBase = ticket.fechaInicioSLA || ticket.createdAt || ticket.created_at;
+        const inicio = new Date(fechaBase).getTime();
+        if (isNaN(inicio)) return 0;
         const horasReales = (ahora - inicio) / (1000 * 60 * 60);
-        return horasReales - (ticket.horasPausadas || 0);
+        return Math.max(0, horasReales - (ticket.horasPausadas || 0));
     }
 
     function getEficienciaColor(eficiencia: number): string {
@@ -275,21 +362,21 @@ export default function ReportesPage() {
                     onClick={() => setSelectedMetric('sla')}
                 >
                     <Clock size={18} />
-                    Eficiencia SLA
+                    Cumplimiento SLA
                 </button>
                 <button
                     className={`${styles.metricBtn} ${selectedMetric === 'volume' ? styles.metricBtnActive : ''}`}
                     onClick={() => setSelectedMetric('volume')}
                 >
-                    <BarChart3 size={18} />
-                    Volumen de Trabajo
+                    <Calendar size={18} />
+                    Histórico Mensual
                 </button>
                 <button
                     className={`${styles.metricBtn} ${selectedMetric === 'efficiency' ? styles.metricBtnActive : ''}`}
                     onClick={() => setSelectedMetric('efficiency')}
                 >
-                    <TrendingUp size={18} />
-                    Rendimiento Global
+                    <Award size={18} />
+                    Ranking Eficiencia
                 </button>
                 {userRole === 'admin' && (
                     <button
@@ -297,72 +384,98 @@ export default function ReportesPage() {
                         onClick={() => setSelectedMetric('finance')}
                     >
                         <DollarSign size={18} />
-                        Rentabilidad
+                        Flujo Financiero
                     </button>
                 )}
             </div>
 
             {/* Contenido Principal */}
             <div className={styles.contentGrid}>
-                {selectedMetric === 'finance' ? (
+                {selectedMetric === 'sla' && (
+                    <div className={styles.chartSection}>
+                        <div className={styles.sectionHeader}>
+                            <h2><PieChart size={20} /> Distribución de Estados</h2>
+                        </div>
+                        <div className={styles.chartContent}>
+                            <div className={styles.chartWrapper}>
+                                <PieChartSVG
+                                    data={[kpis.cerrados, kpis.enRiesgo, kpis.total - kpis.cerrados - kpis.enRiesgo]}
+                                    colors={['#10B981', '#DC2626', '#3B82F6']}
+                                />
+                            </div>
+                            <div className={styles.chartLegend}>
+                                <div className={styles.legendItem}><span style={{ background: '#10B981' }} /> Cerrados ({kpis.cerrados})</div>
+                                <div className={styles.legendItem}><span style={{ background: '#DC2626' }} /> En Riesgo ({kpis.enRiesgo})</div>
+                                <div className={styles.legendItem}><span style={{ background: '#3B82F6' }} /> En Proceso ({kpis.total - kpis.cerrados - kpis.enRiesgo})</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {selectedMetric === 'volume' && (
+                    <div className={styles.chartSection}>
+                        <div className={styles.sectionHeader}>
+                            <h2><BarChart3 size={20} /> Tickets por Mes</h2>
+                        </div>
+                        <BarChartSVG
+                            data={historicoMensual.tickets}
+                            labels={historicoMensual.labels}
+                            color="#3B82F6"
+                        />
+                    </div>
+                )}
+
+                {selectedMetric === 'finance' && (
                     <div className={styles.financeFullSection}>
                         <div className={styles.financeSummaryGrid}>
                             <div className={styles.financeCard}>
-                                <div className={styles.finLabel}>INGRESOS (CERRADOS)</div>
-                                <div className={styles.finValue}>S/ {finanzas.ingresosTotales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
-                                <div className={styles.finSub}>{finanzas.ticketsCerradosCount} Tickets liquidados</div>
+                                <div className={styles.finLabel}>SOLICITADO POR GESTORA</div>
+                                <div className={styles.finValue} style={{ color: '#3B82F6' }}>
+                                    S/ {finanzas.montosPedidos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                </div>
+                                <div className={styles.finSub}>Total solicitudes de adelanto/visita</div>
                             </div>
                             <div className={styles.financeCard}>
-                                <div className={styles.finLabel}>COSTOS OPERATIVOS (DEPOSITADOS)</div>
-                                <div className={styles.finValue} style={{ color: '#DC2626' }}>- S/ {finanzas.costosTotales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
-                                <div className={styles.finSub}>Pagos a técnicos</div>
+                                <div className={styles.finLabel}>TOTAL PAGADO (REAL)</div>
+                                <div className={styles.finValue} style={{ color: '#10B981' }}>
+                                    S/ {finanzas.costosTotales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                </div>
+                                <div className={styles.finSub}>Efectuado en historial de pagos</div>
                             </div>
                             <div className={styles.financeCard} style={{ background: '#F0FDFA', borderColor: '#10B981' }}>
-                                <div className={styles.finLabel} style={{ color: '#0F766E' }}>UTILIDAD NETA (ROI)</div>
-                                <div className={styles.finValue} style={{ color: '#059669' }}>S/ {finanzas.utilidad.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
-                                <div className={styles.finMarginBadge}>Margen: {Math.round(finanzas.margen)}%</div>
+                                <div className={styles.finLabel} style={{ color: '#0F766E' }}>UTILIDAD PROYECTADA</div>
+                                <div className={styles.finValue} style={{ color: '#059669' }}>
+                                    S/ {finanzas.utilidad.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                </div>
+                                <div className={styles.finMarginBadge}>Margen ROI: {Math.round(finanzas.margen)}%</div>
                             </div>
                         </div>
 
                         <div className={styles.section} style={{ marginTop: '2rem' }}>
                             <div className={styles.sectionHeader}>
-                                <h2>
-                                    <BarChart3 size={20} />
-                                    Distribución de Rentabilidad
-                                </h2>
+                                <h2><TrendingUp size={20} /> Histórico de Egresos</h2>
                             </div>
-                            <p style={{ color: '#64748B', fontWeight: 600 }}>
-                                El margen promedio del {Math.round(finanzas.margen)}% se encuentra dentro de los parámetros de SINFIMAC.
-                                Se recomienda mantener la eficiencia SLA para reducir costos indirectos.
-                            </p>
+                            <BarChartSVG
+                                data={historicoMensual.pagos}
+                                labels={historicoMensual.labels}
+                                color="#10B981"
+                            />
                         </div>
                     </div>
-                ) : (
+                )}
+
+                {(selectedMetric === 'efficiency' || selectedMetric === 'sla' || selectedMetric === 'volume') && (
                     <>
                         {/* Ranking de Gestoras */}
                         <div className={styles.section}>
                             <div className={styles.sectionHeader}>
-                                <h2>
-                                    <Users size={20} />
-                                    Ranking de Gestoras
-                                </h2>
+                                <h2><Users size={20} /> Eficiencia Gestoras</h2>
                             </div>
-
                             <div className={styles.rankingList}>
                                 {gestoras.map((gestora: any, index: number) => (
                                     <div key={gestora.nombre} className={styles.rankingItem}>
-                                        <div className={styles.rankingPosition}>
-                                            {index === 0 && <Award size={24} color="#FFD700" />}
-                                            {index === 1 && <Award size={24} color="#C0C0C0" />}
-                                            {index === 2 && <Award size={24} color="#CD7F32" />}
-                                            {index > 2 && <span className={styles.positionNumber}>#{index + 1}</span>}
-                                        </div>
-
                                         <div className={styles.rankingInfo}>
                                             <div className={styles.rankingName}>{gestora.nombre}</div>
-                                            <div className={styles.rankingStats}>
-                                                {gestora.totalTickets} tickets • {gestora.cerrados} cerrados • {gestora.enRiesgo} en riesgo
-                                            </div>
                                             <div className={styles.rankingBar}>
                                                 <div
                                                     className={styles.rankingFill}
@@ -373,26 +486,8 @@ export default function ReportesPage() {
                                                 />
                                             </div>
                                         </div>
-
-                                        <div className={styles.rankingScore}>
-                                            <div
-                                                className={styles.scoreValue}
-                                                style={{ color: getEficienciaColor(gestora.eficiencia) }}
-                                            >
-                                                {gestora.eficiencia}%
-                                            </div>
-                                            <div className={styles.scoreLabel}>Eficiencia</div>
-                                        </div>
-
-                                        <div className={styles.rankingMetrics}>
-                                            <div className={styles.miniMetric}>
-                                                <Clock size={14} />
-                                                {Math.round(gestora.promedioHoras)}h
-                                            </div>
-                                            <div className={styles.miniMetric}>
-                                                <CheckCircle size={14} />
-                                                {Math.round(gestora.tasaCierre)}%
-                                            </div>
+                                        <div className={styles.rankingScore} style={{ color: getEficienciaColor(gestora.eficiencia) }}>
+                                            {gestora.eficiencia}%
                                         </div>
                                     </div>
                                 ))}
@@ -402,57 +497,17 @@ export default function ReportesPage() {
                         {/* Ranking de Técnicos */}
                         <div className={styles.section}>
                             <div className={styles.sectionHeader}>
-                                <h2>
-                                    <User size={20} />
-                                    Ranking de Técnicos
-                                </h2>
+                                <h2><User size={20} /> Técnicos Top Performance</h2>
                             </div>
-
                             <div className={styles.rankingList}>
-                                {tecnicos.slice(0, 10).map((tecnico: any, index: number) => (
+                                {tecnicos.slice(0, 5).map((tecnico: any) => (
                                     <div key={tecnico.nombre} className={styles.rankingItem}>
-                                        <div className={styles.rankingPosition}>
-                                            {index === 0 && <Award size={24} color="#FFD700" />}
-                                            {index === 1 && <Award size={24} color="#C0C0C0" />}
-                                            {index === 2 && <Award size={24} color="#CD7F32" />}
-                                            {index > 2 && <span className={styles.positionNumber}>#{index + 1}</span>}
-                                        </div>
-
                                         <div className={styles.rankingInfo}>
                                             <div className={styles.rankingName}>{tecnico.nombre}</div>
-                                            <div className={styles.rankingStats}>
-                                                {tecnico.totalTickets} tickets • {tecnico.completados} completados
-                                            </div>
-                                            <div className={styles.rankingBar}>
-                                                <div
-                                                    className={styles.rankingFill}
-                                                    style={{
-                                                        width: `${tecnico.eficiencia}%`,
-                                                        background: getEficienciaColor(tecnico.eficiencia)
-                                                    }}
-                                                />
-                                            </div>
+                                            <div className={styles.rankingStats}>{tecnico.completados} serv. / {tecnico.totalTickets} total</div>
                                         </div>
-
-                                        <div className={styles.rankingScore}>
-                                            <div
-                                                className={styles.scoreValue}
-                                                style={{ color: getEficienciaColor(tecnico.eficiencia) }}
-                                            >
-                                                {tecnico.eficiencia}%
-                                            </div>
-                                            <div className={styles.scoreLabel}>Eficiencia</div>
-                                        </div>
-
-                                        <div className={styles.rankingMetrics}>
-                                            <div className={styles.miniMetric}>
-                                                <Clock size={14} />
-                                                {Math.round(tecnico.promedioHoras)}h
-                                            </div>
-                                            <div className={styles.miniMetric}>
-                                                <CheckCircle size={14} />
-                                                {Math.round(tecnico.tasaComplecion)}%
-                                            </div>
+                                        <div className={styles.rankingScore} style={{ color: getEficienciaColor(tecnico.eficiencia) }}>
+                                            {tecnico.eficiencia}%
                                         </div>
                                     </div>
                                 ))}
@@ -463,52 +518,22 @@ export default function ReportesPage() {
             </div>
 
             {/* Tickets en Riesgo Crítico */}
-            <div className={styles.alertSection}>
-                <div className={styles.sectionHeader}>
-                    <h2>
-                        <AlertTriangle size={20} />
-                        Tickets en Riesgo Crítico (60h+)
-                    </h2>
-                    <span className={styles.alertBadge}>{ticketsRiesgo.length}</span>
-                </div>
-
-                {ticketsRiesgo.length === 0 ? (
-                    <div className={styles.noAlerts}>
-                        <CheckCircle size={48} color="#10B981" />
-                        <p>¡Excelente! No hay tickets en riesgo crítico</p>
+            {ticketsRiesgo.length > 0 && (
+                <div className={styles.alertSection}>
+                    <div className={styles.sectionHeader}>
+                        <h2><AlertTriangle size={20} /> Alerta SLA: Riesgo Crítico (60h+)</h2>
+                        <span className={styles.alertCount}>{ticketsRiesgo.length}</span>
                     </div>
-                ) : (
                     <div className={styles.alertsList}>
-                        {ticketsRiesgo.map((ticket: any) => {
-                            const horas = calcularHorasTranscurridas(ticket);
-                            const estado = TICKET_STATES.find(s => s.id === ticket.estadoId);
-
-                            return (
-                                <div key={ticket.id} className={styles.alertItem}>
-                                    <div className={styles.alertHeader}>
-                                        <span className={styles.alertId}>{ticket.id}</span>
-                                        <span className={styles.alertTime} style={{ color: '#DC2626' }}>
-                                            <Clock size={16} />
-                                            {Math.floor(horas)}h / 72h
-                                        </span>
-                                    </div>
-                                    <div className={styles.alertContent}>
-                                        <strong>{ticket.clienteNombre}</strong> - {ticket.asunto}
-                                    </div>
-                                    <div className={styles.alertFooter}>
-                                        <span className={styles.alertEstado} style={{ background: estado?.color }}>
-                                            {estado?.nombre}
-                                        </span>
-                                        <span className={styles.alertGestora}>
-                                            Gestora: {ticket.historial?.[0]?.usuario || "Sin asignar"}
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                        {ticketsRiesgo.slice(0, 3).map((t: any) => (
+                            <div key={t.id} className={styles.alertItem}>
+                                <strong>{t.cliente?.nombre} ({t.numeroTicketCliente})</strong>
+                                <span>{Math.floor(calcularHorasTranscurridas(t))}h transcurridas</span>
+                            </div>
+                        ))}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 }
