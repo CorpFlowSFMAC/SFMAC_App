@@ -10,6 +10,7 @@ import {
 import { normalizeStateId } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
+import { round2, formatSoles } from "@/lib/formatters";
 import styles from "./payments.module.css";
 
 interface PaymentItem {
@@ -215,7 +216,7 @@ export default function PaymentsPage() {
             (ticket.historialPagosTecnico || []).forEach((p: any) => {
                 if (p.monto && p.fecha && p.estado !== 'anulado') {
                     const key = getMonthKey(p.fecha);
-                    totals[key] = (totals[key] || 0) + parseFloat(p.monto);
+                    totals[key] = round2((totals[key] || 0) + round2(p.monto));
                 }
             });
         });
@@ -229,16 +230,18 @@ export default function PaymentsPage() {
             try {
                 const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id.toString().slice(-6).toUpperCase()}`;
 
-                const costoManoObra = parseFloat(ticket.costoManoObra || 0);
-                const costoMateriales = parseFloat(ticket.costoMateriales || 0);
-                const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
+                const costoManoObra = round2(ticket.costoManoObra || 0);
+                const costoMateriales = round2(ticket.costoMateriales || 0);
+                const visitCost = round2(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
 
-                // ★ FIX: Separar costo de trabajo de movilidad para cálculos limpios
-                const jobCostBase = costoManoObra + costoMateriales;
-                const totalPactadoInclVisita = jobCostBase + visitCost;
+                // ★ FIX: El total pactado (Costo Operativo) es lo acordado para el trabajo (MO + Mat).
+                // Si hay trabajo, el pactado es jobCostBase. Si solo es visita, el pactado es visitCost.
+                // Esto evita inflar el costo con la visita si el presupuesto de obra ya la contempla.
+                const jobCostBase = round2(costoManoObra + costoMateriales);
+                const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
 
                 const pagos = ticket.historialPagosTecnico || [];
-                const totalPagadoArray = pagos.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
+                const totalPagadoArray = round2(pagos.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
 
                 const techData = {
                     id: ticket.tecnico?.id,
@@ -257,7 +260,7 @@ export default function PaymentsPage() {
                 if (isRelevantForAdelanto || ticket.adelantoPagado || ticket.solicitudAdelanto) {
                     const pct = ticket.solicitudAdelanto?.porcentaje || ticket.porcentajeAdelanto || 0.5;
                     // El monto del adelanto es el % del trabajo. Si el usuario ya lo pidió manual, se usa ese.
-                    const adelantoMonto = ticket.solicitudAdelanto?.monto || (jobCostBase * pct);
+                    const adelantoMonto = round2(ticket.solicitudAdelanto?.monto || (jobCostBase * pct));
 
                     if (adelantoMonto > 0 || ticket.adelantoPagado) {
                         items.push({
@@ -285,9 +288,9 @@ export default function PaymentsPage() {
                 const hasSolicitudLiquidacion = !!ticket.solicitudLiquidacion;
                 const isRelevantForFinal = ['documentacion_enviada', 'por_liquidar', 'ticket_cerrado'].includes(ticket.estadoId);
                 if (isRelevantForFinal || hasSolicitudLiquidacion) {
-                    const saldoReal = totalPactadoInclVisita - totalPagadoArray;
+                    const saldoReal = round2(totalPactadoInclVisita - totalPagadoArray);
                     const pagoFinal = pagos.find((p: any) => p.referencia?.includes("Liquidación") || p.tipo === "Liquidación Final");
-                    const montoSolicitadoFinal = ticket.solicitudLiquidacion?.monto || (ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal);
+                    const montoSolicitadoFinal = round2(ticket.solicitudLiquidacion?.monto || (ticket.estadoId === 'ticket_cerrado' ? (pagoFinal?.monto || 0) : saldoReal));
                     if (montoSolicitadoFinal > 0 || ticket.estadoId === 'ticket_cerrado' || hasSolicitudLiquidacion) {
                         items.push({
                             id: `${ticket.id}_final`,
@@ -426,12 +429,12 @@ export default function PaymentsPage() {
 
     // ─── Métricas ──────────────────────────────────────────────
     const currentMonthKey = getCurrentMonthKey();
-    const egresosEsteMes = monthlyTotals[currentMonthKey] || 0;
-    const totalPagadoHistorico = Object.values(monthlyTotals).reduce((s, v) => s + v, 0);
+    const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
+    const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s, v) => s + v, 0));
 
     const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente').length, 0);
-    const totalPendingAmount = paymentGroups.reduce((acc, g) =>
-        acc + g.items.filter(i => i.estado === 'pendiente').reduce((s, i) => s + i.monto, 0), 0);
+    const totalPendingAmount = round2(paymentGroups.reduce((acc, g) =>
+        acc + g.items.filter(i => i.estado === 'pendiente').reduce((s, i) => s + i.monto, 0), 0));
 
     const filteredGroups = paymentGroups.filter(g => {
         if (filter === 'todos') return true;
@@ -523,7 +526,7 @@ export default function PaymentsPage() {
                     <div>
                         <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Por Desembolsar</p>
                         <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>
-                            S/ {totalPendingAmount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            S/ {formatSoles(totalPendingAmount)}
                         </p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>monto pendiente total</p>
                     </div>
@@ -543,7 +546,7 @@ export default function PaymentsPage() {
                             Egresos {formatMonthKey(currentMonthKey)}
                         </p>
                         <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#059669', lineHeight: 1 }}>
-                            S/ {egresosEsteMes.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            S/ {formatSoles(egresosEsteMes)}
                         </p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>pagado al técnico este mes</p>
                     </div>
@@ -561,7 +564,7 @@ export default function PaymentsPage() {
                     <div>
                         <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Histórico</p>
                         <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#7C3AED', lineHeight: 1 }}>
-                            S/ {totalPagadoHistorico.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            S/ {formatSoles(totalPagadoHistorico)}
                         </p>
                         <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>acumulado total de pagos</p>
                     </div>
@@ -669,7 +672,7 @@ export default function PaymentsPage() {
                                                             {group.costoVisita && group.costoVisita > 0 && (
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.73rem', color: '#7C3AED', fontWeight: 700, borderTop: '1px dashed #E2E8F0', paddingTop: '4px' }}>
                                                                     <ArrowUpRight size={11} />
-                                                                    Visita: S/ {group.costoVisita.toFixed(2)}
+                                                                    Visita: S/ {formatSoles(group.costoVisita)}
                                                                     {group.voucherVisita && (
                                                                         <button onClick={() => setShowVoucher(getVoucherSrc(group.voucherVisita))}
                                                                             style={{ marginLeft: '4px', background: '#EDE9FE', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 5px', display: 'flex', alignItems: 'center', gap: '3px', color: '#7C3AED', fontSize: '0.65rem' }}>
@@ -687,16 +690,16 @@ export default function PaymentsPage() {
                                                     <div style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
                                                             <span style={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.68rem' }}>Pactado Total</span>
-                                                            <span style={{ fontWeight: 800, color: '#0F172A', fontFamily: 'monospace' }}>S/ {group.montoPactado.toFixed(2)}</span>
+                                                            <span style={{ fontWeight: 800, color: '#0F172A', fontFamily: 'monospace' }}>S/ {formatSoles(group.montoPactado)}</span>
                                                         </div>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
                                                             <span style={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.68rem' }}>Pagado Previo</span>
-                                                            <span style={{ fontWeight: 800, color: '#059669', fontFamily: 'monospace' }}>- S/ {group.montoAdelantado.toFixed(2)}</span>
+                                                            <span style={{ fontWeight: 800, color: '#059669', fontFamily: 'monospace' }}>- S/ {formatSoles(group.montoAdelantado)}</span>
                                                         </div>
                                                         <div style={{ borderTop: '2px dashed #CBD5E1', paddingTop: '5px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
                                                             <span style={{ color: '#64748B', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.68rem' }}>Saldo Pendiente</span>
                                                             <span style={{ fontWeight: 900, color: group.saldoPendiente <= 0 ? '#059669' : '#2563EB', fontFamily: 'monospace' }}>
-                                                                S/ {group.saldoPendiente.toFixed(2)}
+                                                                S/ {formatSoles(group.saldoPendiente)}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -718,7 +721,7 @@ export default function PaymentsPage() {
                                                                             {cfg.label}
                                                                         </span>
                                                                         <span style={{ fontSize: '0.8rem', fontWeight: 900, color: '#0F172A', fontFamily: 'monospace' }}>
-                                                                            S/ {item.monto.toFixed(2)}
+                                                                            S/ {formatSoles(item.monto)}
                                                                         </span>
                                                                     </div>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -761,7 +764,7 @@ export default function PaymentsPage() {
                                                                                 reader.onloadend = () => setPendingConfirmation({
                                                                                     group, item,
                                                                                     voucher: reader.result as string,
-                                                                                    message: `¿Confirmar depósito de S/ ${item.monto.toFixed(2)} para ${item.tipo} y procesar voucher?`
+                                                                                    message: `¿Confirmar depósito de S/ ${formatSoles(item.monto)} para ${item.tipo} y procesar voucher?`
                                                                                 });
                                                                                 reader.readAsDataURL(e.target.files[0]);
                                                                             }
@@ -769,7 +772,7 @@ export default function PaymentsPage() {
                                                                 </label>
                                                                 <button onClick={() => setPendingConfirmation({
                                                                     group, item,
-                                                                    message: `¿Confirmar transferencia directa de S/ ${item.monto.toFixed(2)} a ${group.tecnico.nombre}?`
+                                                                    message: `¿Confirmar transferencia directa de S/ ${formatSoles(item.monto)} a ${group.tecnico.nombre}?`
                                                                 })}
                                                                     style={{
                                                                         border: '1px solid #E2E8F0', background: 'white',
@@ -817,7 +820,7 @@ export default function PaymentsPage() {
                                                                         </div>
                                                                         <div className={styles.historyBody}>
                                                                             <span style={{ fontSize: '0.78rem', color: '#475569' }}>{dep.tipo || 'Depósito'}</span>
-                                                                            <strong style={{ fontSize: '1.05rem', color: '#1E293B', fontFamily: 'monospace' }}>S/ {parseFloat(dep.monto).toFixed(2)}</strong>
+                                                                            <strong style={{ fontSize: '1.05rem', color: '#1E293B', fontFamily: 'monospace' }}>S/ {formatSoles(dep.monto)}</strong>
                                                                             {dep.voucherRef && (
                                                                                 <button onClick={() => {
                                                                                     const src = dep.voucherRef?.startsWith('data:image')
@@ -887,7 +890,7 @@ export default function PaymentsPage() {
                                 <div className={styles.detailRow}>
                                     <span className={styles.detailLabel}>Monto a transferir:</span>
                                     <span className={`${styles.detailValue} ${styles.popAmount}`}>
-                                        S/ {pendingConfirmation.item.monto.toFixed(2)}
+                                        S/ {formatSoles(pendingConfirmation.item.monto)}
                                     </span>
                                 </div>
                             </div>

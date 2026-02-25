@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { ticketsAPI, clientsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { normalizeStateId } from "@/lib/ticketStates";
+import { round2 } from "@/lib/formatters";
 
 // ─────────────────────────────────────────────
 // TICKET NORMALIZER (extraído como función pura reutilizable)
@@ -89,20 +90,24 @@ export const normalizeTicket = (t: any) => {
             t.created_at || t.fechaCreacion || realMetadata.fechaCreacion,
         createdAt:
             t.created_at || t.createdAt || t.fechaCreacion || realMetadata.createdAt,
-        costoManoObra:
-            t.labor_cost || t.costoManoObra || realMetadata.costoManoObra || 0,
-        costoMateriales:
+        costoManoObra: round2(
+            t.labor_cost || t.costoManoObra || realMetadata.costoManoObra || 0
+        ),
+        costoMateriales: round2(
             t.materials_cost ||
             t.costoMateriales ||
             realMetadata.costoMateriales ||
-            0,
-        costoVisita:
-            t.visit_cost || t.costoVisita || realMetadata.costoVisita || 0,
-        montoFinal:
+            0
+        ),
+        costoVisita: round2(
+            t.visit_cost || t.costoVisita || realMetadata.costoVisita || 0
+        ),
+        montoFinal: round2(
             t.total_quoted_amount ||
             t.montoFinal ||
             realMetadata.montoFinal ||
-            0,
+            0
+        ),
         cliente,
         sede,
         tecnico,

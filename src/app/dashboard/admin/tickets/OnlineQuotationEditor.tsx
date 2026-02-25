@@ -5,6 +5,7 @@ import { Plus, Trash2, Calculator, FileSpreadsheet, Download, Hash, Type, Layers
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { getServiceById } from "@/lib/serviceTypes";
+import { round2, formatSoles } from "@/lib/formatters";
 import styles from "./OnlineQuotationEditor.module.css";
 
 interface Partida {
@@ -71,7 +72,8 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
             if (item.id === id) {
                 const updatedItem = { ...item, [field]: value };
                 if (field === 'cantidad' || field === 'precioUnitario') {
-                    updatedItem.total = Number(updatedItem.cantidad) * Number(updatedItem.precioUnitario);
+                    // ★ FIX PRECISION: Redondear el total de la partida a 2 decimales
+                    updatedItem.total = round2(Number(updatedItem.cantidad) * Number(updatedItem.precioUnitario));
                 }
                 return updatedItem;
             }
@@ -80,9 +82,9 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
         setItems(newItems);
     };
 
-    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const igv = subtotal * 0.18;
-    const grandTotal = subtotal + igv;
+    const subtotal = round2(items.reduce((sum, item) => sum + item.total, 0));
+    const igv = round2(subtotal * 0.18);
+    const grandTotal = round2(subtotal + igv);
 
     const quoteRef = useRef<HTMLDivElement>(null);
 
@@ -272,7 +274,7 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                                             type={focusedField === `${item.id}-price` ? "number" : "text"}
                                             value={focusedField === `${item.id}-price`
                                                 ? (item.precioUnitario || "")
-                                                : item.precioUnitario.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                : formatSoles(item.precioUnitario)}
                                             step="0.01"
                                             className={styles.cellInputRight}
                                             disabled={isLocked}
@@ -282,7 +284,7 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                                         />
                                     </td>
                                     <td className={styles.totalCell}>
-                                        {item.total.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                        {formatSoles(item.total)}
                                     </td>
                                     <td className={styles.actionCell}>
                                         {!isLocked && (
@@ -320,15 +322,15 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                     <div className={styles.totalsTable}>
                         <div className={styles.totalRow}>
                             <span>SUBTOTAL NETO</span>
-                            <strong>S/ {subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+                            <strong>S/ {formatSoles(subtotal)}</strong>
                         </div>
                         <div className={styles.totalRow}>
                             <span>I.G.V. (18%)</span>
-                            <strong>S/ {igv.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+                            <strong>S/ {formatSoles(igv)}</strong>
                         </div>
                         <div className={`${styles.totalRow} ${styles.grandTotalHighlight}`}>
                             <span>TOTAL GENERAL</span>
-                            <strong>S/ {grandTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+                            <strong>S/ {formatSoles(grandTotal)}</strong>
                         </div>
                     </div>
                 </div>

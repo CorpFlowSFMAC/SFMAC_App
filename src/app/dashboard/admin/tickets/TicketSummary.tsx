@@ -4,6 +4,7 @@ import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethos
 import { getServiceById } from "@/lib/serviceTypes";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { round2, formatSoles } from "@/lib/formatters";
 import styles from "./TicketSummary.module.css";
 
 interface InfoBarBaseProps {
@@ -317,8 +318,8 @@ export function DiagnosisInfoBar({ ticket }: { ticket: any }) {
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Pre-Presupuesto</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>🛠️ MO: S/ {ticket.costoManoObra || 0}</span>
-                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>📦 MAT: S/ {ticket.costoMateriales || 0}</span>
+                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>🛠️ MO: S/ {formatSoles(ticket.costoManoObra)}</span>
+                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>📦 MAT: S/ {formatSoles(ticket.costoMateriales)}</span>
                 </div>
             </div>
         </div>
@@ -550,7 +551,7 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
                                     {item.cantidad} {item.unidad}
                                 </div>
                                 <div style={{ fontSize: '12px', fontWeight: 700, color: '#1E293B', textAlign: 'right', minWidth: '70px' }}>
-                                    S/ {item.precio_unitario?.toFixed(2)}
+                                    S/ {formatSoles(item.precio_unitario)}
                                 </div>
                             </div>
                         ))}
@@ -594,13 +595,14 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
     const isEnviada = ticket.estadoId === 'cotizacion_enviada';
 
     // Cálculos de desglose
-    const subtotalLocal = (ticket.montoFinal || 0) / 1.18;
-    const igvLocal = (ticket.montoFinal || 0) - subtotalLocal;
+    const totalFinal = round2(ticket.montoFinal || 0);
+    const subtotalLocal = round2(totalFinal / 1.18);
+    const igvLocal = round2(totalFinal - subtotalLocal);
 
     // Cálculo de rentabilidad
-    const totalCosts = (ticket.costoManoObra || 0) + (ticket.costoMateriales || 0);
-    const profit = (ticket.montoFinal || 0) - totalCosts;
-    const margin = ticket.montoFinal > 0 ? (profit / ticket.montoFinal) * 100 : 0;
+    const totalCosts = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
+    const profit = round2(totalFinal - totalCosts);
+    const margin = totalFinal > 0 ? (profit / totalFinal) * 100 : 0;
 
     return (
         <div
@@ -631,15 +633,15 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Desglose (S/)</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>SUB: {subtotalLocal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>IGV: {igvLocal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>SUB: {formatSoles(subtotalLocal)}</span>
+                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>IGV: {formatSoles(igvLocal)}</span>
                 </div>
             </div>
 
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Total General</span>
                 <span className={styles.infoValue} style={{ fontSize: '14px', fontWeight: '800', color: '#15803D' }}>
-                    S/ {ticket.montoFinal?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    S/ {formatSoles(ticket.montoFinal)}
                 </span>
             </div>
 
@@ -677,11 +679,11 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
                         <span className={styles.infoLabel}>Comparativo</span>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <span className={styles.infoValue} style={{ color: '#0369A1', fontSize: '10px', fontWeight: 'bold' }}>
-                                ⚠️ AJUSTADA: S/ {ticket.montoFinal?.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                ⚠️ AJUSTADA: S/ {formatSoles(ticket.montoFinal)}
                             </span>
                             {ticket.montoOriginal && (
                                 <span style={{ fontSize: '9px', color: '#94A3B8', textDecoration: 'line-through' }}>
-                                    Antes: S/ {ticket.montoOriginal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                    Antes: S/ {formatSoles(ticket.montoOriginal)}
                                 </span>
                             )}
                         </div>
@@ -876,18 +878,20 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
     if (!ticket.montoFinal && !ticket.montoTotalCotizado && !ticket.costoManoObra) return null;
 
-    // ★ FIX: El costo de referencia para el técnico DEBE incluir la visita si se le paga a él
-    const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || 0);
-    const costoReferencia = (parseFloat(ticket.costoManoObra || 0) + parseFloat(ticket.costoMateriales || 0) + visitCost);
+    const visitCost = round2(ticket.costoVisita || ticket.costoPasaje || 0);
+    const jobCostBase = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
+    // El costo de referencia (Costo Operativo) es lo pactado. 
+    // Si hay trabajo, usamos MO+Mat. Si solo es visita, usamos el costo de visita.
+    const costoReferencia = jobCostBase > 0 ? jobCostBase : visitCost;
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
 
     // Sumar todos los depÓsitos realizados al técnico
-    const totalPagadoTecnico = (ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + (p.monto || 0), 0);
-    const montoAdelanto = totalPagadoTecnico || ticket.montoAdelanto || 0;
+    const totalPagadoTecnico = round2((ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+    const montoAdelanto = totalPagadoTecnico || round2(ticket.montoAdelanto || 0);
     const pctReal = (montoAdelanto / (costoReferencia || 1)) * 100;
 
     // RECTIFICACIÓN: El saldo pendiente es sobre lo que se le debe pagar al TÉCNICO
-    const montoSaldo = Math.max(0, costoReferencia - totalPagadoTecnico);
+    const montoSaldo = Math.max(0, round2(costoReferencia - totalPagadoTecnico));
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
     const visibleStates = [
@@ -925,7 +929,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Presupuesto Cliente</span>
                 <span className={styles.infoValue} style={{ color: '#1E293B', fontWeight: 900 }}>
-                    S/ {montoTotalCliente.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    S/ {formatSoles(montoTotalCliente)}
                 </span>
             </div>
 
@@ -936,7 +940,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                         {ticket.historialPagosTecnico.map((p: any, idx: number) => (
                             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                    {idx + 1}º S/ {p.monto.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                    {idx + 1}º S/ {formatSoles(p.monto)}
                                 </span>
                                 <span style={{ fontSize: '9px', color: '#B45309', opacity: 0.7, fontWeight: 600 }}>
                                     ({new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })})
@@ -961,7 +965,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span className={styles.infoValue} style={{ color: ticket.adelantoPagado ? '#059669' : '#DC2626' }}>
-                            S/ {montoAdelanto.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                            S/ {formatSoles(montoAdelanto)}
                         </span>
                         {ticket.adelantoPagado ? (
                             <CheckCircle2 size={12} color="#059669" />
@@ -976,7 +980,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                 <span className={styles.infoLabel}>2. Saldo Técnico</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span className={styles.infoValue} style={{ color: ticket.estadoId === 'ticket_cerrado' ? '#059669' : '#1E293B' }}>
-                        S/ {montoSaldo.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        S/ {formatSoles(montoSaldo)}
                     </span>
                     {ticket.estadoId === 'ticket_cerrado' ? (
                         <CheckCircle2 size={12} color="#059669" />
@@ -1110,7 +1114,7 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
 
                             {/* Monto */}
                             <span style={{ fontSize: '12px', fontWeight: 900, color: '#065F46' }}>
-                                S/ {(p.monto || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                S/ {formatSoles(p.monto)}
                             </span>
 
                             {/* Fecha */}
@@ -1170,7 +1174,7 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
                     <TrendingUp size={12} color="#059669" />
                     <span style={{ fontSize: '11px', color: '#059669', fontWeight: 700 }}>Total transferido:</span>
                     <span style={{ fontSize: '13px', fontWeight: 900, color: '#065F46' }}>
-                        S/ {totalPagado.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                        S/ {formatSoles(totalPagado)}
                     </span>
                 </div>
             </div>

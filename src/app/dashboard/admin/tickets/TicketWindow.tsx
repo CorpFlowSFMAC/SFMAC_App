@@ -11,6 +11,7 @@ import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { ticketsAPI, branchesAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
+import { round2, formatSoles } from "@/lib/formatters";
 import styles from "./TicketWindow.module.css";
 
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
@@ -603,8 +604,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const reportData = {
             ...ticketData,
             diagnostico,
-            costoManoObra: parseFloat(costoManoObra) || 0,
-            costoMateriales: modalidad === 'todo_costo' ? 0 : (parseFloat(costoMateriales) || 0),
+            costoManoObra: round2(costoManoObra),
+            costoMateriales: modalidad === 'todo_costo' ? 0 : round2(costoMateriales),
             modalidad,
             evidenciasCampo: evidenciasCampo,
             estadoId: "en_cotizacion",
@@ -1715,21 +1716,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <div className={styles.techCostDetail}>
                                                                         <div className={styles.techRow}>
                                                                             <label>Mano de Obra:</label>
-                                                                            <span>S/ {parseFloat(ticketData.costoManoObra || 0).toFixed(2)}</span>
+                                                                            <span>S/ {formatSoles(ticketData.costoManoObra)}</span>
                                                                         </div>
                                                                         <div className={styles.techRow}>
                                                                             <label>Materiales:</label>
-                                                                            <span>S/ {parseFloat(ticketData.costoMateriales || 0).toFixed(2)}</span>
+                                                                            <span>S/ {formatSoles(ticketData.costoMateriales)}</span>
                                                                         </div>
                                                                         {parseFloat(ticketData.costoVisita || 0) > 0 && (
                                                                             <div className={styles.techRow}>
                                                                                 <label>Gasto de Visita:</label>
-                                                                                <span>S/ {parseFloat(ticketData.costoVisita || 0).toFixed(2)}</span>
+                                                                                <span>S/ {formatSoles(ticketData.costoVisita)}</span>
                                                                             </div>
                                                                         )}
                                                                         <div className={styles.techRowTotal}>
                                                                             <label>Costo Directo Total:</label>
-                                                                            <strong>S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)).toFixed(2)}</strong>
+                                                                            <strong>S/ {formatSoles((round2(ticketData.costoManoObra || 0) + round2(ticketData.costoMateriales || 0)) || round2(ticketData.costoVisita || 0))}</strong>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -1737,7 +1738,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 <div className={styles.suggestedTotal}>
                                                                     <span>PRECIO OBJETIVO (55% MARGEN)</span>
                                                                     <div className={styles.suggestedValue}>
-                                                                        S/ {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)) / 0.45).toFixed(2)}
+                                                                        S/ {formatSoles(round2(((round2(ticketData.costoManoObra || 0) + round2(ticketData.costoMateriales || 0)) || round2(ticketData.costoVisita || 0)) / 0.45))}
                                                                     </div>
                                                                 </div>
 
@@ -1745,12 +1746,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <div className={styles.missingHeader}>
                                                                         <span>CUMPLIMIENTO DE META</span>
                                                                         <strong>
-                                                                            {((montoTotalCotizado / (((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)) / 0.45) || 1)) * 100).toFixed(0)}%
+                                                                            {((montoTotalCotizado / (((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) / 0.45) || 1)) * 100).toFixed(0)}%
                                                                         </strong>
                                                                     </div>
                                                                     <div className={styles.missingValue}>
                                                                         {(() => {
-                                                                            const totalCostoTecnico = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0));
+                                                                            const totalCostoTecnico = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) || parseFloat(ticketData.costoVisita || 0);
                                                                             const meta55 = totalCostoTecnico / 0.45;
 
                                                                             if (montoTotalCotizado < totalCostoTecnico) {
@@ -1761,7 +1762,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                             <span>âš ï¸ PERDIDA DETECTADA</span>
                                                                                         </div>
                                                                                         <span className={styles.lossValue}>
-                                                                                            El presupuesto es menor al costo técnico (S/ {totalCostoTecnico.toFixed(2)})
+                                                                                            El presupuesto es menor al costo técnico (S/ {formatSoles(totalCostoTecnico)})
                                                                                         </span>
                                                                                     </div>
                                                                                 );
@@ -1772,7 +1773,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                     <>
                                                                                         <span className={styles.missingLabel}>FALTAN PARA META 55%:</span>
                                                                                         <strong className={styles.missingAmount}>
-                                                                                            S/ {(meta55 - montoTotalCotizado).toFixed(2)}
+                                                                                            S/ {formatSoles(meta55 - montoTotalCotizado)}
                                                                                         </strong>
                                                                                     </>
                                                                                 );
@@ -1917,9 +1918,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 type='number'
                                                                                 value={montoSubtotal || ''}
                                                                                 onChange={(e) => {
-                                                                                    const sub = parseFloat(e.target.value) || 0;
-                                                                                    const igvValue = parseFloat((sub * 0.18).toFixed(2));
-                                                                                    const totalValue = parseFloat((sub + igvValue).toFixed(2));
+                                                                                    const sub = round2(e.target.value);
+                                                                                    const igvValue = round2(sub * 0.18);
+                                                                                    const totalValue = round2(sub + igvValue);
                                                                                     setMontoSubtotal(sub);
                                                                                     setMontoIGV(igvValue);
                                                                                     setMontoTotalCotizado(totalValue);
@@ -1984,7 +1985,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 servicioId={ticketData.servicioId}
                                                                 ticketId={ticketData.numeroTicketCliente || ticketData.id}
                                                                 initialItems={partidasCotizacion}
-                                                                suggestedTotal={(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)) / 0.45}
+                                                                suggestedTotal={round2((round2(ticketData.costoManoObra || 0) + round2(ticketData.costoMateriales || 0) + round2(ticketData.costoVisita || 0)) / 0.45)}
                                                                 onUpdate={(items: any[], total: number) => {
                                                                     setPartidasCotizacion(items);
                                                                     setMontoTotalCotizado(total);
