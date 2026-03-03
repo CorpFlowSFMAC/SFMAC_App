@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3, Route } from 'lucide-react';
 import styles from "./admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
@@ -98,10 +98,10 @@ export default function AdminLayout({
                             </Link>
 
                             {isMounted && userRole === 'admin' && (
-                                <div className={styles.navItem}>
-                                    <Settings size={20} />
-                                    Configuración
-                                </div>
+                                <Link href="/dashboard/admin/routing" className={`${styles.navItem} ${pathname.includes('/routing') ? styles.navItemActive : ''}`}>
+                                    <Route size={20} />
+                                    Enrutamiento
+                                </Link>
                             )}
                         </nav>
 

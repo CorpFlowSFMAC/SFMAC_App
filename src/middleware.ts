@@ -5,7 +5,18 @@ export function middleware(request: NextRequest) {
     const userRole = request.cookies.get('userRole')?.value;
     const { pathname } = request.nextUrl;
 
-    // 1. Si intenta acceder al dashboard sin rol, redirigir a login
+    // 0. Permitir acceso al gateway /dashboard (sin subruta) para procesar OAuth callback
+    if (pathname === '/dashboard') {
+        // Si ya tiene rol, redirigir directamente al dashboard correcto
+        if (userRole) {
+            const dest = userRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
+            return NextResponse.redirect(new URL(dest, request.url));
+        }
+        // Si no tiene rol, dejar pasar para que el gateway procese el token OAuth
+        return NextResponse.next();
+    }
+
+    // 1. Si intenta acceder a subrutas del dashboard sin rol, redirigir a login
     if (pathname.startsWith('/dashboard')) {
         if (!userRole) {
             return NextResponse.redirect(new URL('/login', request.url));
