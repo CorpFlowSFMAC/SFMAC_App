@@ -28,17 +28,16 @@ export default function LoginPage() {
         const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
         setQuote(randomQuote);
 
-        // Cleanup: If the user arrives at /login, ensure any stale session is cleared
-        // This prevents auto-login when the user explicitly navigated to login
-        const cleanupSession = async () => {
-            await supabase.auth.signOut();
-            document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-            localStorage.removeItem("userRole");
-            localStorage.removeItem("userEmail");
-            localStorage.removeItem("userName");
-            localStorage.removeItem("rbacRole");
-        };
-        cleanupSession();
+        // Clear local auth state (cookies/localStorage) when arriving at /login.
+        // NOTE: We do NOT call supabase.auth.signOut() here because it's async
+        // and causes a race condition with signInWithOAuth — the signOut() can
+        // destroy the session mid-OAuth-callback, sending the user back to login.
+        // The real signOut is properly handled in the logout buttons (admin/gestor layouts).
+        document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("userEmail");
+        localStorage.removeItem("userName");
+        localStorage.removeItem("rbacRole");
     }, []);
 
     const handleMicrosoftLogin = async () => {
