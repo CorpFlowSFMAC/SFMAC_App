@@ -3,20 +3,21 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { perfilesAPI } from "@/lib/profiles-api";
 import { Loader } from "lucide-react";
 
 /**
- * /dashboard — Gateway de Autenticación
+ * /dashboard — Gateway de Autenticación + RBAC
  * 
- * Esta página actúa como punto de entrada después del login OAuth (Microsoft Azure AD).
- * Supabase redirige aquí con un hash fragment (#access_token=...).
- * 
- * Flujo:
- * 1. Supabase client-side SDK procesa automáticamente el hash fragment
- * 2. getSession() devuelve la sesión con el usuario autenticado  
- * 3. Se extrae el rol del user_metadata
- * 4. Se setea la cookie 'userRole' para el middleware
- * 5. Se redirige al dashboard correcto (admin o gestor)
+ * Flujo actualizado con perfiles:
+ * 1. Supabase procesa el hash fragment de OAuth
+ * 2. Se obtiene la sesión autenticada
+ * 3. Se consulta la tabla `perfiles` para obtener el rol RBAC
+ * 4. Se setea la cookie 'userRole' basada en el rol del perfil
+ * 5. Se redirige según el rol:
+ *    - ADMIN → /dashboard/admin
+ *    - GESTORA → /dashboard/gestor  
+ *    - SIN_ACCESO → /dashboard/sin-acceso
  */
 export default function DashboardGateway() {
     const router = useRouter();
@@ -28,8 +29,7 @@ export default function DashboardGateway() {
             try {
                 setStatus("Procesando autenticación...");
 
-                // Esperar un momento para que Supabase procese el hash fragment
-                // El SDK detecta #access_token=... y lo intercambia automáticamente
+                // Esperar a que Supabase procese el hash fragment
                 await new Promise(resolve => setTimeout(resolve, 500));
 
                 // Obtener la sesión actual
@@ -57,10 +57,9 @@ export default function DashboardGateway() {
                         }
                     );
 
-                    // Timeout de seguridad — si después de 8 segundos no hay sesión, ir a login
+                    // Timeout de seguridad
                     setTimeout(async () => {
                         subscription.unsubscribe();
-                        // Último intento antes de rendirse
                         const { data: { session: lastCheck } } = await supabase.auth.getSession();
                         if (lastCheck?.user) {
                             await processUserSession(lastCheck.user);
@@ -86,24 +85,46 @@ export default function DashboardGateway() {
         async function processUserSession(user: any) {
             setStatus(`¡Bienvenido/a, ${user.user_metadata?.full_name || user.email}!`);
 
-            // Determinar el rol del usuario
-            const role = user.user_metadata?.role || 'gestor';
-            console.log("[Dashboard Gateway] User:", user.email, "Role:", role);
+            // ── RBAC: Consultar perfil desde la tabla perfiles ──
+            setStatus("Verificando permisos de acceso...");
+            let perfil = await perfilesAPI.getById(user.id);
 
-            // Establecer la cookie para el middleware
-            document.cookie = `userRole=${role}; path=/; max-age=86400; SameSite=Lax`;
-            localStorage.setItem("userRole", role);
+            // Si no existe perfil (caso raro, el trigger debería haberlo creado),
+            // esperar un momento y reintentar
+            if (!perfil) {
+                console.log("[Dashboard Gateway] Profile not found, waiting for trigger...");
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                perfil = await perfilesAPI.getById(user.id);
+            }
+
+            // Determinar el rol desde el perfil RBAC
+            const rbacRole = perfil?.rol || 'SIN_ACCESO';
+            const legacyRole = perfilesAPI.toLegacyRole(perfil);
+
+            console.log("[Dashboard Gateway] User:", user.email, "RBAC Role:", rbacRole, "Legacy Role:", legacyRole);
+
+            // Establecer la cookie y localStorage para el middleware
+            document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
+            localStorage.setItem("userRole", legacyRole);
             localStorage.setItem("userEmail", user.email || "");
-            localStorage.setItem("userName", user.user_metadata?.full_name || user.email || "");
+            localStorage.setItem("userName", user.user_metadata?.full_name || perfil?.nombre_completo || user.email || "");
+            localStorage.setItem("rbacRole", rbacRole);
 
-            // Pequeña pausa para que se aprecie el mensaje de bienvenida
+            // Pequeña pausa para el mensaje de bienvenida
             await new Promise(resolve => setTimeout(resolve, 800));
 
-            // Redirigir al dashboard correcto
-            const destination = role === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
-            setStatus(`Redirigiendo a ${role === 'admin' ? 'Panel Admin' : 'Panel Gestora'}...`);
-
-            router.push(destination);
+            // Redirigir según el rol RBAC
+            if (rbacRole === 'SIN_ACCESO') {
+                setStatus("Tu cuenta está pendiente de asignación de rol...");
+                router.push('/dashboard/sin-acceso');
+            } else if (rbacRole === 'ADMIN') {
+                setStatus("Redirigiendo a Panel Admin...");
+                router.push('/dashboard/admin');
+            } else {
+                // GESTORA, ESPECTADOR → gestor dashboard
+                setStatus("Redirigiendo a Panel Gestora...");
+                router.push('/dashboard/gestor');
+            }
         }
 
         handleAuth();

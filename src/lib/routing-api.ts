@@ -9,27 +9,51 @@ import { supabase } from './supabase';
 // ============================================
 export const gestorasAPI = {
     /**
-     * Sincroniza gestoras desde auth.users (rol = 'gestor') y retorna la lista actualizada.
-     * Usa la función RPC sync_gestoras_from_auth() que:
-     * 1. Lee auth.users con rol 'gestor'
-     * 2. Upsert en tabla gestoras (nombre real, email real)
-     * 3. Desactiva gestoras que ya no tienen rol 'gestor'
-     * 4. Retorna solo las activas
+     * Obtiene gestoras desde la tabla `perfiles` (RBAC) con rol = 'GESTORA'.
+     * También incluye gestoras de la tabla legacy `gestoras` para compatibilidad.
+     * El resultado combinado se usa para los dropdowns de asignación en Enrutamiento.
      */
     async getAll() {
-        const { data, error } = await supabase.rpc('sync_gestoras_from_auth');
-        if (error) {
-            // Fallback: si la RPC falla, leer directo de la tabla
-            console.warn('[GestorasAPI] sync_gestoras_from_auth failed, fallback to direct query:', error);
-            const { data: fallback, error: fallbackError } = await supabase
-                .from('gestoras')
-                .select('*')
-                .eq('status', 'active')
-                .order('name');
-            if (fallbackError) throw fallbackError;
-            return fallback || [];
+        // Primero: Obtener gestoras desde perfiles RBAC
+        const { data: perfilGestoras, error: perfilError } = await supabase
+            .from('perfiles')
+            .select('id, email, nombre_completo, rol')
+            .eq('rol', 'GESTORA')
+            .order('nombre_completo');
+
+        if (perfilError) {
+            console.warn('[GestorasAPI] Error fetching from perfiles, falling back:', perfilError);
         }
-        return data || [];
+
+        // Convertir perfiles al formato de gestoras para compatibilidad
+        const fromPerfiles = (perfilGestoras || []).map((p: any) => ({
+            id: p.id,
+            name: p.nombre_completo || p.email.split('@')[0],
+            email: p.email,
+            status: 'active',
+            auth_user_id: p.id,
+            _source: 'perfiles'
+        }));
+
+        // Fallback: También leer de la tabla legacy gestoras
+        const { data: legacyGestoras, error: legacyError } = await supabase
+            .from('gestoras')
+            .select('*')
+            .eq('status', 'active')
+            .order('name');
+
+        if (legacyError) {
+            console.warn('[GestorasAPI] Error fetching legacy gestoras:', legacyError);
+        }
+
+        // Combinar: priorizar perfiles RBAC, agregar legacy que no estén duplicadas
+        const perfilIds = new Set(fromPerfiles.map((p: any) => p.id));
+        const perfilEmails = new Set(fromPerfiles.map((p: any) => p.email?.toLowerCase()));
+        const uniqueLegacy = (legacyGestoras || []).filter((g: any) =>
+            !perfilIds.has(g.auth_user_id) && !perfilEmails.has(g.email?.toLowerCase())
+        );
+
+        return [...fromPerfiles, ...uniqueLegacy];
     },
 
     async getById(id: string) {
