@@ -21,7 +21,7 @@ export default function GestorLayout({
     const [isMounted, setIsMounted] = useState(false);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: 'global' });
         document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
         localStorage.removeItem("userRole");
         localStorage.removeItem("userEmail");
