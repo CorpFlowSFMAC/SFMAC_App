@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3 } from 'lucide-react';
 import styles from "@/app/dashboard/admin/admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
 import { QueryProvider } from "@/lib/QueryProvider";
+import { supabase } from "@/lib/supabase";
 
 export default function GestorLayout({
     children,
@@ -15,8 +16,19 @@ export default function GestorLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const router = useRouter();
     const [userRole, setUserRole] = useState<string | null>(null);
     const [isMounted, setIsMounted] = useState(false);
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("userEmail");
+        localStorage.removeItem("userName");
+        localStorage.removeItem("rbacRole");
+        router.push("/login");
+    };
 
     useEffect(() => {
         setIsMounted(true);
@@ -106,18 +118,14 @@ export default function GestorLayout({
                         </nav>
 
                         <div style={{ marginTop: "auto" }}>
-                            <Link
-                                href="/login"
+                            <button
                                 className={styles.navItem}
-                                style={{ color: "#ff4444" }}
-                                onClick={() => {
-                                    document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-                                    localStorage.removeItem("userRole");
-                                }}
+                                style={{ color: "#ff4444", background: "none", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
+                                onClick={handleLogout}
                             >
                                 <LogOut size={20} />
                                 Cerrar Sesión
-                            </Link>
+                            </button>
                         </div>
                     </aside>
 

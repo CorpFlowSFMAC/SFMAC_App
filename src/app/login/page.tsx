@@ -27,6 +27,18 @@ export default function LoginPage() {
         // Random quote on mount
         const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
         setQuote(randomQuote);
+
+        // Cleanup: If the user arrives at /login, ensure any stale session is cleared
+        // This prevents auto-login when the user explicitly navigated to login
+        const cleanupSession = async () => {
+            await supabase.auth.signOut();
+            document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            localStorage.removeItem("userRole");
+            localStorage.removeItem("userEmail");
+            localStorage.removeItem("userName");
+            localStorage.removeItem("rbacRole");
+        };
+        cleanupSession();
     }, []);
 
     const handleMicrosoftLogin = async () => {
