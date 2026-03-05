@@ -30,16 +30,29 @@ export default function AdminLayout({
         router.push("/login");
     };
 
+    const [realUserName, setRealUserName] = useState<string | null>(null);
+
     useEffect(() => {
         setIsMounted(true);
         const role = localStorage.getItem("userRole");
+        const storedName = localStorage.getItem("userName");
         setUserRole(role);
+        setRealUserName(storedName);
     }, []);
 
     // Prevent hydration mismatch by returning a consistent shell until mounted
-    const avatarLetter = isMounted && userRole === 'admin' ? 'A' : 'G';
-    const userName = isMounted && userRole === 'admin' ? 'Administrador' : 'Gestora Operativa';
+    const avatarLetter = isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isMounted && userRole === 'admin' ? 'A' : 'G');
+    const displayName = isMounted && realUserName ? realUserName : (isMounted && userRole === 'admin' ? 'Administrador' : 'Gestora Operativa');
     const dashboardHref = isMounted && userRole === 'admin' ? "/dashboard/admin" : "/dashboard/gestor";
+
+    const motivationalPhrases = [
+        "¡Hoy es un gran día para lograr metas!",
+        "Tu esfuerzo construye el futuro.",
+        "Cada acción cuenta, ¡adelante!",
+        "Juntos somos más fuertes.",
+        "El éxito es el resultado de tu dedicación.",
+    ];
+    const motivationalPhrase = isMounted ? motivationalPhrases[new Date().getDay() % motivationalPhrases.length] : "";
 
     return (
         <QueryProvider>
@@ -57,7 +70,10 @@ export default function AdminLayout({
                                 unoptimized
                                 priority
                             />
-                            <span style={{ fontWeight: "bold", fontSize: "1.2rem" }}>SINFIMAC</span>
+                            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+                                <span style={{ fontWeight: 900, fontSize: "1.1rem", letterSpacing: "0.05em", color: "#fff" }}>SINFIMAC</span>
+                                <span style={{ fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.2em", color: "rgba(255,150,50,0.9)", textTransform: "uppercase" }}>CORP.</span>
+                            </div>
                         </div>
 
                         <div className={styles.userProfileMini}>
@@ -65,8 +81,11 @@ export default function AdminLayout({
                                 {avatarLetter}
                             </div>
                             <div className={styles.userMeta}>
-                                <span className={styles.userName}>{userName}</span>
+                                <span className={styles.userName}>{displayName}</span>
                                 <span className={styles.userStatus}>En Línea</span>
+                                {isMounted && (
+                                    <span className={styles.userMotivation}>{motivationalPhrase}</span>
+                                )}
                             </div>
                         </div>
 
