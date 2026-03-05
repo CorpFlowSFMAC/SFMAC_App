@@ -64,15 +64,15 @@ export default function AdminLayout({
                             <Image
                                 src="/logo-final.png"
                                 alt="Logo"
-                                width={40}
-                                height={40}
+                                width={44}
+                                height={44}
                                 style={{ objectFit: "contain" }}
                                 unoptimized
                                 priority
                             />
-                            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-                                <span style={{ fontWeight: 900, fontSize: "1.1rem", letterSpacing: "0.05em", color: "#fff" }}>SINFIMAC</span>
-                                <span style={{ fontWeight: 700, fontSize: "0.65rem", letterSpacing: "0.2em", color: "rgba(255,150,50,0.9)", textTransform: "uppercase" }}>CORP.</span>
+                            <div className={styles.brandNameContainer}>
+                                <span className={styles.brandMain}>SINFIMAC</span>
+                                <span className={styles.brandSub}>CORP.</span>
                             </div>
                         </div>
 
