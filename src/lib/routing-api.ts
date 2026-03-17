@@ -1,8 +1,67 @@
 /**
  * ROUTING ENGINE API
  * API functions for the cascading routing engine (Cliente > Zona > Agencia)
+ * 
+ * Regla de asignación:
+ * - Una gestora puede ser responsable de una o más ZONAS completas
+ * - Adicionalmente puede tener AGENCIAS específicas de otras zonas
+ * - Resolución en cascada: Agencia (directo) → Agencia (por gestora_branch_assignments) → Zona → Cliente
  */
 import { supabase } from './supabase';
+
+// ============================================
+// HELPER: Resolver gestoras.id desde cualquier ID
+// ============================================
+/**
+ * Dado un gestoraId (puede ser auth_user_id de perfiles o id de gestoras),
+ * devuelve el id correcto de la tabla gestoras para guardar en FKs.
+ */
+async function resolveGestorasId(rawId: string | null): Promise<string | null> {
+    if (!rawId) return null;
+
+    // Primero intentamos buscar directamente en gestoras (id nativo)
+    const { data: direct } = await supabase
+        .from('gestoras')
+        .select('id')
+        .eq('id', rawId)
+        .maybeSingle();
+
+    if (direct) return direct.id;
+
+    // Si no existe, el rawId podría ser auth_user_id (de perfiles RBAC)
+    const { data: byAuthId } = await supabase
+        .from('gestoras')
+        .select('id')
+        .eq('auth_user_id', rawId)
+        .maybeSingle();
+
+    if (byAuthId) return byAuthId.id;
+
+    // No encontrado en gestoras → el usuario es solo RBAC perfiles sin registro legacy
+    // Intentamos crear un registro en gestoras para que sea compatible
+    const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('id, email, nombre_completo')
+        .eq('id', rawId)
+        .maybeSingle();
+
+    if (perfil) {
+        const { data: newGestora, error } = await supabase
+            .from('gestoras')
+            .upsert({
+                auth_user_id: perfil.id,
+                email: perfil.email,
+                name: perfil.nombre_completo || perfil.email?.split('@')[0] || 'Gestora',
+                status: 'active'
+            }, { onConflict: 'email' })
+            .select('id')
+            .single();
+
+        if (!error && newGestora) return newGestora.id;
+    }
+
+    return null;
+}
 
 // ============================================
 // GESTORAS API
@@ -129,7 +188,10 @@ export const zonasAPI = {
         return data;
     },
 
-    async updateGestora(id: string, gestoraId: string | null) {
+    async updateGestora(id: string, rawGestoraId: string | null) {
+        // ── CORRECCIÓN CLAVE: Resolver al gestoras.id real antes de guardar ──
+        const gestoraId = await resolveGestorasId(rawGestoraId);
+
         const { data, error } = await supabase
             .from('zonas')
             .update({ gestora_asignada_id: gestoraId })
@@ -150,11 +212,91 @@ export const zonasAPI = {
 };
 
 // ============================================
+// GESTORA BRANCH ASSIGNMENTS API
+// Regla: Una gestora puede tener zonas + agencias específicas de otras zonas
+// ============================================
+export const gestoraBranchAPI = {
+    /**
+     * Obtiene las agencias específicas asignadas a una gestora
+     * (agencias que están fuera de su zona principal)
+     */
+    async getByGestora(rawGestoraId: string) {
+        const gestoraId = await resolveGestorasId(rawGestoraId);
+        if (!gestoraId) return [];
+
+        const { data, error } = await supabase
+            .from('gestora_branch_assignments')
+            .select('branch_id, branch:branch_offices(id, name, zone, address, departamento, client:clients(id, name, icon, color_aura))')
+            .eq('gestora_id', gestoraId);
+        if (error) throw error;
+        return (data || []).map((r: any) => r.branch).filter(Boolean);
+    },
+
+    /**
+     * Sincroniza las agencias específicas de una gestora.
+     * branchIds = lista completa de agencias específicas a asignar
+     */
+    async syncBranchAssignments(rawGestoraId: string, branchIds: string[]) {
+        const gestoraId = await resolveGestorasId(rawGestoraId);
+        if (!gestoraId) throw new Error('Gestora no encontrada en el sistema');
+
+        // Eliminar todas las asignaciones anteriores
+        await supabase
+            .from('gestora_branch_assignments')
+            .delete()
+            .eq('gestora_id', gestoraId);
+
+        if (branchIds.length === 0) return [];
+
+        // Insertar las nuevas
+        const inserts = branchIds.map(bid => ({ gestora_id: gestoraId, branch_id: bid }));
+        const { data, error } = await supabase
+            .from('gestora_branch_assignments')
+            .insert(inserts)
+            .select();
+        if (error) throw error;
+        return data || [];
+    },
+
+    /**
+     * Agrega una agencia específica a una gestora
+     */
+    async addBranch(rawGestoraId: string, branchId: string) {
+        const gestoraId = await resolveGestorasId(rawGestoraId);
+        if (!gestoraId) throw new Error('Gestora no encontrada');
+
+        const { data, error } = await supabase
+            .from('gestora_branch_assignments')
+            .upsert({ gestora_id: gestoraId, branch_id: branchId })
+            .select();
+        if (error) throw error;
+        return data;
+    },
+
+    /**
+     * Elimina una agencia específica de una gestora
+     */
+    async removeBranch(rawGestoraId: string, branchId: string) {
+        const gestoraId = await resolveGestorasId(rawGestoraId);
+        if (!gestoraId) return;
+
+        const { error } = await supabase
+            .from('gestora_branch_assignments')
+            .delete()
+            .eq('gestora_id', gestoraId)
+            .eq('branch_id', branchId);
+        if (error) throw error;
+    }
+};
+
+// ============================================
 // ROUTING ASSIGNMENTS API
 // ============================================
 export const routingAPI = {
     // Assign gestora to client (Nivel Nacional)
-    async assignGestoraToClient(clientId: string, gestoraId: string | null) {
+    async assignGestoraToClient(clientId: string, rawGestoraId: string | null) {
+        const gestoraId = await resolveGestorasId(rawGestoraId);
+
         const { data, error } = await supabase
             .from('clients')
             .update({ gestora_asignada_id: gestoraId })
@@ -171,7 +313,9 @@ export const routingAPI = {
     },
 
     // Assign gestora to branch (Nivel Agencia) 
-    async assignGestoraToBranch(branchId: string, gestoraId: string | null) {
+    async assignGestoraToBranch(branchId: string, rawGestoraId: string | null) {
+        const gestoraId = await resolveGestorasId(rawGestoraId);
+
         const { data, error } = await supabase
             .from('branch_offices')
             .update({ gestora_asignada_id: gestoraId })
@@ -208,7 +352,13 @@ export const routingAPI = {
         return data || [];
     },
 
-    // Resolve gestora for a branch using cascade logic
+    /**
+     * Resolve gestora for a branch using cascade logic:
+     * 1. Agencia directa (branch.gestora_asignada_id)
+     * 2. Agencia por asignación específica (gestora_branch_assignments)
+     * 3. Zona (branch.zona_id → zonas.gestora_asignada_id)
+     * 4. Cliente (branch.client_id → clients.gestora_asignada_id)
+     */
     async resolveGestora(branchId: string): Promise<string | null> {
         // Step 1: Get branch with its zona and client info
         const { data: branch, error: branchError } = await supabase
@@ -219,12 +369,23 @@ export const routingAPI = {
 
         if (branchError || !branch) return null;
 
-        // Cascade Step 1: Check branch-level assignment
+        // Cascade Step 1: Check branch-level direct assignment
         if (branch.gestora_asignada_id) {
             return branch.gestora_asignada_id;
         }
 
-        // Cascade Step 2: Check zona-level assignment
+        // Cascade Step 2: Check gestora_branch_assignments (agencias específicas de gestoras)
+        const { data: specificAssignment } = await supabase
+            .from('gestora_branch_assignments')
+            .select('gestora_id')
+            .eq('branch_id', branchId)
+            .maybeSingle();
+
+        if (specificAssignment?.gestora_id) {
+            return specificAssignment.gestora_id;
+        }
+
+        // Cascade Step 3: Check zona-level assignment
         if (branch.zona_id) {
             const { data: zona, error: zonaError } = await supabase
                 .from('zonas')
@@ -237,7 +398,7 @@ export const routingAPI = {
             }
         }
 
-        // Cascade Step 3: Check client-level assignment
+        // Cascade Step 4: Check client-level assignment
         if (branch.client_id) {
             const { data: client, error: clientError } = await supabase
                 .from('clients')

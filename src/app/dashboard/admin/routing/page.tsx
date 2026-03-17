@@ -4,10 +4,11 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
     Route, Building2, MapPin, Users, Search, Filter,
     Loader2, CheckCircle2, XCircle, ChevronRight,
-    Globe, Map, Store, Sparkles, ArrowRight, UserCheck
+    Globe, Map, Store, Sparkles, ArrowRight, UserCheck,
+    Plus, Trash2, Info, ChevronDown, ChevronUp
 } from "lucide-react";
 import styles from "./routing.module.css";
-import { routingAPI, gestorasAPI, zonasAPI } from "@/lib/routing-api";
+import { routingAPI, gestorasAPI, zonasAPI, gestoraBranchAPI } from "@/lib/routing-api";
 
 interface Toast {
     message: string;
@@ -16,9 +17,9 @@ interface Toast {
 
 export default function RoutingPage() {
     // ── State ──
-    const [activeTab, setActiveTab] = useState<"cliente" | "zona" | "agencia">("cliente");
+    const [activeTab, setActiveTab] = useState<"cliente" | "zona" | "agencia" | "gestora">("cliente");
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState<string | null>(null); // ID of item being saved
+    const [saving, setSaving] = useState<string | null>(null);
     const [toast, setToast] = useState<Toast | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterClient, setFilterClient] = useState("");
@@ -53,7 +54,7 @@ export default function RoutingPage() {
     // ── Toast ──
     const showToast = (message: string, type: "success" | "error") => {
         setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
+        setTimeout(() => setToast(null), 4000);
     };
 
     // ── Stats ──
@@ -93,16 +94,14 @@ export default function RoutingPage() {
         try {
             const value = gestoraId === "" ? null : gestoraId;
             await routingAPI.assignGestoraToZona(zonaId, value);
-            setZonas(prev => prev.map(z =>
-                z.id === zonaId
-                    ? { ...z, gestora_asignada_id: value, gestora: value ? gestoras.find(g => g.id === value) : null }
-                    : z
-            ));
+            // Recargar zonas para tener datos frescos después del upsert
+            const updatedZonas = await zonasAPI.getAll();
+            setZonas(updatedZonas);
             const gestoraName = value ? gestoras.find(g => g.id === value)?.name : "ninguna";
             showToast(`✅ Zona actualizada → Gestora: ${gestoraName}`, "success");
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error assigning gestora to zona:", err);
-            showToast("❌ Error al asignar gestora a la zona", "error");
+            showToast(`❌ Error al asignar gestora a la zona: ${err?.message || ''}`, "error");
         } finally {
             setSaving(null);
         }
@@ -152,6 +151,13 @@ export default function RoutingPage() {
             return matchesSearch && matchesClient;
         });
     }, [branches, searchTerm, filterClient]);
+
+    const filteredGestoras = useMemo(() => {
+        return gestoras.filter(g =>
+            g.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            g.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [gestoras, searchTerm]);
 
     // ── Loading State ──
     if (loading) {
@@ -226,14 +232,13 @@ export default function RoutingPage() {
             <div className={styles.cascadeInfo}>
                 <Sparkles size={14} color="#8B5CF6" />
                 <span>Resolución en cascada:</span>
-                <span className={styles.cascadeLevel}><Store size={12} /> Agencia</span>
+                <span className={styles.cascadeLevel}><Store size={12} /> Agencia directa</span>
+                <span className={styles.cascadeArrow}>→</span>
+                <span className={styles.cascadeLevel}><UserCheck size={12} /> Asignación específica</span>
                 <span className={styles.cascadeArrow}>→</span>
                 <span className={styles.cascadeLevel}><Map size={12} /> Zona</span>
                 <span className={styles.cascadeArrow}>→</span>
                 <span className={styles.cascadeLevel}><Globe size={12} /> Cliente</span>
-                <span style={{ marginLeft: '0.5rem', opacity: 0.5 }}>
-                    | Si la agencia no tiene gestora, busca en la zona, luego en el cliente.
-                </span>
             </div>
 
             {/* Tabs */}
@@ -262,6 +267,15 @@ export default function RoutingPage() {
                     Por Agencia
                     <span className={styles.tabBadge}>{stats.totalBranches}</span>
                 </button>
+                <button
+                    className={`${styles.tab} ${activeTab === "gestora" ? styles.tabActive : ""}`}
+                    onClick={() => { setActiveTab("gestora"); setSearchTerm(""); setFilterClient(""); }}
+                    style={{ borderColor: activeTab === "gestora" ? "#8B5CF6" : "transparent" }}
+                >
+                    <UserCheck size={16} />
+                    Por Gestora
+                    <span className={styles.tabBadge} style={{ background: activeTab === "gestora" ? "#8B5CF620" : undefined }}>{stats.totalGestoras}</span>
+                </button>
             </div>
 
             {/* Filter Bar */}
@@ -271,11 +285,10 @@ export default function RoutingPage() {
                     <input
                         type="text"
                         placeholder={
-                            activeTab === "cliente"
-                                ? "Buscar cliente..."
-                                : activeTab === "zona"
-                                    ? "Buscar zona..."
-                                    : "Buscar agencia..."
+                            activeTab === "cliente" ? "Buscar cliente..." :
+                            activeTab === "zona" ? "Buscar zona..." :
+                            activeTab === "gestora" ? "Buscar gestora..." :
+                            "Buscar agencia..."
                         }
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -320,6 +333,15 @@ export default function RoutingPage() {
                     gestoras={gestoras}
                     saving={saving}
                     onAssign={handleAssignBranch}
+                />
+            )}
+
+            {activeTab === "gestora" && (
+                <GestoraTab
+                    gestoras={filteredGestoras}
+                    branches={branches}
+                    zonas={zonas}
+                    onToast={showToast}
                 />
             )}
 
@@ -454,19 +476,26 @@ function ZonaTab({ zonas, gestoras, saving, onAssign }: {
                     </div>
 
                     <div className={styles.gestoraSelector}>
-                        <select
-                            className={`${styles.gestoraSelect} ${zona.gestora_asignada_id ? styles.gestoraAssigned : styles.gestoraUnassigned}`}
-                            value={zona.gestora_asignada_id || ""}
-                            onChange={(e) => onAssign(zona.id, e.target.value)}
-                            disabled={saving === zona.id}
-                        >
-                            <option value="">— Sin gestora asignada —</option>
-                            {gestoras.map((g: any) => (
-                                <option key={g.id} value={g.id}>
-                                    👤 {g.name} ({g.email})
-                                </option>
-                            ))}
-                        </select>
+                        {saving === zona.id ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#8B5CF6' }}>
+                                <Loader2 size={16} className={styles.loadingIcon} />
+                                <span style={{ fontSize: '0.8rem' }}>Guardando...</span>
+                            </div>
+                        ) : (
+                            <select
+                                className={`${styles.gestoraSelect} ${zona.gestora_asignada_id ? styles.gestoraAssigned : styles.gestoraUnassigned}`}
+                                value={zona.gestora_asignada_id || ""}
+                                onChange={(e) => onAssign(zona.id, e.target.value)}
+                                disabled={saving === zona.id}
+                            >
+                                <option value="">— Sin gestora asignada —</option>
+                                {gestoras.map((g: any) => (
+                                    <option key={g.id} value={g.id}>
+                                        👤 {g.name} ({g.email})
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                 </div>
             ))}
@@ -551,6 +580,316 @@ function AgenciaTab({ branches, gestoras, saving, onAssign }: {
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+// ════════════════════════════════════════════════
+// TAB: Por Gestora (Nueva regla: zona + agencias específicas)
+// ════════════════════════════════════════════════
+function GestoraTab({ gestoras, branches, zonas, onToast }: {
+    gestoras: any[];
+    branches: any[];
+    zonas: any[];
+    onToast: (msg: string, type: "success" | "error") => void;
+}) {
+    const [expandedGestora, setExpandedGestora] = useState<string | null>(null);
+    const [gestoraAssignments, setGestoraAssignments] = useState<Record<string, string[]>>({});
+    const [loadingGestora, setLoadingGestora] = useState<string | null>(null);
+    const [savingGestora, setSavingGestora] = useState<string | null>(null);
+    const [branchSearch, setBranchSearch] = useState("");
+
+    const loadGestoraAssignments = useCallback(async (gestoraId: string) => {
+        setLoadingGestora(gestoraId);
+        try {
+            const assignedBranches = await gestoraBranchAPI.getByGestora(gestoraId);
+            setGestoraAssignments(prev => ({
+                ...prev,
+                [gestoraId]: assignedBranches.map((b: any) => b.id)
+            }));
+        } catch (err) {
+            console.error("Error loading gestora assignments:", err);
+        } finally {
+            setLoadingGestora(null);
+        }
+    }, []);
+
+    const handleExpandGestora = (gestoraId: string) => {
+        if (expandedGestora === gestoraId) {
+            setExpandedGestora(null);
+        } else {
+            setExpandedGestora(gestoraId);
+            if (!gestoraAssignments[gestoraId]) {
+                loadGestoraAssignments(gestoraId);
+            }
+        }
+    };
+
+    const toggleBranch = (gestoraId: string, branchId: string) => {
+        setGestoraAssignments(prev => {
+            const current = prev[gestoraId] || [];
+            if (current.includes(branchId)) {
+                return { ...prev, [gestoraId]: current.filter(id => id !== branchId) };
+            } else {
+                return { ...prev, [gestoraId]: [...current, branchId] };
+            }
+        });
+    };
+
+    const handleSaveAssignments = async (gestoraId: string) => {
+        setSavingGestora(gestoraId);
+        try {
+            const branchIds = gestoraAssignments[gestoraId] || [];
+            await gestoraBranchAPI.syncBranchAssignments(gestoraId, branchIds);
+            onToast(`✅ Asignaciones de agencias guardadas correctamente`, "success");
+        } catch (err: any) {
+            console.error("Error saving gestora assignments:", err);
+            onToast(`❌ Error al guardar: ${err?.message || ''}`, "error");
+        } finally {
+            setSavingGestora(null);
+        }
+    };
+
+    // Get zonas assigned to a gestora
+    const getGestoraZonas = (gestoraId: string) => {
+        return zonas.filter(z => {
+            const gId = z.gestora?.id || z.gestora_asignada_id;
+            return gId === gestoraId;
+        });
+    };
+
+    // Get branches filtered by search
+    const filteredBranches = branches.filter(b =>
+        !branchSearch ||
+        b.name?.toLowerCase().includes(branchSearch.toLowerCase()) ||
+        b.zone?.toLowerCase().includes(branchSearch.toLowerCase()) ||
+        b.departamento?.toLowerCase().includes(branchSearch.toLowerCase())
+    );
+
+    if (gestoras.length === 0) {
+        return (
+            <div className={styles.emptyState}>
+                <div className={styles.emptyIcon}>👤</div>
+                <p>No hay gestoras registradas en el sistema</p>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* Regla explicada */}
+            <div style={{
+                background: 'rgba(139,92,246,0.08)',
+                border: '1px solid rgba(139,92,246,0.25)',
+                borderRadius: '12px',
+                padding: '0.9rem 1.2rem',
+                display: 'flex',
+                gap: '0.7rem',
+                alignItems: 'flex-start',
+                fontSize: '0.83rem',
+                color: '#C4B5FD'
+            }}>
+                <Info size={16} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div>
+                    <strong>Regla de asignación mixta:</strong> Una gestora puede ser responsable de una <strong>zona completa</strong> (configurada en la pestaña "Por Zona")
+                    y adicionalmente tener <strong>agencias específicas</strong> de otras zonas asignadas aquí.
+                    El sistema resolverá la gestora correcta en cascada al llegar un ticket.
+                </div>
+            </div>
+
+            {gestoras.map(gestora => {
+                const isExpanded = expandedGestora === gestora.id;
+                const gestoraZonas = getGestoraZonas(gestora.id);
+                const assignedBranchIds = gestoraAssignments[gestora.id] || [];
+                const isLoading = loadingGestora === gestora.id;
+                const isSaving = savingGestora === gestora.id;
+
+                return (
+                    <div
+                        key={gestora.id}
+                        style={{
+                            background: 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${isExpanded ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.06)'}`,
+                            borderRadius: '14px',
+                            overflow: 'hidden',
+                            transition: 'border-color 0.2s'
+                        }}
+                    >
+                        {/* Header gestora */}
+                        <button
+                            onClick={() => handleExpandGestora(gestora.id)}
+                            style={{
+                                width: '100%',
+                                padding: '1rem 1.25rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '1rem',
+                                background: isExpanded ? 'rgba(139,92,246,0.06)' : 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                color: 'inherit'
+                            }}
+                        >
+                            <div style={{
+                                width: '42px', height: '42px', borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #8B5CF6, #6366F1)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '1.1rem', fontWeight: 700, color: 'white', flexShrink: 0
+                            }}>
+                                {(gestora.name || 'G')[0].toUpperCase()}
+                            </div>
+
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{gestora.name}</div>
+                                <div style={{ fontSize: '0.78rem', opacity: 0.6 }}>{gestora.email}</div>
+                            </div>
+
+                            {/* Zona badges */}
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', flexShrink: 0 }}>
+                                {gestoraZonas.length > 0 ? (
+                                    gestoraZonas.map(z => (
+                                        <span key={z.id} style={{
+                                            background: `${z.color || '#8B5CF6'}20`,
+                                            color: z.color || '#8B5CF6',
+                                            border: `1px solid ${z.color || '#8B5CF6'}40`,
+                                            borderRadius: '6px', padding: '0.2rem 0.5rem',
+                                            fontSize: '0.72rem', fontWeight: 600
+                                        }}>
+                                            {z.icon || '📍'} {z.nombre}
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span style={{ fontSize: '0.75rem', opacity: 0.4 }}>Sin zona asignada</span>
+                                )}
+                                {assignedBranchIds.length > 0 && (
+                                    <span style={{
+                                        background: 'rgba(16,185,129,0.15)', color: '#10B981',
+                                        border: '1px solid rgba(16,185,129,0.3)',
+                                        borderRadius: '6px', padding: '0.2rem 0.5rem',
+                                        fontSize: '0.72rem', fontWeight: 600
+                                    }}>
+                                        +{assignedBranchIds.length} ag. específicas
+                                    </span>
+                                )}
+                            </div>
+
+                            {isExpanded ? <ChevronUp size={18} style={{ opacity: 0.5 }} /> : <ChevronDown size={18} style={{ opacity: 0.5 }} />}
+                        </button>
+
+                        {/* Expanded panel */}
+                        {isExpanded && (
+                            <div style={{ padding: '0 1.25rem 1.25rem' }}>
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>Agencias específicas asignadas</div>
+                                            <div style={{ fontSize: '0.77rem', opacity: 0.5, marginTop: '0.15rem' }}>
+                                                Estas agencias estarán a cargo de esta gestora, aunque pertenezcan a otra zona.
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleSaveAssignments(gestora.id)}
+                                            disabled={isSaving}
+                                            style={{
+                                                background: 'linear-gradient(135deg, #8B5CF6, #6366F1)',
+                                                color: 'white', border: 'none', borderRadius: '8px',
+                                                padding: '0.5rem 1.1rem', cursor: 'pointer',
+                                                fontSize: '0.82rem', fontWeight: 600,
+                                                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                                opacity: isSaving ? 0.6 : 1
+                                            }}
+                                        >
+                                            {isSaving ? <Loader2 size={14} className={styles.loadingIcon} /> : <CheckCircle2 size={14} />}
+                                            {isSaving ? 'Guardando...' : 'Guardar cambios'}
+                                        </button>
+                                    </div>
+
+                                    {/* Buscador de agencias */}
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                        background: 'rgba(255,255,255,0.05)', borderRadius: '8px',
+                                        padding: '0.45rem 0.75rem', marginBottom: '0.75rem'
+                                    }}>
+                                        <Search size={14} style={{ opacity: 0.5 }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar agencia por nombre, zona o departamento..."
+                                            value={branchSearch}
+                                            onChange={e => setBranchSearch(e.target.value)}
+                                            style={{
+                                                background: 'transparent', border: 'none', outline: 'none',
+                                                color: 'inherit', fontSize: '0.82rem', width: '100%'
+                                            }}
+                                        />
+                                    </div>
+
+                                    {isLoading ? (
+                                        <div style={{ textAlign: 'center', padding: '2rem', opacity: 0.5 }}>
+                                            <Loader2 size={24} className={styles.loadingIcon} />
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            maxHeight: '320px', overflowY: 'auto',
+                                            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                                            gap: '0.4rem'
+                                        }}>
+                                            {filteredBranches.map(branch => {
+                                                const isChecked = assignedBranchIds.includes(branch.id);
+                                                // Si esta agencia pertenece a una zona de esta gestora, mostrarlo
+                                                const branchZona = zonas.find(z => {
+                                                    const gId = z.gestora?.id || z.gestora_asignada_id;
+                                                    return gId === gestora.id && (branch.zone === z.nombre || branch.zone === z.codigo);
+                                                });
+
+                                                return (
+                                                    <label
+                                                        key={branch.id}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', gap: '0.6rem',
+                                                            padding: '0.5rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
+                                                            background: isChecked ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.02)',
+                                                            border: `1px solid ${isChecked ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                                                            transition: 'all 0.15s'
+                                                        }}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() => toggleBranch(gestora.id, branch.id)}
+                                                            style={{ accentColor: '#10B981' }}
+                                                        />
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ fontSize: '0.82rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {branch.name}
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.15rem' }}>
+                                                                {branch.zone && (
+                                                                    <span style={{ fontSize: '0.68rem', opacity: 0.6 }}>
+                                                                        {branchZona ? '✅' : '📍'} {branch.zone}
+                                                                    </span>
+                                                                )}
+                                                                {branch.departamento && (
+                                                                    <span style={{ fontSize: '0.68rem', opacity: 0.5 }}>
+                                                                        · {branch.departamento}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    <div style={{ fontSize: '0.75rem', opacity: 0.4, marginTop: '0.5rem', textAlign: 'right' }}>
+                                        {assignedBranchIds.length} agencias específicas seleccionadas de {branches.length} totales
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
         </div>
     );
 }
