@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Search, Users, Sparkles, Filter, Trash2, Wrench } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Plus, Search, Users, Sparkles, Filter, Trash2, Wrench, MapPin, Building2, Globe } from "lucide-react";
 import styles from "./technicians.module.css";
 import TechnicianDrawer from "./TechnicianDrawer";
 import { useAppData } from "@/lib/AppDataContext";
 import { SKILL_ICONS, SKILL_COLORS, SERVICE_TYPES } from "@/lib/serviceTypes";
+import { ZONES } from "@/lib/zones";
+import { techniciansAPI } from "@/lib/supabase-api";
 
 export default function TechniciansPage() {
-    const router = useRouter();
     const { technicians, loadingTechnicians: loading, createTechnician, updateTechnician, deleteTechnician } = useAppData();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterZone, setFilterZone] = useState("");
@@ -17,7 +17,6 @@ export default function TechniciansPage() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingTech, setEditingTech] = useState<any>(null);
 
-    const zones = Array.from(new Set(technicians.map((t: any) => t.zone || t.zona).filter(Boolean)));
     const allSkills = SERVICE_TYPES.map(s => s.nombreCorto);
 
     const filteredTechnicians = technicians.filter((tech: any) => {
@@ -29,7 +28,13 @@ export default function TechniciansPage() {
         const matchesSearch =
             fullName.includes(searchTerm.toLowerCase()) ||
             docNumber.includes(searchTerm);
-        const matchesZone = !filterZone || (tech.zone || tech.zona) === filterZone;
+
+        // Support multi-zone lookup
+        const techZones: string[] = tech.assigned_zones?.length
+            ? tech.assigned_zones
+            : (tech.zone ? [tech.zone] : []);
+
+        const matchesZone = !filterZone || techZones.includes(filterZone);
         const matchesSkill = !filterSkill || (tech.specialties || tech.especialidades || []).includes(filterSkill);
         return matchesSearch && matchesZone && matchesSkill;
     });
@@ -46,18 +51,28 @@ export default function TechniciansPage() {
 
     const handleSave = async (techData: any) => {
         try {
+            // Extract branch assignments from the hidden field
+            const agenciasAsignadas: string[] = techData._agenciasAsignadas || [];
+            const { _agenciasAsignadas, ...cleanData } = techData;
+
             if (editingTech) {
-                await updateTechnician(editingTech.id, techData);
+                const updated = await updateTechnician(editingTech.id, cleanData);
+                // Sync branch assignments
+                await techniciansAPI.syncBranchAssignments(editingTech.id, agenciasAsignadas);
             } else {
                 // Validar DNI duplicado
                 const docExists = technicians.some((t: any) =>
-                    (t.document_number || t.numeroDoc) === (techData.document_number || techData.numeroDoc)
+                    (t.document_number || t.numeroDoc) === (cleanData.document_number || cleanData.numeroDoc)
                 );
                 if (docExists) {
-                    alert(`❌ El documento ${techData.document_number || techData.numeroDoc} ya está registrado`);
+                    alert(`❌ El documento ${cleanData.document_number || cleanData.numeroDoc} ya está registrado`);
                     return;
                 }
-                await createTechnician(techData);
+                const newTech = await createTechnician(cleanData);
+                // Sync branch assignments for new technician
+                if (newTech?.id && agenciasAsignadas.length > 0) {
+                    await techniciansAPI.syncBranchAssignments(newTech.id, agenciasAsignadas);
+                }
             }
             setIsDrawerOpen(false);
             setEditingTech(null);
@@ -102,14 +117,14 @@ export default function TechniciansPage() {
         <div className={styles.container}>
             <TechnicianDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} onSave={handleSave} technician={editingTech} />
 
-            {/* Header Luminoso */}
+            {/* Header */}
             <div className={styles.pageHeader}>
                 <div className={styles.headerContent}>
                     <div className={styles.titleGroup}>
                         <Users className={styles.usersIcon} size={40} />
                         <div>
                             <h1 className={styles.pageTitle}>Equipo de Técnicos</h1>
-                            <p className={styles.pageSubtitle}>{technicians.length} técnicos activos • {allSkills.length} especialidades</p>
+                            <p className={styles.pageSubtitle}>{technicians.length} técnicos activos • Microzonificación activa</p>
                         </div>
                     </div>
                     <button className={styles.createButton} onClick={handleCreate}>
@@ -119,7 +134,7 @@ export default function TechniciansPage() {
                 </div>
             </div>
 
-            {/* Toolbar con Filtros */}
+            {/* Toolbar */}
             <div className={styles.toolbar}>
                 <div className={styles.searchBox}>
                     <Search size={20} />
@@ -130,7 +145,9 @@ export default function TechniciansPage() {
                     <Filter size={18} />
                     <select value={filterZone} onChange={(e) => setFilterZone(e.target.value)} className={styles.filterSelect}>
                         <option value="">Todas las Zonas</option>
-                        {zones.map((z) => <option key={z} value={z}>{z}</option>)}
+                        {ZONES.map((z) => (
+                            <option key={z.id} value={z.id}>{z.icon} {z.label}</option>
+                        ))}
                     </select>
 
                     <select value={filterSkill} onChange={(e) => setFilterSkill(e.target.value)} className={styles.filterSelect}>
@@ -145,7 +162,7 @@ export default function TechniciansPage() {
                 </div>
             </div>
 
-            {/* Grid de Tarjetas Luminosas */}
+            {/* Grid */}
             <div className={styles.grid}>
                 {filteredTechnicians.map((tech: any) => {
                     const firstName = tech.first_name || tech.nombre || '';
@@ -154,10 +171,18 @@ export default function TechniciansPage() {
                     const docType = tech.document_type || tech.tipoDoc || 'DNI';
                     const docNumber = tech.document_number || tech.numeroDoc || '---';
                     const phone = tech.phone || tech.celular || tech.yape_number || tech.plin_number || '---';
-                    const zone = tech.zone || tech.zona || 'PAN PERÚ';
                     const photo = tech.photo || tech.foto || null;
                     const rating = tech.rating || tech.calificacion || 5;
                     const specialties = tech.specialties || tech.especialidades || [];
+
+                    // Multi-zone support
+                    const techZones: string[] = tech.assigned_zones?.length
+                        ? tech.assigned_zones
+                        : (tech.zone ? [tech.zone] : ['PAN PERÚ']);
+
+                    const zoneObjects = techZones.map(zId =>
+                        ZONES.find(z => z.id === zId)
+                    ).filter(Boolean);
 
                     return (
                         <div key={tech.id} className={styles.techCard}>
@@ -179,7 +204,7 @@ export default function TechniciansPage() {
                                 </div>
 
                                 <div className={styles.skillsGrid}>
-                                    {specialties.map((skill: string) => {
+                                    {specialties.slice(0, 4).map((skill: string) => {
                                         const Icon = SKILL_ICONS[skill] || Wrench;
                                         return (
                                             <div key={skill} className={styles.skillBadge} style={{ background: `${SKILL_COLORS[skill]}20`, borderColor: SKILL_COLORS[skill] }}>
@@ -188,10 +213,24 @@ export default function TechniciansPage() {
                                             </div>
                                         );
                                     })}
+                                    {specialties.length > 4 && (
+                                        <div className={styles.skillBadge} style={{ background: '#F1F5F920', borderColor: '#94A3B8' }}>
+                                            <span style={{ color: '#64748B' }}>+{specialties.length - 4} más</span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className={styles.zoneBadge}>
-                                    📍 {zone}
+                                {/* Multi-zone badges */}
+                                <div className={styles.zonesRow}>
+                                    {zoneObjects.map((z: any) => (
+                                        <span
+                                            key={z.id}
+                                            className={styles.zonePill}
+                                            style={{ background: `${z.color}18`, color: z.color, borderColor: `${z.color}40` }}
+                                        >
+                                            {z.icon} {z.label}
+                                        </span>
+                                    ))}
                                 </div>
 
                                 <div className={styles.rating}>

@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, User, Wrench, CreditCard, ChevronRight, CheckCircle, MapPin, Compass, CreditCard as CardIcon, FileText, Landmark, Sun, Mountain, Map, Trees, Phone } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import {
+    X, User, Wrench, CreditCard, ChevronRight, CheckCircle, MapPin, Compass,
+    CreditCard as CardIcon, FileText, Landmark, Sun, Mountain, Map, Trees,
+    Phone, Building2, Search, ChevronDown, ChevronUp, Globe, Layers
+} from "lucide-react";
 import styles from "./technicianDrawer.module.css";
-import { SERVICE_TYPES, getServicesAsOptions } from "@/lib/serviceTypes";
+import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { ZONES as STANDARDIZED_ZONES } from "@/lib/zones";
+import { techniciansAPI, branchesAPI } from "@/lib/supabase-api";
 
 interface TechnicianDrawerProps {
     isOpen: boolean;
@@ -15,11 +20,10 @@ interface TechnicianDrawerProps {
 
 const STEPS = [
     { id: 1, label: "Perfil & Identidad", icon: User },
-    { id: 2, label: "Skills & Zona", icon: Wrench },
-    { id: 3, label: "BÓveda Bancaria", icon: CreditCard }
+    { id: 2, label: "Skills & Microzona", icon: Layers },
+    { id: 3, label: "Bóveda Bancaria", icon: CreditCard }
 ];
 
-// 🔧 ESPECIALIDADES DESDE SERVICE_TYPES (Sincronizado con tickets)
 const SPECIALTIES = SERVICE_TYPES.map(service => ({
     id: service.nombreCorto,
     label: service.nombreCorto,
@@ -68,7 +72,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
         direccion: "",
         foto: null as string | null,
         especialidades: [] as string[],
-        zona: "LIMA",
+        zonas: [] as string[],          // ← NUEVO: array de zonas
+        agenciasAsignadas: [] as string[], // ← NUEVO: IDs de agencias específicas
         banco: "BCP",
         tipoCuenta: "Ahorros",
         numeroCuenta: "",
@@ -77,81 +82,182 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
         plin: ""
     });
 
+    // Branches data for microzonification
+    const [allBranches, setAllBranches] = useState<any[]>([]);
+    const [loadingBranches, setLoadingBranches] = useState(false);
+    const [expandedZones, setExpandedZones] = useState<Record<string, boolean>>({});
+    const [branchSearch, setBranchSearch] = useState("");
+
+    // Load all branches for zone selection
     useEffect(() => {
-        if (technician) {
-            // LÓgica de extracción para técnicos antiguos que solo tienen 'name'
-            let nombre = technician.first_name || technician.nombre || "";
-            let apellido = technician.last_name || technician.apellido || "";
+        if (!isOpen) return;
+        setLoadingBranches(true);
+        branchesAPI.getAll()
+            .then(data => setAllBranches(data || []))
+            .catch(err => console.error("Error loading branches:", err))
+            .finally(() => setLoadingBranches(false));
+    }, [isOpen]);
 
-            if (!nombre && !apellido && technician.name) {
-                const parts = technician.name.trim().split(' ');
-                if (parts.length > 1) {
-                    nombre = parts[0];
-                    apellido = parts.slice(1).join(' ');
-                } else {
-                    nombre = parts[0];
+    // Load technician data when editing
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const load = async () => {
+            if (technician) {
+                let nombre = technician.first_name || technician.nombre || "";
+                let apellido = technician.last_name || technician.apellido || "";
+
+                if (!nombre && !apellido && technician.name) {
+                    const parts = technician.name.trim().split(' ');
+                    if (parts.length > 1) {
+                        nombre = parts[0];
+                        apellido = parts.slice(1).join(' ');
+                    } else {
+                        nombre = parts[0];
+                    }
                 }
-            }
 
-            setFormData({
-                nombre,
-                apellido,
-                tipoDoc: technician.document_type || technician.tipoDoc || "DNI",
-                numeroDoc: technician.document_number || technician.numeroDoc || "",
-                celular: technician.phone || technician.celular || "",
-                celular2: technician.phone_secondary || technician.celular2 || "",
-                email: technician.email || "",
-                direccion: technician.address || technician.direccion || "",
-                foto: technician.photo || technician.foto || null,
-                especialidades: technician.specialties || technician.especialidades || [],
-                zona: technician.zone || technician.zona || "LIMA",
-                banco: technician.bank_name || technician.banco || "BCP",
-                tipoCuenta: technician.account_type || technician.tipoCuenta || "Ahorros",
-                numeroCuenta: technician.account_number || technician.numeroCuenta || "",
-                cci: technician.cci || "",
-                yape: technician.yape_number || technician.yape || "",
-                plin: technician.plin_number || technician.plin || ""
-            });
-            setCurrentStep(1);
-        } else {
-            setFormData({
-                nombre: "",
-                apellido: "",
-                tipoDoc: "DNI",
-                numeroDoc: "",
-                celular: "",
-                celular2: "",
-                email: "",
-                direccion: "",
-                foto: null,
-                especialidades: [],
-                zona: "LIMA",
-                banco: "BCP",
-                tipoCuenta: "Ahorros",
-                numeroCuenta: "",
-                cci: "",
-                yape: "",
-                plin: ""
-            });
-            setCurrentStep(1);
-        }
+                // Build zones array from the legacy single zone field and new assigned_zones
+                const existingZonas: string[] = technician.assigned_zones && technician.assigned_zones.length > 0
+                    ? technician.assigned_zones
+                    : (technician.zone ? [technician.zone] : []);
+
+                // Load assigned branches
+                let assignedBranchIds: string[] = [];
+                if (technician.id) {
+                    try {
+                        const branches = await techniciansAPI.getAssignedBranches(technician.id);
+                        assignedBranchIds = branches.map((b: any) => b.id);
+                    } catch (err) {
+                        console.error("Error loading assigned branches:", err);
+                    }
+                }
+
+                setFormData({
+                    nombre,
+                    apellido,
+                    tipoDoc: technician.document_type || technician.tipoDoc || "DNI",
+                    numeroDoc: technician.document_number || technician.numeroDoc || "",
+                    celular: technician.phone || technician.celular || "",
+                    celular2: technician.phone_secondary || technician.celular2 || "",
+                    email: technician.email || "",
+                    direccion: technician.address || technician.direccion || "",
+                    foto: technician.photo || technician.foto || null,
+                    especialidades: technician.specialties || technician.especialidades || [],
+                    zonas: existingZonas,
+                    agenciasAsignadas: assignedBranchIds,
+                    banco: technician.bank_name || technician.banco || "BCP",
+                    tipoCuenta: technician.account_type || technician.tipoCuenta || "Ahorros",
+                    numeroCuenta: technician.account_number || technician.numeroCuenta || "",
+                    cci: technician.cci || "",
+                    yape: technician.yape_number || technician.yape || "",
+                    plin: technician.plin_number || technician.plin || ""
+                });
+                setCurrentStep(1);
+            } else {
+                setFormData({
+                    nombre: "",
+                    apellido: "",
+                    tipoDoc: "DNI",
+                    numeroDoc: "",
+                    celular: "",
+                    celular2: "",
+                    email: "",
+                    direccion: "",
+                    foto: null,
+                    especialidades: [],
+                    zonas: [],
+                    agenciasAsignadas: [],
+                    banco: "BCP",
+                    tipoCuenta: "Ahorros",
+                    numeroCuenta: "",
+                    cci: "",
+                    yape: "",
+                    plin: ""
+                });
+                setCurrentStep(1);
+            }
+        };
+
+        load();
     }, [technician, isOpen]);
 
     if (!isOpen) return null;
 
-    const handleNext = () => {
-        if (currentStep < 3) {
-            setCurrentStep(currentStep + 1);
+    // ── Helpers: Zone & Branch selection ────────────────────────────────────
+    const toggleZone = (zoneId: string) => {
+        const isSelected = formData.zonas.includes(zoneId);
+        if (isSelected) {
+            // Remove zone and related branch assignments
+            const branchesInZone = allBranches
+                .filter(b => (b.zone || b.zona) === zoneId)
+                .map((b: any) => b.id);
+            setFormData(prev => ({
+                ...prev,
+                zonas: prev.zonas.filter(z => z !== zoneId),
+                agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchesInZone.includes(id))
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, zonas: [...prev.zonas, zoneId] }));
         }
+    };
+
+    const toggleBranch = (branchId: string) => {
+        if (formData.agenciasAsignadas.includes(branchId)) {
+            setFormData(prev => ({
+                ...prev,
+                agenciasAsignadas: prev.agenciasAsignadas.filter(id => id !== branchId)
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                agenciasAsignadas: [...prev.agenciasAsignadas, branchId]
+            }));
+        }
+    };
+
+    const toggleZoneExpand = (zoneId: string) => {
+        setExpandedZones(prev => ({ ...prev, [zoneId]: !prev[zoneId] }));
+    };
+
+    // Get branches for a zone, with search filter
+    const getBranchesForZone = (zoneId: string) => {
+        return allBranches.filter(b => {
+            const branchZone = b.zone || b.zona || '';
+            const matchesZone = branchZone === zoneId;
+            const matchesSearch = !branchSearch ||
+                (b.name || '').toLowerCase().includes(branchSearch.toLowerCase()) ||
+                (b.codigo_topaz || '').toLowerCase().includes(branchSearch.toLowerCase());
+            return matchesZone && matchesSearch;
+        });
+    };
+
+    const getSelectedBranchesForZone = (zoneId: string) => {
+        return allBranches.filter(b =>
+            (b.zone || b.zona) === zoneId &&
+            formData.agenciasAsignadas.includes(b.id)
+        );
+    };
+
+    // ── Navigation ────────────────────────────────────────────────────────
+    const handleNext = () => {
+        if (currentStep < 3) setCurrentStep(currentStep + 1);
     };
 
     const handlePrevious = () => {
-        if (currentStep > 1) {
-            setCurrentStep(currentStep - 1);
+        if (currentStep > 1) setCurrentStep(currentStep - 1);
+    };
+
+    const toggleSpecialty = (specialty: string) => {
+        if (formData.especialidades.includes(specialty)) {
+            setFormData({ ...formData, especialidades: formData.especialidades.filter(s => s !== specialty) });
+        } else {
+            setFormData({ ...formData, especialidades: [...formData.especialidades, specialty] });
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // ── Submit ────────────────────────────────────────────────────────────
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (formData.tipoDoc === "DNI" && !/^[0-9]{8}$/.test(formData.numeroDoc)) {
@@ -172,7 +278,13 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
-        // Transformar datos al formato de Supabase
+        if (formData.zonas.length === 0) {
+            alert("❌ Debe seleccionar al menos una zona de operación");
+            setCurrentStep(2);
+            return;
+        }
+
+        // Transformar al formato Supabase
         const supabaseData = {
             name: `${formData.nombre} ${formData.apellido}`.trim(),
             first_name: formData.nombre,
@@ -183,7 +295,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             phone_secondary: formData.celular2,
             email: formData.email,
             address: formData.direccion,
-            zone: formData.zona,
+            zone: formData.zonas[0] || "LIMA",          // ← Legacy: primera zona
+            assigned_zones: formData.zonas,              // ← Nuevo
             specialties: formData.especialidades,
             photo: formData.foto,
             rating: technician?.rating || technician?.calificacion || 5,
@@ -193,23 +306,25 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             cci: formData.cci,
             yape_number: formData.yape,
             plin_number: formData.plin,
-            status: 'active'
+            status: 'active',
+            _agenciasAsignadas: formData.agenciasAsignadas  // ← para post-save
         };
 
         onSave(supabaseData);
     };
 
-    const toggleSpecialty = (specialty: string) => {
-        if (formData.especialidades.includes(specialty)) {
-            setFormData({ ...formData, especialidades: formData.especialidades.filter(s => s !== specialty) });
-        } else {
-            setFormData({ ...formData, especialidades: [...formData.especialidades, specialty] });
-        }
-    };
+    // ── Coverage stats ────────────────────────────────────────────────────
+    const totalBranchesInSelectedZones = allBranches.filter(b =>
+        formData.zonas.includes(b.zone || b.zona || '')
+    ).length;
+
+    const totalSelectedBranches = formData.agenciasAsignadas.length;
+    const hasMixedCoverage = totalSelectedBranches > 0;
 
     return (
         <div className={styles.overlay}>
             <div className={styles.drawer}>
+                {/* Header */}
                 <div className={styles.header}>
                     <div>
                         <h2 className={styles.title}>{technician ? "Editar Técnico" : "Contratar Nuevo Técnico"}</h2>
@@ -220,6 +335,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                     </button>
                 </div>
 
+                {/* Stepper */}
                 <div className={styles.stepper}>
                     {STEPS.map((step, index) => {
                         const Icon = step.icon;
@@ -239,12 +355,12 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                 </div>
 
                 <form onSubmit={handleSubmit} className={styles.form}>
-                    {/* PASO 1: Perfil & Identidad */}
+
+                    {/* ── PASO 1: Perfil & Identidad ─────────────────────────── */}
                     {currentStep === 1 && (
                         <div className={styles.stepContent}>
                             <h3 className={styles.stepTitle}>👤 Perfil & Identidad</h3>
 
-                            {/* Doc Type integrado con input */}
                             <div className={styles.docSelectorIntegrated}>
                                 <div
                                     className={`${styles.docCardIntegrated} ${formData.tipoDoc === "DNI" ? styles.docCardActive : ''}`}
@@ -337,19 +453,24 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                         </div>
                     )}
 
-                    {/* PASO 2: Skills & Zona */}
+                    {/* ── PASO 2: Skills & Microzonificación ─────────────────── */}
                     {currentStep === 2 && (
                         <div className={styles.stepContent}>
-                            <h3 className={styles.stepTitle}>🛠️ Skills & Zona de Cobertura</h3>
+                            <h3 className={styles.stepTitle}>🗺️ Skills & Microzonificación</h3>
 
+                            {/* Especialidades */}
                             <div className={styles.sectionLabel}>Especialidades Habilitadas *</div>
                             <div className={styles.skillsGridCompact}>
                                 {SPECIALTIES.map((spec) => {
                                     const Icon = spec.icon;
                                     const isSelected = formData.especialidades.includes(spec.id);
-
                                     return (
-                                        <div key={spec.id} className={`${styles.skillCardCompact} ${isSelected ? styles.skillSelected : ''}`} onClick={() => toggleSpecialty(spec.id)} style={{ borderColor: isSelected ? spec.color : 'transparent', background: isSelected ? `${spec.color}15` : 'white' }}>
+                                        <div
+                                            key={spec.id}
+                                            className={`${styles.skillCardCompact} ${isSelected ? styles.skillSelected : ''}`}
+                                            onClick={() => toggleSpecialty(spec.id)}
+                                            style={{ borderColor: isSelected ? spec.color : 'transparent', background: isSelected ? `${spec.color}15` : 'white' }}
+                                        >
                                             <Icon size={16} color={spec.color} />
                                             <span style={{ color: isSelected ? spec.color : '#475569' }}>{spec.label}</span>
                                         </div>
@@ -357,17 +478,25 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                 })}
                             </div>
 
-                            <div className={styles.sectionLabel} style={{ marginTop: '1.25rem' }}>📍 Zona de Operación *</div>
+                            {/* ── Zonas de operación ── */}
+                            <div className={styles.sectionLabel} style={{ marginTop: '1.25rem' }}>
+                                🌍 Zonas de Operación *
+                                <span className={styles.sectionBadge}>
+                                    {formData.zonas.length} zona{formData.zonas.length !== 1 ? 's' : ''} seleccionada{formData.zonas.length !== 1 ? 's' : ''}
+                                </span>
+                            </div>
                             <div className={styles.zoneGrid}>
                                 {ZONES.map((zone) => {
-                                    const isSelected = formData.zona === zone.id;
+                                    const isSelected = formData.zonas.includes(zone.id);
                                     const Icon = zone.icon;
+                                    const selectedBranchCount = getSelectedBranchesForZone(zone.id).length;
+                                    const totalBranchCount = getBranchesForZone(zone.id).length;
 
                                     return (
                                         <div
                                             key={zone.id}
                                             className={`${styles.zoneCard} ${isSelected ? styles.zoneSelected : ''}`}
-                                            onClick={() => setFormData({ ...formData, zona: zone.id })}
+                                            onClick={() => toggleZone(zone.id)}
                                             style={{
                                                 borderColor: isSelected ? zone.color : 'transparent',
                                                 background: isSelected ? `${zone.color}10` : 'white',
@@ -379,31 +508,203 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                 <span className={styles.zoneEmojiOverlay}>{zone.emoji}</span>
                                             </div>
                                             <span className={styles.zoneLabel} style={{ color: isSelected ? zone.color : '#475569' }}>{zone.label}</span>
+                                            {isSelected && (
+                                                <span className={styles.zoneBranchCount} style={{ color: zone.color }}>
+                                                    {selectedBranchCount > 0
+                                                        ? `${selectedBranchCount} ag. específicas`
+                                                        : `${totalBranchCount} ag. (todas)`
+                                                    }
+                                                </span>
+                                            )}
                                         </div>
                                     );
                                 })}
                             </div>
+
+                            {/* ── Agencias específicas (microzonificación) ── */}
+                            {formData.zonas.length > 0 && (
+                                <div className={styles.microzonSection}>
+                                    <div className={styles.microzonHeader}>
+                                        <Building2 size={18} color="#8B5CF6" />
+                                        <div>
+                                            <div className={styles.microzonTitle}>Microzonificación de Agencias</div>
+                                            <div className={styles.microzonSubtitle}>
+                                                Si no seleccionas agencias específicas, el técnico cubrirá <strong>todas las agencias</strong> de sus zonas.
+                                                Selecciona agencias para restringir su cobertura.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Coverage summary */}
+                                    <div className={styles.coverageSummary}>
+                                        <div className={styles.coverageStat}>
+                                            <Globe size={16} color="#10B981" />
+                                            <span>
+                                                {hasMixedCoverage
+                                                    ? `${totalSelectedBranches} agencias específicas asignadas`
+                                                    : `Cobertura total: ~${totalBranchesInSelectedZones} agencias en ${formData.zonas.length} zona${formData.zonas.length !== 1 ? 's' : ''}`
+                                                }
+                                            </span>
+                                        </div>
+                                        {hasMixedCoverage && (
+                                            <button
+                                                type="button"
+                                                className={styles.clearBranchesBtn}
+                                                onClick={() => setFormData(prev => ({ ...prev, agenciasAsignadas: [] }))}
+                                            >
+                                                ✕ Limpiar selección (cobertura total)
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Search */}
+                                    <div className={styles.branchSearchBox}>
+                                        <Search size={16} />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar agencia por nombre o código..."
+                                            value={branchSearch}
+                                            onChange={(e) => setBranchSearch(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {/* Zones with branches */}
+                                    {loadingBranches ? (
+                                        <div className={styles.loadingBranches}>Cargando agencias...</div>
+                                    ) : (
+                                        <div className={styles.zoneAccordionList}>
+                                            {formData.zonas.map(zoneId => {
+                                                const zoneInfo = ZONES.find(z => z.id === zoneId);
+                                                const zoneBranches = getBranchesForZone(zoneId);
+                                                const selectedInZone = getSelectedBranchesForZone(zoneId);
+                                                const isExpanded = expandedZones[zoneId] ?? true;
+
+                                                if (zoneBranches.length === 0 && !branchSearch) return null;
+
+                                                return (
+                                                    <div
+                                                        key={zoneId}
+                                                        className={styles.zoneAccordion}
+                                                        style={{ borderColor: `${zoneInfo?.color}40` }}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            className={styles.zoneAccordionHeader}
+                                                            onClick={() => toggleZoneExpand(zoneId)}
+                                                            style={{ background: `${zoneInfo?.color}08` }}
+                                                        >
+                                                            <div className={styles.zoneAccordionLeft}>
+                                                                <span style={{ color: zoneInfo?.color }}>{zoneInfo?.emoji}</span>
+                                                                <span className={styles.zoneAccordionName} style={{ color: zoneInfo?.color }}>
+                                                                    {zoneInfo?.label}
+                                                                </span>
+                                                                <span className={styles.zoneAccordionCount}>
+                                                                    {selectedInZone.length > 0
+                                                                        ? `${selectedInZone.length}/${zoneBranches.length} seleccionadas`
+                                                                        : `${zoneBranches.length} agencias disponibles`
+                                                                    }
+                                                                </span>
+                                                            </div>
+                                                            {selectedInZone.length > 0 && (
+                                                                <span className={styles.zoneHasSelection} style={{ background: zoneInfo?.color }}>
+                                                                    {selectedInZone.length} ✓
+                                                                </span>
+                                                            )}
+                                                            {isExpanded ? <ChevronUp size={16} color="#94A3B8" /> : <ChevronDown size={16} color="#94A3B8" />}
+                                                        </button>
+
+                                                        {isExpanded && (
+                                                            <div className={styles.branchesGrid}>
+                                                                {/* Select all / Deselect all */}
+                                                                <div className={styles.branchBulkActions}>
+                                                                    <button
+                                                                        type="button"
+                                                                        className={styles.bulkBtn}
+                                                                        onClick={() => {
+                                                                            const branchIds = zoneBranches.map((b: any) => b.id);
+                                                                            const allSelected = branchIds.every((id: string) => formData.agenciasAsignadas.includes(id));
+                                                                            if (allSelected) {
+                                                                                setFormData(prev => ({
+                                                                                    ...prev,
+                                                                                    agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchIds.includes(id))
+                                                                                }));
+                                                                            } else {
+                                                                                setFormData(prev => ({
+                                                                                    ...prev,
+                                                                                    agenciasAsignadas: [...new Set([...prev.agenciasAsignadas, ...branchIds])]
+                                                                                }));
+                                                                            }
+                                                                        }}
+                                                                        style={{ color: zoneInfo?.color, borderColor: `${zoneInfo?.color}40` }}
+                                                                    >
+                                                                        {zoneBranches.every((b: any) => formData.agenciasAsignadas.includes(b.id))
+                                                                            ? '☑ Deseleccionar todas'
+                                                                            : '☐ Seleccionar todas'
+                                                                        }
+                                                                    </button>
+                                                                </div>
+
+                                                                {zoneBranches.length === 0 && branchSearch && (
+                                                                    <p className={styles.noBranchesMsg}>No hay agencias que coincidan con la búsqueda.</p>
+                                                                )}
+
+                                                                {zoneBranches.map((branch: any) => {
+                                                                    const isSelected = formData.agenciasAsignadas.includes(branch.id);
+                                                                    return (
+                                                                        <div
+                                                                            key={branch.id}
+                                                                            className={`${styles.branchItem} ${isSelected ? styles.branchSelected : ''}`}
+                                                                            onClick={() => toggleBranch(branch.id)}
+                                                                            style={isSelected ? {
+                                                                                borderColor: zoneInfo?.color,
+                                                                                background: `${zoneInfo?.color}10`
+                                                                            } : {}}
+                                                                        >
+                                                                            <div className={`${styles.branchCheckbox} ${isSelected ? styles.branchCheckboxChecked : ''}`}
+                                                                                style={isSelected ? { background: zoneInfo?.color, borderColor: zoneInfo?.color } : {}}>
+                                                                                {isSelected && <CheckCircle size={12} color="white" />}
+                                                                            </div>
+                                                                            <div className={styles.branchInfo}>
+                                                                                <span className={styles.branchName}>
+                                                                                    {branch.name}
+                                                                                    {branch.tipo && <span className={styles.branchType}>{branch.tipo}</span>}
+                                                                                </span>
+                                                                                <span className={styles.branchMeta}>
+                                                                                    {branch.codigo_topaz && <span>#{branch.codigo_topaz}</span>}
+                                                                                    {branch.distrito && <span> · {branch.distrito}</span>}
+                                                                                    {branch.departamento && branch.departamento !== branch.distrito && (
+                                                                                        <span> · {branch.departamento}</span>
+                                                                                    )}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* PASO 3: BÓveda Bancaria */}
+                    {/* ── PASO 3: Bóveda Bancaria ─────────────────────────────── */}
                     {currentStep === 3 && (
                         <div className={styles.stepContent}>
-                            <h3 className={styles.stepTitle}>💳 BÓveda Bancaria</h3>
+                            <h3 className={styles.stepTitle}>💳 Bóveda Bancaria</h3>
 
-                            {/* Premium Preview & Selector Row */}
                             <div className={styles.bankPreviewRow}>
-                                {/* Bank Card Preview Premium */}
                                 {(() => {
                                     const selectedBank = BANKS.find(b => b.id === formData.banco) || BANKS[0];
                                     return (
                                         <>
-                                            {/* Left: Bank Card Preview */}
                                             <div
                                                 className={styles.compactBankCard}
-                                                style={{
-                                                    background: `linear-gradient(135deg, ${selectedBank.gradient[0]}, ${selectedBank.gradient[1]})`
-                                                }}
+                                                style={{ background: `linear-gradient(135deg, ${selectedBank.gradient[0]}, ${selectedBank.gradient[1]})` }}
                                             >
                                                 <div className={styles.bankCardHeader}>
                                                     <div className={styles.vaultTitle}>
@@ -417,7 +718,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                         <div className={styles.bankDetailColumn}>
                                                             <div className={styles.detailItemMini}>
                                                                 <MapPin size={12} />
-                                                                <span>{formData.zona}</span>
+                                                                <span>{formData.zonas.join(', ') || 'Sin zona'}</span>
                                                             </div>
                                                             <div className={styles.detailItemMini}>
                                                                 <Phone size={12} />
@@ -432,7 +733,6 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                 </div>
                                             </div>
 
-                                            {/* Middle: Integrated Inputs Column */}
                                             <div className={styles.cardInputsColumn}>
                                                 <div className={styles.formGroupCompact}>
                                                     <label className={styles.microLabel}>NÚMERO DE CUENTA</label>
@@ -464,7 +764,6 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                     );
                                 })()}
 
-                                {/* Interactive Bank Selector */}
                                 <div className={styles.sideBankSelector}>
                                     <div className={styles.bankSelectorGridCompact}>
                                         {BANKS.map(bank => (
@@ -472,10 +771,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                 key={bank.id}
                                                 className={`${styles.bankOptionMini} ${formData.banco === bank.id ? styles.bankSelectedMini : ''}`}
                                                 onClick={() => setFormData({ ...formData, banco: bank.id })}
-                                                style={{
-                                                    '--bank-color': bank.color,
-                                                    '--bank-accent': bank.accent
-                                                } as any}
+                                                style={{ '--bank-color': bank.color, '--bank-accent': bank.accent } as any}
                                                 title={bank.name}
                                             >
                                                 {formData.banco === bank.id && (
@@ -508,10 +804,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                     </div>
                                 </div>
 
-
-
                                 <div className={styles.walletsSection}>
-                                    <div className={styles.sectionLabelMini}>Ecosistema de Pago MÓvil</div>
+                                    <div className={styles.sectionLabelMini}>Ecosistema de Pago Móvil</div>
                                     <div className={styles.walletsRow}>
                                         <div className={`${styles.walletMiniCard} ${formData.yape ? styles.yapeActive : ''}`}>
                                             <div className={styles.walletBrand} style={{ background: '#7C3AED' }}>Y</div>

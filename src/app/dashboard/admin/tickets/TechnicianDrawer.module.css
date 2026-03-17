@@ -91,12 +91,40 @@
 /* Info del Ticket */
 .ticketInfo {
     display: flex;
-    gap: 12px;
-    padding: 16px 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 20px;
     background: linear-gradient(135deg, #F5F3FF, #EDE9FE);
     border-bottom: 2px solid #DDD6FE;
     flex-shrink: 0;
 }
+
+.microzonBadge {
+    flex: 0 0 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-top: 0.2rem;
+}
+
+.microzonFallback {
+    flex: 0 0 100%;
+    padding: 0.4rem 0.8rem;
+    background: #FFFBEB;
+    color: #92400E;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid #FCD34D;
+    margin-top: 0.2rem;
+}
+
 
 .infoItem {
     flex: 1;

@@ -226,6 +226,44 @@ export const techniciansAPI = {
         return data;
     },
 
+    // Retorna los técnicos disponibles para atender una agencia específica
+    // usando la función PL/pgSQL que implementa la lógica de microzonificación
+    async getAvailableForBranch(branchId: string) {
+        const { data, error } = await supabase
+            .rpc('get_technicians_for_branch', { p_branch_id: branchId });
+        if (error) throw error;
+        return data || [];
+    },
+
+    // Obtiene las agencias asignadas a un técnico
+    async getAssignedBranches(technicianId: string) {
+        const { data, error } = await supabase
+            .from('technician_branches')
+            .select('branch_id, branch_offices(id, name, zone, address, departamento)')
+            .eq('technician_id', technicianId);
+        if (error) throw error;
+        return (data || []).map((r: any) => r.branch_offices);
+    },
+
+    // Sincroniza las agencias asignadas a un técnico (replace completo)
+    async syncBranchAssignments(technicianId: string, branchIds: string[]) {
+        // 1. Borrar asignaciones existentes
+        const { error: delErr } = await supabase
+            .from('technician_branches')
+            .delete()
+            .eq('technician_id', technicianId);
+        if (delErr) throw delErr;
+
+        // 2. Insertar nuevas asignaciones
+        if (branchIds.length > 0) {
+            const rows = branchIds.map(bid => ({ technician_id: technicianId, branch_id: bid }));
+            const { error: insErr } = await supabase
+                .from('technician_branches')
+                .insert(rows);
+            if (insErr) throw insErr;
+        }
+    },
+
     async create(technician: {
         name?: string;
         first_name?: string;
@@ -235,6 +273,7 @@ export const techniciansAPI = {
         phone?: string;
         email?: string;
         zone?: string;
+        assigned_zones?: string[];
         specialties?: string[];
         photo?: string;
         rating?: number;
@@ -272,6 +311,7 @@ export const techniciansAPI = {
         phone: string;
         email: string;
         zone: string;
+        assigned_zones: string[];
         specialties: string[];
         photo: string;
         rating: number;

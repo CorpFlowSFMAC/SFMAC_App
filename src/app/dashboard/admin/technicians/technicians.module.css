@@ -359,6 +359,28 @@
     border: 2px solid #93C5FD;
 }
 
+/* 🗺️ MULTI-ZONA PILLS */
+.zonesRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.7rem;
+}
+
+.zonePill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 20px;
+    border: 1.5px solid;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+
+
+
 /* ⭐ RATING DORADO */
 .rating {
     text-align: center;

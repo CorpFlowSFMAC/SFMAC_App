@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { X, Search, MapPin, Phone, Star, DollarSign, CheckCircle, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Search, MapPin, Phone, Star, DollarSign, CheckCircle, RefreshCw, Building2, Globe } from "lucide-react";
 import { useAppData } from "@/lib/AppDataContext";
 import { SKILL_ICONS, getServiceById } from "@/lib/serviceTypes";
-import { normalizeZone, areZonesCompatible, getZoneFullName } from "@/lib/zones";
+import { normalizeZone, getZoneFullName, ZONES } from "@/lib/zones";
+import { techniciansAPI } from "@/lib/supabase-api";
 import styles from "./TechnicianDrawer.module.css";
 
 interface TechnicianDrawerProps {
@@ -21,56 +22,78 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
     const [costoVisita, setCostoVisita] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Normalizar datos del ticket para el filtro
-    const ticketZone = normalizeZone(ticket?.sede?.zona || ticket?.sede?.zone);
-    const ticketZoneDisplay = getZoneFullName(ticketZone);
+    // State for microzonification-filtered technicians
+    const [microzonTechs, setMicrozonTechs] = useState<any[] | null>(null);
+    const [loadingMicrozon, setLoadingMicrozon] = useState(false);
+    const [microzonError, setMicrozonError] = useState(false);
 
-    // Obtener el nombre corto estandarizado del servicio (ej: "ELECTRICIDAD")
+    // The branch ID of the ticket
+    const branchId = ticket?.branch_id || ticket?.sede?.id || null;
+
+    // Normalizar datos del ticket para el filtro
+    const ticketZone = normalizeZone(ticket?.sede?.zona || ticket?.sede?.zone || ticket?.branch_offices?.zone);
+    const ticketZoneDisplay = getZoneFullName(ticketZone);
+    const ticketBranchName = ticket?.sede?.nombre || ticket?.sede?.name || ticket?.branch_offices?.name || 'Agencia del ticket';
+
+    // Load microzonification-aware technicians when branch is known
+    useEffect(() => {
+        if (!isOpen || !branchId) return;
+        setLoadingMicrozon(true);
+        setMicrozonError(false);
+        techniciansAPI.getAvailableForBranch(branchId)
+            .then(data => setMicrozonTechs(data || []))
+            .catch(err => {
+                console.error('[TechnicianDrawer] Error loading microzon techs:', err);
+                setMicrozonError(true);
+                setMicrozonTechs(null); // fallback to local filter
+            })
+            .finally(() => setLoadingMicrozon(false));
+    }, [isOpen, branchId]);
+
+    // Get standardized skill name for matching
     const getStandardizedSkill = () => {
         if (!ticket) return "";
-
-        // 1. Intentar con tipoServicioNombre (que ya debería ser el nombre corto)
         if (ticket.tipoServicioNombre) return ticket.tipoServicioNombre.toUpperCase();
-
-        // 2. Intentar buscar por ID
         const service = getServiceById(ticket.tipoServicio || ticket.service_type);
         if (service) return service.nombreCorto;
-
-        // 3. Fallback al ID en mayúsculas
         return (ticket.tipoServicio || ticket.service_type || "").toUpperCase();
     };
 
     const requiredSkill = getStandardizedSkill();
 
-    // Filtrar técnicos compatibles
-    const compatibleTechnicians = (technicians || []).filter((tech: any) => {
-        // Normalizar zona del técnico
-        const techZone = normalizeZone(tech.zone || tech.zona);
+    // Build the pool of technicians to show:
+    // - If microzonification data loaded → use it (already filtered by branch coverage)
+    // - If no branch or error → fallback to zone-based filter
+    const techPool = (() => {
+        const base = microzonTechs !== null ? microzonTechs : (technicians || []).filter((tech: any) => {
+            const techZones: string[] = tech.assigned_zones?.length
+                ? tech.assigned_zones
+                : (tech.zone ? [tech.zone] : []);
+            return techZones.some(z => normalizeZone(z) === ticketZone);
+        });
 
-        // Filtro por zona (usando sistema normalizado)
-        const matchesZone = areZonesCompatible(ticketZone, techZone);
+        return base.filter((tech: any) => {
+            // Apply skill filter
+            const specialties = tech.specialties || tech.especialidades || [];
+            const techSkills = specialties.map((s: string) => s.toUpperCase());
+            const matchesSkill = requiredSkill === "" || techSkills.includes(requiredSkill);
 
-        // Filtro por especialidad/servicio (normalizado a mayúsculas)
-        const specialties = tech.specialties || tech.especialidades || [];
-        const techSkills = specialties.map((s: string) => s.toUpperCase());
-        const matchesSkill = requiredSkill === "" || techSkills.includes(requiredSkill);
+            // Apply search filter
+            const firstName = tech.first_name || tech.nombre || '';
+            const lastName = tech.last_name || tech.apellido || '';
+            const fullName = (tech.name || `${firstName} ${lastName}`).toLowerCase();
+            const docNumber = tech.document_number || tech.numeroDoc || '';
+            const matchesSearch = searchTerm === "" ||
+                fullName.includes(searchTerm.toLowerCase()) ||
+                docNumber.includes(searchTerm);
 
-        // Filtro por búsqueda
-        const firstName = tech.first_name || tech.nombre || '';
-        const lastName = tech.last_name || tech.apellido || '';
-        const fullName = (tech.name || `${firstName} ${lastName}`).toLowerCase();
-        const docNumber = tech.document_number || tech.numeroDoc || '';
+            // Status
+            const status = (tech.status || tech.estado || '').toLowerCase();
+            const isActive = status === 'active' || status === 'activo';
 
-        const matchesSearch = searchTerm === "" ||
-            fullName.includes(searchTerm.toLowerCase()) ||
-            docNumber.includes(searchTerm);
-
-        // Filtro de estado Activo
-        const status = (tech.status || tech.estado || '').toLowerCase();
-        const isActive = status === 'active' || status === 'activo';
-
-        return matchesZone && matchesSkill && matchesSearch && isActive;
-    });
+            return matchesSkill && matchesSearch && isActive;
+        });
+    })();
 
     const handleAssign = () => {
         if (!selectedTechnician) return;
@@ -110,12 +133,12 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
 
     if (!isOpen) return null;
 
-    if (loading) {
+    if (loading || loadingMicrozon) {
         return (
             <div className={styles.loadingOverlay}>
                 <div className={styles.loadingContent}>
                     <RefreshCw className={styles.spin} size={40} />
-                    <p>Cargando técnicos autorizados...</p>
+                    <p>{loadingMicrozon ? 'Calculando técnicos para esta agencia...' : 'Cargando técnicos autorizados...'}</p>
                 </div>
             </div>
         );
@@ -134,7 +157,7 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                 <div className={styles.header}>
                     <div className={styles.headerContent}>
                         <h2>Asignar Técnico</h2>
-                        <p>Selecciona un técnico compatible con la zona y servicio</p>
+                        <p>Técnicos habilitados para esta agencia y servicio</p>
                     </div>
                     <button className={styles.closeBtn} onClick={onClose}>
                         <X size={20} />
@@ -147,9 +170,24 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                         <span className={styles.value}>📍 {ticketZoneDisplay}</span>
                     </div>
                     <div className={styles.infoItem}>
+                        <span className={styles.label}>Agencia</span>
+                        <span className={styles.value}><Building2 size={12} /> {ticketBranchName}</span>
+                    </div>
+                    <div className={styles.infoItem}>
                         <span className={styles.label}>Servicio</span>
                         <span className={styles.value}>⚙️ {ticket?.tipoServicioNombre || ticket?.tipoServicio}</span>
                     </div>
+                    {!microzonError && microzonTechs !== null && (
+                        <div className={styles.microzonBadge}>
+                            <Globe size={12} />
+                            Microzonificación activa · {techPool.length} técnico{techPool.length !== 1 ? 's' : ''} habilitado{techPool.length !== 1 ? 's' : ''}
+                        </div>
+                    )}
+                    {microzonError && (
+                        <div className={styles.microzonFallback}>
+                            ⚠️ Filtro por zona general (microzonificación no disponible)
+                        </div>
+                    )}
                 </div>
 
                 <div className={styles.searchBox}>
@@ -163,21 +201,28 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                 </div>
 
                 <div className={styles.techniciansList}>
-                    {compatibleTechnicians.length === 0 ? (
+                    {techPool.length === 0 ? (
                         <div className={styles.emptyState}>
-                            <p>❌ No hay técnicos compatibles disponibles</p>
+                            <p>❌ No hay técnicos habilitados para esta agencia</p>
                             <small>
-                                Zona requerida: {ticketZoneDisplay}<br />
-                                Especialidad requerida: {ticket?.tipoServicioNombre || ticket?.tipoServicio}
+                                Agencia: {ticketBranchName}<br />
+                                Zona: {ticketZoneDisplay}<br />
+                                Especialidad: {ticket?.tipoServicioNombre || ticket?.tipoServicio}<br />
+                                <em>Asigne zonas/agencias al técnico en el módulo de gestión.</em>
                             </small>
                         </div>
                     ) : (
-                        compatibleTechnicians.map((tech: any) => {
+                        techPool.map((tech: any) => {
                             const specialties = tech.specialties || tech.especialidades || [];
                             const SkillIcon = SKILL_ICONS[specialties[0]];
                             const isSelected = selectedTechnician?.id === tech.id;
                             const photo = tech.photo || tech.foto;
                             const name = tech.name || `${tech.first_name || tech.nombre} ${tech.last_name || tech.apellido}`;
+                            // Zone pills for display
+                            const techZones: string[] = tech.assigned_zones?.length
+                                ? tech.assigned_zones
+                                : (tech.zone ? [tech.zone] : []);
+                            const zoneObjs = techZones.map(zId => ZONES.find(z => z.id === zId)).filter(Boolean);
 
                             return (
                                 <div
@@ -209,7 +254,7 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                                             </div>
                                             <div className={styles.detailItem}>
                                                 <MapPin size={12} />
-                                                <span>{tech.zone || tech.zona}</span>
+                                                <span>{zoneObjs.map((z: any) => `${z.icon} ${z.label}`).join(', ') || tech.zone || tech.zona}</span>
                                             </div>
                                             <div className={styles.detailItem}>
                                                 <Star size={12} />

@@ -5,7 +5,7 @@
 import {
     Zap, Wrench, Droplet, Hammer, PaintBucket, Snowflake,
     Glasses, Flame, ClipboardCheck, Lightbulb, Cog, Drill,
-    Ruler, type LucideIcon
+    Ruler, ShieldCheck, type LucideIcon
 } from "lucide-react";
 
 export interface ServiceType {
@@ -82,6 +82,14 @@ export const SERVICE_TYPES: ServiceType[] = [
         icon: Flame,
         color: "#EA580C", // Naranja fuego profesional
         descripcion: "Soldadura de estructuras metálicas, tuberías, reparaciones"
+    },
+    {
+        id: "pre-post-itse",
+        nombre: "Pre - Post ITSE",
+        nombreCorto: "PRE - POST ITSE",
+        icon: ShieldCheck,
+        color: "#8B5CF6", // Violeta profesional
+        descripcion: "Evaluación previa y posterior a la Inspección Técnica de Seguridad en Edificaciones"
     },
     {
         id: "visita-tecnica",
