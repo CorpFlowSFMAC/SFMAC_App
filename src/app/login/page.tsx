@@ -262,13 +262,16 @@ export default function LoginPage() {
 
                     {/* Logo mark */}
                     <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
-                        <div style={{
-                            display: "inline-flex", alignItems: "center", justifyContent: "center",
-                            width: "64px", height: "64px", borderRadius: "18px", marginBottom: "1.25rem",
-                            background: "linear-gradient(135deg,#FF7149,#FF5733)",
-                            boxShadow: "0 8px 25px rgba(255,113,73,0.35)"
-                        }}>
-                            <Rocket size={30} color="white" />
+                        <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "center" }}>
+                            <Image
+                                src="/logo-final.png"
+                                alt="SINFIMAC Logo"
+                                width={240}
+                                height={80}
+                                style={{ objectFit: "contain" }}
+                                priority
+                                unoptimized
+                            />
                         </div>
                         <h1 style={{
                             fontSize: "1.75rem", fontWeight: 900, color: "#1A202C",
