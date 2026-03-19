@@ -73,28 +73,7 @@ export const gestorasAPI = {
      * El resultado combinado se usa para los dropdowns de asignación en Enrutamiento.
      */
     async getAll() {
-        // Primero: Obtener gestoras desde perfiles RBAC
-        const { data: perfilGestoras, error: perfilError } = await supabase
-            .from('perfiles')
-            .select('id, email, nombre_completo, rol')
-            .eq('rol', 'GESTORA')
-            .order('nombre_completo');
-
-        if (perfilError) {
-            console.warn('[GestorasAPI] Error fetching from perfiles, falling back:', perfilError);
-        }
-
-        // Convertir perfiles al formato de gestoras para compatibilidad
-        const fromPerfiles = (perfilGestoras || []).map((p: any) => ({
-            id: p.id,
-            name: p.nombre_completo || p.email.split('@')[0],
-            email: p.email,
-            status: 'active',
-            auth_user_id: p.id,
-            _source: 'perfiles'
-        }));
-
-        // Fallback: También leer de la tabla legacy gestoras
+        // Primero: Obtener todas las gestoras de la tabla `gestoras`
         const { data: legacyGestoras, error: legacyError } = await supabase
             .from('gestoras')
             .select('*')
@@ -105,14 +84,46 @@ export const gestorasAPI = {
             console.warn('[GestorasAPI] Error fetching legacy gestoras:', legacyError);
         }
 
-        // Combinar: priorizar perfiles RBAC, agregar legacy que no estén duplicadas
-        const perfilIds = new Set(fromPerfiles.map((p: any) => p.id));
-        const perfilEmails = new Set(fromPerfiles.map((p: any) => p.email?.toLowerCase()));
-        const uniqueLegacy = (legacyGestoras || []).filter((g: any) =>
-            !perfilIds.has(g.auth_user_id) && !perfilEmails.has(g.email?.toLowerCase())
-        );
+        const gestorasList = legacyGestoras || [];
 
-        return [...fromPerfiles, ...uniqueLegacy];
+        // Segundo: Obtener gestoras desde perfiles RBAC
+        const { data: perfilGestoras, error: perfilError } = await supabase
+            .from('perfiles')
+            .select('id, email, nombre_completo, rol')
+            .eq('rol', 'GESTORA')
+            .order('nombre_completo');
+
+        if (perfilError) {
+            console.warn('[GestorasAPI] Error fetching from perfiles, falling back:', perfilError);
+        }
+
+        // Combinar: Para cada perfil, buscar si ya tiene registro en `gestoras`:
+        const finalGestoras = [...gestorasList];
+        
+        for (const p of (perfilGestoras || [])) {
+            // Check si ya existe en finalGestoras por auth_user_id o email
+            const exists = finalGestoras.find(g => 
+                g.auth_user_id === p.id || 
+                (g.email && p.email && g.email.toLowerCase() === p.email.toLowerCase())
+            );
+
+            if (!exists) {
+                // Agregar perfil no mapeado usando su ID de perfil (luego resolveGestorasId lo arreglará si se le asigna algo)
+                finalGestoras.push({
+                    id: p.id,
+                    name: p.nombre_completo || p.email.split('@')[0],
+                    email: p.email,
+                    status: 'active',
+                    auth_user_id: p.id,
+                    _source: 'perfiles'
+                });
+            } else if (!exists.auth_user_id) {
+                // Vincular silenciosamente
+                exists.auth_user_id = p.id;
+            }
+        }
+
+        return finalGestoras;
     },
 
     async getById(id: string) {
