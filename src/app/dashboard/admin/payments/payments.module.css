@@ -976,3 +976,215 @@
         opacity: 1;
     }
 }
+
+/* ══════════════════════════════════════════════════════════
+   ZERO-FEE DEEP LINK — Botones de acción de pago
+   ══════════════════════════════════════════════════════════ */
+
+.zeroFeeActions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+}
+
+/* Botón Yape — morado vibrante */
+.btnYape {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 10px;
+    background: linear-gradient(135deg, #7C3AED, #6D28D9);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 800;
+    width: 100%;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.btnYape::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    pointer-events: none;
+}
+
+.btnYape:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.55);
+}
+
+.btnYape:active {
+    transform: scale(0.97);
+}
+
+/* Botón Plin — azul eléctrico */
+.btnPlin {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 10px;
+    background: linear-gradient(135deg, #0EA5E9, #0284C7);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 800;
+    width: 100%;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4);
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btnPlin:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(14, 165, 233, 0.55);
+}
+
+.btnPlin:active {
+    transform: scale(0.97);
+}
+
+/* Botón Banco — verde oscuro */
+.btnBanco {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 10px;
+    background: linear-gradient(135deg, #059669, #047857);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 800;
+    width: 100%;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btnBanco:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(5, 150, 105, 0.5);
+}
+
+/* Número de wallet dentro del botón */
+.walletNum {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.65rem;
+    opacity: 0.85;
+    letter-spacing: 0.04em;
+    background: rgba(255, 255, 255, 0.18);
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex: 1;
+    text-align: center;
+}
+
+.walletEmoji {
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+/* Botón clásico "Ya pagué · Subir voucher" */
+.btnVoucherClassic {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 8px;
+    background: #F8FAFC;
+    color: #475569;
+    border: 1px dashed #CBD5E1;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 700;
+    width: 100%;
+    justify-content: center;
+    transition: all 0.2s;
+    margin-top: 2px;
+}
+
+.btnVoucherClassic:hover {
+    background: #EFF6FF;
+    border-color: #93C5FD;
+    color: #1D4ED8;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOAST Zero-Fee — Notificación flash
+   ══════════════════════════════════════════════════════════ */
+
+.toastZeroFee {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    background: linear-gradient(135deg, #0F172A, #1E293B);
+    color: white;
+    padding: 13px 20px;
+    border-radius: 14px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.08);
+    z-index: 9998;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(120%);
+    transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    max-width: 360px;
+}
+
+.toastVisible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* ══════════════════════════════════════════════════════════
+   MODAL Esperando Voucher — Post Deep Link
+   ══════════════════════════════════════════════════════════ */
+
+.voucherCaptureArea {
+    background: linear-gradient(135deg, #F5F3FF, #EDE9FE);
+    border: 2px dashed #A78BFA;
+    border-radius: 16px;
+    padding: 24px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.uploadScreenshotBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #7C3AED, #6D28D9);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.uploadScreenshotBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(124, 58, 237, 0.55);
+}

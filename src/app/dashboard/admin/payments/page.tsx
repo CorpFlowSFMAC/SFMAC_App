@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
     Wallet, History, CheckCircle2, Clock, ArrowUpRight,
     DollarSign, CreditCard, ChevronDown, ChevronUp,
-    TrendingUp, Building2, User, Smartphone, Upload, Eye, X,
-    AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw
+    Building2, User, Upload, Eye, X,
+    AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw,
+    Smartphone, Copy, ExternalLink, Camera, CheckCheck
 } from "lucide-react";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
@@ -175,6 +176,75 @@ export default function PaymentsPage() {
     } | null>(null);
     const [showVoucher, setShowVoucher] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+
+    // ── ZERO-FEE DEEP LINK STATE ─────────────────────────────────
+    // waitingVoucher: después del deep link, espera que el admin vuelva y suba el voucher
+    const [waitingVoucher, setWaitingVoucher] = useState<{
+        group: PaymentTicketGroup;
+        item: PaymentItem;
+        wallet: 'yape' | 'plin' | 'banco';
+        numero: string;
+    } | null>(null);
+
+    // Toast flash (1s) para confirmar que el número fue copiado
+    const [toast, setToast] = useState<{ msg: string; visible: boolean }>({ msg: '', visible: false });
+    const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showToast = useCallback((msg: string) => {
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        setToast({ msg, visible: true });
+        toastTimer.current = setTimeout(() => setToast({ msg: '', visible: false }), 2200);
+    }, []);
+
+    // Función principal del flujo Zero-Fee
+    const handleDeepLinkPayment = useCallback(async (
+        group: PaymentTicketGroup,
+        item: PaymentItem,
+        wallet: 'yape' | 'plin' | 'banco'
+    ) => {
+        const numero = wallet === 'yape'
+            ? group.tecnico.yape
+            : wallet === 'plin'
+                ? group.tecnico.plin
+                : group.tecnico.numeroCuenta;
+
+        if (!numero) return;
+
+        // PASO A: Copiar número al portapapeles
+        try {
+            await navigator.clipboard.writeText(numero);
+        } catch {
+            // Fallback para contextos sin permiso de clipboard (HTTP)
+            const ta = document.createElement('textarea');
+            ta.value = numero;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+
+        // PASO B: Toast flash
+        showToast(`✅ Número copiado. Pegue el monto: S/ ${formatSoles(item.monto)}`);
+
+        // Marcar como "esperando voucher" ANTES de salir de la app
+        setWaitingVoucher({ group, item, wallet, numero });
+
+        // PASO C: Deep Link — intentar abrir la app bancaria vía scheme URI
+        // Los OS modernos ignoran window.location si el scheme no está instalado;
+        // en ese caso el admin simplemente cambia de app manualmente.
+        await new Promise(r => setTimeout(r, 300)); // pequeño delay para que el toast sea visible
+        const deepLinks: Record<string, string> = {
+            yape: 'yape://',
+            plin: 'plin://',
+            banco: 'https://www.google.com', // placeholder seguro para banco tradicional
+        };
+        try {
+            window.location.href = deepLinks[wallet];
+        } catch { /* silencioso */ }
+    }, [showToast]);
 
     // ★ FIX: monthlyTotals usa claves YYYY-MM (no locale) para evitar inconsistencias
     const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
@@ -743,47 +813,72 @@ export default function PaymentsPage() {
                                                     </div>
                                                 </td>
 
-                                                {/* Col 5: Acciones */}
+                                                {/* Col 5: Acciones — Zero-Fee Deep Link */}
                                                 <td>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
-                                                        {group.items.filter(i => i.estado === 'pendiente').map((item) => (
-                                                            <div key={`action-${item.id}`} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                                <label style={{
-                                                                    background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
-                                                                    color: 'white', padding: '7px 10px', borderRadius: '8px',
-                                                                    fontSize: '0.7rem', display: 'flex', alignItems: 'center',
-                                                                    gap: '5px', cursor: 'pointer', justifyContent: 'center',
-                                                                    fontWeight: 800, boxShadow: '0 4px 10px rgba(37,99,235,0.25)'
-                                                                }}>
-                                                                    <Upload size={12} />
-                                                                    Con Voucher
-                                                                    <input type="file" accept="image/*" style={{ display: 'none' }}
-                                                                        onChange={(e) => {
-                                                                            if (e.target.files?.[0]) {
-                                                                                const reader = new FileReader();
-                                                                                reader.onloadend = () => setPendingConfirmation({
-                                                                                    group, item,
-                                                                                    voucher: reader.result as string,
-                                                                                    message: `¿Confirmar depósito de S/ ${formatSoles(item.monto)} para ${item.tipo} y procesar voucher?`
-                                                                                });
-                                                                                reader.readAsDataURL(e.target.files[0]);
-                                                                            }
-                                                                        }} />
-                                                                </label>
-                                                                <button onClick={() => setPendingConfirmation({
-                                                                    group, item,
-                                                                    message: `¿Confirmar transferencia directa de S/ ${formatSoles(item.monto)} a ${group.tecnico.nombre}?`
-                                                                })}
-                                                                    style={{
-                                                                        border: '1px solid #E2E8F0', background: 'white',
-                                                                        color: '#475569', padding: '5px 8px', borderRadius: '7px',
-                                                                        fontSize: '0.7rem', cursor: 'pointer', fontWeight: 700,
-                                                                        transition: 'all 0.2s'
-                                                                    }}>
-                                                                    Pagar Directo
-                                                                </button>
-                                                            </div>
-                                                        ))}
+                                                        {group.items.filter(i => i.estado === 'pendiente').map((item) => {
+                                                            const hasYape = !!group.tecnico.yape;
+                                                            const hasPlin = !!group.tecnico.plin;
+                                                            const hasBanco = group.tecnico.numeroCuenta && group.tecnico.numeroCuenta !== '---';
+                                                            return (
+                                                                <div key={`action-${item.id}`} className={styles.zeroFeeActions}>
+                                                                    {/* Botón YAPE — Deep Link */}
+                                                                    {hasYape && (
+                                                                        <button
+                                                                            className={styles.btnYape}
+                                                                            onClick={() => handleDeepLinkPayment(group, item, 'yape')}
+                                                                            title={`Copiar ${group.tecnico.yape} y abrir Yape`}
+                                                                        >
+                                                                            <span className={styles.walletEmoji}>💜</span>
+                                                                            <span>Yape</span>
+                                                                            <span className={styles.walletNum}>{group.tecnico.yape}</span>
+                                                                            <Copy size={10} style={{ opacity: 0.7 }} />
+                                                                        </button>
+                                                                    )}
+                                                                    {/* Botón PLIN — Deep Link */}
+                                                                    {hasPlin && (
+                                                                        <button
+                                                                            className={styles.btnPlin}
+                                                                            onClick={() => handleDeepLinkPayment(group, item, 'plin')}
+                                                                            title={`Copiar ${group.tecnico.plin} y abrir Plin`}
+                                                                        >
+                                                                            <span className={styles.walletEmoji}>🔵</span>
+                                                                            <span>Plin</span>
+                                                                            <span className={styles.walletNum}>{group.tecnico.plin}</span>
+                                                                            <Copy size={10} style={{ opacity: 0.7 }} />
+                                                                        </button>
+                                                                    )}
+                                                                    {/* Botón BANCO — Solo portapapeles, sin deep link */}
+                                                                    {!hasYape && !hasPlin && hasBanco && (
+                                                                        <button
+                                                                            className={styles.btnBanco}
+                                                                            onClick={() => handleDeepLinkPayment(group, item, 'banco')}
+                                                                        >
+                                                                            <span>🏦</span>
+                                                                            <span>Transferir</span>
+                                                                            <Copy size={10} style={{ opacity: 0.7 }} />
+                                                                        </button>
+                                                                    )}
+                                                                    {/* Botón clásico con voucher */}
+                                                                    <label className={styles.btnVoucherClassic}>
+                                                                        <Upload size={11} />
+                                                                        Ya pagué · Subir voucher
+                                                                        <input type="file" accept="image/*" style={{ display: 'none' }}
+                                                                            onChange={(e) => {
+                                                                                if (e.target.files?.[0]) {
+                                                                                    const reader = new FileReader();
+                                                                                    reader.onloadend = () => setPendingConfirmation({
+                                                                                        group, item,
+                                                                                        voucher: reader.result as string,
+                                                                                        message: `¿Confirmar depósito de S/ ${formatSoles(item.monto)} para ${item.tipo}?`
+                                                                                    });
+                                                                                    reader.readAsDataURL(e.target.files[0]);
+                                                                                }
+                                                                            }} />
+                                                                    </label>
+                                                                </div>
+                                                            );
+                                                        })}
                                                         {group.items.every(i => i.estado === 'pagado') && (
                                                             <div style={{ textAlign: 'center', padding: '8px 4px' }}>
                                                                 <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
@@ -850,6 +945,102 @@ export default function PaymentsPage() {
                 </div>
             </div>
 
+            {/* ─── TOAST ZERO-FEE ──────────────────────────────── */}
+            <div className={`${styles.toastZeroFee} ${toast.visible ? styles.toastVisible : ''}`}>
+                <CheckCheck size={16} />
+                {toast.msg}
+            </div>
+
+            {/* ─── MODAL: ESPERANDO VOUCHER (post-deep-link) ───── */}
+            {waitingVoucher && (
+                <div className={styles.modalOverlay}>
+                    <div className={styles.modalContent} style={{ maxWidth: 460 }}>
+                        <div className={styles.modalHeader}>
+                            <div className={styles.modalIcon} style={{ background: 'linear-gradient(135deg,#F5F3FF,#EDE9FE)', color: '#7C3AED' }}>
+                                {waitingVoucher.wallet === 'yape' ? '💜' : waitingVoucher.wallet === 'plin' ? '🔵' : '🏦'}
+                                <span style={{ fontSize: '2rem' }}></span>
+                            </div>
+                            <h3 style={{ fontSize: '1.2rem' }}>¿Transferencia realizada?</h3>
+                        </div>
+                        <div className={styles.modalBody}>
+                            {/* Resumen */}
+                            <div className={styles.confirmationDetails} style={{ marginBottom: 20 }}>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Técnico:</span>
+                                    <span className={styles.detailValue}>{waitingVoucher.group.tecnico.nombre}</span>
+                                </div>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Número {waitingVoucher.wallet === 'yape' ? 'Yape' : waitingVoucher.wallet === 'plin' ? 'Plin' : 'Cuenta'}:</span>
+                                    <span className={styles.detailValue} style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}>{waitingVoucher.numero}</span>
+                                </div>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Concepto:</span>
+                                    <span className={styles.detailValue}>{waitingVoucher.item.tipo}</span>
+                                </div>
+                                <div className={styles.detailRow}>
+                                    <span className={styles.detailLabel}>Monto transferido:</span>
+                                    <span className={`${styles.detailValue} ${styles.popAmount}`}>S/ {formatSoles(waitingVoucher.item.monto)}</span>
+                                </div>
+                            </div>
+
+                            {/* CTA: Subir captura de pantalla */}
+                            <div className={styles.voucherCaptureArea}>
+                                <Camera size={28} color="#7C3AED" />
+                                <p style={{ margin: '8px 0 4px', fontWeight: 700, color: '#1E293B', fontSize: '0.95rem' }}>
+                                    Sube la captura de tu {waitingVoucher.wallet === 'yape' ? 'Yape' : waitingVoucher.wallet === 'plin' ? 'Plin' : 'banco'}
+                                </p>
+                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B' }}>
+                                    La galería se abrirá directamente en tus capturas recientes
+                                </p>
+                                <label className={styles.uploadScreenshotBtn}>
+                                    <Camera size={16} />
+                                    Seleccionar captura de pantalla
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => {
+                                            if (e.target.files?.[0]) {
+                                                const reader = new FileReader();
+                                                reader.onloadend = () => {
+                                                    const capturedWaiting = waitingVoucher!;
+                                                    setWaitingVoucher(null);
+                                                    handleConfirmPayment(
+                                                        capturedWaiting.group,
+                                                        capturedWaiting.item,
+                                                        reader.result as string
+                                                    );
+                                                    showToast('🎉 ¡Pago registrado y cerrado!');
+                                                };
+                                                reader.readAsDataURL(e.target.files[0]);
+                                            }
+                                        }}
+                                    />
+                                </label>
+                            </div>
+
+                            <div className={styles.modalFooter} style={{ marginTop: 20 }}>
+                                <button className={styles.cancelBtn} onClick={() => setWaitingVoucher(null)}>
+                                    Cancelar
+                                </button>
+                                <button
+                                    className={styles.confirmBtn}
+                                    style={{ background: 'linear-gradient(135deg,#7C3AED,#6D28D9)' }}
+                                    onClick={() => {
+                                        const capturedWaiting = waitingVoucher!;
+                                        setWaitingVoucher(null);
+                                        handleConfirmPayment(capturedWaiting.group, capturedWaiting.item, undefined);
+                                        showToast('✅ Pago confirmado sin voucher');
+                                    }}
+                                >
+                                    ✓ Confirmar sin voucher
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Voucher Lightbox */}
             {showVoucher && (
                 <div onClick={() => setShowVoucher(null)}
@@ -908,7 +1099,13 @@ export default function PaymentsPage() {
                 </div>
             )}
 
-            <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
+            <style>{`
+                @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+                @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+                @keyframes toastSlideIn { from{transform:translateX(120%);opacity:0} to{transform:translateX(0);opacity:1} }
+                @keyframes toastSlideOut { from{transform:translateX(0);opacity:1} to{transform:translateX(120%);opacity:0} }
+                @keyframes walletPulse { 0%,100%{box-shadow:0 4px 14px rgba(124,58,237,0.4)} 50%{box-shadow:0 4px 24px rgba(124,58,237,0.7)} }
+            `}</style>
         </div>
     );
 }
