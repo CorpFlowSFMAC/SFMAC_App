@@ -441,13 +441,13 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                 </div>
 
                                 <div className={styles.formGroup}>
-                                    <label>📧 Email *</label>
-                                    <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })} placeholder="tecnico@sinfimac.com" required />
+                                    <label>📧 Email <span className={styles.optionalTag}>opcional</span></label>
+                                    <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })} placeholder="tecnico@sinfimac.com" />
                                 </div>
 
                                 <div className={styles.formGroup}>
-                                    <label>🏠 Dirección *</label>
-                                    <input type="text" value={formData.direccion} onChange={(e) => setFormData({ ...formData, direccion: e.target.value.toUpperCase() })} placeholder="AV. LOS INCAS 234" style={{ textTransform: 'uppercase' }} required />
+                                    <label>🏠 Dirección <span className={styles.optionalTag}>opcional</span></label>
+                                    <input type="text" value={formData.direccion} onChange={(e) => setFormData({ ...formData, direccion: e.target.value.toUpperCase() })} placeholder="AV. LOS INCAS 234" style={{ textTransform: 'uppercase' }} />
                                 </div>
                             </div>
                         </div>
@@ -805,29 +805,77 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                 </div>
 
                                 <div className={styles.walletsSection}>
-                                    <div className={styles.sectionLabelMini}>Ecosistema de Pago Móvil</div>
+                                    <div className={styles.walletsSectionHeader}>
+                                        <span className={styles.sectionLabelMini}>Billeteras Digitales</span>
+                                        {formData.celular && (
+                                            <span className={styles.celularHint}>📱 {formData.celular}</span>
+                                        )}
+                                    </div>
                                     <div className={styles.walletsRow}>
+                                        {/* YAPE */}
                                         <div className={`${styles.walletMiniCard} ${formData.yape ? styles.yapeActive : ''}`}>
-                                            <div className={styles.walletBrand} style={{ background: '#7C3AED' }}>Y</div>
+                                            <div className={styles.walletCardTop}>
+                                                <div className={styles.walletBrand} style={{ background: '#7C3AED' }}>Y</div>
+                                                <span className={styles.walletName}>Yape</span>
+                                                {formData.celular && formData.yape !== formData.celular && (
+                                                    <button
+                                                        type="button"
+                                                        className={styles.usarCelularBtn}
+                                                        onClick={() => setFormData({ ...formData, yape: formData.celular })}
+                                                        title={`Usar ${formData.celular}`}
+                                                    >
+                                                        📋 Usar celular
+                                                    </button>
+                                                )}
+                                                {formData.yape && formData.yape === formData.celular && (
+                                                    <span className={styles.matchBadge}>✓ Igual al cel.</span>
+                                                )}
+                                            </div>
                                             <input
                                                 type="tel"
                                                 value={formData.yape}
                                                 onChange={(e) => setFormData({ ...formData, yape: e.target.value.replace(/\D/g, '').slice(0, 9) })}
-                                                placeholder="Yape"
+                                                placeholder="N° de Yape"
                                                 maxLength={9}
                                             />
                                         </div>
+                                        {/* PLIN */}
                                         <div className={`${styles.walletMiniCard} ${formData.plin ? styles.plinActive : ''}`}>
-                                            <div className={styles.walletBrand} style={{ background: '#00D1FF' }}>P</div>
+                                            <div className={styles.walletCardTop}>
+                                                <div className={styles.walletBrand} style={{ background: '#00AACC' }}>P</div>
+                                                <span className={styles.walletName}>Plin</span>
+                                                {formData.celular && formData.plin !== formData.celular && (
+                                                    <button
+                                                        type="button"
+                                                        className={styles.usarCelularBtn}
+                                                        onClick={() => setFormData({ ...formData, plin: formData.celular })}
+                                                        title={`Usar ${formData.celular}`}
+                                                    >
+                                                        📋 Usar celular
+                                                    </button>
+                                                )}
+                                                {formData.plin && formData.plin === formData.celular && (
+                                                    <span className={styles.matchBadge}>✓ Igual al cel.</span>
+                                                )}
+                                            </div>
                                             <input
                                                 type="tel"
                                                 value={formData.plin}
                                                 onChange={(e) => setFormData({ ...formData, plin: e.target.value.replace(/\D/g, '').slice(0, 9) })}
-                                                placeholder="Plin"
+                                                placeholder="N° de Plin"
                                                 maxLength={9}
                                             />
                                         </div>
                                     </div>
+                                    {formData.celular && (
+                                        <button
+                                            type="button"
+                                            className={styles.usarCelularBtnAll}
+                                            onClick={() => setFormData({ ...formData, yape: formData.celular, plin: formData.celular })}
+                                        >
+                                            ⚡ Usar mismo número para Yape y Plin ({formData.celular})
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -1369,3 +1369,129 @@
     font-weight: 600;
     font-size: 0.85rem;
 }
+
+/* ===================================================
+   NUEVOS ESTILOS: Optional tag, Wallets mejorados
+   =================================================== */
+
+/* Tag "opcional" junto a la etiqueta del campo */
+.optionalTag {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.4rem;
+    background: #F1F5F9;
+    color: #94A3B8;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.1rem 0.45rem;
+    border-radius: 20px;
+    text-transform: none;
+    letter-spacing: 0;
+    border: 1px solid #E2E8F0;
+    vertical-align: middle;
+}
+
+/* Header de la sección de billeteras */
+.walletsSectionHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+/* Hint del número de celular en el header */
+.celularHint {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748B;
+    background: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 20px;
+    padding: 0.15rem 0.6rem;
+    letter-spacing: 0.5px;
+}
+
+/* Fila superior de cada wallet card: icono + nombre + botón */
+.walletCardTop {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+    flex-wrap: wrap;
+}
+
+/* Nombre de la billetera (Yape / Plin) */
+.walletName {
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex: 1;
+}
+
+/* Botón individual "📋 Usar celular" */
+.usarCelularBtn {
+    background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+    border: 1px solid #BFDBFE;
+    color: #2563EB;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.usarCelularBtn:hover {
+    background: #2563EB;
+    color: white;
+    border-color: #2563EB;
+    transform: scale(1.05);
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+}
+
+/* Badge "✓ Igual al cel." */
+.matchBadge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #16A34A;
+    background: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    padding: 0.15rem 0.45rem;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+/* Botón "⚡ Usar mismo número para Yape y Plin" */
+.usarCelularBtnAll {
+    width: 100%;
+    margin-top: 0.6rem;
+    background: linear-gradient(135deg, #F5F3FF, #EDE9FE);
+    border: 1.5px dashed #8B5CF6;
+    color: #7C3AED;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.45rem 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.25s;
+    text-align: center;
+}
+
+.usarCelularBtnAll:hover {
+    background: linear-gradient(135deg, #7C3AED, #8B5CF6);
+    color: white;
+    border-style: solid;
+    border-color: #7C3AED;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.3);
+}
+
+/* Ajuste walletMiniCard para nueva estructura vertical */
+.walletMiniCard {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0.5rem 0.65rem !important;
+}
