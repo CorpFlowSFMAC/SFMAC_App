@@ -11,6 +11,7 @@ import {
 import { normalizeStateId } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
+import { useAppData } from "@/lib/AppDataContext";
 import { round2, formatSoles } from "@/lib/formatters";
 import styles from "./payments.module.css";
 
@@ -418,9 +419,11 @@ export default function PaymentsPage() {
         calculateMonthlyTotalsFromTickets(allTickets);
     };
 
+    // ★ USAMOS CONTEXTO PARA ACTUALIZACIÓN INMEDIATA EN DASHBOARD
+    const { updatePaymentSafe } = useAppData();
+
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
         // Generar un ID único y determinista para el pago
-        // (evita duplicados si hay doble-click o re-render)
         const pagoId = `pago_${group.ticketId}_${item.tipo.replace(/\s/g, '_')}_${Date.now()}`;
 
         const nuevoPago = {
@@ -433,7 +436,6 @@ export default function PaymentsPage() {
             voucherRef: voucherBase64 || null,
         };
 
-        // Campos adicionales de metadata y columnas que cambian según tipo de pago
         const additionalUpdates: any = { metadataFields: {} };
 
         if (item.tipo === 'Adelanto') {
@@ -459,9 +461,6 @@ export default function PaymentsPage() {
                 solicitudLiquidacion: null,
             };
         } else if (item.tipo === 'Movilidad / Visita') {
-            // Leer estado actual del ticket para decidir si avanzar status
-            // updatePaymentSafe lee la metadata fresca, pero no sabemos el status_id aquí.
-            // Hacemos un fetch ligero para verificar el status antes de decidir.
             try {
                 const { data: currentRow } = await (supabase as any)
                     .from('tickets')
@@ -472,7 +471,7 @@ export default function PaymentsPage() {
                 if (currentRow && preInspectionStates.includes(currentRow.status_id)) {
                     additionalUpdates.status_id = 'en_inspeccion';
                 }
-            } catch (_) { /* si falla, no avanzamos estado */ }
+            } catch (_) { /* bypass */ }
             additionalUpdates.metadataFields = {
                 visitPaymentConfirmed: true,
                 fechaPagoVisita: new Date().toISOString(),
@@ -481,9 +480,9 @@ export default function PaymentsPage() {
         }
 
         try {
-            // ★ updatePaymentSafe: lee servidor → merge → escribe. Nunca destruye pagos existentes.
-            await ticketsAPI.updatePaymentSafe(group.ticketId, nuevoPago, additionalUpdates);
-            // Refrescar la lista de pagos para reflejar el nuevo estado
+            // USAMOS EL MÉTODO DEL CONTEXTO (AppDataContext)
+            // Esto actualiza la caché de TanStack Query inmediatamente para el Dashboard
+            await updatePaymentSafe(group.ticketId, nuevoPago, additionalUpdates);
             await refresh();
         } catch (err) {
             console.error('[Payments] Error confirming payment:', err);

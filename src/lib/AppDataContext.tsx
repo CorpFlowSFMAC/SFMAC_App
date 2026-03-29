@@ -44,6 +44,7 @@ interface AppDataContextType {
     refreshTickets: () => Promise<void>;
     createTicket: (data: any) => Promise<any>;
     updateTicket: (id: string, updates: any) => Promise<any>;
+    updatePaymentSafe: (id: string, newPago: any, additionalUpdates?: any) => Promise<any>;
     deleteTicket: (id: string) => Promise<void>;
 }
 
@@ -402,6 +403,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         [queryClient]
     );
 
+    const updatePaymentSafe = useCallback(
+        async (id: string, newPago: any, additionalUpdates: any = {}) => {
+            const updated = await ticketsAPI.updatePaymentSafe(id, newPago, additionalUpdates);
+            const normalized = normalizeTicket(updated);
+            // Actualización inmediata en caché local
+            queryClient.setQueryData(
+                queryKeys.tickets.summary(),
+                (old: any[] | undefined) =>
+                    old ? old.map((t) => (t.id === id ? { ...t, ...normalized } : t)) : old
+            );
+            queryClient.setQueryData(queryKeys.tickets.detail(id), normalized);
+            return normalized;
+        },
+        [queryClient]
+    );
+
     const deleteTicket = useCallback(
         async (id: string) => {
             await ticketsAPI.delete(id);
@@ -434,6 +451,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 refreshTickets,
                 createTicket,
                 updateTicket,
+                updatePaymentSafe,
                 deleteTicket,
             }}
         >
