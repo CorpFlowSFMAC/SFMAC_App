@@ -125,27 +125,43 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 1: Rentabilidad / ROI ───────────
     const roi = useMemo(() => {
+        // Tickets creados/activos en el periodo
         const periodTickets = tickets.filter((t: any) => isInRange(t.createdAt || t.created_at || ""));
+        
+        // Tickets cerrados en el periodo
         const closed = periodTickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado");
 
-        const inversion = closed.reduce((s: number, t: any) => {
-            return s + (parseFloat(t.costoMateriales || 0) + parseFloat(t.costoVisita || 0));
+        // 1. INVERSIÓN: Suma de todos los pagos realizados al técnico en tickets del periodo
+        // (Incluye ADELANTOS de tickets que aún no cierran)
+        const inversion = periodTickets.reduce((s: number, t: any) => {
+            const pagos = t.metadata?.historialPagosTecnico || [];
+            const sumaPagos = pagos.reduce((ps: number, p: any) => ps + (parseFloat(p.monto) || 0), 0);
+            return s + sumaPagos;
         }, 0);
 
+        // 2. INGRESOS: Suma de lo facturado al cliente (montoFinal / total_quoted_amount) en tickets CERRADOS
         const ingresos = closed.reduce((s: number, t: any) => {
+            return s + (parseFloat(t.montoFinal || t.total_quoted_amount || 0));
+        }, 0);
+
+        // 3. UTILIDAD ESTIMADA (sobre tickets cerrados para el margen proyectado)
+        // La utilidad real se basa en lo cobrado menos lo pagado al técnico
+        const costosCerrados = closed.reduce((s: number, t: any) => {
             return s + (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0) + parseFloat(t.costoVisita || 0));
         }, 0);
 
-        const utilidad = ingresos - inversion;
+        const utilidad = ingresos - costosCerrados;
         const margen = ingresos > 0 ? (utilidad / ingresos) * 100 : 0;
-        const ratio = inversion > 0 ? utilidad / inversion : 0;
+        const ratio = inversion > 0 ? (ingresos - inversion) / inversion : 0;
 
-        // Por servicio
+        // Por servicio (calculado sobre tickets cerrados)
         const byService = SERVICE_TYPES.map(s => {
             const st = closed.filter((t: any) => t.tipoServicio === s.id);
-            const ing = st.reduce((acc: number, t: any) => acc + (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0)), 0);
-            const inv = st.reduce((acc: number, t: any) => acc + parseFloat(t.costoMateriales || 0), 0);
-            const m = ing > 0 ? ((ing - inv) / ing) * 100 : 0;
+            const ing = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
+            const cost = st.reduce((acc: number, t: any) => 
+                acc + (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0) + parseFloat(t.costoVisita || 0))
+            , 0);
+            const m = ing > 0 ? ((ing - cost) / ing) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ing, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
@@ -159,10 +175,12 @@ export default function AdminDashboard() {
             return ["en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "por_liquidar"].includes(sid);
         });
 
+        // Pipeline ahora representa el VALOR DE VENTA de lo que está en curso
         const totalPipeline = pendientes.reduce((s: number, t: any) =>
-            s + parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0), 0);
+            s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
 
-        const lucro = totalPipeline * 0.35; // estimado 35% margen
+        // El lucro cesante es la utilidad proyectada que aún no se cobra (aprox 45% del pipeline)
+        const lucro = totalPipeline * 0.45; 
 
         // Aging
         const aging = {
@@ -172,7 +190,7 @@ export default function AdminDashboard() {
             "+72h": pendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= 72),
         };
 
-        const calcAmount = (arr: any[]) => arr.reduce((s: number, t: any) => s + parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0), 0);
+        const calcAmount = (arr: any[]) => arr.reduce((s: number, t: any) => s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
 
         return {
             total: pendientes.length,
