@@ -125,27 +125,33 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 1: Rentabilidad / ROI ───────────
     const roi = useMemo(() => {
-        // Tickets creados/activos en el periodo
-        const periodTickets = tickets.filter((t: any) => isInRange(t.createdAt || t.created_at || ""));
-        
-        // Tickets cerrados en el periodo
-        const closed = periodTickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado");
-
-        // 1. INVERSIÓN: Suma de todos los pagos realizados al técnico en tickets del periodo
-        // (Incluye ADELANTOS de tickets que aún no cierran)
-        const inversion = periodTickets.reduce((s: number, t: any) => {
+        // Para INVERSIÓN (Caja/Outflow), buscamos pagos realizados DENTRO del periodo, 
+        // independientemente de cuándo se creó el ticket.
+        const inversion = tickets.reduce((s: number, t: any) => {
             const pagos = t.metadata?.historialPagosTecnico || [];
-            const sumaPagos = pagos.reduce((ps: number, p: any) => ps + (parseFloat(p.monto) || 0), 0);
-            return s + sumaPagos;
+            const pagosEnPeriodo = pagos.reduce((ps: number, p: any) => {
+                // p.fecha es la fecha del depósito
+                if (isInRange(p.fecha || t.created_at)) {
+                    return ps + (parseFloat(p.monto) || 0);
+                }
+                return ps;
+            }, 0);
+            return s + pagosEnPeriodo;
         }, 0);
 
-        // 2. INGRESOS: Suma de lo facturado al cliente (montoFinal / total_quoted_amount) en tickets CERRADOS
+        // Para INGRESOS (Ventas/Inflow), buscamos tickets CERRADOS dentro del periodo.
+        const closed = tickets.filter((t: any) => {
+            const isCerrado = normalizeStateId(t.estadoId) === "ticket_cerrado";
+            // Usamos closure_date si existe, si no, updated_at como fallback
+            const fechaCierre = t.closure_date || t.updated_at || t.created_at || "";
+            return isCerrado && isInRange(fechaCierre);
+        });
+
         const ingresos = closed.reduce((s: number, t: any) => {
             return s + (parseFloat(t.montoFinal || t.total_quoted_amount || 0));
         }, 0);
 
-        // 3. UTILIDAD ESTIMADA (sobre tickets cerrados para el margen proyectado)
-        // La utilidad real se basa en lo cobrado menos lo pagado al técnico
+        // Utilidad estimada sobre lo cerrado (para el gráfico de margen)
         const costosCerrados = closed.reduce((s: number, t: any) => {
             return s + (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0) + parseFloat(t.costoVisita || 0));
         }, 0);
@@ -154,7 +160,7 @@ export default function AdminDashboard() {
         const margen = ingresos > 0 ? (utilidad / ingresos) * 100 : 0;
         const ratio = inversion > 0 ? (ingresos - inversion) / inversion : 0;
 
-        // Por servicio (calculado sobre tickets cerrados)
+        // Por servicio (calculado sobre tickets cerrados del periodo)
         const byService = SERVICE_TYPES.map(s => {
             const st = closed.filter((t: any) => t.tipoServicio === s.id);
             const ing = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
@@ -165,7 +171,7 @@ export default function AdminDashboard() {
             return { ...s, tickets: st.length, ingresos: ing, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
-        return { inversion, ingresos, utilidad, margen, ratio, closed: closed.length, total: periodTickets.length, byService };
+        return { inversion, ingresos, utilidad, margen, ratio, closed: closed.length, total: tickets.length, byService };
     }, [tickets, dateRange]);
 
     // ── MÓDULO 2: Tesorería / Pendientes ───────

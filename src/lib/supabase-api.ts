@@ -369,11 +369,13 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // Seleccionamos solo campos necesarios para la lista y kanban
-        // Excluimos 'metadata' que es el que pesa megabytes por las imágenes base64
+        // Seleccionamos campos necesarios para la lista y kanban
+        // NOTA: Incluimos 'metadata' para que el dashboard pueda calcular inversiones (pagos),
+        // pero se recomienda no guardar imágenes pesadas en base64 dentro de este JSON
+        // para no degradar el performance de carga masiva.
         const { data, error } = await supabase
             .from('tickets')
-            .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, clients(*), branch_offices(*), technicians(*)')
+            .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, metadata, clients(*), branch_offices(*), technicians(*)')
             .order('created_at', { ascending: false });
 
         if (error) throw error;
