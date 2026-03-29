@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
@@ -1034,7 +1034,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const amount = costoReferencia - totalPagado;
 
         if (amount < 0) {
-            showToast("Balance Negativo", "El saldo es negativo. Verifique los depÓsitos previos.", "error");
+            showToast("Balance Negativo", "El saldo es negativo. Verifique los depósitos previos.", "error");
             return;
         }
 
@@ -1405,7 +1405,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <Coins size={20} />
                                                         </div>
                                                         <div className={styles.advanceTitleGroup}>
-                                                            <h4>ORDEN DE PAGO: VISITA TÓ‰CNICA</h4>
+                                                            <h4>ORDEN DE PAGO: VISITA TÉCNICA</h4>
                                                             <span>Requiere confirmación de Gerencia</span>
                                                         </div>
                                                         <div className={styles.advanceAmountBadge}>
@@ -1469,7 +1469,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     )}
 
                                                     <div className={styles.bankNote}>
-                                                        * Solo el Administrador puede confirmar depÓsitos bancarios.
+                                                        * Solo el Administrador puede confirmar depósitos bancarios.
                                                     </div>
                                                 </div>
                                             </div>

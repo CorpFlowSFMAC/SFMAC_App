@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3, Clock } from 'lucide-react';
 import styles from "@/app/dashboard/admin/admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
@@ -120,6 +120,13 @@ export default function GestorLayout({
                                 <BarChart3 size={20} />
                                 Reportes de Eficiencia
                             </Link>
+
+                            {isMounted && userRole === 'admin' && (
+                                <Link href="/dashboard/admin/asistencia" className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
+                                    <Clock size={20} />
+                                    Asistencia y Planillas
+                                </Link>
+                            )}
 
                             {isMounted && userRole === 'admin' && (
                                 <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
