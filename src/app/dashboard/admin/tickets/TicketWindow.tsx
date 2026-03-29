@@ -763,7 +763,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 2) {
-            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÓ‰S).", "error");
+            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÉS).", "error");
             return;
         }
         const updated = {
@@ -2470,7 +2470,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </div>
 
                                                             <div className={styles.executionCard}>
-                                                                <h4><Camera size={18} /> EVIDENCIAS (DURANTE Y DESPUÓ‰S)</h4>
+                                                                <h4><Camera size={18} /> EVIDENCIAS (DURANTE Y DESPUÉS)</h4>
                                                                 <div className={styles.evidenceGridExecution}>
                                                                     {evidenciasEjecucion.map((ev, idx) => (
                                                                         <div key={idx} className={styles.evidenceThumbExecution}>

@@ -16,6 +16,8 @@ interface TechnicianDrawerProps {
     onShowToast?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
 }
 
+const MAX_VISITA_COST = 50;
+
 export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, onShowToast }: TechnicianDrawerProps) {
     const { technicians, loadingTechnicians: loading } = useAppData();
     const [selectedTechnician, setSelectedTechnician] = useState<any>(null);
@@ -99,11 +101,11 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         if (!selectedTechnician) return;
 
         const visita = costoVisita ? parseFloat(costoVisita) : 0;
-        if (visita > 20) {
+        if (visita > MAX_VISITA_COST) {
             if (onShowToast) {
-                onShowToast("Costo Excesivo", "El costo máximo de visita técnica es de S/ 20.00", "error");
+                onShowToast("Costo Excesivo", `El costo máximo de visita técnica es de S/ ${MAX_VISITA_COST}.00`, "error");
             } else {
-                alert("El costo máximo de visita técnica es de S/ 20.00");
+                alert(`El costo máximo de visita técnica es de S/ ${MAX_VISITA_COST}.00`);
             }
             return;
         }
@@ -283,21 +285,21 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                 {selectedTechnician && (
                     <div className={styles.costoSection}>
                         <div className={styles.costItem}>
-                            <label htmlFor="costoVisita">
-                                <MapPin size={14} />
-                                Costo de Visita (Máx. S/ 20)
-                            </label>
-                            <div className={styles.inputGroup}>
-                                <span className={styles.currency}>S/.</span>
-                                <input
-                                    id="costoVisita"
-                                    type="number"
-                                    placeholder="0.00"
-                                    max="20"
-                                    value={costoVisita}
-                                    onChange={(e) => setCostoVisita(e.target.value)}
-                                />
-                            </div>
+                    <label htmlFor="costoVisita">
+                        <MapPin size={14} />
+                        Costo de Visita (Máx. S/ {MAX_VISITA_COST})
+                    </label>
+                    <div className={styles.inputGroup}>
+                        <span className={styles.currency}>S/.</span>
+                        <input
+                            id="costoVisita"
+                            type="number"
+                            placeholder="0.00"
+                            max={MAX_VISITA_COST}
+                            value={costoVisita}
+                            onChange={(e) => setCostoVisita(e.target.value)}
+                        />
+                    </div>
                         </div>
                         <small>Este costo técnico se descontará de la utilidad bruta del ticket.</small>
                     </div>
