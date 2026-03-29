@@ -742,12 +742,12 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
 
     const isEnviada = ticket.estadoId === 'cotizacion_enviada';
 
-    // CÃ¡lculos de desglose
+    // Cálculos de desglose
     const totalFinal = round2(ticket.montoFinal || 0);
     const subtotalLocal = round2(totalFinal / 1.18);
     const igvLocal = round2(totalFinal - subtotalLocal);
 
-    // CÃ¡lculo de rentabilidad
+    // Cálculo de rentabilidad
     const totalCosts = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
     const profit = round2(totalFinal - totalCosts);
     const margin = totalFinal > 0 ? (profit / totalFinal) * 100 : 0;
@@ -768,7 +768,7 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
                 <div className={styles.titleText}>
                     <h3 style={{ color: '#15803D' }}>Presupuesto Formal</h3>
                     <span style={{ color: '#166534' }}>
-                        {ticket.estadoId === 'cotizacion_enviada' ? 'Esperando AprobaciÃ³n' :
+                        {ticket.estadoId === 'cotizacion_enviada' ? 'Esperando Aprobación' :
                             ticket.estadoId === 'cotizacion_aprobada' ?
                                 (ticket.adelantoPagado ? 'âœ… Aprobado y Pagado' : 'â³ Esperando Adelanto (50%)') :
                                 'Reloj Pausado'}
@@ -815,7 +815,7 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
             <div className={styles.verticalDivider} style={{ opacity: 0.5, borderStyle: 'dashed' }} />
 
             <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Fecha GestiÃ³n</span>
+                <span className={styles.infoLabel}>Fecha Gestión</span>
                 <span className={styles.infoValue}>
                     {ticket.fechaCotizacion ? new Date(ticket.fechaCotizacion).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : '---'}
                 </span>
@@ -853,7 +853,7 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
 
     if (!hasAnyEvidence) return null;
 
-    // Mostrar esta barra desde que se finaliza el reporte tÃ©cnico (en_cotizacion)
+    // Mostrar esta barra desde que se finaliza el reporte técnico (en_cotizacion)
     const visibleStates = [
         "en_cotizacion",
         "cotizacion_enviada",
@@ -880,8 +880,8 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                     <ImageIcon size={18} />
                 </div>
                 <div className={styles.titleText}>
-                    <h3 style={{ color: '#334155' }}>Expediente FotogrÃ¡fico</h3>
-                    <span style={{ color: '#475569' }}>Unificado (Antes, Durante y DespuÃ©s)</span>
+                    <h3 style={{ color: '#334155' }}>Expediente Fotográfico</h3>
+                    <span style={{ color: '#475569' }}>Unificado (Antes, Durante y Después)</span>
                 </div>
             </div>
 
@@ -904,14 +904,14 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                 </div>
             )}
 
-            {/* Grupo 2: InspecciÃ³n TÃ©cnica */}
+            {/* Grupo 2: Inspección Técnica */}
             {ticket.evidenciasCampo && ticket.evidenciasCampo.length > 0 && (
                 <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>2. InspecciÃ³n (Antes)</span>
+                    <span className={styles.infoLabel}>2. Inspección (Antes)</span>
                     <div className={styles.miniThumbnails}>
                         {ticket.evidenciasCampo.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#0D9488' }}>
-                                <img src={ev.url} alt="InspecciÃ³n" className={styles.thumbImage} />
+                                <img src={ev.url} alt="Inspección" className={styles.thumbImage} />
                                 <div className={styles.largePreview}>
                                     <img src={ev.url} alt="Vista ampliada" />
                                 </div>
@@ -921,14 +921,14 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                 </div>
             )}
 
-            {/* Grupo 3: EjecuciÃ³n de Obra */}
+            {/* Grupo 3: Ejecución de Obra */}
             {ticket.evidenciasEjecucion && ticket.evidenciasEjecucion.length > 0 && (
                 <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>3. EjecuciÃ³n (Durante/DespuÃ©s)</span>
+                    <span className={styles.infoLabel}>3. Ejecución (Durante/Después)</span>
                     <div className={styles.miniThumbnails}>
                         {ticket.evidenciasEjecucion.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#059669' }}>
-                                <img src={ev.url} alt="EjecuciÃ³n" className={styles.thumbImage} />
+                                <img src={ev.url} alt="Ejecución" className={styles.thumbImage} />
                                 <div className={styles.largePreview}>
                                     <img src={ev.url} alt="Vista ampliada" />
                                 </div>
@@ -976,7 +976,7 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
             <div className={styles.verticalDivider} />
 
             <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>DocumentaciÃ³n</span>
+                <span className={styles.infoLabel}>Documentación</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ display: 'flex', gap: '6px' }}>
                         <div title="Acta de Conformidad" style={{ opacity: docs.actaConformidad ? 1 : 0.2 }}>
@@ -985,7 +985,7 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
                         <div title="ATS" style={{ opacity: docs.ats ? 1 : 0.2 }}>
                             <ShieldCheck size={16} color="#4F46E5" />
                         </div>
-                        <div title="DeclaraciÃ³n Jurada" style={{ opacity: docs.declaracionJurada ? 1 : 0.2 }}>
+                        <div title="Declaración Jurada" style={{ opacity: docs.declaracionJurada ? 1 : 0.2 }}>
                             <CheckCircle2 size={16} color="#4F46E5" />
                         </div>
                         <div title="Excel de Seguridad" style={{ opacity: docs.excelSeguridad ? 1 : 0.2 }}>
@@ -1023,7 +1023,7 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
 export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
-    // Si no hay monto final ni costos base, no hay nada que liquidar aÃºn
+    // Si no hay monto final ni costos base, no hay nada que liquidar aún
     if (!ticket.montoFinal && !ticket.montoTotalCotizado && !ticket.costoManoObra) return null;
 
     const visitCost = round2(ticket.costoVisita || ticket.costoPasaje || 0);
@@ -1033,15 +1033,15 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
     const costoReferencia = jobCostBase > 0 ? jobCostBase : visitCost;
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
 
-    // Sumar todos los depÃ“sitos realizados al tÃ©cnico
+    // Sumar todos los depósitos realizados al técnico
     const totalPagadoTecnico = round2((ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
     const montoAdelanto = totalPagadoTecnico || round2(ticket.montoAdelanto || 0);
     const pctReal = (montoAdelanto / (costoReferencia || 1)) * 100;
 
-    // RECTIFICACIÃ“N: El saldo pendiente es sobre lo que se le debe pagar al TÃ‰CNICO
+    // RECTIFICACIÓN: El saldo pendiente es sobre lo que se le debe pagar al TÉCNICO
     const montoSaldo = Math.max(0, round2(costoReferencia - totalPagadoTecnico));
 
-    // Lista de estados donde la barra es relevante (desde que se envÃ­a la cotizaciÃ³n o se aprueba)
+    // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
     const visibleStates = [
         "cotizacion_enviada",
         "cotizacion_aprobada",
@@ -1067,8 +1067,8 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                     <Scale size={18} />
                 </div>
                 <div className={styles.titleText}>
-                    <h3 style={{ color: '#92400E' }}>LiquidaciÃ³n Financiera</h3>
-                    <span style={{ color: '#B45309' }}>Ref: Reporte TÃ©cnico</span>
+                    <h3 style={{ color: '#92400E' }}>Liquidación Financiera</h3>
+                    <span style={{ color: '#B45309' }}>Ref: Reporte Técnico</span>
                 </div>
             </div>
 
@@ -1082,13 +1082,13 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
             </div>
 
             <div className={styles.infoItem} style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                <span className={styles.infoLabel}>Historial de DepÃ“sitos ({pctReal.toFixed(0)}%)</span>
+                <span className={styles.infoLabel}>Historial de Depósitos ({pctReal.toFixed(0)}%)</span>
                 {(ticket.historialPagosTecnico && ticket.historialPagosTecnico.length > 0) ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                         {ticket.historialPagosTecnico.map((p: any, idx: number) => (
                             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                    {idx + 1}Âº S/ {formatSoles(p.monto)}
+                                    {idx + 1}º S/ {formatSoles(p.monto)}
                                 </span>
                                 <span style={{ fontSize: '9px', color: '#B45309', opacity: 0.7, fontWeight: 600 }}>
                                     ({new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })})
@@ -1125,7 +1125,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
             </div>
 
             <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>2. Saldo TÃ©cnico</span>
+                <span className={styles.infoLabel}>2. Saldo Técnico</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span className={styles.infoValue} style={{ color: ticket.estadoId === 'ticket_cerrado' ? '#059669' : '#1E293B' }}>
                         S/ {formatSoles(montoSaldo)}
@@ -1173,7 +1173,7 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// PAYMENT HISTORY BAR â€” visible para Admin Y Gestora
+// PAYMENT HISTORY BAR — visible para Admin Y Gestora
 // Muestra todos los pagos confirmados por el admin con vouchers
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function PaymentHistoryBar({ ticket }: { ticket: any }) {
@@ -1188,7 +1188,7 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
         const map: Record<string, { bg: string; color: string; label: string }> = {
             'Adelanto': { bg: '#DBEAFE', color: '#1D4ED8', label: 'Adelanto' },
             'Refuerzo': { bg: '#FEF3C7', color: '#92400E', label: 'Refuerzo' },
-            'LiquidaciÃ³n Final': { bg: '#D1FAE5', color: '#065F46', label: 'LiquidaciÃ³n' },
+            'Liquidación Final': { bg: '#D1FAE5', color: '#065F46', label: 'Liquidación' },
             'Movilidad / Visita': { bg: '#EDE9FE', color: '#5B21B6', label: 'Movilidad' },
         };
         return map[tipo] || { bg: '#F1F5F9', color: '#475569', label: tipo || 'Pago' };
@@ -1217,9 +1217,9 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
                     <Banknote size={18} />
                 </div>
                 <div className={styles.titleText}>
-                    <h3 style={{ color: '#065F46' }}>Pagos al TÃ©cnico</h3>
+                    <h3 style={{ color: '#065F46' }}>Pagos al Técnico</h3>
                     <span style={{ color: '#059669' }}>
-                        {pagos.length} depÃ³sito{pagos.length !== 1 ? 's' : ''} confirmado{pagos.length !== 1 ? 's' : ''}
+                        {pagos.length} depósito{pagos.length !== 1 ? 's' : ''} confirmado{pagos.length !== 1 ? 's' : ''}
                     </span>
                 </div>
             </div>
@@ -1245,7 +1245,7 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                             }}
                         >
-                            {/* NÃºmero */}
+                            {/* Número */}
                             <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', minWidth: '16px' }}>
                                 {idx + 1}
                             </span>
@@ -1383,7 +1383,7 @@ export function TicketSummary({ ticket, onProceed }: TicketSummaryProps) {
         <div className={styles.container}>
             <InfoBarBase
                 ticket={ticket}
-                title="RevisiÃ³n Inicial"
+                title="Revisión Inicial"
                 icon={FileText}
                 color="#8B5CF6"
                 gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"
@@ -1400,7 +1400,7 @@ export function TicketSummary({ ticket, onProceed }: TicketSummaryProps) {
 
             <div className={styles.actions}>
                 <button className={styles.proceedBtn} onClick={onProceed}>
-                    <span>Asignar TÃ©cnico</span>
+                    <span>Asignar Técnico</span>
                     <ArrowRight size={18} />
                 </button>
             </div>
