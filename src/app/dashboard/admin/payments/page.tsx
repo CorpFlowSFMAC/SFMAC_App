@@ -45,6 +45,8 @@ interface PaymentTicketGroup {
     historialDepositos: any[];
     costoVisita?: number;
     voucherVisita?: string | null;
+    montoFacturado: number;
+    utilidad: number;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -127,6 +129,7 @@ function flattenTicketForPayments(t: any) {
         },
         cliente: { nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente' },
         sede: { nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede' },
+        montoFacturado: parseFloat(t.total_quoted_amount ?? t.montoFinal ?? meta.montoFinal ?? 0),
     };
 }
 
@@ -400,7 +403,9 @@ export default function PaymentsPage() {
                         items,
                         historialDepositos: pagos,
                         costoVisita: visitCost,
-                        voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef
+                        voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
+                        montoFacturado: ticket.montoFacturado,
+                        utilidad: Math.max(0, ticket.montoFacturado - (totalPactadoInclVisita + visitCost)),
                     });
                 }
             } catch (e) {
@@ -754,22 +759,43 @@ export default function PaymentsPage() {
                                                     </div>
                                                 </td>
 
-                                                {/* Col 3: Estado Financiero */}
+                                                {/* Col 3: Estado Financiero - Con Presupuesto y Rentabilidad */}
                                                 <td>
-                                                    <div style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                                                            <span style={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.68rem' }}>Pactado Total</span>
-                                                            <span style={{ fontWeight: 800, color: '#0F172A', fontFamily: 'monospace' }}>S/ {formatSoles(group.montoPactado)}</span>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {/* Presupuesto Aprobado (BLUE) */}
+                                                        <div className={styles.quotedRow}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span className={styles.quotedLabel}>Presupuesto Cliente</span>
+                                                                <span className={styles.quotedValue}>S/ {formatSoles(group.montoFacturado)}</span>
+                                                            </div>
                                                         </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                                                            <span style={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', fontSize: '0.68rem' }}>Pagado Previo</span>
-                                                            <span style={{ fontWeight: 800, color: '#059669', fontFamily: 'monospace' }}>- S/ {formatSoles(group.montoAdelantado)}</span>
+
+                                                        {/* Desglose de Pago al Técnico */}
+                                                        <div className={styles.financialGridCompact}>
+                                                            <div className={styles.finRowCompact}>
+                                                                <span className={styles.finLabelCompact}>Pactado Trabajo</span>
+                                                                <span className={styles.finValueCompact}>S/ {formatSoles(group.montoPactado)}</span>
+                                                            </div>
+                                                            <div className={styles.finRowCompact}>
+                                                                <span className={styles.finLabelCompact}>Pagado Previo</span>
+                                                                <span className={styles.finValueCompact} style={{ color: '#059669' }}>- S/ {formatSoles(group.montoAdelantado)}</span>
+                                                            </div>
+                                                            <div className={styles.finRowTotal}>
+                                                                <div className={styles.finRowCompact}>
+                                                                    <span style={{ fontWeight: 800, color: '#64748B', fontSize: '0.65rem' }}>SALDO PENDIENTE</span>
+                                                                    <span style={{ fontWeight: 900, color: group.saldoPendiente > 0 ? '#2563EB' : '#059669', fontSize: '0.85rem' }}>
+                                                                        S/ {formatSoles(group.saldoPendiente)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <div style={{ borderTop: '2px dashed #CBD5E1', paddingTop: '5px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                                                            <span style={{ color: '#64748B', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.68rem' }}>Saldo Pendiente</span>
-                                                            <span style={{ fontWeight: 900, color: group.saldoPendiente <= 0 ? '#059669' : '#2563EB', fontFamily: 'monospace' }}>
-                                                                S/ {formatSoles(group.saldoPendiente)}
-                                                            </span>
+
+                                                        {/* Rentabilidad (GREEN/RED) */}
+                                                        <div className={group.utilidad > 0 ? styles.finRowProfit : styles.finRowLoss}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span className={styles.profitLabel}>Rentabilidad Bruta</span>
+                                                                <span className={styles.profitValue}>S/ {formatSoles(group.utilidad)}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>

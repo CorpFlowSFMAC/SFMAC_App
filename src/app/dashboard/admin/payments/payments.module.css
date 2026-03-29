@@ -155,10 +155,22 @@
 
 .paymentsTable td {
     padding: 12px 10px;
-    /* Reduced padding */
-    border-bottom: 1px solid #F1F5F9;
+    border-bottom: 2px solid #F8FAFC;
     font-size: 0.9rem;
     vertical-align: top;
+    transition: background 0.2s;
+}
+
+.paymentRow:nth-child(even) {
+    background-color: #F8FAFC !important;
+}
+
+.paymentRow:nth-child(odd) {
+    background-color: #FFFFFF !important;
+}
+
+.paymentRow:hover {
+    background-color: #F1F5F9 !important;
 }
 
 .rowPending {
@@ -584,7 +596,54 @@
     font-weight: 800;
     color: #334155;
     font-family: 'Roboto Mono', monospace;
-    /* More technical feel for numbers */
+}
+
+.finRowProfit {
+    background: #F0FDF4;
+    margin: 4px -6px 0 -6px;
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid #DCFCE7;
+}
+
+.finRowLoss {
+    background: #FEF2F2;
+    margin: 4px -6px 0 -6px;
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid #FEE2E2;
+}
+
+.profitLabel {
+    color: #15803D;
+    font-size: 0.65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.profitValue {
+    color: #15803D;
+    font-weight: 900;
+    font-size: 0.85rem;
+}
+
+.quotedRow {
+    background: #EFF6FF;
+    border: 1px solid #DBEAFE;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 4px;
+}
+
+.quotedLabel {
+    color: #1D4ED8;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.quotedValue {
+    color: #1D4ED8;
+    font-weight: 900;
 }
 
 .finRowTotal {

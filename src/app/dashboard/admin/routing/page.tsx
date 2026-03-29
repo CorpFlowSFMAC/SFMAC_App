@@ -93,15 +93,16 @@ export default function RoutingPage() {
         setSaving(zonaId);
         try {
             const value = gestoraId === "" ? null : gestoraId;
-            await routingAPI.assignGestoraToZona(zonaId, value);
-            // Recargar zonas para tener datos frescos después del upsert
-            const updatedZonas = await zonasAPI.getAll();
-            setZonas(updatedZonas);
-            const gestoraName = value ? gestoras.find(g => g.id === value)?.name : "ninguna";
-            showToast(`✅ Zona actualizada → Gestora: ${gestoraName}`, "success");
+            const updatedZona = await routingAPI.assignGestoraToZona(zonaId, value);
+            
+            // Local state update with the FRESH data from DB (includes the resolved gestora)
+            setZonas(prev => prev.map(z => z.id === zonaId ? updatedZona : z));
+            
+            const gestoraName = value ? gestoras.find(g => g.id === value)?.name : "ningun(a)";
+            showToast(`✅ Zona actualizada → Gestor(a): ${gestoraName}`, "success");
         } catch (err: any) {
-            console.error("Error assigning gestora to zona:", err);
-            showToast(`❌ Error al asignar gestora a la zona: ${err?.message || ''}`, "error");
+            console.error("Error assigning gestor(a) to zona:", err);
+            showToast(`❌ Error al asignar gestor(a) a la zona: ${err?.message || ''}`, "error");
         } finally {
             setSaving(null);
         }
@@ -196,7 +197,7 @@ export default function RoutingPage() {
                     </div>
                     <div className={styles.statData}>
                         <span className={styles.statValue}>{stats.totalGestoras}</span>
-                        <span className={styles.statLabel}>Gestoras</span>
+                        <span className={styles.statLabel}>Gestores/as</span>
                     </div>
                 </div>
                 <div className={styles.statItem}>
@@ -273,7 +274,7 @@ export default function RoutingPage() {
                     style={{ borderColor: activeTab === "gestora" ? "#8B5CF6" : "transparent" }}
                 >
                     <UserCheck size={16} />
-                    Por Gestora
+                    Por Gestor(a)
                     <span className={styles.tabBadge} style={{ background: activeTab === "gestora" ? "#8B5CF620" : undefined }}>{stats.totalGestoras}</span>
                 </button>
             </div>
@@ -287,7 +288,7 @@ export default function RoutingPage() {
                         placeholder={
                             activeTab === "cliente" ? "Buscar cliente..." :
                             activeTab === "zona" ? "Buscar zona..." :
-                            activeTab === "gestora" ? "Buscar gestora..." :
+                            activeTab === "gestora" ? "Buscar gestor(a)..." :
                             "Buscar agencia..."
                         }
                         value={searchTerm}
@@ -397,7 +398,7 @@ function ClientTab({ clients, gestoras, saving, onAssign }: {
                                 <Globe size={10} /> Nivel Nacional
                             </span>
                             <span className={`${styles.statusDot} ${client.gestora_asignada_id ? styles.statusDotActive : styles.statusDotInactive}`} />
-                            <span>{client.gestora_asignada_id ? 'Asignada' : 'Sin asignar'}</span>
+                            <span>{client.gestora_asignada_id ? 'Asignad(a)' : 'Sin asignar'}</span>
                         </div>
                     </div>
 
@@ -408,7 +409,7 @@ function ClientTab({ clients, gestoras, saving, onAssign }: {
                             onChange={(e) => onAssign(client.id, e.target.value)}
                             disabled={saving === client.id}
                         >
-                            <option value="">— Sin gestora asignada —</option>
+                            <option value="">— Sin gestor(a) asignad(a) —</option>
                             {gestoras.map((g: any) => (
                                 <option key={g.id} value={g.id}>
                                     👤 {g.name} ({g.email})
@@ -471,7 +472,7 @@ function ZonaTab({ zonas, gestoras, saving, onAssign }: {
                                 <Map size={10} /> Nivel Regional
                             </span>
                             <span className={`${styles.statusDot} ${zona.gestora_asignada_id ? styles.statusDotActive : styles.statusDotInactive}`} />
-                            <span>{zona.gestora_asignada_id ? 'Asignada' : 'Sin asignar'}</span>
+                            <span>{zona.gestora_asignada_id ? 'Asignad(a)' : 'Sin asignar'}</span>
                         </div>
                     </div>
 
@@ -488,7 +489,7 @@ function ZonaTab({ zonas, gestoras, saving, onAssign }: {
                                 onChange={(e) => onAssign(zona.id, e.target.value)}
                                 disabled={saving === zona.id}
                             >
-                                <option value="">— Sin gestora asignada —</option>
+                                <option value="">— Sin gestor(a) asignad(a) —</option>
                                 {gestoras.map((g: any) => (
                                     <option key={g.id} value={g.id}>
                                         👤 {g.name} ({g.email})
@@ -559,7 +560,7 @@ function AgenciaTab({ branches, gestoras, saving, onAssign }: {
                                 </span>
                             )}
                             <span className={`${styles.statusDot} ${branch.gestora_asignada_id ? styles.statusDotActive : styles.statusDotInactive}`} />
-                            <span>{branch.gestora_asignada_id ? 'Asignada' : 'Hereda'}</span>
+                            <span>{branch.gestora_asignada_id ? 'Asignad(a)' : 'Hereda'}</span>
                         </div>
                     </div>
 
@@ -670,7 +671,7 @@ function GestoraTab({ gestoras, branches, zonas, onToast }: {
         return (
             <div className={styles.emptyState}>
                 <div className={styles.emptyIcon}>👤</div>
-                <p>No hay gestoras registradas en el sistema</p>
+                <p>No hay gestores/as registrados en el sistema</p>
             </div>
         );
     }
@@ -691,9 +692,9 @@ function GestoraTab({ gestoras, branches, zonas, onToast }: {
             }}>
                 <Info size={16} style={{ marginTop: '2px', flexShrink: 0 }} />
                 <div>
-                    <strong>Regla de asignación mixta:</strong> Una gestora puede ser responsable de una <strong>zona completa</strong> (configurada en la pestaña "Por Zona")
+                    <strong>Regla de asignación mixta:</strong> Un(a) gestor(a) puede ser responsable de una <strong>zona completa</strong> (configurada en la pestaña "Por Zona")
                     y adicionalmente tener <strong>agencias específicas</strong> de otras zonas asignadas aquí.
-                    El sistema resolverá la gestora correcta en cascada al llegar un ticket.
+                    El sistema resolverá el(la) gestor(a) correcto en cascada al llegar un ticket.
                 </div>
             </div>
 
