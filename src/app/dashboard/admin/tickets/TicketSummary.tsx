@@ -327,123 +327,68 @@ export function DiagnosisInfoBar({ ticket }: { ticket: any }) {
 }
 
 export function QuoteAssistantBar({ ticket }: { ticket: any }) {
-    // Solo mostrar si hay costos definidos y estamos en etapa de cotización (antes de enviarla)
-    // LÓgica de Sugerencia Comercial
+    // Solo mostrar si hay costos definidos y estamos en etapa de cotización
     const costoMO = parseFloat(ticket.costoManoObra || 0);
     const costoMat = parseFloat(ticket.costoMateriales || 0);
     const costoTotal = costoMO + costoMat;
 
-    // Solo mostrar si hay costos definidos y estamos en etapa de cotización o previa
     const hasCosts = costoTotal > 0;
     const isQuoting = ["visita_realizada", "en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId);
 
     if (!hasCosts || !isQuoting) return null;
 
-    // Margen Objetivo: 55% sobre el Precio de Venta (Rentabilidad)
-    // Precio = Costo / (1 - Margen%)
-    // Margen 55% -> (1 - 0.55) = 0.45
     const precioSugerido = costoTotal / 0.45;
 
-    // Estado para la generación de la propuesta
     const [isGenerating, setIsGenerating] = useState(false);
     const [proposal, setProposal] = useState<any>(null);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Generación de propuesta con IA (Gemini)
     const generateProposal = async () => {
         setIsGenerating(true);
+        setErrorMsg(null);
+        setProposal(null);
+
         try {
-            // 1. Obtener contexto histórico (Aprendizaje)
-            let historyContext = "";
-            const { data: historyTickets } = await supabase
-                .from('tickets')
-                .select('description, metadata')
-                .eq('status_id', 'cerrado')
-                .not('metadata', 'is', null)
-                .limit(3);
-
-            if (historyTickets && historyTickets.length > 0) {
-                historyContext = "\n\nEJEMPLOS REALES DE COTIZACIONES APROBADAS (USAR COMO REFERENCIA):\n" +
-                    historyTickets.map((h: any, i: number) => {
-                        const prop = h.metadata?.proposal || h.metadata?.cotizacion;
-                        if (!prop) return "";
-                        return `EJEMPLO ${i + 1} (${h.description}):\n${JSON.stringify(prop).substring(0, 800)}`;
-                    }).join('\n\n');
-            }
-            const prompt = `
-                Actúas como el Gerente de Presupuestos Senior de SINFIMAC CORP.
-
-                OBJETIVO: Generar un PRESUPUESTO DETALLADO (Desglose de Partidas) basado en el reporte técnico. NO entregues un monto global único. Debes desglosar el trabajo en partidas lÓgicas de ejecución.
-
-                DATOS DEL REPORTE:
-                - Cliente: ${ticket.cliente?.nombre || 'Cliente Corporativo'}
-                - Sede: ${ticket.sede?.nombre || 'Sede Principal'}
-                - Servicio: ${ticket.tipoServicio}
-                - Descripción: "${ticket.descripcionProblema}"
-                - Costo Técnico Referencial (MO + Materiales): S/ ${costoTotal.toFixed(2)}
-
-                ${historyContext}
-
-                INTELIGENCIA DE PRECIOS:
-                1. Analiza los EJEMPLOS HISTÓRICOS para entender cÓmo desglosamos partidas similares.
-                2. Si no hay ejemplos, aplica la regla general: Precio Venta ≈ Costo Técnico / 0.45 (Margen 55%).
-                3. Usa la evidencia visual (imágenes adjuntas) para afinar el alcance.
-                
-                Instrucciones:
-                1. Identifica las actividades necesarias (Ej. 'Movilización', 'Suministro de repuestos', 'Mano de obra especializada', 'Pruebas').
-                2. Distribuye el Precio de Venta Total entre estas partidas de forma lÓgica.
-                3. Redacta un alcance técnico profesional para cada partida.
-
-                FORMATO DE SALIDA (JSON ESTRICTO):
-                {
-                    "partidas": [
-                        {
-                            "item": "1.0",
-                            "titulo": "Título corto de la partida",
-                            "descripcion": "Alcance detallado...",
-                            "unidad": "GLB/UND/M2",
-                            "cantidad": 1,
-                            "precio_unitario": Number (Precio de Venta)
-                        }
-                    ],
-                    "resumen": {
-                        "comentario_ia": "Breve explicación de la estrategia de precios tomada",
-                        "precio_total_venta": Number
-                    }
-                }
-            `;
-
-            // 2. Recolectar Imágenes (Multimodal)
-            const imagesPayload: string[] = [];
-            if (ticket.evidencias && ticket.evidencias.length > 0) {
-                ticket.evidencias.forEach((e: any) => {
-                    // Priorizamos Base64 para envío directo a Gemini
-                    if (e.url && e.url.startsWith('data:image')) {
-                        imagesPayload.push(e.url);
-                    }
-                });
-            }
-
             const response = await fetch('/api/ai/gemini', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt, images: imagesPayload })
+                body: JSON.stringify({
+                    costoTotal,
+                    tipoServicio: ticket.tipoServicio || ticket.tipoServicioNombre || '',
+                    descripcion: ticket.descripcionProblema || '',
+                    cliente: ticket.cliente?.nombre || 'Cliente Corporativo',
+                    sede: ticket.sede?.nombre || '',
+                    prompt: `
+Cliente: ${ticket.cliente?.nombre || 'Cliente Corporativo'}
+Sede: ${ticket.sede?.nombre || 'Sede Principal'}
+Servicio: ${ticket.tipoServicio || ticket.tipoServicioNombre}
+Descripción del problema: "${ticket.descripcionProblema || ''}"
+Diagnóstico técnico: "${ticket.diagnostico || ''}"
+Costo técnico (MO + Materiales): S/ ${costoTotal.toFixed(2)}
+Modalidad: ${ticket.modalidad === 'todo_costo' ? 'Todo Costo' : 'Desagregado'}
+                    `.trim()
+                })
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || errorData.details || "Error en la API de IA");
-            }
-
             const data = await response.json();
-            setProposal(data);
 
+            // Verificar que tenga la estructura mínima esperada
+            if (data?.partidas && Array.isArray(data.partidas) && data.partidas.length > 0) {
+                setProposal(data);
+            } else if (data?.error) {
+                throw new Error(data.error);
+            } else {
+                throw new Error("La respuesta no tiene el formato esperado");
+            }
         } catch (error: any) {
             console.error("Error generando propuesta:", error);
-            alert(`Error: ${error.message || "Hubo un problema al generar la propuesta."}`);
+            setErrorMsg(`No se pudo contactar al servidor. Verifique su conexión e intente nuevamente.`);
         } finally {
             setIsGenerating(false);
         }
     };
+
+    const isFromAlgorithm = proposal?.fuente === "algoritmo";
 
     return (
         <div
@@ -458,8 +403,8 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
                 gap: '12px'
             } as any}
         >
-            {/* Header del Asistente */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* ── HEADER ── */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                     <div className={styles.titleSection}>
                         <div className={styles.titleIcon} style={{ background: 'linear-gradient(135deg, #D946EF, #C026D3)' }}>
@@ -477,116 +422,237 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
 
                     <div className={styles.infoItem}>
                         <span className={styles.infoLabel}>Costo Técnico</span>
-                        <span className={styles.infoValue}>S/ {costoTotal.toFixed(2)}</span>
+                        <span className={styles.infoValue}>S/ {formatSoles(costoTotal)}</span>
+                    </div>
+
+                    <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Precio Objetivo (55%)</span>
+                        <span className={styles.infoValue} style={{ color: '#A21CAF', fontWeight: 700 }}>
+                            S/ {formatSoles(precioSugerido)}
+                        </span>
                     </div>
                 </div>
 
-                {!proposal && (
-                    <button
-                        onClick={generateProposal}
-                        disabled={isGenerating}
-                        style={{
-                            background: '#A21CAF',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            fontWeight: 700,
-                            fontSize: '0.8rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            cursor: isGenerating ? 'wait' : 'pointer',
-                            boxShadow: '0 4px 10px rgba(162, 28, 175, 0.3)'
-                        }}
-                    >
-                        {isGenerating ? (
-                            <>
-                                <RefreshCw size={14} className={styles.spin} />
-                                <span>Analizando...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles size={14} />
-                                <span>GENERAR PROPUESTA IA</span>
-                            </>
-                        )}
-                    </button>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {proposal && (
+                        <button
+                            onClick={() => { setProposal(null); setErrorMsg(null); }}
+                            style={{
+                                background: 'transparent',
+                                color: '#94A3B8',
+                                border: '1px solid #E2E8F0',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '0.75rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}
+                        >
+                            <RefreshCw size={12} />
+                            Regenerar
+                        </button>
+                    )}
+                    {!proposal && (
+                        <button
+                            onClick={generateProposal}
+                            disabled={isGenerating}
+                            style={{
+                                background: isGenerating
+                                    ? '#C084FC'
+                                    : 'linear-gradient(135deg, #A21CAF, #7E22CE)',
+                                color: 'white',
+                                border: 'none',
+                                padding: '9px 18px',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                cursor: isGenerating ? 'wait' : 'pointer',
+                                boxShadow: isGenerating ? 'none' : '0 4px 14px rgba(162, 28, 175, 0.35)',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            {isGenerating ? (
+                                <>
+                                    <RefreshCw size={14} className={styles.spin} />
+                                    <span>Generando propuesta...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles size={14} />
+                                    <span>GENERAR PROPUESTA IA</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* Resultado de la Propuesta */}
+            {/* ── ERROR ── */}
+            {errorMsg && (
+                <div style={{
+                    background: '#FEF2F2',
+                    border: '1px solid #FCA5A5',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                }}>
+                    <AlertTriangle size={16} color="#DC2626" />
+                    <div>
+                        <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: '#991B1B' }}>Error de conexión</p>
+                        <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#B91C1C' }}>{errorMsg}</p>
+                    </div>
+                    <button
+                        onClick={generateProposal}
+                        style={{ marginLeft: 'auto', fontSize: '11px', color: '#7F1D1D', background: 'none', border: '1px solid #FCA5A5', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer' }}
+                    >
+                        Reintentar
+                    </button>
+                </div>
+            )}
+
+            {/* ── RESULTADO DE LA PROPUESTA ── */}
             {proposal && (
                 <div style={{
                     background: 'white',
                     borderRadius: '10px',
-                    border: '1px solid #E9D5FF',
+                    border: `1px solid ${isFromAlgorithm ? '#FDE68A' : '#E9D5FF'}`,
                     padding: '16px',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '12px',
-                    animation: 'fadeIn 0.5s ease-out'
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F3F4F6', paddingBottom: '8px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 800, color: '#A21CAF', textTransform: 'uppercase' }}>Propuesta Generada (JSON)</span>
-                        <span style={{ fontSize: '10px', color: '#64748B' }}>Margen Asegurado: {proposal.margen_aplicado}</span>
+                    {/* Header de resultado */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F3F4F6', paddingBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {isFromAlgorithm ? (
+                                <Lightbulb size={14} color="#D97706" />
+                            ) : (
+                                <Bot size={14} color="#A21CAF" />
+                            )}
+                            <span style={{
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                color: isFromAlgorithm ? '#92400E' : '#A21CAF',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}>
+                                {isFromAlgorithm ? '⚡ Propuesta Algorítmica SINFIMAC' : '✨ Propuesta Generada por Gemini AI'}
+                            </span>
+                        </div>
+                        <span style={{
+                            fontSize: '10px',
+                            background: isFromAlgorithm ? '#FEF3C7' : '#FAF5FF',
+                            color: isFromAlgorithm ? '#92400E' : '#7E22CE',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontWeight: 700,
+                            border: `1px solid ${isFromAlgorithm ? '#FDE68A' : '#E9D5FF'}`
+                        }}>
+                            Margen: {proposal.resumen?.margen_logrado || '55%'}
+                        </span>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {proposal.partidas && proposal.partidas.map((item: any, idx: number) => (
+                    {/* Partidas */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {proposal.partidas?.map((item: any, idx: number) => (
                             <div key={idx} style={{
                                 display: 'grid',
-                                gridTemplateColumns: 'auto 1fr auto auto',
-                                gap: '12px',
+                                gridTemplateColumns: '36px 1fr 60px 80px',
+                                gap: '10px',
                                 alignItems: 'start',
-                                padding: '8px',
+                                padding: '8px 6px',
+                                borderRadius: '6px',
+                                background: idx % 2 === 0 ? '#FAFAFA' : 'white',
                                 borderBottom: idx < proposal.partidas.length - 1 ? '1px dashed #F1F5F9' : 'none'
                             }}>
-                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#A21CAF' }}>{item.item}</span>
+                                <span style={{
+                                    fontSize: '11px',
+                                    fontWeight: 800,
+                                    color: isFromAlgorithm ? '#D97706' : '#A21CAF',
+                                    paddingTop: '1px'
+                                }}>
+                                    {item.item}
+                                </span>
                                 <div>
-                                    <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: '#1E293B' }}>{item.titulo}</p>
-                                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: '#64748B', whiteSpace: 'pre-wrap' }}>{item.descripcion}</p>
+                                    <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: '#1E293B' }}>{item.titulo}</p>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: '#64748B', lineHeight: '1.3' }}>{item.descripcion}</p>
                                 </div>
-                                <div style={{ fontSize: '11px', color: '#475569', textAlign: 'right' }}>
+                                <div style={{ fontSize: '10px', color: '#94A3B8', textAlign: 'center', paddingTop: '2px' }}>
                                     {item.cantidad} {item.unidad}
                                 </div>
-                                <div style={{ fontSize: '12px', fontWeight: 700, color: '#1E293B', textAlign: 'right', minWidth: '70px' }}>
-                                    S/ {formatSoles(item.precio_unitario)}
+                                <div style={{ fontSize: '13px', fontWeight: 800, color: '#1E293B', textAlign: 'right' }}>
+                                    S/ {formatSoles(item.precio_unitario || item.precio_total)}
                                 </div>
                             </div>
                         ))}
+                    </div>
 
-                        <div style={{
-                            marginTop: '8px',
-                            paddingTop: '12px',
-                            borderTop: '2px solid #F3F4F6',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Bot size={14} color="#A21CAF" />
-                                <span style={{ fontSize: '11px', color: '#A21CAF', fontWeight: 600 }}>Total Sugerido (Rentabilidad 55%)</span>
-                            </div>
-                            <span style={{ fontSize: '16px', fontWeight: 900, color: '#A21CAF' }}>
-                                S/ {proposal.resumen?.precio_total_venta?.toFixed(2)}
+                    {/* Total */}
+                    <div style={{
+                        marginTop: '4px',
+                        paddingTop: '12px',
+                        borderTop: '2px solid #F3F4F6',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <TrendingUp size={14} color={isFromAlgorithm ? '#D97706' : '#A21CAF'} />
+                            <span style={{ fontSize: '11px', color: isFromAlgorithm ? '#92400E' : '#7E22CE', fontWeight: 600 }}>
+                                Total Sugerido (Margen 55%)
                             </span>
                         </div>
+                        <span style={{ fontSize: '18px', fontWeight: 900, color: isFromAlgorithm ? '#D97706' : '#A21CAF' }}>
+                            S/ {formatSoles(proposal.resumen?.precio_total_venta)}
+                        </span>
                     </div>
 
-                    <div style={{ background: '#FEF2F2', padding: '8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <AlertTriangle size={14} color="#DC2626" />
-                        <span style={{ fontSize: '11px', color: '#B91C1C', fontWeight: 600 }}>Advertencia IA: {proposal.advertencia_ia}</span>
-                    </div>
+                    {/* Comentario IA */}
+                    {proposal.resumen?.comentario_ia && (
+                        <div style={{
+                            background: isFromAlgorithm ? '#FFFBEB' : '#FAF5FF',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px',
+                            border: `1px solid ${isFromAlgorithm ? '#FDE68A' : '#E9D5FF'}`
+                        }}>
+                            <Lightbulb size={13} color={isFromAlgorithm ? '#D97706' : '#A21CAF'} style={{ marginTop: '1px', flexShrink: 0 }} />
+                            <span style={{ fontSize: '11px', color: isFromAlgorithm ? '#78350F' : '#6B21A8', fontWeight: 500, lineHeight: '1.4' }}>
+                                {proposal.resumen.comentario_ia}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Advertencia */}
+                    {proposal.resumen?.advertencia_ia && (
+                        <div style={{
+                            background: '#FEF2F2',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px'
+                        }}>
+                            <AlertTriangle size={13} color="#DC2626" style={{ marginTop: '1px', flexShrink: 0 }} />
+                            <span style={{ fontSize: '11px', color: '#B91C1C', fontWeight: 500, lineHeight: '1.4' }}>
+                                {proposal.resumen.advertencia_ia}
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
     );
-
-
-
-
-
 }
 
 export function QuotationInfoBar({ ticket }: { ticket: any }) {
