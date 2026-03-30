@@ -27,64 +27,51 @@ interface TicketWindowProps {
 export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
     // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
     // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
-    const [ticketData, setTicketData] = useState(() => {
+    // Cargar posición y estado de ventana desde localStorage (solo UI, NO datos de negocio)
+    const [ticketData, setTicketData] = useState(() => ({
+        ...ticket,
+        estadoId: normalizeStateId(ticket.estadoId)
+    }));
+
+    const [isMaximized, setIsMaximized] = useState(() => {
         if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-
-                    // 🛠️¡ï¸ HARDENING INITIAL STATE:
-                    // Al cargar la página, IGNORAMOS los campos de negocio críticos del localStorage.
-                    // La verdad absoluta viene del prop 'ticket' (Server/Realtime).
-                    const {
-                        adelantoPagado,
-                        fechaPagoAdelanto,
-                        historialPagosTecnico,
-                        estadoId, // El estado es ultra crítico
-                        status_id,
-                        visitPaymentConfirmed,
-                        solicitudAdelanto,
-                        fechaPagoVisita,
-                        solicitudPagoVisita,
-                        montoFinal,
-                        ...safeToRestore
-                    } = parsed;
-
-                    return {
-                        ...ticket,
-                        ...safeToRestore,
-                        // Forzamos el estado del server si existe conflicto
-                        estadoId: normalizeStateId(ticket.estadoId || parsed.estadoId)
-                    };
-                } catch (e) {
-                    // Error parsing state
-                }
-            }
+            const ui = localStorage.getItem(`ticket_ui_${ticket.id}`);
+            if (ui) return JSON.parse(ui).isMaximized;
         }
-        return {
-            ...ticket,
-            estadoId: normalizeStateId(ticket.estadoId)
-        };
+        return true;
     });
 
-    const [isMaximized, setIsMaximized] = useState(() => ticketData?.isMaximized !== undefined ? ticketData.isMaximized : true);
-    const [isMinimized, setIsMinimized] = useState(() => ticketData?.isMinimized !== undefined ? ticketData.isMinimized : false);
-    const [position, setPosition] = useState(() => ticketData?.position || { x: 100 + (index * 30), y: 50 + (index * 30) });
+    const [isMinimized, setIsMinimized] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const ui = localStorage.getItem(`ticket_ui_${ticket.id}`);
+            if (ui) return JSON.parse(ui).isMinimized;
+        }
+        return false;
+    });
+
+    const [position, setPosition] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const ui = localStorage.getItem(`ticket_ui_${ticket.id}`);
+            if (ui) return JSON.parse(ui).position;
+        }
+        return { x: 100 + (index * 30), y: 50 + (index * 30) };
+    });
+
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
     const [zIndex, setZIndex] = useState(1001 + (index || 0));
     const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
 
-    // Sincronizar estados de UI con ticketData para persistencia
+    // Solo persistimos la posición y el estado de la ventana en localStorage para preferencias de usuario
     useEffect(() => {
-        setTicketData((prev: any) => ({
-            ...prev,
-            isMaximized,
-            isMinimized,
-            position
-        }));
-    }, [isMaximized, isMinimized, isDragging]); // Sincronizar cuando cambian banderas o termina drag (vía isDragging)
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(`ticket_ui_${ticket.id}`, JSON.stringify({
+                isMaximized,
+                isMinimized,
+                position
+            }));
+        }
+    }, [isMaximized, isMinimized, position, ticket.id]);
 
     // Estados para el reporte de campo (Paso 4)
     const [diagnostico, setDiagnostico] = useState("");
