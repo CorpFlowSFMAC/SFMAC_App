@@ -43,10 +43,14 @@ export async function POST(req: NextRequest) {
         const body = payload.body || payload.Body || '';
 
         // Validar remitente estricto pero tolerante a formatos de nombre de Outlook
-        if (!sender.toLowerCase().includes('j.portocarrero@sinfimac.pe')) {
-            console.log(`Webhook ignorado: Remitente no es Janeth. Remitente real: ${sender}`);
+        // NOTA: Se comenta esta validación porque Power Automate a veces envía el "Display Name" 
+        // en vez del correo, y el trigger de Power Automate ya filtra físicamente el buzón.
+        /*
+        if (!sender.toLowerCase().includes('j.portocarrero@sinfimac.pe') && !sender.toLowerCase().includes('janeth')) {
+            console.log(`Webhook ignorado: Remitente no autorizado. Remitente real: ${sender}`);
             return NextResponse.json({ message: 'Ignorado: Remitente no autorizado', receivedSender: sender }, { status: 200 });
         }
+        */
 
         // 2. EXTRACCIÓN INTELIGENTE (REGEX) BISTURÍ DE TEXTO
         const textToParse = `${subject} \n ${body}`;
