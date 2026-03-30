@@ -170,15 +170,15 @@ export default function GestorDashboard() {
             const email = localStorage.getItem('userEmail');
             if (!email) return;
 
-            // Primero buscar en gestoras (tabla heredada o directa)
-            const { data: g } = await supabase.from('gestoras').select('id').eq('email', email).maybeSingle();
+            // Primero buscar en gestoras (tabla heredada o directa) tolerando mayúsculas/minúsculas
+            const { data: g } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
             if (g?.id) {
                 setMyGestoraId(g.id);
                 return;
             }
             
-            // Fallback a tabla perfiles (creando el vínculo)
-            const { data: p } = await supabase.from('perfiles').select('id').eq('email', email).maybeSingle();
+            // Fallback a tabla perfiles (creando el vínculo) tolerando mayúsculas/minúsculas
+            const { data: p } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
             if (p?.id) {
                 setMyGestoraId(p.id);
             }
