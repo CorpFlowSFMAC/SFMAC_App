@@ -22,8 +22,9 @@ export async function POST(req: NextRequest) {
         const payload = await req.json();
         const { sender, subject, body } = payload;
 
-        // Validar remitente estricto (Gestora Operativa)
-        if (sender !== 'j.portocarrero@sinfimac.pe') {
+        // Validar remitente estricto pero tolerante a formatos de nombre de Outlook
+        if (!sender || !sender.toLowerCase().includes('j.portocarrero@sinfimac.pe')) {
+            console.log(`Webhook ignorado: Remitente no es Janeth. Remitente real: ${sender}`);
             return NextResponse.json({ message: 'Ignorado: Remitente no autorizado' }, { status: 200 });
         }
 
