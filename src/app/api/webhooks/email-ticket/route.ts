@@ -37,10 +37,10 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        // Soportar keys capitalizadas de Power Automate
-        const sender = payload.sender || payload.Sender || payload.from || payload.From || '';
-        const subject = payload.subject || payload.Subject || '';
-        const body = payload.body || payload.Body || '';
+        // Soportar keys enviadas desde Microsoft Power Automate (español)
+        const sender = payload.remitente || payload.sender || payload.Sender || payload.from || payload.From || '';
+        const subject = payload.asunto || payload.subject || payload.Subject || '';
+        const body = payload.cuerpo || payload.body || payload.Body || '';
 
         // Validar remitente estricto pero tolerante a formatos de nombre de Outlook
         // NOTA: Se comenta esta validación porque Power Automate a veces envía el "Display Name" 
