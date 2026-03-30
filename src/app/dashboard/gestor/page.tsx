@@ -162,6 +162,30 @@ export default function GestorDashboard() {
     const quote = useMemo(() => QUOTES[new Date().getDay() % QUOTES.length], []);
     const now = useMemo(() => new Date(), []);
 
+    // ── GESTORA RESOLUTION ─────────────────────────────────────
+    const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchGestora = async () => {
+            const email = localStorage.getItem('userEmail');
+            if (!email) return;
+
+            // Primero buscar en gestoras (tabla heredada o directa)
+            const { data: g } = await supabase.from('gestoras').select('id').eq('email', email).maybeSingle();
+            if (g?.id) {
+                setMyGestoraId(g.id);
+                return;
+            }
+            
+            // Fallback a tabla perfiles (creando el vínculo)
+            const { data: p } = await supabase.from('perfiles').select('id').eq('email', email).maybeSingle();
+            if (p?.id) {
+                setMyGestoraId(p.id);
+            }
+        };
+        fetchGestora();
+    }, []);
+
     // ── CONTROL DE ASISTENCIA ──────────────────────────────────
     const [turnoActivo, setTurnoActivo] = useState<{id:string; hora_ingreso:string} | null>(null);
     const [turnoLoading, setTurnoLoading] = useState(false);
@@ -248,7 +272,15 @@ export default function GestorDashboard() {
         }
     };
 
-    // ── Date range filter ──
+    // ── Date and Gestora filter ──
+    const isVisibleForMe = useCallback((t: any) => {
+        // La regla: Los tickets asignados SOLO deben mostrarse a la gestora asignada y a Admin.
+        // Si el ticket no tiene gestora asignada, entra a flujo de Triaje normal donde las gestoras pueden tomarlo.
+        const isAssignedToMe = t.gestora_id === myGestoraId || t.gestora_asignada_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
+        const isUnassigned = !t.gestora_id && !t.gestora_asignada_id && !t.metadata?.gestora_id;
+        return isAssignedToMe || isUnassigned;
+    }, [myGestoraId]);
+
     const isInDateRange = useCallback((dateStr: string) => {
         const d = new Date(dateStr);
         const diff = (now.getTime() - d.getTime()) / 86_400_000;
@@ -260,8 +292,8 @@ export default function GestorDashboard() {
 
     // ── Filtered tickets for the period ──
     const periodTickets = useMemo(() =>
-        tickets.filter((t: any) => isInDateRange(t.createdAt || t.created_at || now.toISOString())),
-        [tickets, isInDateRange, now]
+        tickets.filter((t: any) => isVisibleForMe(t) && isInDateRange(t.createdAt || t.created_at || now.toISOString())),
+        [tickets, isVisibleForMe, isInDateRange, now]
     );
 
     // ── Core KPI calculations ──
@@ -313,7 +345,7 @@ export default function GestorDashboard() {
     // ── Top 5 Urgent tickets ──
     const top5Urgent = useMemo(() => {
         return tickets
-            .filter((t: any) => !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId)))
+            .filter((t: any) => isVisibleForMe(t) && !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId)))
             .map((t: any) => {
                 const ageH = hoursAgo(t.createdAt || t.created_at || now.toISOString());
                 const sla = getSlaStatus(t.createdAt || t.created_at || now.toISOString());
@@ -321,7 +353,7 @@ export default function GestorDashboard() {
             })
             .sort((a: any, b: any) => b._ageH - a._ageH)
             .slice(0, 5);
-    }, [tickets, now]);
+    }, [tickets, isVisibleForMe, now]);
 
     // ── 7-day bar chart data ──
     const barData = useMemo(() => {
@@ -334,22 +366,24 @@ export default function GestorDashboard() {
             const label = day.toLocaleDateString("es-PE", { weekday: "short" });
             const open = tickets.filter((t: any) => {
                 const c = new Date(t.createdAt || t.created_at || "");
-                return c.toDateString() === day.toDateString() &&
+                return isVisibleForMe(t) && c.toDateString() === day.toDateString() &&
                     !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId));
             }).length;
             const closed = tickets.filter((t: any) => {
                 const c = new Date(t.createdAt || t.created_at || "");
-                return c.toDateString() === day.toDateString() &&
+                return isVisibleForMe(t) && c.toDateString() === day.toDateString() &&
                     normalizeStateId(t.estadoId) === "ticket_cerrado";
             }).length;
             return { label, open, closed };
         });
-    }, [tickets, now]);
+    }, [tickets, isVisibleForMe, now]);
 
     // ── Filtered tickets for list view ──
     const filteredTickets = useMemo(() => {
         const search = searchTerm.toLowerCase();
         return tickets.filter((t: any) => {
+            if (!isVisibleForMe(t)) return false;
+
             const sid = normalizeStateId(t.estadoId);
             const isActive = !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
 
@@ -366,7 +400,7 @@ export default function GestorDashboard() {
 
             return isActive && matchSearch && matchPriority && matchService;
         });
-    }, [tickets, searchTerm, priorityFilter, serviceFilter, now]);
+    }, [tickets, searchTerm, priorityFilter, serviceFilter, isVisibleForMe, now]);
 
     const slaColor = kpis.slaCompliance >= 90 ? "#10B981" : kpis.slaCompliance >= 70 ? "#F59E0B" : "#EF4444";
     const mttrBetter = kpis.mttrHours > 0 && kpis.mttrHours < TEAM_BENCHMARK_MTTR;
@@ -832,9 +866,9 @@ export default function GestorDashboard() {
                             </h3>
                             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                                 {TICKET_STATES.filter(s => s.order >= 1 && s.order <= 11).map(estado => {
-                                    const count = tickets.filter((t: any) => normalizeStateId(t.estadoId) === estado.id).length;
+                                    const count = tickets.filter((t: any) => isVisibleForMe(t) && normalizeStateId(t.estadoId) === estado.id).length;
                                     const maxCount = Math.max(...TICKET_STATES.map(s =>
-                                        tickets.filter((t: any) => normalizeStateId(t.estadoId) === s.id).length
+                                        tickets.filter((t: any) => isVisibleForMe(t) && normalizeStateId(t.estadoId) === s.id).length
                                     ), 1);
                                     const Icon = estado.icon;
                                     return (

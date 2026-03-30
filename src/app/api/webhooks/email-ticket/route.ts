@@ -49,27 +49,34 @@ export async function POST(req: NextRequest) {
         }
 
         // 2. EXTRACCIÓN INTELIGENTE (REGEX) BISTURÍ DE TEXTO
-        const subjectRegex = /ST:\s*(.*?)\s*-\s*TIPO\s*:\s*(.*?)\s*-\s*INMUEBLE\s*:\s*(.*)/i;
-        const match = subject.match(subjectRegex);
+        const textToParse = `${subject} \n ${body}`;
+        const formatRegex = /ST:?\s*([a-zA-Z0-9.\-_]*)\s*-\s*TIPO\s*:\s*(.*?)\s*-\s*INMUEBLE\s*:\s*(.*)/i;
+        let match = textToParse.match(formatRegex);
+        
+        // Intentar otro formato si es necesario (ej: sin guiones)
+        if (!match) {
+            const altRegex = /Ticket:?\s*([a-zA-Z0-9.\-_]+).*?Tipo:?\s*(.*?)(?:Sede|Inmueble|Agencia):?\s*(.*)/i;
+            match = textToParse.match(altRegex);
+        }
 
         if (!match) {
-            // Si el asunto no encaja, forzar creación como Ticket de Diagnóstico (Borrador) para no perder el correo
-            console.error('Asunto no cuadra con la Regex:', subject);
+            // Si el texto no encaja, forzar creación como Ticket de Diagnóstico (Borrador) para no perder el correo
+            console.error('El texto no cuadra con la Regex:', textToParse.substring(0, 100));
             const fallbackTicket = {
                 client_id: MIBANCO_ID,
                 status_id: 'borrador',
                 description: body || `Error en Asunto: ${subject}`,
-                client_ticket_number: 'DESCONOCIDO-' + Date.now().toString().slice(-4),
+                client_ticket_number: 'DESC-' + Date.now().toString().slice(-4),
                 created_by: 'SISTEMA (IA - WEBHOOK FAIL)',
                 metadata: { origen: 'CORREO_FALLIDO', subject_original: subject, sender }
             };
             await supabase.from('tickets').insert(fallbackTicket);
-            return NextResponse.json({ error: 'Formato de asunto no reconocido pero ticket guardado en borrador' }, { status: 400 });
+            return NextResponse.json({ error: 'Formato no reconocido pero ticket guardado en borrador' }, { status: 400 });
         }
 
-        const ticket_banco = match[1].trim(); // Ej: MB005563.26
-        const tipo_incidencia = match[2].trim(); // Ej: INCIDENCIA MANTENIMIENTO
-        const inmueble_raw = match[3].trim(); // Ej: AG127 - AG HUARI MATRIZ
+        let ticket_banco = match[1]?.trim() || ''; 
+        const tipo_incidencia = match[2]?.trim() || ''; 
+        const inmueble_raw = match[3]?.trim() || '';
 
         // Extraer código corto de sede para búsqueda (ej. "AG127")
         const inmuebleRegex = /^([\w\-]+)\s*-\s*(.*)$/;
