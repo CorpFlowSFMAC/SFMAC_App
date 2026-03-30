@@ -162,13 +162,20 @@ export default function GestorDashboard() {
     const quote = useMemo(() => QUOTES[new Date().getDay() % QUOTES.length], []);
     const now = useMemo(() => new Date(), []);
 
-    // ── GESTORA RESOLUTION ─────────────────────────────────────
+    // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
     useEffect(() => {
         const fetchGestora = async () => {
             const email = localStorage.getItem('userEmail');
             if (!email) return;
+
+            // Verificar rol de administrador
+            const userRole = localStorage.getItem('userRole');
+            if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
+                setIsAdmin(true);
+            }
 
             // Primero buscar en gestoras (tabla heredada o directa) tolerando mayúsculas/minúsculas
             const { data: g } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
@@ -178,9 +185,10 @@ export default function GestorDashboard() {
             }
             
             // Fallback a tabla perfiles (creando el vínculo) tolerando mayúsculas/minúsculas
-            const { data: p } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
-            if (p?.id) {
-                setMyGestoraId(p.id);
+            const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
+            if (p) {
+                if (p.id) setMyGestoraId(p.id);
+                if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') setIsAdmin(true);
             }
         };
         fetchGestora();
@@ -275,11 +283,13 @@ export default function GestorDashboard() {
     // ── Date and Gestora filter ──
     const isVisibleForMe = useCallback((t: any) => {
         // La regla: Los tickets asignados SOLO deben mostrarse a la gestora asignada y a Admin.
+        if (isAdmin) return true; // Si es ADMIN o SUPERADMIN lo ve todo en cualquier lado.
+        
         // Si el ticket no tiene gestora asignada, entra a flujo de Triaje normal donde las gestoras pueden tomarlo.
         const isAssignedToMe = t.gestora_id === myGestoraId || t.gestora_asignada_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
         const isUnassigned = !t.gestora_id && !t.gestora_asignada_id && !t.metadata?.gestora_id;
         return isAssignedToMe || isUnassigned;
-    }, [myGestoraId]);
+    }, [myGestoraId, isAdmin]);
 
     const isInDateRange = useCallback((dateStr: string) => {
         const d = new Date(dateStr);
