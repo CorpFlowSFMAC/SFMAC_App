@@ -31,15 +31,18 @@ export default function DashboardGateway() {
 
                 // ==========================================
                 // 1. REGISTRAR LISTENER INMEDIATAMENTE ANTES DE CUALQUIER ESPERA
-                // Esto previene que perdamos el evento 'SIGNED_IN' si Supabase procesa el hash extremadamente rápido.
                 // ==========================================
                 let authEventListened = false;
                 const { data: { subscription } } = supabase.auth.onAuthStateChange(
                     async (event, newSession) => {
                         console.log("[Dashboard Gateway] Auth event:", event);
-                        if (event === 'SIGNED_IN' && newSession?.user && !authEventListened) {
+                        // Aceptar INITIAL_SESSION o SIGNED_IN o TOKEN_REFRESHED
+                        const validAuthEvent = ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event);
+                        
+                        if (validAuthEvent && newSession?.user && !authEventListened) {
                             authEventListened = true;
-                            subscription.unsubscribe();
+                            // Prevenir race condition cancelando la suscripción inmediatamente
+                            setTimeout(() => subscription.unsubscribe(), 100);
                             await processUserSession(newSession.user);
                         }
                     }
