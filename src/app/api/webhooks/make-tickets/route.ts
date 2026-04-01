@@ -109,25 +109,52 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. BÚSQUEDA Y ENRUTAMIENTO LOGÍSTICO (CASCADA)
-        // Paso A: Match de Agencia en TODA LA BASE DE DATOS (No solo MiBanco)
-        const { data: branchData } = await supabase
+        // Paso A: Match por código directo (es el más fiable si viene AG127)
+        const { data: branchByCode } = await supabase
             .from('branch_offices')
-            .select('id, client_id')
+            .select('id, client_id, name')
             .ilike('codigo_cliente', `%${codigo_sede}%`)
             .maybeSingle();
 
-        // Si no lo encuentra por código, intenta por nombre aproximado
-        let finalBranchId = branchData?.id;
-        let resolvedClientId = branchData?.client_id || MIBANCO_ID; // Fallback to MiBanco si no se halla
+        let finalBranchId = branchByCode?.id;
+        let resolvedClientId = branchByCode?.client_id || MIBANCO_ID;
 
-        if (!finalBranchId && cleanName.length > 3) {
-             const { data: fallbackBranch } = await supabase
+        // Paso B: BÚSQUEDA FLEXIBLE (Si falla el código o el código es genérico)
+        if (!finalBranchId) {
+            // Limpieza agresiva: "AG127 - AG OTUZCO MATRIZ" -> "OTUZCO"
+            const aggressiveClean = inmueble_raw
+                .replace(/^[A-Z0-9]+\s*-\s*/i, '') // Quita el prefijo "AG127 - "
+                .replace(/\b(AG|AGENCIA|MATRIZ|SUCURSAL|OF|OFICINA|SEDE|BN)\b/gi, '') // Quita palabras genéricas
+                .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, ' ') // Quita caracteres especiales
+                .trim();
+
+            console.log(`🔍 Buscando sede flexible para: "${inmueble_raw}" -> Limpio: "${aggressiveClean}"`);
+
+            // 1. Intentar buscar si el nombre de la sede está contenido en el inmueble_raw
+            // Traemos las sedes del cliente (o todas si no hay cliente) para comparar en JS
+            const { data: allBranches } = await supabase
                 .from('branch_offices')
-                .select('id, client_id')
-                .ilike('name', `%${cleanName}%`)
-                .maybeSingle();
-             finalBranchId = fallbackBranch?.id || null;
-             if (fallbackBranch?.client_id) resolvedClientId = fallbackBranch.client_id;
+                .select('id, name, client_id, codigo_cliente')
+                .eq('client_id', MIBANCO_ID); // Optimizado para MiBanco
+
+            // Búsqueda por coincidencia de palabras clave
+            const match = allBranches?.find(b => {
+                const dbName = b.name.toLowerCase();
+                const rawName = inmueble_raw.toLowerCase();
+                const cleanInput = aggressiveClean.toLowerCase();
+                
+                return (
+                    rawName.includes(dbName) || 
+                    dbName.includes(cleanInput) ||
+                    (b.codigo_cliente && rawName.includes(b.codigo_cliente.toLowerCase()))
+                );
+            });
+
+            if (match) {
+                finalBranchId = match.id;
+                resolvedClientId = match.client_id;
+                console.log(`✅ Sede encontrada por Match Flexible: ${match.name} (ID: ${match.id})`);
+            }
         }
 
         // Paso B: Enrutamiento en Cascada (routingAPI resuelve Agencia > Zona > Cliente)
