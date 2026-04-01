@@ -104,10 +104,14 @@ export default function DashboardGateway() {
             console.log("[Dashboard Gateway] User:", user.email, "RBAC Role:", rbacRole, "Legacy Role:", legacyRole);
 
             // Establecer la cookie y localStorage para el middleware
+            const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || user.email || "";
+            const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=f97316&color=fff&bold=true`;
+            
             document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
             localStorage.setItem("userRole", legacyRole);
             localStorage.setItem("userEmail", user.email || "");
-            localStorage.setItem("userName", user.user_metadata?.full_name || perfil?.nombre_completo || user.email || "");
+            localStorage.setItem("userName", finalName);
+            localStorage.setItem("userAvatar", avatarUrl);
             localStorage.setItem("rbacRole", rbacRole);
 
             // Pequeña pausa para el mensaje de bienvenida

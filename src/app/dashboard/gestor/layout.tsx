@@ -26,23 +26,29 @@ export default function GestorLayout({
         localStorage.removeItem("userRole");
         localStorage.removeItem("userEmail");
         localStorage.removeItem("userName");
+        localStorage.removeItem("userAvatar");
         localStorage.removeItem("rbacRole");
         router.push("/login");
     };
 
     const [realUserName, setRealUserName] = useState<string | null>(null);
 
+    const [userAvatar, setUserAvatar] = useState<string | null>(null);
+
     useEffect(() => {
         setIsMounted(true);
         const role = localStorage.getItem("userRole");
         const storedName = localStorage.getItem("userName");
+        const storedAvatar = localStorage.getItem("userAvatar");
         setUserRole(role);
         setRealUserName(storedName);
+        setUserAvatar(storedAvatar);
     }, []);
 
-    // Prevent hydration mismatch by returning a consistent shell until mounted
     const avatarLetter = isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isMounted && userRole === 'admin' ? 'A' : 'G');
-    const displayName = isMounted && realUserName ? realUserName : (isMounted && userRole === 'admin' ? 'Administrador' : 'Gestora Operativa');
+    const fullDisplayName = isMounted && realUserName ? realUserName : (isMounted && userRole === 'admin' ? 'Administrador' : 'Gestora Operativa');
+    const displayName = fullDisplayName.split(' ')[0]; // Solo el primer nombre
+    const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(fullDisplayName)}&background=f97316&color=fff&bold=true` : null);
     const dashboardHref = isMounted && userRole === 'admin' ? "/dashboard/admin" : "/dashboard/gestor";
 
     const motivationalPhrases = [
@@ -77,8 +83,12 @@ export default function GestorLayout({
                         </div>
 
                         <div className={styles.userProfileMini}>
-                            <div className={styles.avatarCircle}>
-                                {avatarLetter}
+                            <div className={styles.avatarCircle} style={{ padding: finalAvatarUrl ? 0 : '', overflow: 'hidden' }}>
+                                {finalAvatarUrl ? (
+                                    <img src={finalAvatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    avatarLetter
+                                )}
                             </div>
                             <div className={styles.userMeta}>
                                 <span className={styles.userName}>{displayName}</span>
