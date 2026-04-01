@@ -13,9 +13,9 @@ export default function Home() {
             
             // Si hay token o código, ir al dashboard para procesarlos
             if (hash.includes("access_token") || search.includes("code=")) {
-                router.replace("/dashboard" + search + hash);
+                window.location.href = "/dashboard" + search + hash;
             } else {
-                router.replace("/login");
+                window.location.href = "/login";
             }
         }
     }, [router]);
