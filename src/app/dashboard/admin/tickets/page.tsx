@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle } from "lucide-react";
 import CreateTicketWizard from "./CreateTicketWizard";
 import TicketWindow from "./TicketWindow";
@@ -9,6 +9,7 @@ import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 import { useAppData } from "@/lib/AppDataContext";
 import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 import { prefetchTickets } from "@/lib/useQueryHooks";
 
 
@@ -98,22 +99,30 @@ export default function TicketsPage() {
     }, [fetchGestora]);
 
     const isVisibleForMe = useCallback((t: any) => {
+        // REGLA 0: Admin ve TODO
         if (isAdminState) return true;
+
+        // REGLA 1: Identidad requerida
         if (!myGestoraId) return false;
 
-        const isDirectTicket = t.gestora_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
-        if (isDirectTicket) return true;
+        // EXCLUSIVIDAD: Si el ticket tiene una GESTORA DIRECTA ya asignada
+        if (t.gestora_id || t.metadata?.gestora_id) {
+            const finalGestoraId = t.gestora_id || t.metadata?.gestora_id;
+            return finalGestoraId === myGestoraId;
+        }
 
-        const isBranchMatch = t.branch_offices?.gestora_asignada_id === myGestoraId;
-        if (isBranchMatch) return true;
+        // CASCADA (Solo si no hay gestora directa): ¿A quién le toca tomarlo?
+        // 1. Asignación por Sede (Branch)
+        if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
 
-        const isZoneMatch = t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId;
-        if (isZoneMatch) return true;
+        // 2. Asignación por Zona (Cascada 1)
+        if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
 
-        const isClientMatch = 
-            t.clients?.gestora_asignada_id === myGestoraId || 
-            t.branch_offices?.clients?.gestora_asignada_id === myGestoraId;
-        if (isClientMatch) return true;
+        // 3. Asignación por Cliente o Sede-Cliente (Cascada 2)
+        if (t.clients?.gestora_asignada_id === myGestoraId || 
+            t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
+            return true;
+        }
 
         return false;
     }, [myGestoraId, isAdminState]);

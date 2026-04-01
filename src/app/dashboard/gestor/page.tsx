@@ -298,23 +298,24 @@ export default function GestorDashboard() {
         // REGLA 1: Identidad requerida
         if (!myGestoraId) return false;
 
-        // REGLA 2: Asignación Directa en ticket
-        const isDirectTicket = t.gestora_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
-        if (isDirectTicket) return true;
+        // EXCLUSIVIDAD: Si el ticket tiene una GESTORA DIRECTA ya asignada
+        if (t.gestora_id || t.metadata?.gestora_id) {
+            const finalGestoraId = t.gestora_id || t.metadata?.gestora_id;
+            return finalGestoraId === myGestoraId;
+        }
 
-        // REGLA 3: Asignación por Sede (Branch)
-        const isBranchMatch = t.branch_offices?.gestora_asignada_id === myGestoraId;
-        if (isBranchMatch) return true;
+        // CASCADA (Solo si no hay gestora directa): ¿A quién le toca tomarlo?
+        // 1. Asignación por Sede (Branch)
+        if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
 
-        // REGLA 4: Asignación por Zona (Cascada 1)
-        const isZoneMatch = t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId;
-        if (isZoneMatch) return true;
+        // 2. Asignación por Zona (Cascada 1)
+        if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
 
-        // REGLA 5: Asignación por Cliente (Cascada 2)
-        const isClientMatch = 
-            t.clients?.gestora_asignada_id === myGestoraId || 
-            t.branch_offices?.clients?.gestora_asignada_id === myGestoraId;
-        if (isClientMatch) return true;
+        // 3. Asignación por Cliente o Sede-Cliente (Cascada 2)
+        if (t.clients?.gestora_asignada_id === myGestoraId || 
+            t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
+            return true;
+        }
 
         return false;
     }, [myGestoraId, isAdmin]);

@@ -17,6 +17,7 @@ interface CreateTicketWizardProps {
 
 export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTicketWizardProps) {
     const [currentStep, setCurrentStep] = useState(1);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
         cliente: null as any,
         clienteId: "",
@@ -33,7 +34,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
     });
 
     // 🔗 INTEGRACIÓN CON CONTEXTO GLOBAL (Realtime compartido)
-    const { clients: rawClients, loadingClients } = useAppData();
+    const { clients: rawClients, loadingClients, tickets: allExistingTickets } = useAppData();
     const { branches: allBranches, loading: loadingBranches } = useBranches();
 
     // Mapear clientes al formato esperado por el Wizard
@@ -104,11 +105,14 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         setShowRestoreDraft(false);
     };
 
-    // Tickets se manejan desde el componente padre
-
     const isTicketClienteDuplicate = (): boolean => {
-        // Validación de duplicados se hará en el servidor
-        return false;
+        if (!formData.tieneNumeroCliente || !formData.numeroTicketCliente) return false;
+        
+        const search = formData.numeroTicketCliente.trim().toUpperCase();
+        return (allExistingTickets || []).some((t: any) => 
+            t.client_ticket_number?.trim().toUpperCase() === search ||
+            t.metadata?.numeroTicketCliente?.trim().toUpperCase() === search
+        );
     };
 
     const isTicketClienteValid = (): boolean => {
@@ -159,11 +163,15 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
     };
 
     const handleGenerarTicket = async () => {
+        if (isSubmitting) return;
+
         if (formData.tieneNumeroCliente && isTicketClienteDuplicate()) {
-            alert("❌ Error: El número de ticket de cliente ya existe. Por favor use uno único.");
+            alert("❌ Error: El número de ticket de cliente ya existe en el sistema. Por favor use uno único.");
             setCurrentStep(3);
             return;
         }
+
+        setIsSubmitting(true);
 
         // Convertir evidencias a Base64 para guardarlas en Supabase (metadata)
         const processFiles = async () => {
@@ -209,8 +217,9 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
             onClose();
         } catch (error: any) {
             console.error("Error al crear ticket:", error);
-            console.error("Detalles del error:", error.message, error.details, error.hint);
             alert(`Hubo un error al crear el ticket: ${error.message || "Error desconocido"}`);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -704,9 +713,22 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
 
                             <div className={styles.confirmationAction}>
                                 <p className={styles.confirmationTip}>🚀 Al presionar el botón se notificará automáticamente al área técnica.</p>
-                                <button className={styles.generarBtn} onClick={handleGenerarTicket}>
-                                    <CheckCircle size={18} />
-                                    CONFIRMAR Y GENERAR TICKET
+                                <button 
+                                    className={styles.generarBtn} 
+                                    onClick={handleGenerarTicket}
+                                    disabled={isSubmitting}
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <Sparkles size={18} className={styles.spinning} />
+                                            GENERANDO...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle size={18} />
+                                            CONFIRMAR Y GENERAR TICKET
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
