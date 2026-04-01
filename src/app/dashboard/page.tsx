@@ -77,14 +77,15 @@ export default function DashboardGateway() {
                         if (lastCheck?.user) {
                             await processUserSession(lastCheck.user);
                         } else {
-                            // Extraer razones posibles de la URL
-                            const urlInfo = window.location.hash || window.location.search;
-                            let errorMsj = "No se pudo establecer la sesión desde Microsoft. Intente de nuevo.";
+                            // Extraer razones posibles de la URL para diagnóstico puro
+                            const urlInfo = window.location.hash || window.location.search || "Ningún parámetro";
+                            let errorMsj = "Falla de acceso. URL actual: " + window.location.href + " | Params: " + urlInfo;
                             if (urlInfo && urlInfo.includes('error=')) {
-                                errorMsj = "Microsoft denegó el acceso (Error de Tokens/Tenant): " + urlInfo;
+                                errorMsj = "Microsoft denegó: " + urlInfo;
                             }
                             setError(errorMsj);
-                            setTimeout(() => router.push("/login"), 4500); // 4.5s para que puedan leer el error
+                            // Dejar más tiempo para leer la URL y enviar la captura
+                            setTimeout(() => router.push("/login"), 10000); 
                         }
                     }, 12000);
                 }
