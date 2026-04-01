@@ -28,17 +28,24 @@ export default function LoginPage() {
         const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
         setQuote(randomQuote);
 
-        // Clear local auth state (cookies/localStorage) when arriving at /login.
-        // NOTE: We do NOT call supabase.auth.signOut() here because it's async
-        // and causes a race condition with signInWithOAuth — the signOut() can
-        // destroy the session mid-OAuth-callback, sending the user back to login.
-        // The real signOut is properly handled in the logout buttons (admin/gestor layouts).
-        document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-        localStorage.removeItem("userRole");
-        localStorage.removeItem("userEmail");
-        localStorage.removeItem("userName");
-        localStorage.removeItem("rbacRole");
-    }, []);
+        // Clear local auth state (cookies/localStorage) for all potential Supabase keys
+        if (typeof window !== 'undefined') {
+            document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            
+            // Loop through all keys and remove those that belong to Supabase (sb- prefix)
+            Object.keys(localStorage).forEach(key => {
+                if (key.includes('sb-') || key.includes('supabase.auth')) {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            localStorage.removeItem("userRole");
+            localStorage.removeItem("userEmail");
+            localStorage.removeItem("userName");
+            localStorage.removeItem("userAvatar");
+            localStorage.removeItem("rbacRole");
+        }
+    }, [router]);
 
     const handleMicrosoftLogin = async () => {
         setIsLoading(true);
