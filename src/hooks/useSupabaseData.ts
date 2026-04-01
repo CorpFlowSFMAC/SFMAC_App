@@ -401,6 +401,13 @@ const normalizeTicket = (t: any) => {
         };
     }
 
+    // Normalizar Gestora (Supabase 'gestora' -> UI 'gestora')
+    const gestoraRaw = t.gestora || realMetadata.gestora;
+    const gestora = gestoraRaw ? {
+        ...gestoraRaw,
+        nombre: gestoraRaw.name || gestoraRaw.nombre || gestoraRaw.email?.split('@')[0] || 'Gestora'
+    } : null;
+
     return {
         ...t,
         // Mapeo de campos raíz prioritarios
@@ -414,11 +421,6 @@ const normalizeTicket = (t: any) => {
         costoVisita: t.visit_cost || t.costoVisita || realMetadata.costoVisita || 0,
         montoFinal: t.total_quoted_amount || t.montoFinal || realMetadata.montoFinal || 0,
 
-        // Relaciones normalizadas
-        cliente,
-        sede,
-        tecnico,
-
         // Otros campos operativos
         tipoServicio: t.service_type || t.tipoServicio || realMetadata.tipoServicio,
         creadoPor: t.created_by || t.creadoPor || realMetadata.creadoPor,
@@ -426,7 +428,12 @@ const normalizeTicket = (t: any) => {
 
         // Conservar metadatos limpios
         metadata: realMetadata,
-        ...realMetadata
+        ...realMetadata,
+        // Forzar objetos normalizados para que no sean sobrescritos por nulos en metadata
+        cliente,
+        sede,
+        tecnico,
+        gestora
     };
 };
 
