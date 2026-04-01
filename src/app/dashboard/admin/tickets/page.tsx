@@ -414,6 +414,9 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                 {slaStatus === "expired" && (
                     <div className={styles.expiredBadge}>SLA VENCIDO</div>
                 )}
+                {(!ticket.gestora_id && !ticket.gestora) && (
+                    <div className={styles.expiredBadge} style={{ background: '#F59E0B', marginLeft: '4px' }}>SIN GESTORA</div>
+                )}
             </div>
 
             {/* BODY OPTIMIZADO */}
@@ -532,7 +535,11 @@ function TicketRow({ ticket, onTicketClick }: any) {
                 </div>
             </td>
             <td>
-                <span className={styles.rowGestora}>{ticket.historial?.[0]?.usuario || '---'}</span>
+                {ticket.gestora?.name || ticket.gestora?.nombre ? (
+                    <span className={styles.rowGestora}>{ticket.gestora.name || ticket.gestora.nombre}</span>
+                ) : (
+                    <span className={styles.rowGestora} style={{ color: '#F59E0B', fontWeight: 800 }}>⚠️ PENDIENTE</span>
+                )}
             </td>
             <td>
                 <button className={styles.rowActionBtn}>

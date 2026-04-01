@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp } from "lucide-react";
+import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -1404,6 +1404,70 @@ export function TicketSummary({ ticket, onProceed }: TicketSummaryProps) {
                     <ArrowRight size={18} />
                 </button>
             </div>
+        </div>
+    );
+}
+
+export function GestoraAssignmentBar({ ticket, onAssign, isAdmin }: { ticket: any; onAssign?: () => void; isAdmin: boolean }) {
+    const gestora = ticket.gestora || ticket.gestoraAsignado;
+    const hasGestora = !!gestora;
+
+    return (
+        <div 
+            className={styles.infoBar}
+            style={{ 
+                background: hasGestora ? 'linear-gradient(to right, #EEF2FF, white)' : 'linear-gradient(to right, #FFF7ED, white)',
+                '--bar-accent-color': hasGestora ? '#6366F1' : '#F97316',
+                marginTop: '-4px'
+            } as any}
+        >
+            <div className={styles.titleSection}>
+                <div className={styles.titleIcon} style={{ background: hasGestora ? '#6366F1' : '#F97316' }}>
+                    <ShieldCheck size={18} />
+                </div>
+                <div className={styles.titleText}>
+                    <h3 style={{ color: hasGestora ? '#3730A3' : '#9A3412' }}>Gestión Operativa</h3>
+                    <span style={{ color: hasGestora ? '#4F46E5' : '#C2410C' }}>
+                        {hasGestora ? 'Responsable Asignada' : 'Pendiente de Derivación'}
+                    </span>
+                </div>
+            </div>
+
+            <div className={styles.verticalDivider} />
+
+            <div className={styles.infoItem} style={{ flex: 1.5 }}>
+                <span className={styles.infoLabel}>Gestora</span>
+                {hasGestora ? (
+                    <div className={styles.clienteCompact}>
+                        <div className={styles.clienteAvatar} style={{ background: '#6366F1' }}>
+                            {(gestora.name || gestora.nombre || "G").substring(0, 1).toUpperCase()}
+                        </div>
+                        <span className={styles.infoValue} style={{ fontWeight: 700 }}>{gestora.name || gestora.nombre}</span>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F97316' }}>
+                        <AlertTriangle size={14} />
+                        <span style={{ fontSize: '11px', fontWeight: 800 }}>REQUIERE DESIGNACIÓN MANUAL</span>
+                    </div>
+                )}
+            </div>
+
+            {isAdmin && !ticket.estadoId.includes('cerrado') && (
+                <button 
+                    className={styles.reassignBtn}
+                    onClick={onAssign}
+                    style={{ 
+                        color: hasGestora ? '#4338CA' : '#C2410C', 
+                        '--btn-color': hasGestora ? '#6366F1' : '#F97316',
+                        background: hasGestora ? '#EEF2FF' : '#FFF7ED',
+                        padding: '6px 12px',
+                        border: `1px solid ${hasGestora ? '#C7D2FE' : '#FFEDD5'}`
+                    } as any}
+                >
+                    {hasGestora ? <RefreshCw size={12} /> : <ChevronRight size={14} />}
+                    <span>{hasGestora ? 'Cambiar Gestora' : 'Derivar Ahora'}</span>
+                </button>
+            )}
         </div>
     );
 }

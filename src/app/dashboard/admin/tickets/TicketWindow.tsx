@@ -5,7 +5,8 @@ import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2 } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
-import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar } from "./TicketSummary";
+import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
+import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
@@ -61,6 +62,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
     const [zIndex, setZIndex] = useState(1001 + (index || 0));
     const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
+    const [showGestoraDrawer, setShowGestoraDrawer] = useState(false);
 
     // Solo persistimos la posición y el estado de la ventana en localStorage para preferencias de usuario
     useEffect(() => {
@@ -138,6 +140,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     solicitudAdelanto: meta.solicitudAdelanto ?? null,
                     solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
                     historialPagosTecnico: meta.historialPagosTecnico ?? [],
+                    gestora: fullTicket.gestora || meta.gestora || null
                 }));
             } catch (err) {
                 console.error('Error fetching full ticket data:', err);
@@ -376,6 +379,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             visit_cost: parseFloat(sourceForPayments.costoVisita || 0),
             total_quoted_amount: parseFloat(sourceForPayments.montoFinal || 0),
             technician_id: tecnico?.id || businessData.technician_id || ticket.technician_id,
+            gestora_id: businessData.gestora?.id || ticket.gestora?.id || ticket.gestora_id,
             is_sla_paused: isAdmin ? businessData.pausadoSLA : ticket.is_sla_paused,
             sla_pause_date: isAdmin ? businessData.fechaPausa : ticket.sla_pause_date,
             sla_reactivation_date: isAdmin ? businessData.fechaReactivacion : ticket.sla_reactivation_date,
@@ -579,6 +583,35 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             Promise.all(promises).then(results => {
                 setEvidenciasCampo(prev => [...prev, ...results]);
             }).catch(err => console.error("Error reading files:", err));
+        }
+    };
+
+    const handleGestoraAssignment = async (gestora: any) => {
+        try {
+            const dbUpdates = {
+                gestora_id: gestora.id,
+                metadata: {
+                    ...ticketData.metadata,
+                    gestora: gestora
+                }
+            };
+            
+            if (onUpdate) {
+                await onUpdate(ticketData.id, dbUpdates);
+            } else {
+                await ticketsAPI.update(ticketData.id, dbUpdates);
+            }
+
+            setTicketData((prev: any) => ({
+                ...prev,
+                gestora: gestora,
+                gestora_id: gestora.id
+            }));
+            
+            showToast("Ticket Derivado", `El servicio ahora está a cargo de ${gestora.name}.`, "success");
+        } catch (err) {
+            console.error("Error assigned gestora:", err);
+            showToast("Error", "No se pudo completar la derivación.", "error");
         }
     };
 
@@ -1238,6 +1271,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 icon={FileText}
                                 color="#8B5CF6"
                                 gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"
+                            />
+
+                            <GestoraAssignmentBar 
+                                ticket={ticketData}
+                                isAdmin={userRole === 'admin' || userRole === 'superadmin'}
+                                onAssign={() => setShowGestoraDrawer(true)}
                             />
 
                             <TechnicianSchedulingBar
@@ -2838,15 +2877,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     </div>
                 )}
 
-                {showAssignmentDrawer && (
-                    <TechnicianDrawer
-                        isOpen={showAssignmentDrawer}
-                        ticket={ticketData}
-                        onClose={() => setShowAssignmentDrawer(false)}
-                        onAssign={handleAssignment}
-                        onShowToast={showToast}
-                    />
-                )}
 
                 {/* Modal de Negociación de Costo */}
                 {showNegotiationModal && (
@@ -2920,6 +2950,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
                     </div>
                 )}
+
+                <TechnicianDrawer 
+                    isOpen={showAssignmentDrawer}
+                    onClose={() => setShowAssignmentDrawer(false)}
+                    ticket={ticketData}
+                    onAssign={handleAssignment}
+                    onShowToast={showToast}
+                />
+
+                <GestoraDrawer 
+                    isOpen={showGestoraDrawer}
+                    onClose={() => setShowGestoraDrawer(false)}
+                    onAssign={handleGestoraAssignment}
+                />
             </div>
         </>
     );
