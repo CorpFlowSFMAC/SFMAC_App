@@ -283,12 +283,19 @@ export default function GestorDashboard() {
     // ── Date and Gestora filter ──
     const isVisibleForMe = useCallback((t: any) => {
         // La regla: Los tickets asignados SOLO deben mostrarse a la gestora asignada y a Admin.
-        if (isAdmin) return true; // Si es ADMIN o SUPERADMIN lo ve todo en cualquier lado.
+        if (isAdmin) return true;
         
-        // Si el ticket no tiene gestora asignada, sólo el Administrador lo verá (porque isAdmin retorna true arriba).
-        // Las gestoras solo deben ver estrictamente SUS tickets.
-        const isAssignedToMe = t.gestora_id === myGestoraId || t.gestora_asignada_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
-        return isAssignedToMe;
+        // REGLA DE ORO: Si no tenemos identificada a la gestora actual, no mostramos nada por seguridad.
+        if (!myGestoraId) return false;
+
+        // 1. Verificamos asignación directa en el ticket (Columna gestora_id o metadata)
+        const isDirectlyAssigned = (t.gestora_id === myGestoraId) || (t.metadata?.gestora_id === myGestoraId);
+
+        // 2. Verificamos asignación automática por sede (Columna gestora_asignada_id en branch_offices)
+        // Nota: t.branch_offices viene del JOIN de Supabase
+        const isAssignedByBranch = t.branch_offices?.gestora_asignada_id === myGestoraId;
+
+        return isDirectlyAssigned || isAssignedByBranch;
     }, [myGestoraId, isAdmin]);
 
     const isInDateRange = useCallback((dateStr: string) => {
