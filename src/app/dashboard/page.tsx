@@ -29,69 +29,51 @@ export default function DashboardGateway() {
             try {
                 setStatus("Procesando autenticación...");
 
-                // ==========================================
-                // 1. REGISTRAR LISTENER INMEDIATAMENTE ANTES DE CUALQUIER ESPERA
-                // ==========================================
-                let authEventListened = false;
-                const { data: { subscription } } = supabase.auth.onAuthStateChange(
-                    async (event, newSession) => {
-                        console.log("[Dashboard Gateway] Auth event:", event);
-                        // Aceptar INITIAL_SESSION o SIGNED_IN o TOKEN_REFRESHED
-                        const validAuthEvent = ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event);
-                        
-                        if (validAuthEvent && newSession?.user && !authEventListened) {
-                            authEventListened = true;
-                            // Prevenir race condition cancelando la suscripción inmediatamente
-                            setTimeout(() => subscription.unsubscribe(), 100);
-                            await processUserSession(newSession.user);
-                        }
-                    }
-                );
-
                 // Esperar a que Supabase procese el hash fragment
-                await new Promise(resolve => setTimeout(resolve, 800));
+                await new Promise(resolve => setTimeout(resolve, 500));
 
-                // Obtener la sesión actual por si el onAuthStateChange no se disparó
+                // Obtener la sesión actual
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
                 if (sessionError) {
                     console.error("[Dashboard Gateway] Session error:", sessionError);
                     setError("Error al verificar la sesión: " + sessionError.message);
-                    subscription.unsubscribe();
                     setTimeout(() => router.push("/login"), 2000);
                     return;
                 }
 
-                if (session?.user && !authEventListened) {
-                    // Sesión encontrada directamente — procesar
-                    authEventListened = true;
-                    subscription.unsubscribe();
-                    await processUserSession(session.user);
-                    return;
-                }
+                if (!session?.user) {
+                    // No hay sesión — intentar escuchar el evento de auth
+                    setStatus("Esperando confirmación de Microsoft...");
 
-                if (!authEventListened) {
-                    // Timeout de seguridad en caso de redes extremadamente lentas
+                    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+                        async (event, newSession) => {
+                            console.log("[Dashboard Gateway] Auth event:", event);
+
+                            if (event === 'SIGNED_IN' && newSession?.user) {
+                                subscription.unsubscribe();
+                                await processUserSession(newSession.user);
+                            }
+                        }
+                    );
+
+                    // Timeout de seguridad
                     setTimeout(async () => {
-                        if (authEventListened) return; 
                         subscription.unsubscribe();
                         const { data: { session: lastCheck } } = await supabase.auth.getSession();
-                        
                         if (lastCheck?.user) {
                             await processUserSession(lastCheck.user);
                         } else {
-                            // Extraer razones posibles de la URL para diagnóstico puro
-                            const urlInfo = window.location.hash || window.location.search || "Ningún parámetro";
-                            let errorMsj = "Falla de acceso. URL actual: " + window.location.href + " | Params: " + urlInfo;
-                            if (urlInfo && urlInfo.includes('error=')) {
-                                errorMsj = "Microsoft denegó: " + urlInfo;
-                            }
-                            setError(errorMsj);
-                            // Dejar más tiempo para leer la URL y enviar la captura
-                            setTimeout(() => router.push("/login"), 10000); 
+                            setError("No se pudo establecer la sesión. Redirigiendo al login...");
+                            setTimeout(() => router.push("/login"), 1500);
                         }
-                    }, 12000);
+                    }, 8000);
+
+                    return;
                 }
+
+                // Sesión encontrada — procesar
+                await processUserSession(session.user);
 
             } catch (err: any) {
                 console.error("[Dashboard Gateway] Error:", err);
@@ -101,57 +83,51 @@ export default function DashboardGateway() {
         }
 
         async function processUserSession(user: any) {
-            try {
-                setStatus(`¡Bienvenido/a, ${user.user_metadata?.full_name || user.email}!`);
+            setStatus(`¡Bienvenido/a, ${user.user_metadata?.full_name || user.email}!`);
 
-                // ── RBAC: Consultar perfil desde la tabla perfiles ──
-                setStatus("Verificando permisos de acceso...");
-                let perfil = await perfilesAPI.getById(user.id);
+            // ── RBAC: Consultar perfil desde la tabla perfiles ──
+            setStatus("Verificando permisos de acceso...");
+            let perfil = await perfilesAPI.getById(user.id);
 
-                // Si no existe perfil (caso raro, el trigger debería haberlo creado),
-                // esperar un momento y reintentar
-                if (!perfil) {
-                    console.log("[Dashboard Gateway] Profile not found, waiting for trigger...");
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    perfil = await perfilesAPI.getById(user.id);
-                }
+            // Si no existe perfil (caso raro, el trigger debería haberlo creado),
+            // esperar un momento y reintentar
+            if (!perfil) {
+                console.log("[Dashboard Gateway] Profile not found, waiting for trigger...");
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                perfil = await perfilesAPI.getById(user.id);
+            }
 
-                // Determinar el rol desde el perfil RBAC
-                const rbacRole = perfil?.rol || 'SIN_ACCESO';
-                const legacyRole = perfilesAPI.toLegacyRole(perfil);
+            // Determinar el rol desde el perfil RBAC
+            const rbacRole = perfil?.rol || 'SIN_ACCESO';
+            const legacyRole = perfilesAPI.toLegacyRole(perfil);
 
-                console.log("[Dashboard Gateway] User:", user.email, "RBAC Role:", rbacRole, "Legacy Role:", legacyRole);
+            console.log("[Dashboard Gateway] User:", user.email, "RBAC Role:", rbacRole, "Legacy Role:", legacyRole);
 
-                // Establecer la cookie y localStorage para el middleware
-                const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || user.email || "";
-                const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=f97316&color=fff&bold=true`;
-                
-                document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
-                localStorage.setItem("userRole", legacyRole);
-                localStorage.setItem("userEmail", user.email || "");
-                localStorage.setItem("userName", finalName);
-                localStorage.setItem("userAvatar", avatarUrl);
-                localStorage.setItem("rbacRole", rbacRole);
+            // Establecer la cookie y localStorage para el middleware
+            const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || user.email || "";
+            const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=f97316&color=fff&bold=true`;
+            
+            document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
+            localStorage.setItem("userRole", legacyRole);
+            localStorage.setItem("userEmail", user.email || "");
+            localStorage.setItem("userName", finalName);
+            localStorage.setItem("userAvatar", avatarUrl);
+            localStorage.setItem("rbacRole", rbacRole);
 
-                // Pequeña pausa para el mensaje de bienvenida
-                await new Promise(resolve => setTimeout(resolve, 800));
+            // Pequeña pausa para el mensaje de bienvenida
+            await new Promise(resolve => setTimeout(resolve, 800));
 
-                // Redirigir según el rol RBAC
-                if (rbacRole === 'SIN_ACCESO') {
-                    setStatus("Tu cuenta está pendiente de asignación de rol...");
-                    router.push('/dashboard/sin-acceso');
-                } else if (rbacRole === 'ADMIN') {
-                    setStatus("Redirigiendo a Panel Admin...");
-                    router.push('/dashboard/admin');
-                } else {
-                    // GESTORA, ESPECTADOR → gestor dashboard
-                    setStatus("Redirigiendo a Panel Gestora...");
-                    router.push('/dashboard/gestor');
-                }
-            } catch (err: any) {
-                console.error("[Dashboard Gateway] Critical error processing session:", err);
-                setError("Error procesando sesión: " + (err.message || String(err)));
-                // No redirigimos inmediatamente para que el usuario pueda ver el error y reportarlo.
+            // Redirigir según el rol RBAC
+            if (rbacRole === 'SIN_ACCESO') {
+                setStatus("Tu cuenta está pendiente de asignación de rol...");
+                router.push('/dashboard/sin-acceso');
+            } else if (rbacRole === 'ADMIN') {
+                setStatus("Redirigiendo a Panel Admin...");
+                router.push('/dashboard/admin');
+            } else {
+                // GESTORA, ESPECTADOR → gestor dashboard
+                setStatus("Redirigiendo a Panel Gestora...");
+                router.push('/dashboard/gestor');
             }
         }
 

@@ -47,7 +47,7 @@ export default function LoginPage() {
                 provider: 'azure',
                 options: {
                     scopes: 'openid profile email',
-                    redirectTo: `${window.location.origin}/auth/callback`,
+                    redirectTo: `${window.location.origin}/dashboard`,
                     queryParams: {
                         prompt: 'select_account'
                     }
