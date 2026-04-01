@@ -63,6 +63,61 @@ export default function TicketsPage() {
     const [openTickets, setOpenTickets] = useState<any[]>([]);
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("triage");
 
+    // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
+    const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
+    const [isAdminState, setIsAdminState] = useState<boolean>(false);
+
+    const fetchGestora = useCallback(async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const email = user?.email || localStorage.getItem('userEmail');
+            if (!email) return;
+
+            const userRole = localStorage.getItem('userRole');
+            if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
+                setIsAdminState(true);
+            }
+
+            const { data: g } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            if (g?.id) {
+                setMyGestoraId(g.id);
+            } else {
+                const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
+                if (p) {
+                    if (p.id) setMyGestoraId(p.id);
+                    if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') setIsAdminState(true);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching gestora context:", error);
+        }
+    }, [queryClient]);
+
+    useEffect(() => {
+        fetchGestora();
+    }, [fetchGestora]);
+
+    const isVisibleForMe = useCallback((t: any) => {
+        if (isAdminState) return true;
+        if (!myGestoraId) return false;
+
+        const isDirectTicket = t.gestora_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
+        if (isDirectTicket) return true;
+
+        const isBranchMatch = t.branch_offices?.gestora_asignada_id === myGestoraId;
+        if (isBranchMatch) return true;
+
+        const isZoneMatch = t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId;
+        if (isZoneMatch) return true;
+
+        const isClientMatch = 
+            t.clients?.gestora_asignada_id === myGestoraId || 
+            t.branch_offices?.clients?.gestora_asignada_id === myGestoraId;
+        if (isClientMatch) return true;
+
+        return false;
+    }, [myGestoraId, isAdminState]);
+
 
     const handleCreateTicket = async (newTicket: any) => {
         await createTicket(newTicket);
@@ -140,6 +195,10 @@ export default function TicketsPage() {
 
     const filteredTickets = React.useMemo(() => {
         return tickets.filter((t: any) => {
+            // 1. Visibilidad por Rol (REGLA DE ORO)
+            if (!isVisibleForMe(t)) return false;
+
+            // 2. Filtros UI existentes
             const sid = normalizeStateId(t.estadoId);
             const isClosed = sid === "ticket_cerrado";
 
@@ -157,7 +216,7 @@ export default function TicketsPage() {
             if (viewMode === "active") return !["borrador", "ticket_cerrado"].includes(sid) && matchesSearch;
             return isClosed && matchesSearch;
         });
-    }, [tickets, searchTerm, viewMode]);
+    }, [tickets, searchTerm, viewMode, isVisibleForMe]);
 
     return (
         <div className={styles.page}>
