@@ -43,17 +43,25 @@ export default function LoginPage() {
     const handleMicrosoftLogin = async () => {
         setIsLoading(true);
         try {
-            const { error } = await supabase.auth.signInWithOAuth({
+            const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'azure',
                 options: {
                     scopes: 'openid profile email',
                     redirectTo: `${window.location.origin}/dashboard`,
+                    skipBrowserRedirect: true,
                     queryParams: {
                         prompt: 'select_account'
                     }
                 }
             });
             if (error) throw error;
+            
+            // Si funciona y devuelve la URL (evita borrado de LocalStorage ITP en Safari/Brave)
+            if (data?.url) {
+                setTimeout(() => {
+                    window.location.href = data.url;
+                }, 400); // 400ms es suficiente para evadir el bloqueo
+            }
         } catch (err: any) {
             setError(err.message || "Error al conectar con Microsoft.");
             setIsLoading(false);
