@@ -285,10 +285,10 @@ export default function GestorDashboard() {
         // La regla: Los tickets asignados SOLO deben mostrarse a la gestora asignada y a Admin.
         if (isAdmin) return true; // Si es ADMIN o SUPERADMIN lo ve todo en cualquier lado.
         
-        // Si el ticket no tiene gestora asignada, entra a flujo de Triaje normal donde las gestoras pueden tomarlo.
+        // Si el ticket no tiene gestora asignada, sólo el Administrador lo verá (porque isAdmin retorna true arriba).
+        // Las gestoras solo deben ver estrictamente SUS tickets.
         const isAssignedToMe = t.gestora_id === myGestoraId || t.gestora_asignada_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
-        const isUnassigned = !t.gestora_id && !t.gestora_asignada_id && !t.metadata?.gestora_id;
-        return isAssignedToMe || isUnassigned;
+        return isAssignedToMe;
     }, [myGestoraId, isAdmin]);
 
     const isInDateRange = useCallback((dateStr: string) => {

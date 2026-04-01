@@ -86,6 +86,10 @@ export async function POST(req: NextRequest) {
         const inmuebleRegex = /^([\w\-]+)\s*-\s*(.*)$/;
         const inmuebleMatch = inmueble_raw.match(inmuebleRegex);
         const codigo_sede = inmuebleMatch ? inmuebleMatch[1].trim() : inmueble_raw.split(' ')[0];
+        let nombre_sede = inmuebleMatch ? inmuebleMatch[2].trim() : inmueble_raw;
+        
+        // Limpiar prefijos comunes como "AG " o "BN " para mejorar las coincidencias aproximadas
+        const cleanName = nombre_sede.replace(/^(AG\s+|BN\s+|SEDE\s+)/i, '').trim();
 
         // 3. DEDUPLICACIÓN
         const { data: existing } = await supabase
@@ -115,12 +119,12 @@ export async function POST(req: NextRequest) {
 
         // Si no lo encuentra por código, intenta por nombre aproximado
         let finalBranchId = branchData?.id;
-        if (!finalBranchId) {
+        if (!finalBranchId && cleanName.length > 3) {
              const { data: fallbackBranch } = await supabase
                 .from('branch_offices')
                 .select('id')
                 .eq('client_id', MIBANCO_ID)
-                .ilike('name', `%${codigo_sede}%`)
+                .ilike('name', `%${cleanName}%`)
                 .maybeSingle();
              finalBranchId = fallbackBranch?.id || null;
         }
