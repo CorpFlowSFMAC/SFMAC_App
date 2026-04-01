@@ -166,33 +166,43 @@ export default function GestorDashboard() {
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
-    useEffect(() => {
-        const fetchGestora = async () => {
-            const email = localStorage.getItem('userEmail');
+    const fetchGestora = useCallback(async () => {
+        try {
+            // 1. Obtener email de la sesión activa (más fiable que el localStorage solo)
+            const { data: { user } } = await supabase.auth.getUser();
+            const email = user?.email || localStorage.getItem('userEmail');
+
             if (!email) return;
 
-            // Verificar rol de administrador
+            // Asegurar persistencia básica
+            if (user?.email) localStorage.setItem('userEmail', user.email);
+
+            // 2. Verificar rol de administrador (Admin ve TODO)
             const userRole = localStorage.getItem('userRole');
             if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
                 setIsAdmin(true);
             }
 
-            // Primero buscar en gestoras (tabla heredada o directa) tolerando mayúsculas/minúsculas
+            // 3. Buscar el ID de gestora fiable (Prioriza tabla gestoras por herencia)
             const { data: g } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
             if (g?.id) {
                 setMyGestoraId(g.id);
-                return;
+            } else {
+                // 4. Fallback a tabla perfiles si no está en gestoras (pero es una gestora registrada)
+                const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
+                if (p) {
+                    if (p.id) setMyGestoraId(p.id);
+                    if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') setIsAdmin(true);
+                }
             }
-            
-            // Fallback a tabla perfiles (creando el vínculo) tolerando mayúsculas/minúsculas
-            const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
-            if (p) {
-                if (p.id) setMyGestoraId(p.id);
-                if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') setIsAdmin(true);
-            }
-        };
-        fetchGestora();
+        } catch (error) {
+            console.error("Error fetching gestora context:", error);
+        }
     }, []);
+
+    useEffect(() => {
+        fetchGestora();
+    }, [fetchGestora]);
 
     // ── CONTROL DE ASISTENCIA ──────────────────────────────────
     const [turnoActivo, setTurnoActivo] = useState<{id:string; hora_ingreso:string} | null>(null);
@@ -282,20 +292,31 @@ export default function GestorDashboard() {
 
     // ── Date and Gestora filter ──
     const isVisibleForMe = useCallback((t: any) => {
-        // La regla: Los tickets asignados SOLO deben mostrarse a la gestora asignada y a Admin.
+        // REGLA 0: Admin ve TODO
         if (isAdmin) return true;
-        
-        // REGLA DE ORO: Si no tenemos identificada a la gestora actual, no mostramos nada por seguridad.
+
+        // REGLA 1: Identidad requerida
         if (!myGestoraId) return false;
 
-        // 1. Verificamos asignación directa en el ticket (Columna gestora_id o metadata)
-        const isDirectlyAssigned = (t.gestora_id === myGestoraId) || (t.metadata?.gestora_id === myGestoraId);
+        // REGLA 2: Asignación Directa en ticket
+        const isDirectTicket = t.gestora_id === myGestoraId || t.metadata?.gestora_id === myGestoraId;
+        if (isDirectTicket) return true;
 
-        // 2. Verificamos asignación automática por sede (Columna gestora_asignada_id en branch_offices)
-        // Nota: t.branch_offices viene del JOIN de Supabase
-        const isAssignedByBranch = t.branch_offices?.gestora_asignada_id === myGestoraId;
+        // REGLA 3: Asignación por Sede (Branch)
+        const isBranchMatch = t.branch_offices?.gestora_asignada_id === myGestoraId;
+        if (isBranchMatch) return true;
 
-        return isDirectlyAssigned || isAssignedByBranch;
+        // REGLA 4: Asignación por Zona (Cascada 1)
+        const isZoneMatch = t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId;
+        if (isZoneMatch) return true;
+
+        // REGLA 5: Asignación por Cliente (Cascada 2)
+        const isClientMatch = 
+            t.clients?.gestora_asignada_id === myGestoraId || 
+            t.branch_offices?.clients?.gestora_asignada_id === myGestoraId;
+        if (isClientMatch) return true;
+
+        return false;
     }, [myGestoraId, isAdmin]);
 
     const isInDateRange = useCallback((dateStr: string) => {

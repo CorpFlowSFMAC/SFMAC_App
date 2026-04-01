@@ -370,18 +370,15 @@ const normalizeTicket = (t: any) => {
         ...sedeRaw,
         nombre: sedeRaw.name || sedeRaw.nombre || 'Sin Sede',
         direccion: sedeRaw.address || sedeRaw.direccion || 'Sin dirección',
-        zona: sedeRaw.zone || sedeRaw.zona || 'PAN PERÚ',
+        zona: sedeRaw.zone || sedeRaw.zona || (sedeRaw.zonas?.nombre) || 'PAN PERÚ',
         departamento: sedeRaw.departamento || realMetadata.departamento,
         provincia: sedeRaw.provincia || realMetadata.provincia,
         distrito: sedeRaw.distrito || realMetadata.distrito
     } : null;
 
-    // Normalizar Técnico (Supabase 'technicians' -> UI 'tecnico')
-    // Normalizar Técnico (Supabase 'technicians' -> UI 'tecnico')
+    // Normalizar Técnico
     let tecnicoRaw = t.technicians || t.tecnico || realMetadata.tecnico;
-    if (Array.isArray(tecnicoRaw)) {
-        tecnicoRaw = tecnicoRaw[0];
-    }
+    if (Array.isArray(tecnicoRaw)) tecnicoRaw = tecnicoRaw[0];
 
     let tecnico = null;
     if (tecnicoRaw) {
@@ -401,8 +398,9 @@ const normalizeTicket = (t: any) => {
         };
     }
 
-    // Normalizar Gestora (Supabase 'gestora' -> UI 'gestora')
-    const gestoraRaw = t.gestora || realMetadata.gestora;
+    // Normalizar Gestora (Supabase 'gestora' o 'gestoras' o plural anidado -> UI 'gestora')
+    // El API usa .select('..., gestora:gestoras(*)') el resultado es t.gestora
+    const gestoraRaw = t.gestora || t.gestoras?.[0] || t.gestoras || realMetadata.gestora;
     const gestora = gestoraRaw ? {
         ...gestoraRaw,
         nombre: gestoraRaw.name || gestoraRaw.nombre || gestoraRaw.email?.split('@')[0] || 'Gestora'
@@ -429,11 +427,13 @@ const normalizeTicket = (t: any) => {
         // Conservar metadatos limpios
         metadata: realMetadata,
         ...realMetadata,
-        // Forzar objetos normalizados para que no sean sobrescritos por nulos en metadata
+        // Forzar objetos normalizados
         cliente,
         sede,
         tecnico,
-        gestora
+        gestora,
+        // Columna de base de datos directa para lógica de visibilidad fiable
+        gestora_id: t.gestora_id || realMetadata.gestora_id || null
     };
 };
 
