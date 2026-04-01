@@ -27,16 +27,29 @@ export default function DashboardGateway() {
     useEffect(() => {
         async function handleAuth() {
             try {
+                const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+                const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+                const errorParam = searchParams?.get('error') || searchParams?.get('error_description');
+
+                console.log("[Dashboard Gateway] URL:", currentUrl);
+
+                if (errorParam) {
+                    setError(`Error de autenticación: ${errorParam}`);
+                    setTimeout(() => router.push("/login"), 3000);
+                    return;
+                }
+
                 setStatus("Procesando autenticación...");
 
-                // Esperar a que Supabase procese el hash fragment
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // Supabase client handles hash automatically. Wait for it.
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
                 // Obtener la sesión actual
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
+                console.log("[Dashboard Gateway] Initial session attempt:", session ? "Found" : "Not found");
+
                 if (sessionError) {
-                    console.error("[Dashboard Gateway] Session error:", sessionError);
                     setError("Error al verificar la sesión: " + sessionError.message);
                     setTimeout(() => router.push("/login"), 2000);
                     return;
@@ -44,30 +57,30 @@ export default function DashboardGateway() {
 
                 if (!session?.user) {
                     // No hay sesión — intentar escuchar el evento de auth
-                    setStatus("Esperando confirmación de Microsoft...");
+                    setStatus("Esperando confirmación segura...");
 
                     const { data: { subscription } } = supabase.auth.onAuthStateChange(
                         async (event, newSession) => {
-                            console.log("[Dashboard Gateway] Auth event:", event);
+                            console.log("[Dashboard Gateway] Auth event receipt:", event, newSession ? "WSession" : "NoSession");
 
-                            if (event === 'SIGNED_IN' && newSession?.user) {
+                            if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') && newSession?.user) {
                                 subscription.unsubscribe();
                                 await processUserSession(newSession.user);
                             }
                         }
                     );
 
-                    // Timeout de seguridad
+                    // Timeout prolongado para Azure AD
                     setTimeout(async () => {
                         subscription.unsubscribe();
                         const { data: { session: lastCheck } } = await supabase.auth.getSession();
                         if (lastCheck?.user) {
                             await processUserSession(lastCheck.user);
                         } else {
-                            setError("No se pudo establecer la sesión. Redirigiendo al login...");
-                            setTimeout(() => router.push("/login"), 1500);
+                            setError(`Falla de acceso. URL actual: ${currentUrl.split('#')[0]} | Params: ${searchParams?.toString() || 'Ninguno'}`);
+                            setTimeout(() => router.push("/login"), 8000);
                         }
-                    }, 8000);
+                    }, 12000);
 
                     return;
                 }
