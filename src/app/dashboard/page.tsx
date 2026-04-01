@@ -74,11 +74,18 @@ export default function DashboardGateway() {
                     setTimeout(async () => {
                         subscription.unsubscribe();
                         const { data: { session: lastCheck } } = await supabase.auth.getSession();
+                        console.log("[Dashboard Gateway] Final fallback session check:", lastCheck ? "Found" : "Not found");
+                        
+                        // Deep inspection
+                        const hasHash = typeof window !== 'undefined' && window.location.hash.length > 0;
+                        const storageKeys = typeof window !== 'undefined' ? Object.keys(localStorage).filter(k => k.includes('sb-')) : [];
+                        const supabaseConfigUrl = (supabase as any).supabaseUrl;
+
                         if (lastCheck?.user) {
                             await processUserSession(lastCheck.user);
                         } else {
-                            setError(`Falla de acceso. URL actual: ${currentUrl.split('#')[0]} | Params: ${searchParams?.toString() || 'Ninguno'}`);
-                            setTimeout(() => router.push("/login"), 8000);
+                            setError(`Falla de acceso. URL: ${currentUrl.split('#')[0]} | Hash: ${hasHash ? 'Preservado (Oculto x seguridad)' : 'VACÍO'} | Params: ${searchParams?.toString() || 'Ninguno'} | SB_Keys: ${storageKeys.length} | Client: ${supabaseConfigUrl}`);
+                            setTimeout(() => router.push("/login"), 15000);
                         }
                     }, 12000);
 
