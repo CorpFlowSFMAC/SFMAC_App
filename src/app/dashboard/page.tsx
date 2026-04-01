@@ -29,51 +29,59 @@ export default function DashboardGateway() {
             try {
                 setStatus("Procesando autenticación...");
 
-                // Esperar a que Supabase procese el hash fragment
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // ==========================================
+                // 1. REGISTRAR LISTENER INMEDIATAMENTE ANTES DE CUALQUIER ESPERA
+                // Esto previene que perdamos el evento 'SIGNED_IN' si Supabase procesa el hash extremadamente rápido.
+                // ==========================================
+                let authEventListened = false;
+                const { data: { subscription } } = supabase.auth.onAuthStateChange(
+                    async (event, newSession) => {
+                        console.log("[Dashboard Gateway] Auth event:", event);
+                        if (event === 'SIGNED_IN' && newSession?.user && !authEventListened) {
+                            authEventListened = true;
+                            subscription.unsubscribe();
+                            await processUserSession(newSession.user);
+                        }
+                    }
+                );
 
-                // Obtener la sesión actual
+                // Esperar a que Supabase procese el hash fragment
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                // Obtener la sesión actual por si el onAuthStateChange no se disparó
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
                 if (sessionError) {
                     console.error("[Dashboard Gateway] Session error:", sessionError);
                     setError("Error al verificar la sesión: " + sessionError.message);
+                    subscription.unsubscribe();
                     setTimeout(() => router.push("/login"), 2000);
                     return;
                 }
 
-                if (!session?.user) {
-                    // No hay sesión — intentar escuchar el evento de auth
-                    setStatus("Esperando confirmación de Microsoft...");
-
-                    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-                        async (event, newSession) => {
-                            console.log("[Dashboard Gateway] Auth event:", event);
-
-                            if (event === 'SIGNED_IN' && newSession?.user) {
-                                subscription.unsubscribe();
-                                await processUserSession(newSession.user);
-                            }
-                        }
-                    );
-
-                    // Timeout de seguridad
-                    setTimeout(async () => {
-                        subscription.unsubscribe();
-                        const { data: { session: lastCheck } } = await supabase.auth.getSession();
-                        if (lastCheck?.user) {
-                            await processUserSession(lastCheck.user);
-                        } else {
-                            setError("No se pudo establecer la sesión. Redirigiendo al login...");
-                            setTimeout(() => router.push("/login"), 1500);
-                        }
-                    }, 8000);
-
+                if (session?.user && !authEventListened) {
+                    // Sesión encontrada directamente — procesar
+                    authEventListened = true;
+                    subscription.unsubscribe();
+                    await processUserSession(session.user);
                     return;
                 }
 
-                // Sesión encontrada — procesar
-                await processUserSession(session.user);
+                if (!authEventListened) {
+                    // Timeout de seguridad en caso de redes extremadamente lentas
+                    setTimeout(async () => {
+                        if (authEventListened) return; 
+                        subscription.unsubscribe();
+                        const { data: { session: lastCheck } } = await supabase.auth.getSession();
+                        
+                        if (lastCheck?.user) {
+                            await processUserSession(lastCheck.user);
+                        } else {
+                            setError("No se pudo establecer la sesión desde Microsoft. Intente de nuevo.");
+                            setTimeout(() => router.push("/login"), 1500);
+                        }
+                    }, 12000);
+                }
 
             } catch (err: any) {
                 console.error("[Dashboard Gateway] Error:", err);
