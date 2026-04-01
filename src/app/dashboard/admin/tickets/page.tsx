@@ -62,11 +62,12 @@ export default function TicketsPage() {
     const queryClient = useQueryClient();
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
-    const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("triage");
-
     // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
+    const [searchTerm, setSearchTerm] = useState("");
+    const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("active");
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
     const [isAdminState, setIsAdminState] = useState<boolean>(false);
+
 
     const fetchGestora = useCallback(async () => {
         try {
@@ -79,14 +80,19 @@ export default function TicketsPage() {
                 setIsAdminState(true);
             }
 
-            const { data: g } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            const { data: g } = await supabase.from('gestoras').select('id, email').ilike('email', email).maybeSingle();
             if (g?.id) {
                 setMyGestoraId(g.id);
-            } else {
-                const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
-                if (p) {
-                    if (p.id) setMyGestoraId(p.id);
-                    if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') setIsAdminState(true);
+            }
+
+            // REVISIÓN DE ROL EN PERFILES (Independiente de si es gestora o no)
+            const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
+            if (p) {
+                if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') {
+                    setIsAdminState(true);
+                }
+                if (!g?.id && p.id) {
+                    setMyGestoraId(p.id);
                 }
             }
         } catch (error) {
@@ -99,16 +105,18 @@ export default function TicketsPage() {
     }, [fetchGestora]);
 
     const isVisibleForMe = useCallback((t: any) => {
-        // REGLA 0: Admin ve TODO
+        // REGLA 0: Admin ve TODO (Prioridad absoluta)
         if (isAdminState) return true;
 
-        // REGLA 1: Identidad requerida
+        // REGLA 1: Identidad requerida para filtros no-admin
         if (!myGestoraId) return false;
 
-        // EXCLUSIVIDAD: Si el ticket tiene una GESTORA DIRECTA ya asignada
-        if (t.gestora_id || t.metadata?.gestora_id) {
-            const finalGestoraId = t.gestora_id || t.metadata?.gestora_id;
-            return finalGestoraId === myGestoraId;
+        const ticketSid = normalizeStateId(t.estadoId);
+
+        // REGLA 2: Si el ticket tiene una GESTORA DIRECTA ya asignada
+        const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
+        if (assignedGestoraId) {
+            return assignedGestoraId === myGestoraId;
         }
 
         // CASCADA (Solo si no hay gestora directa): ¿A quién le toca tomarlo?
@@ -126,6 +134,25 @@ export default function TicketsPage() {
 
         return false;
     }, [myGestoraId, isAdminState]);
+
+    const filterByView = useCallback((t: any, mode: string) => {
+        const sid = normalizeStateId(t.estadoId);
+        const matchesSearch = !searchTerm ||
+            t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (t.cliente?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (t.numeroTicketCliente || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+        if (!matchesSearch) return false;
+
+        const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+        const isBorrador = sid === "borrador";
+
+        if (mode === "triage") return isBorrador;
+        if (mode === "active") return !isBorrador && !isClosed;
+        if (mode === "closed") return isClosed;
+
+        return true;
+    }, [searchTerm]);
 
 
     const handleCreateTicket = async (newTicket: any) => {
@@ -181,51 +208,28 @@ export default function TicketsPage() {
         }
     };
 
-    const [searchTerm, setSearchTerm] = useState("");
-
     // 🛠️ REPARACIÓN/SINCRONIZACIÓN AUTOMÁTICA
     // Eliminada la sincronización local forzada, ahora se usa normalización en el hook useTickets
     // para asegurar que los datos de Supabase sean compatibles con la UI.
 
+    // Eliminada la sincronización local forzada, ahora se usa normalización en el hook useTickets
+    const ticketsForMe = React.useMemo(() => {
+        return (tickets || []).filter(isVisibleForMe);
+    }, [tickets, isVisibleForMe]);
 
-    // Estadísticas rápidas usando el flujo operativo real - MEMOIZED
     const stats = React.useMemo(() => {
         return {
-            total: tickets.length,
-            borradores: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "borrador").length,
-            nuevos: tickets.filter((t: any) => ["nuevo", "pendiente"].includes(normalizeStateId(t.estadoId))).length,
-            enProceso: tickets.filter((t: any) => {
-                const sid = normalizeStateId(t.estadoId);
-                return !["borrador", "nuevo", "pendiente", "ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
-            }).length,
-            completados: tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length,
+            total: ticketsForMe.length,
+            borradores: ticketsForMe.filter(t => filterByView(t, "triage")).length,
+            completados: ticketsForMe.filter(t => filterByView(t, "closed")).length,
+            nuevos: ticketsForMe.filter(t => ["nuevo", "pendiente"].includes(normalizeStateId(t.estadoId))).length,
+            enProceso: ticketsForMe.filter(t => filterByView(t, "active")).length,
         };
-    }, [tickets]);
+    }, [ticketsForMe, filterByView]);
 
     const filteredTickets = React.useMemo(() => {
-        return tickets.filter((t: any) => {
-            // 1. Visibilidad por Rol (REGLA DE ORO)
-            if (!isVisibleForMe(t)) return false;
-
-            // 2. Filtros UI existentes
-            const sid = normalizeStateId(t.estadoId);
-            const isClosed = sid === "ticket_cerrado";
-
-            const clienteNombre = (t.cliente?.nombre || t.metadata?.cliente?.nombre || "").toLowerCase();
-            const descripcion = (t.descripcionProblema || "").toLowerCase();
-            const tktCliente = (t.numeroTicketCliente || "").toLowerCase();
-            const search = searchTerm.toLowerCase();
-
-            const matchesSearch =
-                clienteNombre.includes(search) ||
-                descripcion.includes(search) ||
-                tktCliente.includes(search);
-
-            if (viewMode === "triage") return sid === "borrador" && matchesSearch;
-            if (viewMode === "active") return !["borrador", "ticket_cerrado"].includes(sid) && matchesSearch;
-            return isClosed && matchesSearch;
-        });
-    }, [tickets, searchTerm, viewMode, isVisibleForMe]);
+        return ticketsForMe.filter(t => filterByView(t, viewMode));
+    }, [ticketsForMe, filterByView, viewMode]);
 
     return (
         <div className={styles.page}>
@@ -316,8 +320,8 @@ export default function TicketsPage() {
             <div className={styles.kanbanFlow}>
                 {TICKET_STATES.filter(s => s.order <= 13 && s.id !== "nuevo").map((estado, index, array) => {
                     const IconComponent = estado.icon;
-                    // Optimizar búsqueda de tickets por estado
-                    const ticketsEnEstado = tickets.reduce((count: number, t: any) =>
+                    // Optimizar búsqueda de tickets por estado (SOLO LOS VISIBLES PARA MÍ)
+                    const ticketsEnEstado = ticketsForMe.reduce((count: number, t: any) =>
                         normalizeStateId(t.estadoId) === estado.id ? count + 1 : count, 0
                     );
 
