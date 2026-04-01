@@ -28,22 +28,29 @@ export default function LoginPage() {
         const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
         setQuote(randomQuote);
 
-        // Clear local auth state (cookies/localStorage) for all potential Supabase keys
+        /**
+         * NUCLEAR STORAGE & COOKIE CLEANUP:
+         * To match Incognito behavior, we must purge EVERYTHING.
+         */
         if (typeof window !== 'undefined') {
-            document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+            // 1. Purge ALL cookies
+            const cookies = document.cookie.split(";");
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i];
+                const eqPos = cookie.indexOf("=");
+                const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+                document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+                // Also try with current domain
+                document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=" + window.location.hostname;
+            }
             
-            // Loop through all keys and remove those that belong to Supabase (sb- prefix)
-            Object.keys(localStorage).forEach(key => {
-                if (key.includes('sb-') || key.includes('supabase.auth')) {
-                    localStorage.removeItem(key);
-                }
-            });
+            // 2. Purge ALL localStorage
+            localStorage.clear();
+            
+            // 3. Purge ALL sessionStorage
+            sessionStorage.clear();
 
-            localStorage.removeItem("userRole");
-            localStorage.removeItem("userEmail");
-            localStorage.removeItem("userName");
-            localStorage.removeItem("userAvatar");
-            localStorage.removeItem("rbacRole");
+            console.log("💥 Nuclear cleanup completed. Browser state is now equivalent to Incognito.");
         }
     }, [router]);
 
