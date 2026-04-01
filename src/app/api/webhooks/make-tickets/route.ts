@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
         // 2. EXTRACCIÓN INTELIGENTE (REGEX) BISTURÍ DE TEXTO
         const textToParse = `${subject} \n ${body}`;
-        const formatRegex = /ST:?\s*([a-zA-Z0-9.\-_]*)\s*-\s*TIPO\s*:\s*(.*?)\s*-\s*INMUEBLE\s*:\s*(.*)/i;
+        const formatRegex = /(?:RV:\s*|FW:\s*|FWD:\s*)?ST:\s*(.*?)\s*-\s*TIPO\s*:\s*(.*?)\s*-\s*INMUEBLE\s*:\s*(.*)/i;
         let match = textToParse.match(formatRegex);
         
         // Intentar otro formato si es necesario (ej: sin guiones)
@@ -105,24 +105,25 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. BÚSQUEDA Y ENRUTAMIENTO LOGÍSTICO (CASCADA)
-        // Paso A: Match de Agencia
+        // Paso A: Match de Agencia en TODA LA BASE DE DATOS (No solo MiBanco)
         const { data: branchData } = await supabase
             .from('branch_offices')
-            .select('id')
-            .eq('client_id', MIBANCO_ID)
+            .select('id, client_id')
             .ilike('codigo_cliente', `%${codigo_sede}%`)
             .maybeSingle();
 
         // Si no lo encuentra por código, intenta por nombre aproximado
         let finalBranchId = branchData?.id;
+        let resolvedClientId = branchData?.client_id || MIBANCO_ID; // Fallback to MiBanco si no se halla
+
         if (!finalBranchId) {
              const { data: fallbackBranch } = await supabase
                 .from('branch_offices')
-                .select('id')
-                .eq('client_id', MIBANCO_ID)
+                .select('id, client_id')
                 .ilike('name', `%${codigo_sede}%`)
                 .maybeSingle();
              finalBranchId = fallbackBranch?.id || null;
+             if (fallbackBranch?.client_id) resolvedClientId = fallbackBranch.client_id;
         }
 
         // Paso B: Enrutamiento en Cascada (routingAPI resuelve Agencia > Zona > Cliente)
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
 
         // 5. CREACIÓN DEL TICKET (MUTACIÓN Y NOTIFICACIÓN REALTIME AUTOMÁTICA)
         const ticketToCreate: any = {
-            client_id: MIBANCO_ID,
+            client_id: resolvedClientId,
             status_id: 'borrador', // Estado inicial de triage (requiere confirmación)
             description: body || `Ticket importado automáticamente. Tipo: ${tipo_incidencia}\nAsunto original: ${subject}`,
             client_ticket_number: ticket_banco,
