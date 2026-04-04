@@ -8,12 +8,14 @@ import React, {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { clientsAPI, techniciansAPI, ticketsAPI } from "@/lib/supabase-api";
+import { clientsAPI, techniciansAPI, ticketsAPI, gestorasAPI, gestorasTargetsAPI } from "@/lib/supabase-api";
 import { normalizeStateId } from "@/lib/ticketStates";
 import {
     useTickets,
     useClients as useClientsQuery,
     useTechnicians as useTechniciansQuery,
+    useGestoras as useGestorasQuery,
+    useGestorasTargets as useGestorasTargetsQuery,
     queryKeys,
     normalizeTicket,
 } from "@/lib/useQueryHooks";
@@ -46,6 +48,17 @@ interface AppDataContextType {
     updateTicket: (id: string, updates: any) => Promise<any>;
     updatePaymentSafe: (id: string, newPago: any, additionalUpdates?: any) => Promise<any>;
     deleteTicket: (id: string) => Promise<void>;
+
+    // Gestoras
+    gestoras: any[];
+    loadingGestoras: boolean;
+    refreshGestoras: () => Promise<void>;
+
+    // Targets & Bonos
+    gestorasTargets: any[];
+    loadingTargets: boolean;
+    refreshTargets: () => Promise<void>;
+    setTarget: (gestoraId: string, monthKey: string, updates: any) => Promise<any>;
 }
 
 const AppDataContext = createContext<AppDataContextType | null>(null);
@@ -73,6 +86,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         isLoading: loadingTechnicians,
     } = useTechniciansQuery();
 
+    const {
+        data: gestoras = [],
+        isLoading: loadingGestoras,
+    } = useGestorasQuery();
+
+    const {
+        data: gestorasTargets = [],
+        isLoading: loadingTargets,
+    } = useGestorasTargetsQuery();
+
     // ── Refresh = invalidar caché → TanStack refetch automáticamente ──
     const refreshTickets = useCallback(async () => {
         await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
@@ -84,6 +107,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const refreshTechnicians = useCallback(async () => {
         await queryClient.invalidateQueries({ queryKey: queryKeys.technicians.all });
+    }, [queryClient]);
+
+    const refreshGestoras = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.gestoras.all });
+    }, [queryClient]);
+
+    const refreshTargets = useCallback(async () => {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.gestorasTargets.all });
+    }, [queryClient]);
+
+    const setTarget = useCallback(async (gestoraId: string, monthKey: string, updates: any) => {
+        const result = await gestorasTargetsAPI.set(gestoraId, monthKey, updates);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.gestorasTargets.all });
+        return result;
     }, [queryClient]);
 
     // ── Suscripciones Realtime → invalidan caché TanStack ──
@@ -278,11 +315,41 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             )
             .subscribe();
 
+        // ─ Canal: GESTORAS
+        const gestorasChannel = supabase
+            .channel("appdata:gestoras")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "gestoras" },
+                () => {
+                    queryClient.invalidateQueries({
+                        queryKey: queryKeys.gestoras.all,
+                    });
+                }
+            )
+            .subscribe();
+
+        // ─ Canal: TARGETS
+        const targetsChannel = supabase
+            .channel("appdata:targets")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "gestoras_targets" },
+                () => {
+                    queryClient.invalidateQueries({
+                        queryKey: queryKeys.gestorasTargets.all,
+                    });
+                }
+            )
+            .subscribe();
+
         return () => {
             supabase.removeChannel(clientsChannel);
             supabase.removeChannel(techniciansChannel);
             supabase.removeChannel(ticketsChannel);
             supabase.removeChannel(branchesChannel);
+            supabase.removeChannel(gestorasChannel);
+            supabase.removeChannel(targetsChannel);
         };
     }, [queryClient]);
 
@@ -453,6 +520,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 updateTicket,
                 updatePaymentSafe,
                 deleteTicket,
+                gestoras,
+                loadingGestoras,
+                refreshGestoras,
+                gestorasTargets,
+                loadingTargets,
+                refreshTargets,
+                setTarget,
             }}
         >
             {children}

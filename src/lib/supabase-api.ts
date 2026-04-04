@@ -354,6 +354,76 @@ export const techniciansAPI = {
 };
 
 // ============================================
+// GESTORAS API
+// ============================================
+
+export const gestorasAPI = {
+    async getAll() {
+        const { data, error } = await supabase
+            .from('gestoras')
+            .select('*')
+            .order('name');
+
+        if (error) throw error;
+        return data;
+    },
+
+    async getById(id: string) {
+        const { data, error } = await supabase
+            .from('gestoras')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async create(gestora: {
+        name: string;
+        email?: string;
+        phone?: string;
+        auth_user_id?: string;
+        status?: string;
+    }) {
+        const { data, error } = await supabase
+            .from('gestoras')
+            .insert(gestora)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async update(id: string, updates: Partial<{
+        name: string;
+        email: string;
+        phone: string;
+        status: string;
+    }>) {
+        const { data, error } = await supabase
+            .from('gestoras')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async delete(id: string) {
+        const { error } = await supabase
+            .from('gestoras')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    }
+};
+
+// ============================================
 // TICKETS API
 // ============================================
 
@@ -658,5 +728,35 @@ export const evidencesAPI = {
 
         if (error) throw error;
     }
+};
+
+// ─────────────────────────────────────────────
+// GESTORAS TARGETS (Metas y Bonos)
+// ─────────────────────────────────────────────
+export const gestorasTargetsAPI = {
+    async getAll() {
+        const { data, error } = await supabase
+            .from("gestoras_targets")
+            .select("*")
+            .order("month_key", { ascending: false });
+        if (error) throw error;
+        return data;
+    },
+    async getByMonth(monthKey: string) {
+        const { data, error } = await supabase
+            .from("gestoras_targets")
+            .select("*")
+            .eq("month_key", monthKey);
+        if (error) throw error;
+        return data;
+    },
+    async set(gestora_id: string, month_key: string, updates: any) {
+        const { data, error } = await supabase
+            .from("gestoras_targets")
+            .upsert({ gestora_id, month_key, ...updates }, { onConflict: "gestora_id,month_key" })
+            .select();
+        if (error) throw error;
+        return data?.[0];
+    },
 };
 

@@ -6,7 +6,7 @@ import {
     useQueryClient,
     QueryClient,
 } from "@tanstack/react-query";
-import { ticketsAPI, clientsAPI, techniciansAPI } from "@/lib/supabase-api";
+import { ticketsAPI, clientsAPI, techniciansAPI, gestorasAPI, gestorasTargetsAPI } from "@/lib/supabase-api";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { round2 } from "@/lib/formatters";
 
@@ -137,6 +137,13 @@ export const queryKeys = {
     technicians: {
         all: ["technicians"] as const,
     },
+    gestoras: {
+        all: ["gestoras"] as const,
+    },
+    gestorasTargets: {
+        all: ["gestorasTargets"] as const,
+        byMonth: (month: string) => [...queryKeys.gestorasTargets.all, month] as const,
+    },
 };
 
 // ─────────────────────────────────────────────
@@ -202,6 +209,32 @@ export function useTechnicians() {
         queryKey: queryKeys.technicians.all,
         queryFn: async () => {
             const data = await techniciansAPI.getAll();
+            return data || [];
+        },
+    });
+}
+
+// ─────────────────────────────────────────────
+// useGestoras — Hook para gestoras
+// ─────────────────────────────────────────────
+export function useGestoras() {
+    return useQuery({
+        queryKey: queryKeys.gestoras.all,
+        queryFn: async () => {
+            const data = await gestorasAPI.getAll();
+            return data || [];
+        },
+    });
+}
+
+// ─────────────────────────────────────────────
+// useGestorasTargets — Hook para metas y bonos
+// ─────────────────────────────────────────────
+export function useGestorasTargets() {
+    return useQuery({
+        queryKey: queryKeys.gestorasTargets.all,
+        queryFn: async () => {
+            const data = await gestorasTargetsAPI.getAll();
             return data || [];
         },
     });
@@ -409,6 +442,28 @@ export function prefetchTechnicians(queryClient: QueryClient) {
         queryKey: queryKeys.technicians.all,
         queryFn: async () => {
             const data = await techniciansAPI.getAll();
+            return data || [];
+        },
+    });
+}
+
+/** Precarga gestoras en caché */
+export function prefetchGestoras(queryClient: QueryClient) {
+    return queryClient.prefetchQuery({
+        queryKey: queryKeys.gestoras.all,
+        queryFn: async () => {
+            const data = await gestorasAPI.getAll();
+            return data || [];
+        },
+    });
+}
+
+/** Precarga metas en caché */
+export function prefetchGestorasTargets(queryClient: QueryClient) {
+    return queryClient.prefetchQuery({
+        queryKey: queryKeys.gestorasTargets.all,
+        queryFn: async () => {
+            const data = await gestorasTargetsAPI.getAll();
             return data || [];
         },
     });

@@ -4,536 +4,664 @@ import { useState, useMemo, useEffect } from "react";
 import {
     TrendingUp, TrendingDown, Users, Award, AlertTriangle,
     Clock, CheckCircle, XCircle, BarChart3, PieChart, Calendar,
-    Download, Filter, User, DollarSign
+    Download, Filter, User, DollarSign, ArrowUpRight, ArrowDownRight,
+    Search, ChevronRight, Activity, Zap, ShieldAlert, Target, Save, 
+    Percent, Gavel, FileText, Info
 } from "lucide-react";
 import styles from "./reportes.module.css";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId, TICKET_STATES } from "@/lib/ticketStates";
+import { round2 } from "@/lib/formatters";
 
-// Componentes Visuales Minimalistas (SVG)
-const PieChartSVG = ({ data, colors }: { data: number[], colors: string[] }) => {
-    const total = data.reduce((a, b) => a + b, 0);
-    let cumulativePercent = 0;
+/** Calcula horas transcurridas desde el inicio del SLA */
+function calcularHoras(ticket: any): number {
+    const fechaBase = ticket.fechaInicioSLA || ticket.createdAt || ticket.created_at;
+    const inicio = new Date(fechaBase).getTime();
+    if (isNaN(inicio)) return 0;
 
-    function getCoordinatesForPercent(percent: number) {
-        const x = Math.cos(2 * Math.PI * percent);
-        const y = Math.sin(2 * Math.PI * percent);
-        return [x, y];
-    }
+    // Si está cerrado, usamos la fecha de cierre para el cálculo histórico
+    const fin = ticket.closure_date ? new Date(ticket.closure_date).getTime() : new Date().getTime();
+    
+    return Math.max(0, (fin - inicio) / (1000 * 60 * 60));
+}
+// COMPONENTES VISUALES PREMIUM (CUSTOM SVG)
+// ─────────────────────────────────────────────────────────────────────────────
 
+// 🎯 Funnel Chart (Embudo de Productividad)
+const FunnelChart = ({ data }: { data: { label: string, value: number, color: string }[] }) => {
+    const max = Math.max(...data.map(d => d.value), 1);
+    
     return (
-        <svg viewBox="-1 -1 2 2" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
-            {data.map((value, i) => {
-                if (value === 0) return null;
-                const [startX, startY] = getCoordinatesForPercent(cumulativePercent);
-                const percent = value / total;
-                cumulativePercent += percent;
-                const [endX, endY] = getCoordinatesForPercent(cumulativePercent);
-                const largeArcFlag = percent > 0.5 ? 1 : 0;
-                const pathData = [
-                    `M ${startX} ${startY}`,
-                    `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
-                    `L 0 0`,
-                ].join(' ');
-                return <path key={i} d={pathData} fill={colors[i]} />;
+        <div className={styles.funnelContainer}>
+            {data.map((item, i) => {
+                const width = (item.value / max) * 100;
+                const nextWidth = data[i+1] ? (data[i+1].value / max) * 100 : width * 0.8;
+                
+                return (
+                    <div key={i} className={styles.funnelStage} style={{ opacity: 1 - i * 0.1 }}>
+                        <div className={styles.funnelShapes}>
+                            <svg viewBox="0 0 100 40" preserveAspectRatio="none" className={styles.funnelSvg}>
+                                <path 
+                                    d={`M ${(100-width)/2} 0 L ${(100+width)/2} 0 L ${(100+nextWidth)/2} 40 L ${(100-nextWidth)/2} 40 Z`} 
+                                    fill={item.color}
+                                />
+                            </svg>
+                            <div className={styles.funnelLabel}>
+                                <span className={styles.funnelName}>{item.label}</span>
+                                <span className={styles.funnelValue}>{item.value}</span>
+                            </div>
+                        </div>
+                    </div>
+                );
             })}
-        </svg>
-    );
-};
-
-const BarChartSVG = ({ data, labels, color }: { data: number[], labels: string[], color: string }) => {
-    const max = Math.max(...data, 1);
-    return (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '120px', padding: '10px 0' }}>
-            {data.map((v, i) => (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                    <div
-                        style={{
-                            width: '100%',
-                            height: `${(v / max) * 100}%`,
-                            background: color,
-                            borderRadius: '4px 4px 0 0',
-                            minHeight: '2px',
-                            transition: 'height 0.6s ease'
-                        }}
-                    />
-                    <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>{labels[i]}</span>
-                </div>
-            ))}
         </div>
     );
 };
 
-export default function ReportesPage() {
-    const { tickets, technicians } = useAppData();
-    const [selectedPeriod, setSelectedPeriod] = useState<"week" | "month" | "all">("month");
-    const [selectedMetric, setSelectedMetric] = useState<"sla" | "volume" | "efficiency" | "finance">("sla");
+// 🎯 Termómetro de Metas (Bonus Progress)
+const GoalThermometer = ({ current, target, label }: { current: number, target: number, label: string }) => {
+    const percent = Math.min((current / (target || 1)) * 100, 120);
+    const isSuccess = percent >= 100;
+    
+    return (
+        <div className={styles.thermometerWrapper}>
+            <div className={styles.thermometerLabel}>
+                <span>{label}</span>
+                <strong>{Math.round(percent)}%</strong>
+            </div>
+            <div className={styles.thermometerTrack}>
+                <div 
+                    className={percent >= 100 ? styles.thermometerFillSuccess : styles.thermometerFill} 
+                    style={{ width: `${percent}%` }}
+                >
+                    {percent > 20 && <span className={styles.thermometerValue}>S/ {Math.round(current/1000)}k</span>}
+                </div>
+                <div className={styles.thermometerMarkers}>
+                    <div className={styles.marker} style={{ left: '80%' }}><span>80%</span></div>
+                    <div className={styles.marker} style={{ left: '100%', borderColor: '#10B981' }}><span>100%</span></div>
+                </div>
+            </div>
+            <div className={styles.thermometerFooter}>
+                Meta: S/ {target.toLocaleString()}
+            </div>
+        </div>
+    );
+};
 
-    // 🎯 Calcular Eficiencia por Gestora
-    const gestoras = useMemo(() => {
-        const gestorasMap: any = {};
+// 🎯 Scatter Plot (Rentabilidad vs Inversión)
+const ScatterPlot = ({ data }: { data: { x: number, y: number, label: string }[] }) => {
+    const maxX = Math.max(...data.map(d => d.x), 1);
+    const maxY = Math.max(...data.map(d => d.y), 1);
 
-        tickets.forEach((ticket: any) => {
-            // Asumimos que el último usuario del historial es la gestora asignada
-            const gestora = ticket.historial?.[0]?.usuario || "Sin Asignar";
+    return (
+        <div className={styles.scatterWrapper}>
+            <div className={styles.scatterYAxis}>Inversión (S/)</div>
+            <div className={styles.scatterContent}>
+                <svg viewBox="0 0 100 100" className={styles.scatterSvg}>
+                    {/* Grid Lines */}
+                    <line x1="0" y1="50" x2="100" y2="50" stroke="#E2E8F0" strokeWidth="0.5" strokeDasharray="2" />
+                    <line x1="50" y1="0" x2="50" y2="100" stroke="#E2E8F0" strokeWidth="0.5" strokeDasharray="2" />
+                    
+                    {data.map((d, i) => (
+                        <g key={i}>
+                            <circle 
+                                cx={(d.x / maxX) * 100} 
+                                cy={100 - (d.y / maxY) * 100} 
+                                r="2.5" 
+                                fill="#002A8F" 
+                                opacity="0.6"
+                            >
+                                <title>{d.label}: Rel S/ {d.x} / Inv S/ {d.y}</title>
+                            </circle>
+                            <text 
+                                x={(d.x / maxX) * 100 + 3} 
+                                y={100 - (d.y / maxY) * 100} 
+                                fontSize="3" 
+                                fill="#64748B"
+                            >{d.label.split(' ')[0]}</text>
+                        </g>
+                    ))}
+                </svg>
+            </div>
+            <div className={styles.scatterXAxis}>Rentabilidad (S/)</div>
+        </div>
+    );
+};
 
-            if (!gestorasMap[gestora]) {
-                gestorasMap[gestora] = {
-                    nombre: gestora,
-                    totalTickets: 0,
-                    cerrados: 0,
-                    enRiesgo: 0,
-                    promedioHoras: 0,
-                    ticketsAnalizados: []
-                };
-            }
+// 🎯 Speedometer Gauge (Velocidad de Respuesta)
+const VelocityGauge = ({ value, label, max = 72 }: { value: number, label: string, max?: number }) => {
+    const clampedValue = Math.min(value, max);
+    const percent = (clampedValue / max) * 100;
+    const angle = (percent / 100) * 180 - 180;
+    
+    const getColor = (v: number) => {
+        if (v < 24) return "#10B981"; 
+        if (v < 48) return "#F59E0B"; 
+        return "#DC2626"; 
+    };
 
-            gestorasMap[gestora].totalTickets++;
-            gestorasMap[gestora].ticketsAnalizados.push(ticket);
+    return (
+        <div className={styles.gaugeWrapper}>
+            <div className={styles.gaugeContainer}>
+                <svg viewBox="0 0 100 50" className={styles.gaugeSvg}>
+                    <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#E2E8F0" strokeWidth="8" strokeLinecap="round" />
+                    <path 
+                        d="M 10 50 A 40 40 0 0 1 90 50" 
+                        fill="none" 
+                        stroke={getColor(value)} 
+                        strokeWidth="8" 
+                        strokeLinecap="round"
+                        strokeDasharray="125.6"
+                        strokeDashoffset={125.6 * (1 - percent/100)}
+                        style={{ transition: 'stroke-dashoffset 1.5s ease-out' }}
+                    />
+                    <line 
+                        x1="50" y1="50" 
+                        x2={50 + 35 * Math.cos((angle * Math.PI) / 180)} 
+                        y2={50 + 35 * Math.sin((angle * Math.PI) / 180)} 
+                        stroke="#1E293B" strokeWidth="3" strokeLinecap="round"
+                    />
+                    <circle cx="50" cy="50" r="4" fill="#1E293B" />
+                </svg>
+                <div className={styles.gaugeContent}>
+                    <div className={styles.gaugeValue}>{Math.round(value)}h</div>
+                    <div className={styles.gaugeLabel}>{label}</div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
-            if (normalizeStateId(ticket.estadoId) === "ticket_cerrado") {
-                gestorasMap[gestora].cerrados++;
-            }
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGE COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
 
-            // Calcular si estuvo en riesgo
-            const horasTranscurridas = calcularHorasTranscurridas(ticket);
-            if (horasTranscurridas >= 60 && normalizeStateId(ticket.estadoId) !== "ticket_cerrado") {
-                gestorasMap[gestora].enRiesgo++;
-            }
+export default function ReportesEficienciaPage() {
+    const { 
+        tickets, clients, gestoras, gestorasTargets, setTarget, 
+        loadingTickets, loadingClients, loadingGestoras, loadingTargets 
+    } = useAppData();
+    
+    const [selectedPeriod, setSelectedPeriod] = useState<"current" | "previous">("current");
+    const [selectedTab, setSelectedTab] = useState<"productivity" | "profitability" | "bonuses" | "admin" | "risk">("productivity");
+    const [editingTarget, setEditingTarget] = useState<Record<string, number>>({});
+    const [isSaving, setIsSaving] = useState(false);
 
-            gestorasMap[gestora].promedioHoras += horasTranscurridas;
-        });
+    // Mes actual formateado como KEY (YYYY-MM)
+    const currentMonthKey = useMemo(() => {
+        const d = new Date();
+        if (selectedPeriod === "previous") d.setMonth(d.getMonth() - 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    }, [selectedPeriod]);
 
-        // Calcular promedios y eficiencia
-        return Object.values(gestorasMap).map((g: any) => {
-            const promedio = g.promedioHoras / g.totalTickets;
-            const tasaCierre = (g.cerrados / g.totalTickets) * 100;
-            const eficiencia = Math.max(0, 100 - (promedio / 72 * 100) - (g.enRiesgo / g.totalTickets * 50));
-
-            return {
-                ...g,
-                promedioHoras: promedio,
-                tasaCierre,
-                eficiencia: Math.round(eficiencia)
-            };
-        }).sort((a, b) => b.eficiencia - a.eficiencia);
-    }, [tickets]);
-
-    // 🎯 Calcular Eficiencia por Técnico
-    const tecnicos = useMemo(() => {
-        const tecnicosMap: any = {};
-
-        tickets.forEach((ticket: any) => {
-            const tecnico = ticket.tecnico?.nombre;
-            if (!tecnico) return;
-
-            if (!tecnicosMap[tecnico]) {
-                tecnicosMap[tecnico] = {
-                    nombre: tecnico,
-                    totalTickets: 0,
-                    completados: 0,
-                    promedioHoras: 0,
-                    enRiesgo: 0
-                };
-            }
-
-            tecnicosMap[tecnico].totalTickets++;
-
-            if (["documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(normalizeStateId(ticket.estadoId))) { // Completado o superior
-                tecnicosMap[tecnico].completados++;
-            }
-
-            const horasTranscurridas = calcularHorasTranscurridas(ticket);
-            if (horasTranscurridas >= 60 && normalizeStateId(ticket.estadoId) !== "ticket_cerrado") {
-                tecnicosMap[tecnico].enRiesgo++;
-            }
-
-            tecnicosMap[tecnico].promedioHoras += horasTranscurridas;
-        });
-
-        return Object.values(tecnicosMap).map((t: any) => {
-            const promedio = t.promedioHoras / t.totalTickets;
-            const tasaComplecion = (t.completados / t.totalTickets) * 100;
-            const eficiencia = Math.max(0, 100 - (promedio / 72 * 100) - (t.enRiesgo / t.totalTickets * 30));
-
-            return {
-                ...t,
-                promedioHoras: promedio,
-                tasaComplecion,
-                eficiencia: Math.round(eficiencia)
-            };
-        }).sort((a, b) => b.eficiencia - a.eficiencia);
-    }, [tickets]);
-
-    // 🎯 Tickets en Riesgo Crítico
-    const ticketsRiesgo = useMemo(() => {
-        return tickets
-            .filter((t: any) => {
-                const horas = calcularHorasTranscurridas(t);
-                return horas >= 60 && normalizeStateId(t.estadoId) !== "ticket_cerrado";
-            })
-            .sort((a: any, b: any) => {
-                return calcularHorasTranscurridas(b) - calcularHorasTranscurridas(a);
-            });
-    }, [tickets]);
-
-    // 🎯 KPIs Generales
-    const kpis = useMemo(() => {
-        const total = tickets.length;
-        const cerrados = tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado").length;
-        const enRiesgo = ticketsRiesgo.length;
-        const promedioGeneral = tickets.reduce((acc: number, t: any) => {
-            return acc + calcularHorasTranscurridas(t);
-        }, 0) / total || 0;
-
-        const cumplimientoSLA = ((total - enRiesgo) / total) * 100 || 0;
-
-        return {
-            total,
-            cerrados,
-            enRiesgo,
-            promedioHoras: Math.round(promedioGeneral),
-            cumplimientoSLA: Math.round(cumplimientoSLA),
-            tasaCierre: Math.round((cerrados / total) * 100) || 0
-        };
-    }, [tickets, ticketsRiesgo]);
-
-    // 🎯 Métricas Financieras (Rentabilidad y Flujo)
-    const finanzas = useMemo(() => {
-        let ingresosTotales = 0;
-        let costosTotales = 0;
-        let montosPedidos = 0;
-        let ticketsCerradosCount = 0;
-
-        tickets.forEach((t: any) => {
-            const sid = normalizeStateId(t.estadoId);
-            const ingreso = (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0));
-            const pagado = (t.historialPagosTecnico || t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-
-            // Montos que "pide" la gestora (basado en solicitudes en metadata)
-            const pedido = (t.solicitudAdelanto?.monto || 0) + (t.solicitudPagoVisita ? parseFloat(t.costoVisita || 0) : 0) + (t.solicitudLiquidacion?.monto || 0);
-            montosPedidos += pedido;
-
-            if (sid === "ticket_cerrado") {
-                ticketsCerradosCount++;
-                ingresosTotales += ingreso;
-                costosTotales += pagado;
-            } else if (pagado > 0) {
-                // También contar costos de tickets en proceso
-                costosTotales += pagado;
-            }
-        });
-
-        const utilidad = ingresosTotales - costosTotales;
-        const margen = ingresosTotales > 0 ? (utilidad / ingresosTotales) * 100 : 0;
-
-        return { ingresosTotales, costosTotales, montosPedidos, utilidad, margen, ticketsCerradosCount };
-    }, [tickets]);
-
-    // 🎯 Datos para Históricos (meses)
-    const historicoMensual = useMemo(() => {
-        const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-        const data = new Array(12).fill(0);
-        const pagos = new Array(12).fill(0);
-
-        tickets.forEach((t: any) => {
+    // 🎯 Filtrar datos por el período seleccionado
+    const filteredTickets = useMemo(() => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth() - (selectedPeriod === "previous" ? 1 : 0), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() - (selectedPeriod === "previous" ? 1 : -1), 0);
+        
+        return tickets.filter(t => {
             const date = new Date(t.createdAt || t.created_at);
-            const mes = date.getMonth();
-            data[mes]++;
+            return date >= startOfMonth && date <= endOfMonth;
+        });
+    }, [tickets, selectedPeriod]);
 
-            const pagado = (t.historialPagosTecnico || t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-            pagos[mes] += pagado;
+    // 🎯 Productividad por Gestor Expandida
+    const productivityByGestor = useMemo(() => {
+        const map: any = {};
+        gestoras.forEach(g => {
+            const targetObj = gestorasTargets.find(t => t.gestora_id === g.id && t.month_key === currentMonthKey);
+            map[g.id] = {
+                id: g.id,
+                nombre: g.name,
+                nuevos: 0,
+                proceso: 0,
+                cerrados: 0,
+                vencidos: 0,
+                inversion: 0,
+                facturacion: 0,
+                costoLaboral: g.costo_laboral_mensual || 1800,
+                activos: g.activos_mensuales_valor || 0,
+                sstCompliance: g.sst_compliance_status ?? true,
+                targetAmount: targetObj?.target_amount || 35000, // Defecto si no hay meta
+                bonusMultiplier: targetObj?.bonus_multiplier || 0.1,
+                horasCierre: []
+            };
         });
 
-        // Solo mostrar meses con actividad
-        return {
-            labels: meses,
-            tickets: data,
-            pagos: pagos
-        };
-    }, [tickets]);
+        filteredTickets.forEach(t => {
+            const gid = t.gestora_id;
+            if (!gid || !map[gid]) return;
+            
+            const sid = normalizeStateId(t.estadoId);
+            if (['nuevo', 'asignado_a_tecnico', 'cotizando'].includes(sid)) map[gid].nuevos++;
+            else if (['enviada', 'trabajo_en_curso', 'documentacion_enviada'].includes(sid)) map[gid].proceso++;
+            else if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) map[gid].cerrados++;
 
-    const [userRole, setUserRole] = useState<string | null>(null);
-    useEffect(() => {
-        if (typeof window !== "undefined") {
-            setUserRole(localStorage.getItem("userRole"));
+            const horas = calcularHoras(t);
+            if (horas > 72 && sid !== 'ticket_cerrado') map[gid].vencidos++;
+            if (sid === 'ticket_cerrado') map[gid].horasCierre.push(horas);
+
+            map[gid].facturacion += parseFloat(t.total_quoted_amount || 0);
+            const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+            map[gid].inversion += pagos;
+        });
+
+        return Object.values(map).map((g: any) => {
+            const totalCerrados = g.horasCierre.length;
+            const avgTime = totalCerrados > 0 ? g.horasCierre.reduce((a: any, b: any) => a + b, 0) / totalCerrados : 0;
+            const rentabilidad = g.facturacion - g.inversion - g.costoLaboral - g.activos;
+            const totalTickets = g.nuevos + g.proceso + g.cerrados;
+            const ratioVencidos = totalTickets > 0 ? (g.vencidos / totalTickets) * 100 : 0;
+            
+            // Lógica de Bono Variable
+            let bonoValido = g.sstCompliance && ratioVencidos < 5;
+            let percentMeta = (rentabilidad / (g.targetAmount || 1)) * 100;
+            let bonoProyectado = 0;
+            
+            if (bonoValido && percentMeta >= 80) {
+                // Bono escalable: 80% meta -> bono proporcional
+                bonoProyectado = (rentabilidad / g.targetAmount) * (g.costoLaboral * g.bonusMultiplier);
+            }
+
+            return { ...g, avgTime, rentabilidad, ratioVencidos, bonoValido, bonoProyectado, percentMeta };
+        }).sort((a: any, b: any) => b.rentabilidad - a.rentabilidad);
+    }, [filteredTickets, gestoras, gestorasTargets, currentMonthKey]);
+
+    // 🎯 Rentabilidad por Cliente
+    const profitabilityByClient = useMemo(() => {
+        const map: any = {};
+        clients.forEach(c => {
+            map[c.id] = { id: c.id, nombre: c.name, billing: 0, costs: 0, profit: 0, margin: 0 };
+        });
+
+        filteredTickets.forEach(t => {
+            const cid = t.client_id;
+            if (!cid || !map[cid]) return;
+            map[cid].billing += parseFloat(t.total_quoted_amount || 0);
+            const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+            map[cid].costs += pagos;
+        });
+
+        return Object.values(map).map((c: any) => {
+            c.profit = c.billing - c.costs;
+            c.margin = c.billing > 0 ? (c.profit / c.billing) * 100 : 0;
+            return c;
+        }).filter(c => c.billing > 0).sort((a,b) => b.profit - a.profit);
+    }, [filteredTickets, clients]);
+
+    // 🎯 Alertas de Desviación (Admin)
+    const deviationAlerts = useMemo(() => {
+        const now = new Date();
+        const midMonth = now.getDate() >= 15;
+        const alerts: any[] = [];
+
+        productivityByGestor.forEach(g => {
+            if (midMonth && g.percentMeta < 50) {
+                alerts.push({ 
+                    type: 'DEVIATION', 
+                    severity: 'error', 
+                    message: `ALERTA ADMIN: ${g.nombre} está por debajo del 50% de la meta mensual (A fecha día ${now.getDate()})` 
+                });
+            }
+            if (g.ratioVencidos >= 5) {
+                alerts.push({ 
+                    type: 'QUALITY', 
+                    severity: 'critical', 
+                    message: `BONO BLOQUEADO: ${g.nombre} supera el 5% de tickets vencidos (${Math.round(g.ratioVencidos)}%)` 
+                });
+            }
+        });
+        return alerts;
+    }, [productivityByGestor]);
+
+    // ─────────────────────────────────────────────
+    // ACCIONES ADMIN
+    // ─────────────────────────────────────────────
+    const handleSaveTargets = async () => {
+        setIsSaving(true);
+        try {
+            for (const [gid, amount] of Object.entries(editingTarget)) {
+                await setTarget(gid, currentMonthKey, { target_amount: amount });
+            }
+            setEditingTarget({});
+            alert("Metas actualizadas correctamente.");
+        } catch (err) {
+            console.error(err);
+            alert("Error al guardar metas.");
+        } finally {
+            setIsSaving(false);
         }
-    }, []);
+    };
 
-    function calcularHorasTranscurridas(ticket: any): number {
+    function calcularHoras(ticket: any): number {
         const ahora = new Date().getTime();
         const fechaBase = ticket.fechaInicioSLA || ticket.createdAt || ticket.created_at;
         const inicio = new Date(fechaBase).getTime();
         if (isNaN(inicio)) return 0;
-        const horasReales = (ahora - inicio) / (1000 * 60 * 60);
-        return Math.max(0, horasReales - (ticket.horasPausadas || 0));
+        return Math.max(0, (ahora - inicio) / (1000 * 60 * 60));
     }
 
-    function getEficienciaColor(eficiencia: number): string {
-        if (eficiencia >= 80) return "#10B981"; // Verde
-        if (eficiencia >= 60) return "#F59E0B"; // Amarillo
-        return "#DC2626"; // Rojo
-    }
-
-    function exportarReporte() {
-        alert("📊 Función de exportación a Excel/PDF en desarrollo");
-        // TODO: Implementar exportación
+    if (loadingTickets || loadingClients || loadingGestoras || loadingTargets) {
+        return <div className={styles.loading}>Sincronizando Sistema de BI y Bonos...</div>;
     }
 
     return (
         <div className={styles.container}>
-            {/* Header */}
-            <div className={styles.pageHeader}>
-                <div className={styles.headerContent}>
-                    <div className={styles.titleGroup}>
-                        <div className={styles.headerIcon}>
-                            <BarChart3 size={32} />
-                        </div>
+            {/* Header Glassmorphism */}
+            <div className={styles.header}>
+                <div className={styles.headerLeft}>
+                    <div className={styles.headerTitleRow}>
+                        <div className={styles.logoIcon}><Gavel size={28} /></div>
                         <div>
-                            <h1 className={styles.pageTitle}>Reportes de Eficiencia</h1>
-                            <p className={styles.pageSubtitle}>Análisis de Rendimiento SLA 72h</p>
+                            <h1 className={styles.title}>Controller & Variable Bonus</h1>
+                            <p className={styles.subtitle}>Gestión Estratégica de Rentabilidad</p>
                         </div>
                     </div>
-                    <div className={styles.headerActions}>
-                        <select
-                            className={styles.periodSelector}
-                            value={selectedPeriod}
-                            onChange={(e) => setSelectedPeriod(e.target.value as any)}
+                </div>
+                <div className={styles.headerRight}>
+                    <div className={styles.periodSwitcher}>
+                        <button 
+                            className={selectedPeriod === 'current' ? styles.periodBtnActive : styles.periodBtn}
+                            onClick={() => setSelectedPeriod('current')}
                         >
-                            <option value="week">Esta Semana</option>
-                            <option value="month">Este Mes</option>
-                            <option value="all">Todo el Tiempo</option>
-                        </select>
-                        <button className={styles.exportButton} onClick={exportarReporte}>
-                            <Download size={20} />
-                            Exportar
+                            Ciclo Actual
+                        </button>
+                        <button 
+                            className={selectedPeriod === 'previous' ? styles.periodBtnActive : styles.periodBtn}
+                            onClick={() => setSelectedPeriod('previous')}
+                        >
+                            Cerrado: {currentMonthKey}
                         </button>
                     </div>
+                    <button className={styles.exportBtn}><FileText size={18} /> Planilla de Bonos</button>
                 </div>
             </div>
 
-            {/* KPIs Globales */}
-            <div className={styles.kpisGrid}>
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIcon} style={{ background: 'linear-gradient(135deg, #3B82F6, #60A5FA)' }}>
-                        <TrendingUp size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <div className={styles.kpiValue}>{kpis.total}</div>
-                        <div className={styles.kpiLabel}>Total Tickets</div>
-                    </div>
-                </div>
-
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIcon} style={{ background: 'linear-gradient(135deg, #10B981, #34D399)' }}>
-                        <CheckCircle size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <div className={styles.kpiValue}>{kpis.cumplimientoSLA}%</div>
-                        <div className={styles.kpiLabel}>Cumplimiento SLA</div>
-                    </div>
-                </div>
-
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIcon} style={{ background: 'linear-gradient(135deg, #F59E0B, #FBBF24)' }}>
-                        <Clock size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <div className={styles.kpiValue}>{kpis.promedioHoras}h</div>
-                        <div className={styles.kpiLabel}>Promedio Cierre</div>
-                    </div>
-                </div>
-
-                <div className={styles.kpiCard}>
-                    <div className={styles.kpiIcon} style={{ background: 'linear-gradient(135deg, #DC2626, #EF4444)' }}>
-                        <AlertTriangle size={24} />
-                    </div>
-                    <div className={styles.kpiContent}>
-                        <div className={styles.kpiValue}>{kpis.enRiesgo}</div>
-                        <div className={styles.kpiLabel}>En Riesgo Crítico</div>
-                    </div>
-                </div>
+            {/* Tabs de Navegación Expandidos */}
+            <div className={styles.tabContainer}>
+                <button className={selectedTab === 'productivity' ? styles.tabActive : styles.tab} onClick={() => setSelectedTab('productivity')}>
+                    <Target size={18} /> Eficiencia
+                </button>
+                <button className={selectedTab === 'bonuses' ? styles.tabActive : styles.tab} onClick={() => setSelectedTab('bonuses')}>
+                    <Zap size={18} /> Bonos Variables
+                </button>
+                <button className={selectedTab === 'profitability' ? styles.tabActive : styles.tab} onClick={() => setSelectedTab('profitability')}>
+                    <DollarSign size={18} /> Clientes/Scatter
+                </button>
+                <button className={selectedTab === 'admin' ? styles.tabActive : styles.tab} onClick={() => setSelectedTab('admin')}>
+                    <Save size={18} /> Conf. Metas
+                </button>
+                <button className={selectedTab === 'risk' ? styles.tabActive : styles.tab} onClick={() => setSelectedTab('risk')}>
+                    <ShieldAlert size={18} /> Control Interno {deviationAlerts.length > 0 && <span className={styles.alertDot}>{deviationAlerts.length}</span>}
+                </button>
             </div>
 
-            {/* Tabs de Métricas */}
-            <div className={styles.metricsTab}>
-                <button
-                    className={`${styles.metricBtn} ${selectedMetric === 'sla' ? styles.metricBtnActive : ''}`}
-                    onClick={() => setSelectedMetric('sla')}
-                >
-                    <Clock size={18} />
-                    Cumplimiento SLA
-                </button>
-                <button
-                    className={`${styles.metricBtn} ${selectedMetric === 'volume' ? styles.metricBtnActive : ''}`}
-                    onClick={() => setSelectedMetric('volume')}
-                >
-                    <Calendar size={18} />
-                    Histórico Mensual
-                </button>
-                <button
-                    className={`${styles.metricBtn} ${selectedMetric === 'efficiency' ? styles.metricBtnActive : ''}`}
-                    onClick={() => setSelectedMetric('efficiency')}
-                >
-                    <Award size={18} />
-                    Ranking Eficiencia
-                </button>
-                {userRole === 'admin' && (
-                    <button
-                        className={`${styles.metricBtn} ${selectedMetric === 'finance' ? styles.metricBtnActive : ''}`}
-                        onClick={() => setSelectedMetric('finance')}
-                    >
-                        <DollarSign size={18} />
-                        Flujo Financiero
-                    </button>
-                )}
-            </div>
-
-            {/* Contenido Principal */}
-            <div className={styles.contentGrid}>
-                {selectedMetric === 'sla' && (
-                    <div className={styles.chartSection}>
-                        <div className={styles.sectionHeader}>
-                            <h2><PieChart size={20} /> Distribución de Estados</h2>
-                        </div>
-                        <div className={styles.chartContent}>
-                            <div className={styles.chartWrapper}>
-                                <PieChartSVG
-                                    data={[kpis.cerrados, kpis.enRiesgo, kpis.total - kpis.cerrados - kpis.enRiesgo]}
-                                    colors={['#10B981', '#DC2626', '#3B82F6']}
-                                />
-                            </div>
-                            <div className={styles.chartLegend}>
-                                <div className={styles.legendItem}><span style={{ background: '#10B981' }} /> Cerrados ({kpis.cerrados})</div>
-                                <div className={styles.legendItem}><span style={{ background: '#DC2626' }} /> En Riesgo ({kpis.enRiesgo})</div>
-                                <div className={styles.legendItem}><span style={{ background: '#3B82F6' }} /> En Proceso ({kpis.total - kpis.cerrados - kpis.enRiesgo})</div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {selectedMetric === 'volume' && (
-                    <div className={styles.chartSection}>
-                        <div className={styles.sectionHeader}>
-                            <h2><BarChart3 size={20} /> Tickets por Mes</h2>
-                        </div>
-                        <BarChartSVG
-                            data={historicoMensual.tickets}
-                            labels={historicoMensual.labels}
-                            color="#3B82F6"
-                        />
-                    </div>
-                )}
-
-                {selectedMetric === 'finance' && (
-                    <div className={styles.financeFullSection}>
-                        <div className={styles.financeSummaryGrid}>
-                            <div className={styles.financeCard}>
-                                <div className={styles.finLabel}>SOLICITADO POR GESTORA</div>
-                                <div className={styles.finValue} style={{ color: '#3B82F6' }}>
-                                    S/ {finanzas.montosPedidos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                </div>
-                                <div className={styles.finSub}>Total solicitudes de adelanto/visita</div>
-                            </div>
-                            <div className={styles.financeCard}>
-                                <div className={styles.finLabel}>TOTAL PAGADO (REAL)</div>
-                                <div className={styles.finValue} style={{ color: '#10B981' }}>
-                                    S/ {finanzas.costosTotales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                </div>
-                                <div className={styles.finSub}>Efectuado en historial de pagos</div>
-                            </div>
-                            <div className={styles.financeCard} style={{ background: '#F0FDFA', borderColor: '#10B981' }}>
-                                <div className={styles.finLabel} style={{ color: '#0F766E' }}>UTILIDAD PROYECTADA</div>
-                                <div className={styles.finValue} style={{ color: '#059669' }}>
-                                    S/ {finanzas.utilidad.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                </div>
-                                <div className={styles.finMarginBadge}>Margen ROI: {Math.round(finanzas.margen)}%</div>
-                            </div>
-                        </div>
-
-                        <div className={styles.section} style={{ marginTop: '2rem' }}>
-                            <div className={styles.sectionHeader}>
-                                <h2><TrendingUp size={20} /> Histórico de Egresos</h2>
-                            </div>
-                            <BarChartSVG
-                                data={historicoMensual.pagos}
-                                labels={historicoMensual.labels}
-                                color="#10B981"
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {(selectedMetric === 'efficiency' || selectedMetric === 'sla' || selectedMetric === 'volume') && (
+            <div className={styles.dashboardGrid}>
+                
+                {selectedTab === 'productivity' && (
                     <>
-                        {/* Ranking de Gestoras */}
-                        <div className={styles.section}>
-                            <div className={styles.sectionHeader}>
-                                <h2><Users size={20} /> Eficiencia Gestoras</h2>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2><Activity size={20} /> Embudo Operativo</h2>
+                                <p>Progreso de tickets este mes</p>
                             </div>
-                            <div className={styles.rankingList}>
-                                {gestoras.map((gestora: any, index: number) => (
-                                    <div key={gestora.nombre} className={styles.rankingItem}>
-                                        <div className={styles.rankingInfo}>
-                                            <div className={styles.rankingName}>{gestora.nombre}</div>
-                                            <div className={styles.rankingBar}>
-                                                <div
-                                                    className={styles.rankingFill}
-                                                    style={{
-                                                        width: `${gestora.eficiencia}%`,
-                                                        background: getEficienciaColor(gestora.eficiencia)
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className={styles.rankingScore} style={{ color: getEficienciaColor(gestora.eficiencia) }}>
-                                            {gestora.eficiencia}%
-                                        </div>
-                                    </div>
+                            <FunnelChart data={[
+                                { label: 'Recibidos', value: filteredTickets.length, color: '#3B82F6' },
+                                { label: 'En Gestion', value: filteredTickets.length - (productivityByGestor.reduce((s,g)=>s+g.cerrados,0)), color: '#F59E0B' },
+                                { label: 'Cerrados/OK', value: productivityByGestor.reduce((s,g)=>s+g.cerrados,0), color: '#10B981' },
+                            ]} />
+                        </div>
+
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2><Clock size={20} /> SLAs por Gestora</h2>
+                                <p>Cumplimiento del umbral 72h</p>
+                            </div>
+                            <div className={styles.gaugesGrid}>
+                                {productivityByGestor.slice(0, 3).map((g: any, i: number) => (
+                                    <VelocityGauge key={i} value={g.avgTime} label={g.nombre} />
                                 ))}
                             </div>
                         </div>
 
-                        {/* Ranking de Técnicos */}
-                        <div className={styles.section}>
-                            <div className={styles.sectionHeader}>
-                                <h2><User size={20} /> Técnicos Top Performance</h2>
+                        <div className={styles.fullWidthCard}>
+                            <div className={styles.cardHeader}>
+                                <h2><Users size={20} /> Ranking de Productividad y Margen</h2>
                             </div>
-                            <div className={styles.rankingList}>
-                                {tecnicos.slice(0, 5).map((tecnico: any) => (
-                                    <div key={tecnico.nombre} className={styles.rankingItem}>
-                                        <div className={styles.rankingInfo}>
-                                            <div className={styles.rankingName}>{tecnico.nombre}</div>
-                                            <div className={styles.rankingStats}>{tecnico.completados} serv. / {tecnico.totalTickets} total</div>
-                                        </div>
-                                        <div className={styles.rankingScore} style={{ color: getEficienciaColor(tecnico.eficiencia) }}>
-                                            {tecnico.eficiencia}%
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                            <table className={styles.masterTable}>
+                                <thead>
+                                    <tr>
+                                        <th>Gestora</th>
+                                        <th>Tickets</th>
+                                        <th>Vencidos (%)</th>
+                                        <th>SST</th>
+                                        <th>Rentabilidad Bruta</th>
+                                        <th>Alcance Meta</th>
+                                        <th>Status Bonus</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {productivityByGestor.map((g: any, i: number) => (
+                                        <tr key={i}>
+                                            <td><strong>{g.nombre}</strong></td>
+                                            <td>{g.nuevos+g.proceso+g.cerrados}</td>
+                                            <td>
+                                                <span className={g.ratioVencidos < 5 ? styles.badgeGreen : styles.badgeRed}>
+                                                    {Math.round(g.ratioVencidos)}%
+                                                </span>
+                                            </td>
+                                            <td>{g.sstCompliance ? <ShieldAlert size={16} color="#10B981" /> : <XCircle size={16} color="#DC2626" />}</td>
+                                            <td className={styles.positiveValue}>S/ {g.rentabilidad.toLocaleString()}</td>
+                                            <td>
+                                                <div className={styles.rankingBarMini}>
+                                                    <div className={styles.rankingFillMini} style={{ width: `${g.percentMeta}%`, background: g.percentMeta >= 100 ? '#10B981' : '#F59E0B' }} />
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className={g.bonoValido ? styles.bonusTagOn : styles.bonusTagOff}>
+                                                    {g.bonoValido ? 'ELEGIBLE' : 'BLOQUEADO'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </>
                 )}
-            </div>
 
-            {/* Tickets en Riesgo Crítico */}
-            {ticketsRiesgo.length > 0 && (
-                <div className={styles.alertSection}>
-                    <div className={styles.sectionHeader}>
-                        <h2><AlertTriangle size={20} /> Alerta SLA: Riesgo Crítico (60h+)</h2>
-                        <span className={styles.alertCount}>{ticketsRiesgo.length}</span>
+                {selectedTab === 'bonuses' && (
+                    <div className={styles.fullWidthCard}>
+                        <div className={styles.cardHeader}>
+                            <h2><Zap size={20} /> Proyección de Bonos Variables</h2>
+                            <p>Cálculo basado en (Rentabilidad Real / Meta) * Bono Base</p>
+                        </div>
+                        <div className={styles.thermometersGrid}>
+                            {productivityByGestor.map((g: any, i: number) => (
+                                <div key={i} className={styles.bonusPanelCard}>
+                                    <GoalThermometer current={g.rentabilidad} target={g.targetAmount} label={g.nombre} />
+                                    <div className={styles.bonusResultRow}>
+                                        <div className={styles.bonusMetric}>
+                                            <span>Bono Proyectado</span>
+                                            <div className={styles.bonusValue}>S/ {Math.round(g.bonoProyectado).toLocaleString()}</div>
+                                        </div>
+                                        <div className={styles.bonusConditions}>
+                                            <div className={g.ratioVencidos < 5 ? styles.condOK : styles.condFail}>
+                                                {g.ratioVencidos < 5 ? <CheckCircle size={14} /> : <AlertTriangle size={14} />} SLA {Math.round(g.ratioVencidos)}%
+                                            </div>
+                                            <div className={g.sstCompliance ? styles.condOK : styles.condFail}>
+                                                {g.sstCompliance ? <CheckCircle size={14} /> : <AlertTriangle size={14} />} Normas SST
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className={styles.alertsList}>
-                        {ticketsRiesgo.slice(0, 3).map((t: any) => (
-                            <div key={t.id} className={styles.alertItem}>
-                                <strong>{t.cliente?.nombre} ({t.numeroTicketCliente})</strong>
-                                <span>{Math.floor(calcularHorasTranscurridas(t))}h transcurridas</span>
+                )}
+
+                {selectedTab === 'profitability' && (
+                    <>
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2><BarChart3 size={20} /> Scatter: Inversión vs Margen</h2>
+                                <p>Identificación de ineficiencias críticas</p>
                             </div>
-                        ))}
+                            <ScatterPlot data={profitabilityByClient.map(c => ({
+                                x: c.profit,
+                                y: c.costs,
+                                label: c.nombre
+                            }))} />
+                        </div>
+
+                        <div className={styles.card}>
+                            <div className={styles.cardHeader}>
+                                <h2><TrendingUp size={20} /> Clientes más Rentables</h2>
+                                <p>Top contribución al margen neto</p>
+                            </div>
+                            <div className={styles.goldClientsList}>
+                                {profitabilityByClient.slice(0, 5).map((c, i) => (
+                                    <div key={i} className={styles.clientMiniRow}>
+                                        <span>{c.nombre}</span>
+                                        <strong>S/ {c.profit.toLocaleString()}</strong>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className={styles.fullWidthCard}>
+                            <div className={styles.cardHeaderRow}>
+                                <h2><DollarSign size={20} /> P&L por Cliente</h2>
+                                <button className={styles.smallExportBtn}>Bajar Excel</button>
+                            </div>
+                            <table className={styles.masterTable}>
+                                <thead>
+                                    <tr>
+                                        <th>Cliente</th>
+                                        <th>Facturación Bruta</th>
+                                        <th>Costos Especialista</th>
+                                        <th>Margen Contribución</th>
+                                        <th>% Margen</th>
+                                        <th>Salud Cuenta</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {profitabilityByClient.map((c, i) => (
+                                        <tr key={i}>
+                                            <td>
+                                                <div className={styles.clientCell}>
+                                                    {i < 3 && <span className={styles.oroBadge}>ORO</span>}
+                                                    <strong>{c.nombre}</strong>
+                                                </div>
+                                            </td>
+                                            <td>S/ {c.billing.toLocaleString()}</td>
+                                            <td>S/ {c.costs.toLocaleString()}</td>
+                                            <td className={styles.positiveValue}>S/ {c.profit.toLocaleString()}</td>
+                                            <td>{Math.round(c.margin)}%</td>
+                                            <td>
+                                                <div className={styles.statusDot} style={{ background: c.margin > 20 ? '#10B981' : c.margin > 10 ? '#F59E0B' : '#DC2626' }} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                )}
+
+                {selectedTab === 'admin' && (
+                    <div className={styles.fullWidthCard}>
+                        <div className={styles.cardHeader}>
+                            <h2><Settings size={20} /> Configuración de Metas Mensuales</h2>
+                            <p>Asigna la meta de rentabilidad bruta para el ciclo: {currentMonthKey}</p>
+                        </div>
+                        <div className={styles.adminConfigTable}>
+                            <table className={styles.masterTable}>
+                                <thead>
+                                    <tr>
+                                        <th>Gestora</th>
+                                        <th>Sueldo Base</th>
+                                        <th>Meta Rentabilidad (S/)</th>
+                                        <th>Bono Base (%)</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {productivityByGestor.map((g: any, i: number) => (
+                                        <tr key={i}>
+                                            <td>{g.nombre}</td>
+                                            <td>S/ {g.costoLaboral}</td>
+                                            <td>
+                                                <input 
+                                                    type="number" 
+                                                    className={styles.adminInput}
+                                                    defaultValue={g.targetAmount}
+                                                    onChange={(e) => setEditingTarget({ ...editingTarget, [g.id]: parseFloat(e.target.value) })}
+                                                />
+                                            </td>
+                                            <td>{g.bonusMultiplier * 100}%</td>
+                                            <td>
+                                                <button 
+                                                    className={styles.miniSaveBtn}
+                                                    onClick={() => setEditingTarget({ ...editingTarget, [g.id]: g.targetAmount })}
+                                                >
+                                                    Reset
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className={styles.adminActions}>
+                                <button 
+                                    className={styles.saveAllBtn} 
+                                    onClick={handleSaveTargets}
+                                    disabled={isSaving || Object.keys(editingTarget).length === 0}
+                                >
+                                    {isSaving ? 'Guardando...' : 'Guardar Todas las Metas'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {selectedTab === 'risk' && (
+                    <div className={styles.fullWidthCard}>
+                        <div className={styles.cardHeader}>
+                            <h2><ShieldAlert size={20} /> Centro de Desviaciones y SST</h2>
+                        </div>
+                        <div className={styles.alertsContainer}>
+                            {deviationAlerts.length === 0 ? (
+                                <div className={styles.emptyAlerts}>
+                                    <CheckCircle size={48} color="#10B981" />
+                                    <h3>Niveles de Servicio Óptimos</h3>
+                                    <p>No se detectan bloqueos de bonos ni desviaciones críticas.</p>
+                                </div>
+                            ) : (
+                                <div className={styles.alertsGrid}>
+                                    {deviationAlerts.map((alert: any, i: number) => (
+                                        <div key={i} className={alert.severity === 'critical' ? styles.alertCardCritical : styles.alertCardError}>
+                                            <div className={styles.alertIcon}>
+                                                {alert.severity === 'critical' ? <ShieldAlert size={32} /> : <AlertTriangle size={32} />}
+                                            </div>
+                                            <div className={styles.alertBody}>
+                                                <h4>{alert.type === 'QUALITY' ? 'INCUMPLIMIENTO DE CALIDAD' : 'DESVIACIÓN ESTRATÉGICA'}</h4>
+                                                <p>{alert.message}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+            </div>
         </div>
     );
+}
+
+function Settings(props: any) {
+    return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
 }

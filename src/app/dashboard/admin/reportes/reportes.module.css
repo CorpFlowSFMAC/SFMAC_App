@@ -1,242 +1,216 @@
-/* ========================================
-   📊 MÓDULO DE REPORTES DE EFICIENCIA
-   ======================================== */
+/* ==========================================================================
+   📊 MÓDULO DE REPORTES PREMIUM (BI, CONTROLLER & BONOS)
+   ========================================================================== */
 
 .container {
-    padding: 2rem;
-    background: #F8FAFC;
+    padding: 2.5rem;
+    background: #F0F2F5;
     min-height: 100vh;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* ========================================
-   HEADER
-   ======================================== */
-
-.pageHeader {
-    margin-bottom: 2rem;
-    background: linear-gradient(135deg, #002A8F 0%, #003BA8 100%);
-    border-radius: 20px;
-    padding: 2rem;
-    box-shadow: 0 10px 40px rgba(0, 42, 143, 0.25);
-}
-
-.headerContent {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 2rem;
-}
-
-.titleGroup {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-}
-
-.headerIcon {
-    width: 60px;
-    height: 60px;
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    border-radius: 16px;
+.loading {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-}
-
-.pageTitle {
-    font-size: 2rem;
-    font-weight: 800;
-    color: white;
-    margin: 0;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-}
-
-.pageSubtitle {
-    color: rgba(255, 255, 255, 0.95);
-    margin: 0.5rem 0 0 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-}
-
-.headerActions {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-}
-
-.periodSelector {
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 12px;
-    padding: 0.85rem 1.5rem;
-    color: white;
-    font-size: 0.9rem;
+    height: 100vh;
     font-weight: 700;
-    cursor: pointer;
-    outline: none;
-    transition: all 0.3s;
-}
-
-.periodSelector:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
-
-.periodSelector option {
-    background: #002A8F;
-    color: white;
-}
-
-.exportButton {
-    background: white;
     color: #002A8F;
-    border: none;
-    padding: 0.85rem 1.75rem;
-    border-radius: 12px;
-    font-weight: 700;
-    font-size: 0.9rem;
-    cursor: pointer;
+    font-size: 1.25rem;
+}
+
+/* ─────────────────────────────────────────────
+   HEADER
+   ───────────────────────────────────────────── */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2.5rem;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    padding: 1.5rem 2rem;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.headerTitleRow {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    transition: all 0.3s;
-    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+    gap: 1.25rem;
 }
 
-.exportButton:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 30px rgba(255, 255, 255, 0.5);
-}
-
-/* ========================================
-   KPIs GLOBALES
-   ======================================== */
-
-.kpisGrid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.kpiCard {
-    background: white;
-    border-radius: 16px;
-    padding: 1.75rem;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    transition: all 0.3s;
-}
-
-.kpiCard:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-}
-
-.kpiIcon {
-    width: 60px;
-    height: 60px;
+.logoIcon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #002A8F, #0055FF);
     border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    flex-shrink: 0;
+    box-shadow: 0 8px 16px rgba(0, 42, 143, 0.2);
 }
 
-.kpiContent {
-    flex: 1;
-}
-
-.kpiValue {
-    font-size: 2.25rem;
+.title {
+    font-size: 1.75rem;
     font-weight: 800;
     color: #1E293B;
-    line-height: 1;
+    margin: 0;
 }
 
-.kpiLabel {
+.subtitle {
+    font-size: 0.9rem;
     color: #64748B;
-    font-size: 0.85rem;
-    margin-top: 0.5rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    margin: 0;
+    font-weight: 600;
 }
 
-/* ========================================
-   TABS DE MÉTRICAS
-   ======================================== */
-
-.metricsTab {
+.headerRight {
     display: flex;
     gap: 1rem;
-    margin-bottom: 2rem;
-    background: white;
-    padding: 0.75rem;
-    border-radius: 16px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    align-items: center;
 }
 
-.metricBtn {
-    flex: 1;
-    background: transparent;
-    border: none;
-    padding: 1rem;
+.periodSwitcher {
+    background: #E2E8F0;
+    padding: 0.4rem;
     border-radius: 12px;
+    display: flex;
+    gap: 0.25rem;
+}
+
+.periodBtn, .periodBtnActive {
+    padding: 0.6rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.85rem;
     font-weight: 700;
-    font-size: 0.95rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.periodBtn {
+    background: transparent;
     color: #64748B;
+}
+
+.periodBtnActive {
+    background: white;
+    color: #002A8F;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.exportBtn, .saveAllBtn {
+    background: #002A8F;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    border: none;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 42, 143, 0.15);
+    transition: all 0.2s;
+}
+
+.exportBtn:hover, .saveAllBtn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 42, 143, 0.25);
+}
+
+.saveAllBtn:disabled {
+    background: #94A3B8;
+    cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────────
+   TABS
+   ───────────────────────────────────────────── */
+.tabContainer {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.tab, .tabActive {
+    padding: 0.9rem 1.5rem;
+    border-radius: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: none;
     cursor: pointer;
     transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.tab {
+    background: white;
+    color: #64748B;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+}
+
+.tabActive {
+    background: #002A8F;
+    color: white;
+    box-shadow: 0 8px 20px rgba(0, 42, 143, 0.2);
+}
+
+.alertDot {
+    background: #EF4444;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
+    font-size: 0.7rem;
 }
 
-.metricBtn:hover {
-    background: #F8FAFC;
-    color: #FF6600;
-}
-
-.metricBtnActive {
-    background: linear-gradient(135deg, #FF6600, #FF8533);
-    color: white;
-}
-
-/* ========================================
-   GRID DE CONTENIDO
-   ======================================== */
-
-.contentGrid {
+/* ─────────────────────────────────────────────
+   DASHBOARD GRID & CARDS
+   ───────────────────────────────────────────── */
+.dashboardGrid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
     gap: 2rem;
+}
+
+.fullWidthCard {
+    grid-column: 1 / -1;
+    background: white;
+    border-radius: 24px;
+    padding: 2.25rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+}
+
+.card {
+    background: white;
+    border-radius: 24px;
+    padding: 2.25rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    min-height: 420px;
+}
+
+.cardHeader, .cardHeaderRow {
     margin-bottom: 2rem;
 }
 
-.section {
-    background: white;
-    border-radius: 20px;
-    padding: 2rem;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-
-.sectionHeader {
+.cardHeaderRow {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 2px solid #F1F5F9;
 }
 
-.sectionHeader h2 {
+.cardHeader h2 {
     font-size: 1.35rem;
     font-weight: 800;
     color: #1E293B;
@@ -246,438 +220,302 @@
     gap: 0.75rem;
 }
 
-/* ========================================
-   RANKING LIST
-   ======================================== */
-
-.rankingList {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-}
-
-.rankingItem {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    background: #F8FAFC;
-    border: 2px solid #E2E8F0;
-    border-radius: 16px;
-    padding: 1.25rem;
-    transition: all 0.3s;
-}
-
-.rankingItem:hover {
-    border-color: #FF6600;
-    transform: translateX(5px);
-    box-shadow: 0 5px 20px rgba(255, 102, 0, 0.1);
-}
-
-.rankingPosition {
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.positionNumber {
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: #94A3B8;
-    font-family: 'Courier New', monospace;
-}
-
-.rankingInfo {
-    flex: 1;
-    min-width: 0;
-}
-
-.rankingName {
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: #1E293B;
-    margin-bottom: 0.5rem;
-}
-
-.rankingStats {
-    font-size: 0.85rem;
+.cardHeader p {
+    font-size: 0.9rem;
     color: #64748B;
+    margin: 0.4rem 0 0 0;
     font-weight: 600;
-    margin-bottom: 0.75rem;
 }
 
-.rankingBar {
-    height: 8px;
-    background: #E2E8F0;
-    border-radius: 4px;
-    overflow: hidden;
+/* ─────────────────────────────────────────────
+   THERMOMETER (METAS)
+   ───────────────────────────────────────────── */
+.thermometersGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 2rem;
 }
 
-.rankingFill {
-    height: 100%;
-    transition: all 0.5s ease;
-    border-radius: 4px;
-}
-
-.rankingScore {
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.scoreValue {
-    font-size: 2rem;
-    font-weight: 800;
-    line-height: 1;
-    font-family: 'Courier New', monospace;
-}
-
-.scoreLabel {
-    font-size: 0.75rem;
-    color: #64748B;
-    font-weight: 700;
-    text-transform: uppercase;
-    margin-top: 0.25rem;
-}
-
-.rankingMetrics {
-    display: flex;
-    gap: 1rem;
-    flex-shrink: 0;
-}
-
-.miniMetric {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: white;
-    padding: 0.5rem 0.85rem;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #475569;
-}
-
-/* ========================================
-   SECCIÓN DE ALERTAS
-   ======================================== */
-
-.alertSection {
-    background: white;
+.bonusPanelCard {
+    background: #F8FAFC;
     border-radius: 20px;
     padding: 2rem;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    border-left: 6px solid #DC2626;
+    border: 1px solid #E2E8F0;
 }
 
-.alertBadge {
-    background: #DC2626;
-    color: white;
-    padding: 0.4rem 1rem;
-    border-radius: 20px;
-    font-weight: 800;
-    font-size: 0.9rem;
+.thermometerWrapper {
+    margin-bottom: 1.5rem;
 }
 
-.noAlerts {
-    text-align: center;
-    padding: 4rem 2rem;
-    color: #64748B;
-}
-
-.noAlerts p {
-    font-size: 1.2rem;
-    font-weight: 700;
-    margin: 1.5rem 0 0 0;
-    color: #10B981;
-}
-
-.alertsList {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 1.25rem;
-}
-
-.alertItem {
-    background: #FEF2F2;
-    border: 2px solid #FEE2E2;
-    border-radius: 12px;
-    padding: 1.25rem;
-    transition: all 0.3s;
-}
-
-.alertItem:hover {
-    border-color: #DC2626;
-    box-shadow: 0 5px 20px rgba(220, 38, 38, 0.2);
-}
-
-.alertHeader {
+.thermometerLabel {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     margin-bottom: 0.75rem;
-}
-
-.alertId {
     font-weight: 800;
-    font-size: 1rem;
-    color: #DC2626;
-    font-family: 'Courier New', monospace;
-}
-
-.alertTime {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-weight: 800;
-    font-size: 0.9rem;
-    font-family: 'Courier New', monospace;
-}
-
-.alertContent {
-    color: #475569;
-    font-size: 0.95rem;
-    margin-bottom: 0.75rem;
-    line-height: 1.5;
-}
-
-.alertContent strong {
     color: #1E293B;
 }
 
-.alertFooter {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-}
-
-.alertEstado {
-    padding: 0.4rem 0.85rem;
-    border-radius: 12px;
-    color: white;
-    font-weight: 700;
-    font-size: 0.75rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.alertGestora {
-    font-size: 0.85rem;
-    color: #64748B;
-    font-weight: 700;
-}
-
-/* ========================================
-   SECCIÓN FINANCIERA (RENTABILIDAD)
-   ======================================== */
-
-.financeFullSection {
-    grid-column: 1 / -1;
-    animation: fadeIn 0.4s ease-out;
-}
-
-.financeSummaryGrid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.5rem;
-}
-
-.financeCard {
-    background: white;
-    border: 2px solid #E2E8F0;
-    border-radius: 20px;
-    padding: 2rem;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+.thermometerTrack {
+    height: 32px;
+    background: #E2E8F0;
+    border-radius: 16px;
     position: relative;
     overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.finLabel {
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: #64748B;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 0.75rem;
-}
-
-.finValue {
-    font-size: 2.5rem;
-    font-weight: 900;
-    color: #1E293B;
-    font-family: 'Courier New', monospace;
-    line-height: 1;
-}
-
-.finSub {
-    font-size: 0.85rem;
-    color: #94A3B8;
-    margin-top: 0.5rem;
-    font-weight: 600;
-}
-
-.finMarginBadge {
-    position: absolute;
-    top: 1.5rem;
-    right: 1.5rem;
-    background: #10B981;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 99px;
-    font-weight: 800;
-    font-size: 0.85rem;
-    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-
-/* ========================================
-   CHARTS (PIE & BAR)
-   ======================================== */
-
-.chartSection {
-    background: white;
-    border-radius: 20px;
-    padding: 2rem;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    display: flex;
-    flex-direction: column;
-}
-
-.chartContent {
+.thermometerFill, .thermometerFillSuccess {
+    height: 100%;
+    border-radius: 16px;
     display: flex;
     align-items: center;
-    gap: 3rem;
+    justify-content: center;
+    transition: width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.thermometerFill { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+.thermometerFillSuccess { background: linear-gradient(90deg, #10B981, #34D399); }
+
+.thermometerValue {
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 900;
+}
+
+.thermometerMarkers {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+}
+
+.marker {
+    position: absolute;
+    top: 0; bottom: 0;
+    border-left: 2px dashed #94A3B8;
+    z-index: 2;
+}
+
+.marker span {
+    position: absolute;
+    top: -18px;
+    left: -10px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: #94A3B8;
+}
+
+.thermometerFooter {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748B;
+    text-align: right;
+    margin-top: 0.5rem;
+}
+
+.bonusResultRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1.5rem;
+    border-top: 2px solid #E2E8F0;
+}
+
+.bonusValue {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #002A8F;
+    font-family: 'Courier New', monospace;
+}
+
+.bonusMetric span {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #94A3B8;
+    text-transform: uppercase;
+}
+
+.bonusConditions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.condOK, .condFail {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+}
+
+.condOK { background: #DCFCE7; color: #15803D; }
+.condFail { background: #FEE2E2; color: #B91C1C; }
+
+/* ─────────────────────────────────────────────
+   SCATTER PLOT
+   ───────────────────────────────────────────── */
+.scatterWrapper {
+    height: 300px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    padding: 1rem;
+}
+
+.scatterSvg {
     flex: 1;
-    margin-top: 1rem;
+    width: 100%;
 }
 
-.chartWrapper {
-    width: 200px;
-    height: 200px;
-    flex-shrink: 0;
+.scatterXAxis, .scatterYAxis {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #94A3B8;
+    text-transform: uppercase;
 }
 
-.chartLegend {
+.scatterXAxis { text-align: center; margin-top: 0.5rem; }
+.scatterYAxis { 
+    position: absolute; 
+    left: -20px; 
+    top: 50%; 
+    transform: rotate(-90deg) translateY(-50%); 
+}
+
+/* ─────────────────────────────────────────────
+   ADMIN CONFIG
+   ───────────────────────────────────────────── */
+.adminInput {
+    width: 120px;
+    padding: 0.6rem;
+    border: 2px solid #E2E8F0;
+    border-radius: 8px;
+    font-weight: 800;
+    color: #1E293B;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.adminInput:focus { border-color: #002A8F; }
+
+.miniSaveBtn {
+    padding: 0.4rem 0.8rem;
+    background: white;
+    border: 2px solid #E2E8F0;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.adminActions {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ─────────────────────────────────────────────
+   TABLE REFINEMENTS
+   ───────────────────────────────────────────── */
+.masterTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 0.5rem;
+}
+
+.masterTable th {
+    padding: 1rem;
+    font-size: 0.75rem;
+    color: #94A3B8;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+.masterTable td {
+    padding: 1rem;
+    background: #F8FAFC;
+}
+
+.positiveValue { color: #10B981; font-weight: 800; }
+.negativeValue { color: #EF4444; font-weight: 800; }
+
+.bonusTagOn, .bonusTagOff {
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    font-weight: 900;
+}
+
+.bonusTagOn { background: #002A8F; color: white; }
+.bonusTagOff { background: #E2E8F0; color: #64748B; }
+
+.statusDot {
+    width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+}
+
+/* ─────────────────────────────────────────────
+   ALERTS
+   ───────────────────────────────────────────── */
+.alertCardCritical {
+    background: #450A0A;
+    color: white;
+    padding: 1.5rem;
+    border-radius: 20px;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    border-left: 8px solid #EF4444;
+}
+
+.alertCardCritical h4 { font-weight: 900; margin: 0; color: #FECACA; }
+
+/* ─────────────────────────────────────────────
+   MISC
+   ───────────────────────────────────────────── */
+.goldClientsList {
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
 
-.legendItem {
+.clientMiniRow {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem;
+    background: #F8FAFC;
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+.smallExportBtn {
+    padding: 0.5rem 1rem;
+    background: #F1F5F9;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.clientCell {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #475569;
 }
 
-.legendItem span {
-    width: 14px;
-    height: 14px;
-    border-radius: 4px;
-}
-
-/* ========================================
-   RANKING REFINEMENTS
-   ======================================== */
-
-.rankingItem {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    background: #F8FAFC;
-    border: 2px solid #E2E8F0;
-    border-radius: 16px;
-    padding: 1rem 1.5rem;
-    transition: all 0.3s;
-}
-
-.rankingScore {
-    font-size: 1.5rem;
+.oroBadge {
+    background: linear-gradient(135deg, #FFD700, #DAA520);
+    color: #450A0A;
+    font-size: 0.6rem;
     font-weight: 900;
-    font-family: 'Courier New', monospace;
-    min-width: 60px;
-    text-align: right;
-}
-
-/* ========================================
-   ALERTS REFINEMENTS
-   ======================================== */
-
-.alertCount {
-    background: #DC2626;
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.85rem;
-    font-weight: 800;
-}
-
-.alertItem {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.9rem;
-    background: #FEF2F2;
-    border: 1px solid #FEE2E2;
-    border-radius: 10px;
-    padding: 0.75rem;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ========================================
-   RESPONSIVE
-   ======================================== */
-
-@media (max-width: 1400px) {
-    .contentGrid {
-        grid-template-columns: 1fr;
-    }
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(218, 165, 32, 0.3);
 }
 
 @media (max-width: 1024px) {
-    .kpisGrid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 768px) {
-    .kpisGrid {
-        grid-template-columns: 1fr;
-    }
-
-    .chartContent {
-        flex-direction: column;
-        gap: 2rem;
-    }
+    .dashboardGrid { grid-template-columns: 1fr; }
+    .thermometersGrid { grid-template-columns: 1fr; }
 }

@@ -775,10 +775,40 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleAddExpense = () => {
         if (!newExpense.concepto || !newExpense.monto) return;
-        const updatedGastos = [...gastos, { ...newExpense, id: Date.now(), monto: parseFloat(newExpense.monto) }];
-        setGastos(updatedGastos);
+        const amount = parseFloat(newExpense.monto);
+        if (isNaN(amount) || amount <= 0) {
+            showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
+            return;
+        }
+
+        const isSpecialistPayment = ["Adelanto", "Viáticos", "Pago por Diagnóstico"].includes(newExpense.tipo);
+        let updatedTicket = { ...ticketData };
+
+        if (isSpecialistPayment) {
+            // Si es un pago al técnico, lo registramos en el historial de pagos para la liquidación
+            const nuevoPago = {
+                id: Math.random().toString(36).substr(2, 9),
+                fecha: new Date().toISOString(),
+                monto: amount,
+                referencia: `${newExpense.tipo}: ${newExpense.concepto}`
+            };
+            const updatedHistorial = [...(ticketData.historialPagosTecnico || []), nuevoPago];
+            updatedTicket.historialPagosTecnico = updatedHistorial;
+            showToast("Pago Registrado", `${newExpense.tipo} registrado y descontado del saldo técnico.`, "success");
+        } else {
+            // Es un gasto operativo normal (no se descuenta del técnico)
+            const newEntry = { ...newExpense, id: Date.now(), monto: amount };
+            const updatedGastos = [...gastos, newEntry];
+            setGastos(updatedGastos);
+            updatedTicket.gastos = updatedGastos;
+            showToast("Gasto Registrado", "Gasto operativo agregado al ticket.", "success");
+        }
+
+        setTicketData(updatedTicket);
         setNewExpense({ concepto: "", monto: "", tipo: "Gasto Operativo" });
-        setTicketData({ ...ticketData, gastos: updatedGastos });
+        
+        // Sincronización inmediata
+        setTimeout(() => syncToSupabase(true), 100);
     };
 
     const handleFinishExecution = () => {
@@ -1302,6 +1332,98 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         <div className={styles.operationalArea}>
                             {children || (
                                 <>
+                                    {/* 💰 MÓDULO DE TESORERÍA PERSISTENTE (COTIZANDO, ENVIADO, EN EJECUCIÓN) */}
+                                    {['en_cotizacion', 'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar'].includes(ticketData.estadoId) && (
+                                        <div className={styles.treasurySection} style={{ marginBottom: '25px' }}>
+                                            <div className={styles.executionCard} style={{ borderLeft: '4px solid #10B981', background: '#F0FDF4' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                                    <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#065F46' }}>
+                                                        <DollarSign size={18} /> REGISTRO DE PAGOS Y GASTOS (ENTREGA DE DINERO)
+                                                    </h4>
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#059669', background: '#DCFCE7', padding: '2px 8px', borderRadius: '4px' }}>OPERACIÓN FINANCIERA</span>
+                                                </div>
+
+                                                <div className={styles.expenseEntryRow}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Concepto (ej: Adelanto Viáticos)"
+                                                        className={styles.expenseInput}
+                                                        value={newExpense.concepto}
+                                                        onChange={(e) => setNewExpense({ ...newExpense, concepto: e.target.value })}
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        placeholder="Monto S/"
+                                                        className={styles.expenseInput}
+                                                        value={newExpense.monto}
+                                                        onChange={(e) => setNewExpense({ ...newExpense, monto: e.target.value })}
+                                                    />
+                                                    <select
+                                                        className={styles.expenseInput}
+                                                        value={newExpense.tipo}
+                                                        onChange={(e) => setNewExpense({ ...newExpense, tipo: e.target.value })}
+                                                    >
+                                                        <optgroup label="Pagos a Especialista (Deducibles)">
+                                                            <option>Adelanto</option>
+                                                            <option>Viáticos</option>
+                                                            <option>Pago por Diagnóstico</option>
+                                                            <option>Factura Técnico</option>
+                                                        </optgroup>
+                                                        <optgroup label="Gastos Administrativos / Otros">
+                                                            <option>Gasto Operativo</option>
+                                                            <option>Compra Material</option>
+                                                        </optgroup>
+                                                    </select>
+                                                    <button 
+                                                        className={styles.addExpenseBtn} 
+                                                        onClick={handleAddExpense} 
+                                                        title="Registrar en Ticket"
+                                                        style={{ background: '#10B981' }}
+                                                    >
+                                                        <Plus size={16} />
+                                                    </button>
+                                                </div>
+
+                                                {/* Tabla de movimientos recientes en este ticket */}
+                                                {(gastos.length > 0 || (ticketData.historialPagosTecnico || []).length > 0) && (
+                                                    <div style={{ marginTop: '15px', borderTop: '1px solid #DCFCE7', paddingTop: '10px' }}>
+                                                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#065F46', marginBottom: '8px' }}>MOVIMIENTOS REGISTRADOS:</p>
+                                                        <table className={styles.expenseTable}>
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Fecha</th>
+                                                                    <th>Concepto</th>
+                                                                    <th>Monto</th>
+                                                                    <th>Estado</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {/* Pagos al técnico (Deducibles) */}
+                                                                {(ticketData.historialPagosTecnico || []).map((p: any) => (
+                                                                    <tr key={p.id}>
+                                                                        <td>{new Date(p.fecha).toLocaleDateString('es-PE')}</td>
+                                                                        <td><span style={{ color: '#059669', fontSize: '0.7rem', fontWeight: 700 }}>[PAGO]</span> {p.referencia}</td>
+                                                                        <td style={{ fontWeight: 800 }}>S/ {p.monto.toFixed(2)}</td>
+                                                                        <td><span className={styles.statusBadge} style={{ background: '#DCFCE7', color: '#065F46' }}>Confirmado</span></td>
+                                                                    </tr>
+                                                                ))}
+                                                                {/* Gastos operativos */}
+                                                                {gastos.map((g: any) => (
+                                                                    <tr key={g.id}>
+                                                                        <td>---</td>
+                                                                        <td><span style={{ color: '#3B82F6', fontSize: '0.7rem', fontWeight: 700 }}>[{g.tipo.toUpperCase()}]</span> {g.concepto}</td>
+                                                                        <td style={{ fontWeight: 800 }}>S/ {g.monto.toFixed(2)}</td>
+                                                                        <td><span className={styles.statusBadge} style={{ background: '#DBEAFE', color: '#1E40AF' }}>Gasto</span></td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {ticketData.estadoId === "borrador" && (
                                         <div className={styles.triageBox}>
                                             <div className={styles.triageHeader}>
@@ -2356,56 +2478,35 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
 
                                                     <div className={styles.executionMainGrid}>
-                                                        <div className={styles.executionCard}>
-                                                            <h4><Package size={18} /> GASTOS Y MATERIALES (FACTURAS/COMPRAS)</h4>
-                                                            <div className={styles.expenseEntryRow}>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Concepto (ej: Factura Pintura)"
-                                                                    className={styles.expenseInput}
-                                                                    value={newExpense.concepto}
-                                                                    onChange={(e) => setNewExpense({ ...newExpense, concepto: e.target.value })}
-                                                                />
-                                                                <input
-                                                                    type="number"
-                                                                    placeholder="Monto"
-                                                                    className={styles.expenseInput}
-                                                                    value={newExpense.monto}
-                                                                    onChange={(e) => setNewExpense({ ...newExpense, monto: e.target.value })}
-                                                                />
-                                                                <select
-                                                                    className={styles.expenseInput}
-                                                                    value={newExpense.tipo}
-                                                                    onChange={(e) => setNewExpense({ ...newExpense, tipo: e.target.value })}
-                                                                >
-                                                                    <option>Gasto Operativo</option>
-                                                                    <option>Compra Material</option>
-                                                                    <option>Factura Técnico</option>
-                                                                </select>
-                                                                <button className={styles.addExpenseBtn} onClick={handleAddExpense}><Plus size={16} /></button>
-                                                            </div>
+                                                                {/* El módulo de gastos y materiales se ha unificado en la parte superior del área operativa para accesibilidad total */}
+                                                                <div className={styles.executionCard} style={{ background: '#F8FAFC' }}>
+                                                                    <h4><Package size={18} /> GESTIÓN DE MATERIALES Y RECURSOS</h4>
+                                                                    <p style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                                                                        Use el módulo de tesorería superior para registrar nuevas salidas de dinero, adelantos o facturas de materiales.
+                                                                    </p>
 
-                                                            {gastos.length > 0 && (
-                                                                <table className={styles.expenseTable}>
-                                                                    <thead>
-                                                                        <tr>
-                                                                            <th>Concepto</th>
-                                                                            <th>Tipo</th>
-                                                                            <th>Monto</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {gastos.map((g: any) => (
-                                                                            <tr key={g.id}>
-                                                                                <td>{g.concepto}</td>
-                                                                                <td>{g.tipo}</td>
-                                                                                <td style={{ fontWeight: 800 }}>S/ {g.monto.toFixed(2)}</td>
-                                                                            </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            )}
-                                                        </div>
+                                                                    {gastos.length > 0 && (
+                                                                        <div style={{ marginTop: '10px' }}>
+                                                                             <p style={{ fontSize: '0.7rem', fontWeight: 700, marginBottom: '5px' }}>LISTADO DE MATERIALES/COMPRAS:</p>
+                                                                             <table className={styles.expenseTable}>
+                                                                                <thead>
+                                                                                    <tr>
+                                                                                        <th>Concepto</th>
+                                                                                        <th>Monto</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody>
+                                                                                    {gastos.map((g: any) => (
+                                                                                        <tr key={g.id}>
+                                                                                            <td>{g.concepto}</td>
+                                                                                            <td style={{ fontWeight: 800 }}>S/ {g.monto.toFixed(2)}</td>
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
 
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                                             <div className={`${styles.executionCard} ${styles.extraAdvanceRequest}`}>
