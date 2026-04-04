@@ -276,7 +276,7 @@ export default function ReportesEficienciaPage() {
                 vencidos: 0,
                 inversion: 0,
                 facturacion: 0,
-                costoLaboral: g.costo_laboral_mensual || 1800,
+                costoLaboral: Number(g.costo_laboral_mensual || 0),
                 activos: g.activos_mensuales_valor || 0,
                 sstCompliance: g.sst_compliance_status ?? true,
                 targetAmount: targetObj?.target_amount || 35000,
