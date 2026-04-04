@@ -302,7 +302,11 @@ export default function ReportesEficienciaPage() {
             if (sid === 'ticket_cerrado') map[gid].horasCierre.push(horas);
 
             // Montos Financieros
-            map[gid].facturacion += parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+            // Sincronización: Facturación Total solo suma tickets cerrados o por liquidar
+            if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
+                map[gid].facturacion += parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+            }
+            
             const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
             map[gid].inversion += pagos;
         });
@@ -337,7 +341,13 @@ export default function ReportesEficienciaPage() {
         filteredTickets.forEach(t => {
             const cid = t.client_id;
             if (!cid || !map[cid]) return;
-            map[cid].billing += parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+            const sid = normalizeStateId(t.status_id || t.estadoId);
+            
+            // Sincronización: Solo sumamos facturación real de tickets cerrados/liquidando
+            if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
+                map[cid].billing += parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+            }
+            
             const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
             map[cid].costs += pagos;
         });
