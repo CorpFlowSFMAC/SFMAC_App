@@ -65,6 +65,7 @@ export default function TicketsPage() {
     // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("active");
+    const [statFilter, setStatFilter] = useState<"all" | "nuevos" | "enProceso">("all");
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
     const [isAdminState, setIsAdminState] = useState<boolean>(false);
 
@@ -217,19 +218,34 @@ export default function TicketsPage() {
         return (tickets || []).filter(isVisibleForMe);
     }, [tickets, isVisibleForMe]);
 
+    // Estado inicial de cada ticket: "nuevo" o "asignado_a_tecnico" o estados de inicio de proceso
+    const NUEVOS_STATES = ["nuevo", "pendiente", "asignado_a_tecnico"];
+    const EN_PROCESO_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado"];
+
     const stats = React.useMemo(() => {
+        const activos = ticketsForMe.filter(t => filterByView(t, "active"));
         return {
             total: ticketsForMe.length,
             borradores: ticketsForMe.filter(t => filterByView(t, "triage")).length,
             completados: ticketsForMe.filter(t => filterByView(t, "closed")).length,
-            nuevos: ticketsForMe.filter(t => ["nuevo", "pendiente"].includes(normalizeStateId(t.estadoId))).length,
-            enProceso: ticketsForMe.filter(t => filterByView(t, "active")).length,
+            nuevos: activos.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId))).length,
+            enProceso: activos.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId))).length,
+            activosTotal: activos.length,
+            _nuevosList: activos.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId))),
+            _enProcesoList: activos.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId))),
         };
     }, [ticketsForMe, filterByView]);
 
     const filteredTickets = React.useMemo(() => {
-        return ticketsForMe.filter(t => filterByView(t, viewMode));
-    }, [ticketsForMe, filterByView, viewMode]);
+        const base = ticketsForMe.filter(t => filterByView(t, viewMode));
+        if (viewMode === "active" && statFilter === "nuevos") {
+            return base.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId)));
+        }
+        if (viewMode === "active" && statFilter === "enProceso") {
+            return base.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId)));
+        }
+        return base;
+    }, [ticketsForMe, filterByView, viewMode, statFilter]);
 
     return (
         <div className={styles.page}>
@@ -244,7 +260,9 @@ export default function TicketsPage() {
                         </h1>
                         <p className={styles.pageSubtitle}>
                             {viewMode === "triage" ? `${stats.borradores} por clasificar` :
-                                viewMode === "active" ? `${stats.total - stats.completados - stats.borradores} activos` :
+                                viewMode === "active" && statFilter === "nuevos" ? `Mostrando: ${stats.nuevos} Nuevos de ${stats.activosTotal} activos` :
+                                viewMode === "active" && statFilter === "enProceso" ? `Mostrando: ${stats.enProceso} En Proceso de ${stats.activosTotal} activos` :
+                                viewMode === "active" ? `${stats.activosTotal} activos` :
                                     `${stats.completados} cerrados`} • {stats.nuevos} nuevos
                         </p>
                     </div>
@@ -252,7 +270,7 @@ export default function TicketsPage() {
                 <div className={styles.viewToggle}>
                     <button
                         className={`${styles.toggleBtn} ${viewMode === "triage" ? styles.toggleBtnActive : ""}`}
-                        onClick={() => setViewMode("triage")}
+                        onClick={() => { setViewMode("triage"); setStatFilter('all'); }}
                         onMouseEnter={() => prefetchTickets(queryClient)}
                         style={{ borderLeft: 'none' }}
                     >
@@ -260,14 +278,14 @@ export default function TicketsPage() {
                     </button>
                     <button
                         className={`${styles.toggleBtn} ${viewMode === "active" ? styles.toggleBtnActive : ""}`}
-                        onClick={() => setViewMode("active")}
+                        onClick={() => { setViewMode("active"); setStatFilter('all'); }}
                         onMouseEnter={() => prefetchTickets(queryClient)}
                     >
                         En Proceso
                     </button>
                     <button
                         className={`${styles.toggleBtn} ${viewMode === "closed" ? styles.toggleBtnActive : ""}`}
-                        onClick={() => setViewMode("closed")}
+                        onClick={() => { setViewMode("closed"); setStatFilter('all'); }}
                         onMouseEnter={() => prefetchTickets(queryClient)}
                     >
                         Cerrados
@@ -283,9 +301,20 @@ export default function TicketsPage() {
                 </button>
             </div>
 
-            {/* 📊 STATS MINI */}
+            {/* 📊 STATS MINI — CLICKABLES */}
             <div className={styles.statsGrid}>
-                <div className={styles.statCard} style={{ '--card-color': '#8B5CF6' } as any}>
+                <div 
+                    className={styles.statCard} 
+                    style={{ 
+                        '--card-color': '#8B5CF6',
+                        cursor: 'pointer',
+                        outline: viewMode === 'active' && statFilter === 'nuevos' ? '2px solid #8B5CF6' : 'none',
+                        transform: viewMode === 'active' && statFilter === 'nuevos' ? 'scale(1.03)' : 'scale(1)',
+                        transition: 'all 0.2s'
+                    } as any}
+                    onClick={() => { setViewMode('active'); setStatFilter(statFilter === 'nuevos' ? 'all' : 'nuevos'); }}
+                    title="Ver tickets nuevos"
+                >
                     <div className={styles.statIcon}>
                         <Clock size={16} />
                     </div>
@@ -295,7 +324,18 @@ export default function TicketsPage() {
                     </div>
                 </div>
 
-                <div className={styles.statCard} style={{ '--card-color': '#F59E0B' } as any}>
+                <div 
+                    className={styles.statCard} 
+                    style={{ 
+                        '--card-color': '#F59E0B',
+                        cursor: 'pointer',
+                        outline: viewMode === 'active' && statFilter === 'enProceso' ? '2px solid #F59E0B' : 'none',
+                        transform: viewMode === 'active' && statFilter === 'enProceso' ? 'scale(1.03)' : 'scale(1)',
+                        transition: 'all 0.2s'
+                    } as any}
+                    onClick={() => { setViewMode('active'); setStatFilter(statFilter === 'enProceso' ? 'all' : 'enProceso'); }}
+                    title="Ver tickets en proceso"
+                >
                     <div className={styles.statIcon}>
                         <Zap size={16} />
                     </div>
@@ -305,7 +345,18 @@ export default function TicketsPage() {
                     </div>
                 </div>
 
-                <div className={styles.statCard} style={{ '--card-color': '#10B981' } as any}>
+                <div 
+                    className={styles.statCard} 
+                    style={{ 
+                        '--card-color': '#10B981',
+                        cursor: 'pointer',
+                        outline: viewMode === 'closed' ? '2px solid #10B981' : 'none',
+                        transform: viewMode === 'closed' ? 'scale(1.03)' : 'scale(1)',
+                        transition: 'all 0.2s'
+                    } as any}
+                    onClick={() => { setViewMode('closed'); setStatFilter('all'); }}
+                    title="Ver tickets completados"
+                >
                     <div className={styles.statIcon}>
                         <CheckCircle2 size={16} />
                     </div>
