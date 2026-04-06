@@ -115,6 +115,11 @@ export default function AdminDashboard() {
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
     const [now] = useState(() => new Date());
 
+    // Estados para el Modal de Seguimiento
+    const [showListModal, setShowListModal] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalTickets, setModalTickets] = useState<any[]>([]);
+
     const isInRange = (d: string) => {
         const diff = (now.getTime() - new Date(d).getTime()) / 86_400_000;
         if (dateRange === "today") return diff < 1;
@@ -452,19 +457,76 @@ export default function AdminDashboard() {
                 {/* Alert status cards */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                     {[
-                        { label: "Tickets Activos", value: fmtInt(tickets.filter((t: any) => !["ticket_cerrado","ticket_rechazado","ticket_cancelado"].includes(normalizeStateId(t.estadoId))).length), icon: Activity, color: "#3B82F6", light: "VERDE" as Light },
-                        { label: "SLA Vencidos (activos)", value: fmtInt(rrhh.expired), icon: AlertTriangle, color: "#EF4444", light: (rrhh.expired > 0 ? "ROJO" : "VERDE") as Light },
+                        { 
+                            label: "Tickets Activos", 
+                            value: fmtInt(tickets.filter((t: any) => !["ticket_cerrado","ticket_rechazado","ticket_cancelado"].includes(normalizeStateId(t.estadoId))).length), 
+                            icon: Activity, 
+                            color: "#3B82F6", 
+                            light: "VERDE" as Light,
+                            tickets: tickets.filter((t: any) => !["ticket_cerrado","ticket_rechazado","ticket_cancelado"].includes(normalizeStateId(t.estadoId)))
+                        },
+                        { 
+                            label: "SLA Vencidos (activos)", 
+                            value: fmtInt(rrhh.expired), 
+                            icon: AlertTriangle, 
+                            color: "#EF4444", 
+                            light: (rrhh.expired > 0 ? "ROJO" : "VERDE") as Light,
+                            tickets: tickets.filter((t: any) => {
+                                const active = !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId));
+                                return active && hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS;
+                            })
+                        },
                         { label: "Técnicos Registrados", value: fmtInt(technicians.length), icon: Award, color: "#8B5CF6", light: "VERDE" as Light },
-                        { label: "Pipeline Bloq. >48h", value: fmtInt(tesoreria.bloqueados48), icon: Shield, color: "#F59E0B", light: (tesoreria.bloqueados48 > 0 ? "ROJO" : "VERDE") as Light },
+                        { 
+                            label: "Pipeline Bloq. >48h", 
+                            value: fmtInt(tesoreria.bloqueados48), 
+                            icon: Shield, 
+                            color: "#F59E0B", 
+                            light: (tesoreria.bloqueados48 > 0 ? "ROJO" : "VERDE") as Light,
+                            tickets: tickets.filter((t: any) => {
+                                const sid = normalizeStateId(t.estadoId);
+                                const isPending = ["en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "por_liquidar"].includes(sid);
+                                return isPending && hoursAgo(t.createdAt || t.created_at || "") >= 48;
+                            })
+                        },
                     ].map(c => {
                         const Icon = c.icon;
                         const lc = c.light === "ROJO" ? "#EF4444" : c.light === "AMBAR" ? "#F59E0B" : "#10B981";
+                        const isClickable = !!c.tickets;
+
                         return (
-                            <div key={c.label} style={{
-                                background: `${lc}08`, border: `1px solid ${lc}25`,
-                                borderRadius: "12px", padding: "0.85rem 1.1rem",
-                                display: "flex", alignItems: "center", gap: "0.75rem"
-                            }}>
+                            <div 
+                                key={c.label} 
+                                onClick={() => {
+                                    if (isClickable) {
+                                        setModalTitle(c.label);
+                                        setModalTickets(c.tickets || []);
+                                        setShowListModal(true);
+                                    }
+                                }}
+                                style={{
+                                    background: `${lc}08`, border: `1px solid ${lc}25`,
+                                    borderRadius: "12px", padding: "0.85rem 1.1rem",
+                                    display: "flex", alignItems: "center", gap: "0.75rem",
+                                    cursor: isClickable ? "pointer" : "default",
+                                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                                    position: "relative"
+                                }}
+                                onMouseEnter={e => {
+                                    if (isClickable) {
+                                        e.currentTarget.style.background = `${lc}18`;
+                                        e.currentTarget.style.transform = "translateX(5px)";
+                                        e.currentTarget.style.borderColor = `${lc}60`;
+                                    }
+                                }}
+                                onMouseLeave={e => {
+                                    if (isClickable) {
+                                        e.currentTarget.style.background = `${lc}08`;
+                                        e.currentTarget.style.transform = "translateX(0)";
+                                        e.currentTarget.style.borderColor = `${lc}25`;
+                                    }
+                                }}
+                            >
                                 <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: `${c.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                     <Icon size={17} color={c.color} />
                                 </div>
@@ -473,11 +535,102 @@ export default function AdminDashboard() {
                                     <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "white", lineHeight: 1.2 }}>{c.value}</div>
                                 </div>
                                 <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "2px 7px", borderRadius: "999px", background: `${lc}18`, color: lc }}>{c.light}</span>
+                                {isClickable && <ChevronRight size={14} color="rgba(255,255,255,0.2)" style={{ marginLeft: "5px" }} />}
                             </div>
                         );
                     })}
                 </div>
             </div>
+
+            {/* ── MODAL DE LISTADO DE TICKETS (DRILL-DOWN) ── */}
+            {showListModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 10000, padding: '2rem'
+                }} onClick={() => setShowListModal(false)}>
+                    <div style={{
+                        background: '#0F0F1A', border: '1px solid rgba(255,255,255,0.1)',
+                        width: '100%', maxWidth: '900px', maxHeight: '85vh',
+                        borderRadius: '24px', display: 'flex', flexDirection: 'column',
+                        overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                        position: 'relative'
+                    }} onClick={e => e.stopPropagation()}>
+                        
+                        <div style={{ padding: '1.5rem 2rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Activity size={20} color="#8B5CF6" /> {modalTitle}
+                                </h3>
+                                <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Total: {modalTickets.length} registros para seguimiento</p>
+                            </div>
+                            <button onClick={() => setShowListModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <ArrowRight size={18} style={{ transform: 'rotate(45deg)' }} />
+                            </button>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Ticket #</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Sede</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Estado</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Aging</th>
+                                        <th style={{ padding: '12px 2px', textAlign: 'center' }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {modalTickets.map((t: any) => {
+                                        const h = hoursAgo(t.createdAt || t.created_at || "");
+                                        const agingCol = h >= 72 ? "#EF4444" : h >= 48 ? "#F59E0B" : "#10B981";
+                                        return (
+                                            <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem' }}>{t.id.substring(0,8).toUpperCase()}</div>
+                                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)' }}>{new Date(t.createdAt || t.created_at).toLocaleDateString()}</div>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.82rem' }}>{t.client?.name || "Cliente SINFIMAC"}</div>
+                                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>{t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir"}</div>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <span style={{ 
+                                                        padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
+                                                        background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)'
+                                                    }}>
+                                                        {t.estadoId?.replace(/_/g, ' ').toUpperCase() || "NUEVO"}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: agingCol, fontWeight: 900, fontSize: '0.85rem' }}>{Math.floor(h)}h</div>
+                                                    <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', marginTop: '4px' }}>
+                                                        <div style={{ width: `${Math.min(h/72*100, 100)}%`, height: '100%', background: agingCol, borderRadius: '2px' }} />
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '14px 2px' }}>
+                                                    <Link 
+                                                        href={`/dashboard/admin/tickets?ticketId=${t.id}`}
+                                                        style={{ 
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', 
+                                                            borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'white', transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                                                    >
+                                                        <ChevronRight size={14} />
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ── QUICK NAVIGATION ─────────────── */}
             <SectionHeader icon={<Zap size={16} />} title="Acceso Rápido a Módulos" color="#FF6600" />
