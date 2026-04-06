@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -115,10 +115,13 @@ export default function AdminDashboard() {
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
     const [now] = useState(() => new Date());
 
-    // Estados para el Modal de Seguimiento
+    // Estados para el Modal de Seguimiento (General)
     const [showListModal, setShowListModal] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
     const [modalTickets, setModalTickets] = useState<any[]>([]);
+
+    // Estado para el Modal de Capital Expuesto
+    const [showCapitalModal, setShowCapitalModal] = useState(false);
 
     const isInRange = (d: string) => {
         const diff = (now.getTime() - new Date(d).getTime()) / 86_400_000;
@@ -215,6 +218,62 @@ export default function AdminDashboard() {
             bloqueados48: aging["+48h"].length,
         };
     }, [tickets]);
+
+    // ── CAPITAL EXPUESTO / ADELANTADO (Pagos a Técnicos en tickets activos) ────────
+    // Estados activos previos a ejecución/cierre donde aún hay capital en riesgo
+    const ESTADOS_RIESGO_CAPITAL = ["en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "por_liquidar", "nuevo", "asignado_a_tecnico", "en_inspeccion", "visitado"];
+
+    const capitalExpuesto = useMemo(() => {
+        const ticketsConAdelantos = tickets
+            .filter((t: any) => {
+                const sid = normalizeStateId(t.estadoId);
+                // Exluir cerrados/rechazados/cancelados
+                const isActive = !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+                // Debe tener al menos un pago registrado
+                const pagos = t.metadata?.historialPagosTecnico || [];
+                const totalPagado = pagos.reduce((s: number, p: any) => s + (parseFloat(p.monto) || 0), 0);
+                return isActive && totalPagado > 0;
+            })
+            .map((t: any) => {
+                const pagos = t.metadata?.historialPagosTecnico || [];
+                const totalAdelantado = pagos.reduce((s: number, p: any) => s + (parseFloat(p.monto) || 0), 0);
+
+                // Resolver nombre de gestora
+                const gestoraId = t.gestora_id || t.metadata?.gestora_id;
+                const gestoraObj = gestoras.find((g: any) => g.id === gestoraId);
+                const gestoraName = gestoraObj
+                    ? (gestoraObj.name || gestoraObj.nombre || gestoraObj.full_name || "Gestora")
+                    : (t.gestora?.nombre || t.gestora?.name || "Sin asignar");
+
+                // Resolver especialista (primer pago con nombre, o metadata)
+                const especialista = pagos[0]?.tecnico || t.metadata?.tecnicoAsignado?.name || t.metadata?.tecnico_nombre || "Sin especialista";
+
+                // Sede
+                const sede = t.sede?.nombre || t.cliente?.nombre || "Sin sede";
+
+                // Aging
+                const ageH = hoursAgo(t.createdAt || t.created_at || "");
+                const isRiesgo = ageH >= 48; // +48h = riesgo financiero
+
+                return {
+                    ...t,
+                    _totalAdelantado: totalAdelantado,
+                    _gestoraName: gestoraName,
+                    _especialista: especialista,
+                    _sede: sede,
+                    _ageH: ageH,
+                    _isRiesgo: isRiesgo,
+                    _pagos: pagos,
+                };
+            })
+            .sort((a: any, b: any) => b._totalAdelantado - a._totalAdelantado);
+
+        const totalCapital = ticketsConAdelantos.reduce((s: number, t: any) => s + t._totalAdelantado, 0);
+        const enRiesgo = ticketsConAdelantos.filter((t: any) => t._isRiesgo);
+        const totalEnRiesgo = enRiesgo.reduce((s: number, t: any) => s + t._totalAdelantado, 0);
+
+        return { tickets: ticketsConAdelantos, total: totalCapital, enRiesgo: enRiesgo.length, totalEnRiesgo };
+    }, [tickets, gestoras]);
 
     // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
     const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
@@ -398,12 +457,51 @@ export default function AdminDashboard() {
             <SectionHeader icon={<Layers size={16} />} title="Tesorería & Flujo de Caja" color="#F59E0B" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
 
-                {/* Pipeline total */}
+                {/* Pipeline total + Capital Expuesto */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
                     <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.75rem" }}>Pipeline Pendiente</div>
                     <div style={{ fontSize: "2rem", fontWeight: 900, color: "#F59E0B" }}>S/ {fmt(tesoreria.totalPipeline)}</div>
                     <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.35rem" }}>{tesoreria.total} servicios en curso</div>
-                    <div style={{ marginTop: "1rem", padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px" }}>
+
+                    {/* Capital Expuesto — CLICKABLE */}
+                    <div
+                        onClick={() => setShowCapitalModal(true)}
+                        style={{
+                            marginTop: "0.85rem", padding: "0.75rem 0.9rem",
+                            background: capitalExpuesto.total > 0 ? "rgba(239,68,68,0.08)" : "rgba(16,185,129,0.08)",
+                            border: capitalExpuesto.total > 0 ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(16,185,129,0.2)",
+                            borderRadius: "10px", cursor: capitalExpuesto.total > 0 ? "pointer" : "default",
+                            transition: "all 0.2s"
+                        }}
+                        onMouseEnter={e => { if (capitalExpuesto.total > 0) { e.currentTarget.style.background = "rgba(239,68,68,0.15)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.5)"; } }}
+                        onMouseLeave={e => { if (capitalExpuesto.total > 0) { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; e.currentTarget.style.borderColor = "rgba(239,68,68,0.3)"; } }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                            <div style={{ fontSize: "0.7rem", fontWeight: 700, color: capitalExpuesto.total > 0 ? "#EF4444" : "#10B981" }}>
+                                💸 Capital Expuesto / Adelantado
+                            </div>
+                            {capitalExpuesto.total > 0 && (
+                                <span style={{ fontSize: "0.6rem", fontWeight: 800, color: "#EF4444", display: "flex", alignItems: "center", gap: "3px" }}>
+                                    VER DETALLE <ChevronRight size={11} />
+                                </span>
+                            )}
+                        </div>
+                        <div style={{ fontSize: "1.5rem", fontWeight: 900, color: capitalExpuesto.total > 0 ? "#EF4444" : "#10B981", lineHeight: 1 }}>
+                            S/ {fmt(capitalExpuesto.total)}
+                        </div>
+                        <div style={{ fontSize: "0.68rem", marginTop: "3px", color: capitalExpuesto.total > 0 ? "rgba(239,68,68,0.7)" : "rgba(16,185,129,0.7)" }}>
+                            {capitalExpuesto.tickets.length > 0
+                                ? `${capitalExpuesto.tickets.length} tickets · ${capitalExpuesto.enRiesgo} en riesgo +48h`
+                                : "Sin adelantos registrados"}
+                        </div>
+                        {capitalExpuesto.enRiesgo > 0 && (
+                            <div style={{ marginTop: "6px", fontSize: "0.62rem", fontWeight: 800, color: "#F59E0B", padding: "2px 6px", background: "rgba(245,158,11,0.12)", borderRadius: "5px", display: "inline-block" }}>
+                                ⚠️ S/ {fmt(capitalExpuesto.totalEnRiesgo)} en zona crítica
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ marginTop: "0.85rem", padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px" }}>
                         <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#EF4444", marginBottom: "2px" }}>⚡ Lucro Cesante Estimado</div>
                         <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "#EF4444" }}>S/ {fmt(tesoreria.lucro)}</div>
                         <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>ganancia detenida por pendientes</div>
@@ -699,7 +797,126 @@ export default function AdminDashboard() {
                 </div>
             )}
 
-            {/* ── QUICK NAVIGATION ─────────────── */}
+            {/* -- MODAL DE CAPITAL EXPUESTO / ADELANTADO -- */}
+            {showCapitalModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 10001, padding: '1.5rem'
+                }} onClick={() => setShowCapitalModal(false)}>
+                    <div style={{
+                        background: 'linear-gradient(135deg,#0F0F1A 0%,#1A0F2A 100%)',
+                        border: '1px solid rgba(239,68,68,0.25)',
+                        width: '100%', maxWidth: '1100px', maxHeight: '88vh',
+                        borderRadius: '24px', display: 'flex', flexDirection: 'column',
+                        overflow: 'hidden', boxShadow: '0 25px 60px rgba(239,68,68,0.15)'
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{ padding: '1.5rem 2rem', background: 'rgba(239,68,68,0.06)', borderBottom: '1px solid rgba(239,68,68,0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <BanknoteIcon size={22} color="#EF4444" /> Capital Expuesto -- Adelantos a Especialistas
+                                </h3>
+                                <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+                                    {capitalExpuesto.tickets.length} ticket{capitalExpuesto.tickets.length !== 1 ? 's' : ''} con capital adelantado - Total S/ {fmt(capitalExpuesto.total)}
+                                </p>
+                            </div>
+                            <button onClick={() => setShowCapitalModal(false)} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', width: '36px', height: '36px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>X</button>
+                        </div>
+                        {capitalExpuesto.enRiesgo > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.8rem 2rem', background: 'rgba(245,158,11,0.08)', borderBottom: '1px solid rgba(245,158,11,0.2)' }}>
+                                <AlertTriangle size={16} color="#F59E0B" />
+                                <span style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+                                    <strong style={{ color: '#F59E0B' }}>{capitalExpuesto.enRiesgo} ticket{capitalExpuesto.enRiesgo !== 1 ? 's' : ''}</strong> con +48h representan <strong style={{ color: '#EF4444' }}>S/ {fmt(capitalExpuesto.totalEnRiesgo)}</strong> en zona critica.
+                                </span>
+                            </div>
+                        )}
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 1rem' }}>
+                            {capitalExpuesto.tickets.length === 0 ? (
+                                <div style={{ padding: '3rem', textAlign: 'center', color: 'rgba(255,255,255,0.3)' }}>
+                                    <CheckCircle2 size={40} color="#10B981" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#10B981' }}>Sin capital expuesto</div>
+                                    <div style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>No hay adelantos en tickets activos.</div>
+                                </div>
+                            ) : (
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                                        <tr style={{ background: '#0F0F1A', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                            {['ID Ticket', 'Gestora', 'Agencia / Sede', 'Especialista', 'Monto Adelantado', 'Estado', 'Aging'].map(h => (
+                                                <th key={h} style={{ padding: '14px 12px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', textAlign: 'left', letterSpacing: '0.05em' }}>{h}</th>
+                                            ))}
+                                            <th style={{ padding: '14px 4px' }}></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {capitalExpuesto.tickets.map((t: any) => {
+                                            const agingHours = Math.floor(t._ageH);
+                                            const agingDays = Math.floor(t._ageH / 24);
+                                            const agingLabel = agingDays >= 1 ? `${agingDays}d ${agingHours % 24}h` : `${agingHours}h`;
+                                            const agingCol = t._ageH >= 72 ? '#EF4444' : t._ageH >= 48 ? '#F59E0B' : '#10B981';
+                                            const rowBg = t._isRiesgo ? 'rgba(239,68,68,0.04)' : 'transparent';
+                                            const rowBorder = t._isRiesgo ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.03)';
+                                            const estadoLabel = (t.estadoId || 'nuevo').replace(/_/g, ' ').toUpperCase();
+                                            return (
+                                                <tr key={t.id} style={{ borderBottom: `1px solid ${rowBorder}`, background: rowBg }}>
+                                                    <td style={{ padding: '14px 12px' }}>
+                                                        <div style={{ fontWeight: 800, fontSize: '0.82rem', color: t._isRiesgo ? '#FCA5A5' : 'white', fontFamily: 'monospace' }}>
+                                                            {t.numeroTicketCliente || t.id.substring(0, 8).toUpperCase()}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
+                                                            {new Date(t.createdAt || t.created_at).toLocaleDateString('es-PE')}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '14px 12px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 900, color: 'white', flexShrink: 0 }}>
+                                                                {(t._gestoraName || '?').substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>{t._gestoraName}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '14px 12px' }}>
+                                                        <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{t.cliente?.nombre || String.fromCharCode(8212)}</div>
+                                                        <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>{t._sede}</div>
+                                                    </td>
+                                                    <td style={{ padding: '14px 12px' }}>
+                                                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{t._especialista}</span>
+                                                    </td>
+                                                    <td style={{ padding: '14px 12px' }}>
+                                                        <div style={{ fontSize: '1rem', fontWeight: 900, color: t._isRiesgo ? '#EF4444' : '#F59E0B' }}>S/ {fmt(t._totalAdelantado)}</div>
+                                                        <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>{t._pagos.length} pago{t._pagos.length !== 1 ? 's' : ''}</div>
+                                                    </td>
+                                                    <td style={{ padding: '14px 12px' }}>
+                                                        <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.62rem', fontWeight: 800, background: t._isRiesgo ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)', color: t._isRiesgo ? '#FCA5A5' : 'rgba(255,255,255,0.6)', border: t._isRiesgo ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' }}>
+                                                            {estadoLabel}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '14px 12px' }}>
+                                                        <div style={{ fontWeight: 900, fontSize: '0.88rem', color: agingCol }}>{agingLabel}</div>
+                                                        <div style={{ width: '50px', height: '3px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', marginTop: '4px' }}>
+                                                            <div style={{ width: `${Math.min(t._ageH / 72 * 100, 100)}%`, height: '100%', background: agingCol, borderRadius: '2px' }} />
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '14px 8px' }}>
+                                                        <Link href={`/dashboard/admin/tickets?ticketId=${t.id}`} onClick={() => setShowCapitalModal(false)}
+                                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'white', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.2)'}
+                                                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'}
+                                                        >
+                                                            <ChevronRight size={14} />
+                                                        </Link>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <SectionHeader icon={<Zap size={16} />} title="Acceso Rápido a Módulos" color="#FF6600" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "0.75rem" }}>
                 {[
