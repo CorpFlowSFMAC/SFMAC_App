@@ -291,6 +291,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizacionBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
 
+    // NUEVO: Estado para solicitud de depósito en etapa Enviada
+    const [depositRequest, setDepositRequest] = useState({ concepto: "", monto: "" });
+
     // Estados para Triage de Mibanco
     const [triageSedeId, setTriageSedeId] = useState("");
     const [triageServiceType, setTriageServiceType] = useState("");
@@ -829,6 +832,39 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 
+    const handleRequestTechnicianDeposit = () => {
+        if (!depositRequest.concepto || !depositRequest.monto) {
+            showToast("Campos Incompletos", "Debe ingresar concepto y monto.", "error");
+            return;
+        }
+        const amount = parseFloat(depositRequest.monto);
+        if (isNaN(amount) || amount <= 0) {
+            showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
+            return;
+        }
+
+        const nuevoPago = {
+            id: Math.random().toString(36).substr(2, 9),
+            fecha: new Date().toISOString(),
+            monto: amount,
+            referencia: `Solicitud Gestora: ${depositRequest.concepto}`,
+            tipo: "Adelanto" // Por defecto se descuenta de la rentabilidad/técnico
+        };
+
+        const updatedHistorial = [...(ticketData.historialPagosTecnico || []), nuevoPago];
+        const updatedTicket = {
+            ...ticketData,
+            historialPagosTecnico: updatedHistorial
+        };
+
+        setTicketData(updatedTicket);
+        setDepositRequest({ concepto: "", monto: "" });
+        showToast("Pago Registrado", `Se registró el depósito de S/ ${amount.toFixed(2)} que afecta la rentabilidad del ticket.`, "success");
+        
+        // Sincronización inmediata
+        setTimeout(() => syncToSupabase(true), 100);
+    };
+
     const handleRequestExtraAdvance = () => {
         // Toggle input visibility instead of using prompt
         setShowExtraAdvanceInput(true);
@@ -1332,97 +1368,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         <div className={styles.operationalArea}>
                             {children || (
                                 <>
-                                    {/* 💰 MÓDULO DE TESORERÍA PERSISTENTE (COTIZANDO, ENVIADO, EN EJECUCIÓN) */}
-                                    {['en_cotizacion', 'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar'].includes(ticketData.estadoId) && (
-                                        <div className={styles.treasurySection} style={{ marginBottom: '25px' }}>
-                                            <div className={styles.executionCard} style={{ borderLeft: '4px solid #10B981', background: '#F0FDF4' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                                                    <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#065F46' }}>
-                                                        <DollarSign size={18} /> REGISTRO DE PAGOS Y GASTOS (ENTREGA DE DINERO)
-                                                    </h4>
-                                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#059669', background: '#DCFCE7', padding: '2px 8px', borderRadius: '4px' }}>OPERACIÓN FINANCIERA</span>
-                                                </div>
+                                    {/* El Módulo de Tesorería General ha sido removido según solicitud para evitar redundancia visual */}
 
-                                                <div className={styles.expenseEntryRow}>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Concepto (ej: Adelanto Viáticos)"
-                                                        className={styles.expenseInput}
-                                                        value={newExpense.concepto}
-                                                        onChange={(e) => setNewExpense({ ...newExpense, concepto: e.target.value })}
-                                                    />
-                                                    <input
-                                                        type="number"
-                                                        placeholder="Monto S/"
-                                                        className={styles.expenseInput}
-                                                        value={newExpense.monto}
-                                                        onChange={(e) => setNewExpense({ ...newExpense, monto: e.target.value })}
-                                                    />
-                                                    <select
-                                                        className={styles.expenseInput}
-                                                        value={newExpense.tipo}
-                                                        onChange={(e) => setNewExpense({ ...newExpense, tipo: e.target.value })}
-                                                    >
-                                                        <optgroup label="Pagos a Especialista (Deducibles)">
-                                                            <option>Adelanto</option>
-                                                            <option>Viáticos</option>
-                                                            <option>Pago por Diagnóstico</option>
-                                                            <option>Factura Técnico</option>
-                                                        </optgroup>
-                                                        <optgroup label="Gastos Administrativos / Otros">
-                                                            <option>Gasto Operativo</option>
-                                                            <option>Compra Material</option>
-                                                        </optgroup>
-                                                    </select>
-                                                    <button 
-                                                        className={styles.addExpenseBtn} 
-                                                        onClick={handleAddExpense} 
-                                                        title="Registrar en Ticket"
-                                                        style={{ background: '#10B981' }}
-                                                    >
-                                                        <Plus size={16} />
-                                                    </button>
-                                                </div>
-
-                                                {/* Tabla de movimientos recientes en este ticket */}
-                                                {(gastos.length > 0 || (ticketData.historialPagosTecnico || []).length > 0) && (
-                                                    <div style={{ marginTop: '15px', borderTop: '1px solid #DCFCE7', paddingTop: '10px' }}>
-                                                        <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#065F46', marginBottom: '8px' }}>MOVIMIENTOS REGISTRADOS:</p>
-                                                        <table className={styles.expenseTable}>
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>Fecha</th>
-                                                                    <th>Concepto</th>
-                                                                    <th>Monto</th>
-                                                                    <th>Estado</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {/* Pagos al técnico (Deducibles) */}
-                                                                {(ticketData.historialPagosTecnico || []).map((p: any) => (
-                                                                    <tr key={p.id}>
-                                                                        <td>{new Date(p.fecha).toLocaleDateString('es-PE')}</td>
-                                                                        <td><span style={{ color: '#059669', fontSize: '0.7rem', fontWeight: 700 }}>[PAGO]</span> {p.referencia}</td>
-                                                                        <td style={{ fontWeight: 800 }}>S/ {p.monto.toFixed(2)}</td>
-                                                                        <td><span className={styles.statusBadge} style={{ background: '#DCFCE7', color: '#065F46' }}>Confirmado</span></td>
-                                                                    </tr>
-                                                                ))}
-                                                                {/* Gastos operativos */}
-                                                                {gastos.map((g: any) => (
-                                                                    <tr key={g.id}>
-                                                                        <td>---</td>
-                                                                        <td><span style={{ color: '#3B82F6', fontSize: '0.7rem', fontWeight: 700 }}>[{g.tipo.toUpperCase()}]</span> {g.concepto}</td>
-                                                                        <td style={{ fontWeight: 800 }}>S/ {g.monto.toFixed(2)}</td>
-                                                                        <td><span className={styles.statusBadge} style={{ background: '#DBEAFE', color: '#1E40AF' }}>Gasto</span></td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
 
                                     {ticketData.estadoId === "borrador" && (
                                         <div className={styles.triageBox}>
@@ -2289,6 +2236,83 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 >
                                                     <ArrowRight size={16} /> Corregir Presupuesto o Reenviar
                                                 </button>
+                                            </div>
+
+                                            {/* SECCIÓN NUEVA: SOLICITUD DE DEPÓSITO EN ETAPA ENVIADA */}
+                                            <div style={{
+                                                marginTop: '10px',
+                                                padding: '24px',
+                                                background: '#f8fafc',
+                                                borderRadius: '24px',
+                                                border: '1px solid #e2e8f0',
+                                                width: '100%',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '16px',
+                                                boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <div style={{ padding: '8px', background: '#e0f2fe', borderRadius: '10px', color: '#0369a1' }}>
+                                                        <Wallet size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e293b' }}>Solicitud de Pago/Depósito</h4>
+                                                        <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Registre adelantos que afectarán la rentabilidad final</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Concepto (ej: Adelanto para técnico)" 
+                                                        value={depositRequest.concepto}
+                                                        onChange={(e) => setDepositRequest({...depositRequest, concepto: e.target.value})}
+                                                        style={{ 
+                                                            flex: 2, 
+                                                            padding: '12px 16px', 
+                                                            borderRadius: '12px', 
+                                                            border: '2px solid #e2e8f0',
+                                                            fontSize: '14px',
+                                                            outline: 'none',
+                                                            transition: 'border-color 0.2s'
+                                                        }}
+                                                    />
+                                                    <div style={{ position: 'relative', flex: 1 }}>
+                                                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: '14px' }}>S/</span>
+                                                        <input 
+                                                            type="number" 
+                                                            placeholder="0.00" 
+                                                            value={depositRequest.monto}
+                                                            onChange={(e) => setDepositRequest({...depositRequest, monto: e.target.value})}
+                                                            style={{ 
+                                                                width: '100%',
+                                                                padding: '12px 16px 12px 32px', 
+                                                                borderRadius: '12px', 
+                                                                border: '2px solid #e2e8f0',
+                                                                fontSize: '14px',
+                                                                fontWeight: 700,
+                                                                outline: 'none',
+                                                                boxSizing: 'border-box'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <button 
+                                                        onClick={handleRequestTechnicianDeposit}
+                                                        style={{ 
+                                                            background: '#0f172a', 
+                                                            color: 'white', 
+                                                            padding: '0 24px', 
+                                                            borderRadius: '12px', 
+                                                            fontWeight: 800, 
+                                                            fontSize: '14px',
+                                                            cursor: 'pointer',
+                                                            border: 'none',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        Solicitar
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
