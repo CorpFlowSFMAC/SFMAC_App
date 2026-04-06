@@ -111,7 +111,7 @@ function GestoraBar({ name, count, max, color }: any) {
 // MAIN EXECUTIVE DASHBOARD
 // ════════════════════════════════════════════
 export default function AdminDashboard() {
-    const { tickets, loadingTickets, technicians } = useAppData();
+    const { tickets, loadingTickets, technicians, gestoras } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
     const [now] = useState(() => new Date());
 
@@ -216,7 +216,10 @@ export default function AdminDashboard() {
         };
     }, [tickets]);
 
-    // ── MÓDULO 3: RRHH / Productividad ────────
+    // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
+    const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
+    const EN_PROCESO_STATES_RRHH = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado"];
+
     const rrhh = useMemo(() => {
         const active = tickets.filter((t: any) =>
             !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId))
@@ -229,26 +232,38 @@ export default function AdminDashboard() {
         const expired = active.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS);
         const slaGlobal = ((total - expired.length) / total) * 100;
 
-        // FCR (tickets cerrados sin re-apertura — simulado desde historial)
+        // FCR (tickets cerrados sin re-apertura — simulado)
         const fcrPct = closed.length > 0 ? Math.min(92, 70 + closed.length * 2) : 0;
-
-        // NPS simulado (promedio de satisfacción de metadata)
         const npsPct = 78;
 
-        // Carga por gestora (usando created_by o metadata)
-        const gestoraMap: Record<string, number> = {};
-        active.forEach((t: any) => {
-            const g = t.gestora?.nombre || t.created_by || "Sin asignar";
-            gestoraMap[g] = (gestoraMap[g] || 0) + 1;
-        });
-        const gestoras = Object.entries(gestoraMap)
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 6);
-        const maxLoad = Math.max(...gestoras.map(g => g.count), 1);
+        // Distribución por gestora REAL (matching por gestora_id)
+        const gestorasData = gestoras.map((g: any) => {
+            const nombre = g.name || g.nombre || g.full_name || "Gestora";
+            const ticketsGestora = active.filter((t: any) => {
+                const tGestoraId = t.gestora_id || t.metadata?.gestora_id;
+                return tGestoraId === g.id;
+            });
 
-        return { slaGlobal, fcrPct, npsPct, gestoras, maxLoad, expired: expired.length };
-    }, [tickets]);
+            const nuevos = ticketsGestora.filter((t: any) => NUEVOS_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
+            const enProceso = ticketsGestora.filter((t: any) => EN_PROCESO_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
+            const vencidos = ticketsGestora.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS).length;
+
+            return { id: g.id, nombre, count: ticketsGestora.length, nuevos, enProceso, vencidos, tickets: ticketsGestora };
+        }).sort((a: any, b: any) => b.count - a.count);
+
+        // Tickets SIN gestora asignada
+        const sinGestora = active.filter((t: any) => {
+            const tGestoraId = t.gestora_id || t.metadata?.gestora_id;
+            return !tGestoraId || !gestoras.find((g: any) => g.id === tGestoraId);
+        });
+        if (sinGestora.length > 0) {
+            gestorasData.push({ id: 'sin_asignar', nombre: 'Sin Gestora', count: sinGestora.length, nuevos: sinGestora.length, enProceso: 0, vencidos: 0, tickets: sinGestora });
+        }
+
+        const maxLoad = Math.max(...gestorasData.map((g: any) => g.count), 1);
+
+        return { slaGlobal, fcrPct, npsPct, gestoras: gestorasData, maxLoad, expired: expired.length };
+    }, [tickets, gestoras]);
 
     // ── SEMÁFORO GLOBAL ─────────────────────
     const globalLight = useMemo(() => semaforo([
@@ -442,14 +457,66 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Carga por gestora */}
+                {/* Carga por gestora — NUEVA VERSIÓN CON DATOS REALES */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
-                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "1rem" }}>Distribución de Carga</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Distribución de Carga</div>
+                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>CLICK para ver tickets</div>
+                    </div>
                     {rrhh.gestoras.length === 0 ? (
                         <div style={{ textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", paddingTop: "1rem" }}>Sin datos de asignación</div>
                     ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                            {rrhh.gestoras.map(g => <GestoraBar key={g.name} name={g.name} count={g.count} max={rrhh.maxLoad} color="#8B5CF6" />)}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                            {rrhh.gestoras.map((g: any) => {
+                                const pct = rrhh.maxLoad > 0 ? (g.count / rrhh.maxLoad) * 100 : 0;
+                                const stress = g.count > 8 ? "#EF4444" : g.count > 5 ? "#F59E0B" : "#10B981";
+                                const initials = (g.nombre || "?").substring(0, 2).toUpperCase();
+                                return (
+                                    <div
+                                        key={g.id}
+                                        onClick={() => { setModalTitle(`Tickets de ${g.nombre}`); setModalTickets(g.tickets || []); setShowListModal(true); }}
+                                        style={{
+                                            padding: "0.75rem 0.9rem", borderRadius: "12px",
+                                            background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+                                            cursor: "pointer", transition: "all 0.2s"
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.07)"; e.currentTarget.style.borderColor = `${stress}40`; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.03)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; }}
+                                    >
+                                        {/* Row 1: Avatar + Nombre + Total */}
+                                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.5rem" }}>
+                                            <div style={{
+                                                width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
+                                                background: g.id === 'sin_asignar' ? "rgba(255,255,255,0.1)" : "linear-gradient(135deg,#8B5CF6,#6366F1)",
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                                fontSize: "0.72rem", fontWeight: 900, color: "white"
+                                            }}>{initials}</div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "rgba(255,255,255,0.9)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.nombre}</div>
+                                                <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.35)" }}>
+                                                    {g.nuevos} nuevo{g.nuevos !== 1 ? "s" : ""} · {g.enProceso} en proceso{g.vencidos > 0 ? ` · ⚠️ ${g.vencidos} vencido${g.vencidos !== 1 ? "s" : ""}` : ""}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                                <span style={{ fontSize: "1.1rem", fontWeight: 900, color: stress, lineHeight: 1 }}>{g.count}</span>
+                                                <span style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>tickets</span>
+                                            </div>
+                                        </div>
+                                        {/* Row 2: Barra de progreso */}
+                                        <div style={{ height: "5px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
+                                            <div style={{ height: "100%", width: `${pct}%`, background: stress, borderRadius: "999px", transition: "width 0.8s ease" }} />
+                                        </div>
+                                        {/* Row 3: Badges */}
+                                        {g.vencidos > 0 && (
+                                            <div style={{ marginTop: "0.4rem", display: "flex", gap: "4px" }}>
+                                                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 6px", borderRadius: "4px", background: "rgba(239,68,68,0.15)", color: "#EF4444", border: "1px solid rgba(239,68,68,0.3)" }}>
+                                                    {g.vencidos} SLA VENCIDO{g.vencidos > 1 ? "S" : ""}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
