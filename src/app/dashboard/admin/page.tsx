@@ -768,13 +768,20 @@ export default function AdminDashboard() {
                                         const agingCol = h >= 72 ? "#EF4444" : h >= 48 ? "#F59E0B" : "#10B981";
                                         return (
                                             <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}>
+
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem' }}>{t.id.substring(0,8).toUpperCase()}</div>
+                                                    <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                                                        {t.numeroTicketCliente || t.id.substring(0,8).toUpperCase()}
+                                                    </div>
                                                     <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)' }}>{new Date(t.createdAt || t.created_at).toLocaleDateString()}</div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.82rem' }}>{t.client?.name || "Cliente SINFIMAC"}</div>
-                                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>{t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir"}</div>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.82rem' }}>
+                                                        {t.cliente?.nombre || t.client?.name || "Cliente SINFIMAC"}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+                                                        {t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir"}
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <span style={{ 
