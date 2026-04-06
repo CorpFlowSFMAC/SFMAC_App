@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo, useEffect } from "react";
 import {
@@ -207,6 +207,7 @@ export default function AdminDashboard() {
         const calcAmount = (arr: any[]) => arr.reduce((s: number, t: any) => s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
 
         return {
+            tickets: pendientes,
             total: pendientes.length,
             totalPipeline,
             lucro,
@@ -459,9 +460,24 @@ export default function AdminDashboard() {
 
                 {/* Pipeline total + Capital Expuesto */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
-                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.75rem" }}>Pipeline Pendiente</div>
-                    <div style={{ fontSize: "2rem", fontWeight: 900, color: "#F59E0B" }}>S/ {fmt(tesoreria.totalPipeline)}</div>
-                    <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.35rem" }}>{tesoreria.total} servicios en curso</div>
+                    
+                    {/* Pipeline Pendiente — CLICKABLE */}
+                    <div 
+                        onClick={() => {
+                            setModalTitle("Pipeline Pendiente (Cotizaciones y Liquidaciones en curso)");
+                            setModalTickets(tesoreria.tickets);
+                            setShowListModal(true);
+                        }}
+                        style={{ padding: "0.5rem", margin: "-0.5rem -0.5rem 0.5rem -0.5rem", borderRadius: "10px", cursor: "pointer", transition: "background 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,11,0.06)"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                            Pipeline Pendiente <ChevronRight size={12} color="rgba(245,158,11,0.6)" />
+                        </div>
+                        <div style={{ fontSize: "2rem", fontWeight: 900, color: "#F59E0B" }}>S/ {fmt(tesoreria.totalPipeline)}</div>
+                        <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.25rem" }}>{tesoreria.total} servicios en curso</div>
+                    </div>
 
                     {/* Capital Expuesto — CLICKABLE */}
                     <div
