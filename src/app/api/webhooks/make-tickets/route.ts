@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { routingAPI } from '@/lib/routing-api';
 
-// ID de MiBanco (constante fija para este flujo)
 const MIBANCO_ID = 'b65727ed-94d3-46ef-ab7d-62621ec46acb';
 
 export async function POST(req: NextRequest) {
-    // 1. SEGURIDAD Y VALIDACIÓN
     const secret = req.headers.get('x-corpflow-secret');
     const webhookSecret = process.env.WEBHOOK_SECRET;
 
@@ -17,81 +15,71 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
     }
 
-    // 1.B DUMPEO A BASE DE DATOS PARA DIAGNÓSTICO (TODO SE GUARDA)
+    const diagLog: any = {
+        timestamp: new Date().toISOString(),
+        webhook: 'make-tickets',
+        headers: Object.fromEntries(req.headers.entries()),
+        payload,
+        steps: []
+    };
+
+    const log = (step: string, detail: any) => {
+        console.log(`[make-tickets] ${step}:`, detail);
+        diagLog.steps.push({ step, detail, ts: new Date().toISOString() });
+    };
+
     try {
-        await supabase.from('debug_logs').insert({ log_data: { 
-            headers: Object.fromEntries(req.headers.entries()),
-            payload: payload, 
-            secretReceived: secret,
-            webhookSecretEnv: webhookSecret || 'UNDEFINED'
-        }});
+        await supabase.from('debug_logs').insert({ log_data: diagLog });
     } catch(e) { /* ignore */ }
 
-    // 2. SEGURIDAD RELAJADA (SI VERCEL NO TIENE EL SECRETO AÚN, LO DEJAMOS PASAR POR AHORA)
     if (webhookSecret && secret !== webhookSecret) {
-        console.error('Webhook Auth Failed:', {
-            received: secret,
-            envSet: !!webhookSecret
-        });
+        log('AUTH_FAILED', { received: secret });
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
-        // Soportar keys enviadas desde Microsoft Power Automate (español)
-        const sender = payload.remitente || payload.sender || payload.Sender || payload.from || payload.From || '';
-        const subject = payload.asunto || payload.subject || payload.Subject || '';
-        const body = payload.cuerpo || payload.body || payload.Body || '';
+        const sender  = payload.remitente || payload.sender  || payload.Sender  || payload.from || payload.From || '';
+        const subject = payload.asunto    || payload.subject || payload.Subject || '';
+        const body    = payload.cuerpo    || payload.body    || payload.Body    || '';
 
-        // Validar remitente estricto pero tolerante a formatos de nombre de Outlook
-        // NOTA: Se comenta esta validación porque Power Automate a veces envía el "Display Name" 
-        // en vez del correo, y el trigger de Power Automate ya filtra físicamente el buzón.
-        /*
-        if (!sender.toLowerCase().includes('j.portocarrero@sinfimac.pe') && !sender.toLowerCase().includes('janeth')) {
-            console.log(`Webhook ignorado: Remitente no autorizado. Remitente real: ${sender}`);
-            return NextResponse.json({ message: 'Ignorado: Remitente no autorizado', receivedSender: sender }, { status: 200 });
-        }
-        */
+        log('CAMPOS', { sender, subject: subject.substring(0, 120) });
 
-        // 2. EXTRACCIÓN INTELIGENTE (REGEX) BISTURÍ DE TEXTO
+        const MAIN_REGEX = /(?:RV:|FW:|FWD:|RE:)?\s*ST:\s*([\w.\-]+)\s*-\s*TIPO\s*:\s*(.+?)\s*-\s*INMUEBLE\s*:\s*(.+)/i;
+        const ALT_REGEX  = /Ticket:?\s*([\w.\-]+).*?Tipo:?\s*(.+?)(?:Sede|Inmueble|Agencia):?\s*(.+)/i;
+
         const textToParse = `${subject} \n ${body}`;
-        const formatRegex = /(?:RV:\s*|FW:\s*|FWD:\s*)?ST:\s*(.*?)\s*-\s*TIPO\s*:\s*(.*?)\s*-\s*INMUEBLE\s*:\s*(.*)/i;
-        let match = textToParse.match(formatRegex);
-        
-        // Intentar otro formato si es necesario (ej: sin guiones)
-        if (!match) {
-            const altRegex = /Ticket:?\s*([a-zA-Z0-9.\-_]+).*?Tipo:?\s*(.*?)(?:Sede|Inmueble|Agencia):?\s*(.*)/i;
-            match = textToParse.match(altRegex);
-        }
+        let match = textToParse.match(MAIN_REGEX);
+        if (!match) match = textToParse.match(ALT_REGEX);
 
         if (!match) {
-            // Si el texto no encaja, forzar creación como Ticket de Diagnóstico (Borrador) para no perder el correo
-            console.error('El texto no cuadra con la Regex:', textToParse.substring(0, 100));
-            const fallbackTicket = {
+            log('REGEX_FALLO', textToParse.substring(0, 200));
+            const fallback = {
                 client_id: MIBANCO_ID,
                 status_id: 'borrador',
-                description: body || `Error en Asunto: ${subject}`,
-                client_ticket_number: 'DESC-' + Date.now().toString().slice(-4),
-                created_by: 'SISTEMA (IA - WEBHOOK FAIL)',
-                metadata: { origen: 'CORREO_FALLIDO', subject_original: subject, sender }
+                description: body || `Asunto: ${subject}`,
+                client_ticket_number: 'BORRADOR-' + Date.now().toString().slice(-6),
+                created_by: 'SISTEMA (MAKE-WEBHOOK FAIL)',
+                metadata: { origen: 'CORREO_FALLIDO', subject_original: subject, remitente_original: sender, diagLog }
             };
-            await supabase.from('tickets').insert(fallbackTicket);
-            return NextResponse.json({ error: 'Formato no reconocido pero ticket guardado en borrador' }, { status: 400 });
+            await supabase.from('tickets').insert(fallback);
+            return NextResponse.json({ error: 'Formato no reconocido — ticket en borrador', subject }, { status: 400 });
         }
 
-        let ticket_banco = match[1]?.trim() || ''; 
-        const tipo_incidencia = match[2]?.trim() || ''; 
-        const inmueble_raw = match[3]?.trim() || '';
+        const ticket_banco    = match[1].trim();
+        const tipo_incidencia = match[2].trim();
+        const inmueble_raw    = match[3].trim();
 
-        // Extraer código corto de sede para búsqueda (ej. "AG127")
-        const inmuebleRegex = /^([\w\-]+)\s*-\s*(.*)$/;
-        const inmuebleMatch = inmueble_raw.match(inmuebleRegex);
-        const codigo_sede = inmuebleMatch ? inmuebleMatch[1].trim() : inmueble_raw.split(' ')[0];
-        let nombre_sede = inmuebleMatch ? inmuebleMatch[2].trim() : inmueble_raw;
-        
-        // Limpiar prefijos comunes como "AG " o "BN " para mejorar las coincidencias aproximadas
-        const cleanName = nombre_sede.replace(/^(AG\s+|BN\s+|SEDE\s+)/i, '').trim();
+        log('PARSED', { ticket_banco, tipo_incidencia, inmueble_raw });
 
-        // 3. DEDUPLICACIÓN
+        const inmuebleMatch = inmueble_raw.match(/^([\w\-]+)\s*-\s*(.*)$/);
+        const codigo_sede   = inmuebleMatch ? inmuebleMatch[1].trim() : inmueble_raw.split(' ')[0];
+        const nombre_sede   = inmuebleMatch ? inmuebleMatch[2].trim() : inmueble_raw;
+        const cleanNombre   = nombre_sede
+            .replace(/\b(AG|AGENCIA|MATRIZ|SUCURSAL|OF|OFICINA|SEDE|BN)\b/gi, '')
+            .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, ' ')
+            .replace(/\s+/g, ' ').trim();
+
+        // DEDUPLICACIÓN
         const { data: existing } = await supabase
             .from('tickets')
             .select('id, status_id')
@@ -100,121 +88,99 @@ export async function POST(req: NextRequest) {
             .maybeSingle();
 
         if (existing) {
-            console.log(`Ticket duplicado ignorado: ${ticket_banco}`);
-            return NextResponse.json({
-                id: existing.id,
-                message: `Ticket ya existe con número ${ticket_banco}`,
-                duplicate: true
-            }, { status: 200 });
+            log('DUPLICADO', { id: existing.id });
+            return NextResponse.json({ id: existing.id, message: `Ticket ya existe: ${ticket_banco}`, duplicate: true }, { status: 200 });
         }
 
-        // 4. BÚSQUEDA Y ENRUTAMIENTO LOGÍSTICO (CASCADA)
-        // Paso A: Match por código directo (es el más fiable si viene AG127)
-        const { data: branchByCode } = await supabase
+        // BÚSQUEDA DE SEDE
+        let finalBranchId: string | null = null;
+        let resolvedClientId = MIBANCO_ID;
+
+        const { data: byCode } = await supabase
             .from('branch_offices')
-            .select('id, client_id, name')
+            .select('id, name, client_id')
+            .eq('client_id', MIBANCO_ID)
             .ilike('codigo_cliente', `%${codigo_sede}%`)
             .maybeSingle();
 
-        let finalBranchId = branchByCode?.id;
-        let resolvedClientId = branchByCode?.client_id || MIBANCO_ID;
+        if (byCode?.id) {
+            finalBranchId = byCode.id;
+            resolvedClientId = byCode.client_id || MIBANCO_ID;
+            log('SEDE_CODIGO', { branch: byCode.name });
+        }
 
-        // Paso B: BÚSQUEDA FLEXIBLE (Si falla el código o el código es genérico)
+        if (!finalBranchId && cleanNombre.length >= 4) {
+            const { data: byName } = await supabase
+                .from('branch_offices')
+                .select('id, name, client_id')
+                .eq('client_id', MIBANCO_ID)
+                .ilike('name', `%${cleanNombre}%`)
+                .maybeSingle();
+            if (byName?.id) { finalBranchId = byName.id; resolvedClientId = byName.client_id || MIBANCO_ID; log('SEDE_NOMBRE', { branch: byName.name }); }
+        }
+
         if (!finalBranchId) {
-            // Limpieza agresiva: "AG127 - AG OTUZCO MATRIZ" -> "OTUZCO"
-            const aggressiveClean = inmueble_raw
-                .replace(/^[A-Z0-9]+\s*-\s*/i, '') // Quita el prefijo "AG127 - "
-                .replace(/\b(AG|AGENCIA|MATRIZ|SUCURSAL|OF|OFICINA|SEDE|BN)\b/gi, '') // Quita palabras genéricas
-                .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, ' ') // Quita caracteres especiales
-                .trim();
-
-            console.log(`🔍 Buscando sede flexible para: "${inmueble_raw}" -> Limpio: "${aggressiveClean}"`);
-
-            // 1. Intentar buscar si el nombre de la sede está contenido en el inmueble_raw
-            // Traemos las sedes del cliente (o todas si no hay cliente) para comparar en JS
             const { data: allBranches } = await supabase
                 .from('branch_offices')
                 .select('id, name, client_id, codigo_cliente')
-                .eq('client_id', MIBANCO_ID); // Optimizado para MiBanco
+                .eq('client_id', MIBANCO_ID);
 
-            // Búsqueda por coincidencia de palabras clave
-            const match = allBranches?.find(b => {
-                const dbName = b.name.toLowerCase();
-                const rawName = inmueble_raw.toLowerCase();
-                const cleanInput = aggressiveClean.toLowerCase();
-                
-                return (
-                    rawName.includes(dbName) || 
-                    dbName.includes(cleanInput) ||
-                    (b.codigo_cliente && rawName.includes(b.codigo_cliente.toLowerCase()))
-                );
+            const fuzzy = allBranches?.find(b => {
+                const dbLow  = b.name.toLowerCase();
+                const rawLow = inmueble_raw.toLowerCase();
+                const cLow   = cleanNombre.toLowerCase();
+                const codLow = (b.codigo_cliente || '').toLowerCase();
+                return rawLow.includes(dbLow) || dbLow.includes(cLow) || (codLow && rawLow.includes(codLow));
             });
-
-            if (match) {
-                finalBranchId = match.id;
-                resolvedClientId = match.client_id;
-                console.log(`✅ Sede encontrada por Match Flexible: ${match.name} (ID: ${match.id})`);
-            }
+            if (fuzzy) { finalBranchId = fuzzy.id; resolvedClientId = fuzzy.client_id || MIBANCO_ID; log('SEDE_FUZZY', { branch: fuzzy.name }); }
+            else { log('SEDE_NO_ENCONTRADA', { codigo_sede, cleanNombre }); }
         }
 
-        // Paso B: Enrutamiento en Cascada (routingAPI resuelve Agencia > Zona > Cliente)
-        let gestoraId = null;
+        let gestoraId: string | null = null;
         if (finalBranchId) {
             gestoraId = await routingAPI.resolveGestora(finalBranchId);
-            console.log(`🤖 Enrutamiento Inteligente Resuelto: Agencia ${finalBranchId} -> Gestora ${gestoraId}`);
+            log('ENRUTAMIENTO', { finalBranchId, gestoraId });
         }
 
         const titulo = `${ticket_banco} - ${inmueble_raw}`;
-
-        // 5. CREACIÓN DEL TICKET (MUTACIÓN Y NOTIFICACIÓN REALTIME AUTOMÁTICA)
         const ticketToCreate: any = {
             client_id: resolvedClientId,
-            status_id: 'borrador', // Estado inicial de triage (requiere confirmación)
-            description: body || `Ticket importado automáticamente. Tipo: ${tipo_incidencia}\nAsunto original: ${subject}`,
+            status_id: 'borrador',
+            description: body || `Importado. Tipo: ${tipo_incidencia}\nAsunto: ${subject}`,
             client_ticket_number: ticket_banco,
             service_type: null,
-            created_by: 'SISTEMA (IA - WEBHOOK)',
-            branch_id: finalBranchId,
-            gestora_id: gestoraId, // Asignación inteligente en cascada
+            created_by: 'SISTEMA (MAKE-WEBHOOK)',
+            branch_id: finalBranchId || null,
+            gestora_id: gestoraId || null,
             metadata: {
-                titulo,
-                subject_original: subject,
-                remitente_original: sender,
-                codigo_sede_extraido: codigo_sede,
+                titulo, subject_original: subject, remitente_original: sender,
+                codigo_sede_extraido: codigo_sede, nombre_sede_extraido: nombre_sede,
                 sede_reportada_cliente: inmueble_raw,
                 tipo_incidencia_reportada: tipo_incidencia,
                 origen: 'CORREO_A_TICKET',
                 enrutamiento_cascada_aplicado: true,
-                gestora_auto_asignada: !!gestoraId
+                gestora_auto_asignada: !!gestoraId,
+                sede_mapeada: !!finalBranchId
             }
         };
-
-        if (!finalBranchId) {
-            ticketToCreate.sede_reportada_cliente = inmueble_raw;
-        }
+        if (!finalBranchId) ticketToCreate.sede_reportada_cliente = inmueble_raw;
 
         const { data: newTicket, error: insertError } = await supabase
-            .from('tickets')
-            .insert(ticketToCreate)
-            .select('id')
-            .single();
+            .from('tickets').insert(ticketToCreate).select('id').single();
 
         if (insertError) {
-            console.error('Error insertando ticket:', insertError);
+            log('INSERT_ERROR', insertError);
             return NextResponse.json({ error: 'Error al crear ticket', detail: insertError.message }, { status: 500 });
         }
 
-        console.log(`✅ Ticket Inteligente creado: ${ticket_banco} -> ID: ${newTicket.id} -> Gestora: ${gestoraId || 'Sin Asignar'}`);
+        log('TICKET_CREADO', { id: newTicket.id, ticket_banco, gestoraId });
         return NextResponse.json({
-            id: newTicket.id,
-            ticket_numero: ticket_banco,
-            sede_mapeada: !!finalBranchId,
-            enrutado_a_gestora: !!gestoraId,
-            gestora_id: gestoraId
+            id: newTicket.id, ticket_numero: ticket_banco,
+            sede_mapeada: !!finalBranchId, enrutado_a_gestora: !!gestoraId, gestora_id: gestoraId
         }, { status: 200 });
 
     } catch (error: any) {
-        console.error('Webhook Error:', error);
+        console.error('[make-tickets] EXCEPCION:', error);
         return NextResponse.json({ error: 'Internal Server Error', detail: error.message }, { status: 500 });
     }
 }
