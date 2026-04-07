@@ -80,9 +80,7 @@ export const gestorasAPI = {
             .eq('status', 'active')
             .order('name');
 
-        if (legacyError) {
-            console.warn('[GestorasAPI] Error fetching legacy gestoras:', legacyError);
-        }
+        if (legacyError) { /* Continuar con lista vacía si tabla legacy no existe */ }
 
         const gestorasList = legacyGestoras || [];
 
@@ -93,9 +91,7 @@ export const gestorasAPI = {
             .eq('rol', 'GESTORA')
             .order('nombre_completo');
 
-        if (perfilError) {
-            console.warn('[GestorasAPI] Error fetching from perfiles, falling back:', perfilError);
-        }
+        if (perfilError) { /* Continuar sin perfiles RBAC si hay error de acceso */ }
 
         // Combinar: Para cada perfil, buscar si ya tiene registro en `gestoras`:
         const finalGestoras = [...gestorasList];

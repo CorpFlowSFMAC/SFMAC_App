@@ -257,11 +257,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     normalized
                                 );
                             }
-                        } catch (err) {
-                            console.warn(
-                                "[AppData] No pudo refetch ticket, merge superficial:",
-                                err
-                            );
+                        } catch {
+                            // Fallback: aplicar merge superficial con status_id disponible
                             const pNew = payload.new as any;
                             const statusId = pNew.status_id;
                             if (statusId) {
