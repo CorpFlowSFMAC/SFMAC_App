@@ -2271,58 +2271,77 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
                                                 </div>
                                                 
-                                                <div style={{ display: 'flex', gap: '10px' }}>
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="Concepto (ej: Adelanto para técnico)" 
-                                                        value={depositRequest.concepto}
-                                                        onChange={(e) => setDepositRequest({...depositRequest, concepto: e.target.value})}
-                                                        style={{ 
-                                                            flex: 2, 
-                                                            padding: '12px 16px', 
-                                                            borderRadius: '12px', 
-                                                            border: '2px solid #e2e8f0',
-                                                            fontSize: '14px',
-                                                            outline: 'none',
-                                                            transition: 'border-color 0.2s'
-                                                        }}
-                                                    />
-                                                    <div style={{ position: 'relative', flex: 1 }}>
-                                                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: '14px' }}>S/</span>
+                                                {(ticketData.solicitudesDeposito || []).some((s: any) => s.estado === 'pendiente') ? (
+                                                    <div style={{ 
+                                                        marginTop: '8px', 
+                                                        padding: '16px', 
+                                                        background: '#fffbeb', 
+                                                        borderRadius: '12px', 
+                                                        border: '1px dashed #f59e0b',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '10px',
+                                                        color: '#d97706',
+                                                        fontWeight: 700
+                                                    }}>
+                                                        <Clock size={20} />
+                                                        <span>TIENES UNA SOLICITUD EN ESPERA DE APROBACIÓN POR TESORERÍA</span>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', gap: '10px' }}>
                                                         <input 
-                                                            type="number" 
-                                                            placeholder="0.00" 
-                                                            value={depositRequest.monto}
-                                                            onChange={(e) => setDepositRequest({...depositRequest, monto: e.target.value})}
+                                                            type="text" 
+                                                            placeholder="Concepto (ej: Adelanto para técnico)" 
+                                                            value={depositRequest.concepto}
+                                                            onChange={(e) => setDepositRequest({...depositRequest, concepto: e.target.value})}
                                                             style={{ 
-                                                                width: '100%',
-                                                                padding: '12px 16px 12px 32px', 
+                                                                flex: 2, 
+                                                                padding: '12px 16px', 
                                                                 borderRadius: '12px', 
                                                                 border: '2px solid #e2e8f0',
                                                                 fontSize: '14px',
-                                                                fontWeight: 700,
                                                                 outline: 'none',
-                                                                boxSizing: 'border-box'
+                                                                transition: 'border-color 0.2s'
                                                             }}
                                                         />
+                                                        <div style={{ position: 'relative', flex: 1 }}>
+                                                            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: '14px' }}>S/</span>
+                                                            <input 
+                                                                type="number" 
+                                                                placeholder="0.00" 
+                                                                value={depositRequest.monto}
+                                                                onChange={(e) => setDepositRequest({...depositRequest, monto: e.target.value})}
+                                                                style={{ 
+                                                                    width: '100%',
+                                                                    padding: '12px 16px 12px 32px', 
+                                                                    borderRadius: '12px', 
+                                                                    border: '2px solid #e2e8f0',
+                                                                    fontSize: '14px',
+                                                                    fontWeight: 700,
+                                                                    outline: 'none',
+                                                                    boxSizing: 'border-box'
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <button 
+                                                            onClick={handleRequestTechnicianDeposit}
+                                                            style={{ 
+                                                                background: '#0f172a', 
+                                                                color: 'white', 
+                                                                padding: '0 24px', 
+                                                                borderRadius: '12px', 
+                                                                fontWeight: 800, 
+                                                                fontSize: '14px',
+                                                                cursor: 'pointer',
+                                                                border: 'none',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                        >
+                                                            Solicitar
+                                                        </button>
                                                     </div>
-                                                    <button 
-                                                        onClick={handleRequestTechnicianDeposit}
-                                                        style={{ 
-                                                            background: '#0f172a', 
-                                                            color: 'white', 
-                                                            padding: '0 24px', 
-                                                            borderRadius: '12px', 
-                                                            fontWeight: 800, 
-                                                            fontSize: '14px',
-                                                            cursor: 'pointer',
-                                                            border: 'none',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                    >
-                                                        Solicitar
-                                                    </button>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
