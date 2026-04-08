@@ -244,9 +244,10 @@ export default function PaymentsPage() {
         // Los OS modernos ignoran window.location si el scheme no está instalado;
         // en ese caso el admin simplemente cambia de app manualmente.
         await new Promise(r => setTimeout(r, 300)); // pequeño delay para que el toast sea visible
+        const isAndroid = /android/i.test(navigator.userAgent || '');
         const deepLinks: Record<string, string> = {
-            yape: 'yape://',
-            plin: 'plin://',
+            yape: isAndroid ? 'intent://share#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://',
+            plin: isAndroid ? 'intent://share#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://',
             banco: 'https://www.google.com', // placeholder seguro para banco tradicional
         };
         try {
@@ -1101,9 +1102,25 @@ export default function PaymentsPage() {
                                 <p style={{ margin: '8px 0 4px', fontWeight: 700, color: '#1E293B', fontSize: '0.95rem' }}>
                                     Sube la captura de tu {waitingVoucher.wallet === 'yape' ? 'Yape' : waitingVoucher.wallet === 'plin' ? 'Plin' : 'banco'}
                                 </p>
-                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B' }}>
+                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', marginBottom: '16px' }}>
                                     La galería se abrirá directamente en tus capturas recientes
                                 </p>
+                                <button 
+                                    className={styles.uploadScreenshotBtn}
+                                    style={{ background: '#F8FAFC', color: '#1E293B', border: '1px solid #E2E8F0', marginBottom: '12px' }}
+                                    onClick={() => {
+                                        const isAndroid = /android/i.test(navigator.userAgent || '');
+                                        const link = waitingVoucher.wallet === 'yape' 
+                                            ? (isAndroid ? 'intent://share#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://')
+                                            : waitingVoucher.wallet === 'plin'
+                                                ? (isAndroid ? 'intent://share#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://')
+                                                : 'https://www.google.com';
+                                        window.location.href = link;
+                                    }}
+                                >
+                                    <ExternalLink size={16} />
+                                    Abrir Billetera Manualmente
+                                </button>
                                 <label className={styles.uploadScreenshotBtn}>
                                     <Camera size={16} />
                                     Seleccionar captura de pantalla
