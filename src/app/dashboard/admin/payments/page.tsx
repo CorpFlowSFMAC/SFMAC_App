@@ -246,9 +246,9 @@ export default function PaymentsPage() {
         await new Promise(r => setTimeout(r, 300)); // pequeño delay para que el toast sea visible
         const isAndroid = /android/i.test(navigator.userAgent || '');
         const deepLinks: Record<string, string> = {
-            yape: isAndroid ? 'intent://share#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://',
-            plin: isAndroid ? 'intent://share#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://',
-            banco: 'https://www.google.com', // placeholder seguro para banco tradicional
+            yape: isAndroid ? 'intent://#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://',
+            plin: isAndroid ? 'intent://#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://',
+            banco: 'https://www.google.com', // placeholder
         };
         try {
             window.location.href = deepLinks[wallet];
@@ -1111,9 +1111,9 @@ export default function PaymentsPage() {
                                     onClick={() => {
                                         const isAndroid = /android/i.test(navigator.userAgent || '');
                                         const link = waitingVoucher.wallet === 'yape' 
-                                            ? (isAndroid ? 'intent://share#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://')
+                                            ? (isAndroid ? 'intent://#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://')
                                             : waitingVoucher.wallet === 'plin'
-                                                ? (isAndroid ? 'intent://share#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://')
+                                                ? (isAndroid ? 'intent://#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://')
                                                 : 'https://www.google.com';
                                         window.location.href = link;
                                     }}
