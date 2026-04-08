@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -11,6 +12,13 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "SINFIMAC Ecosystem",
   description: "Advanced FM & Productivity Platform",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Corpflow",
+  },
+  themeColor: "#020C1F",
 };
 
 export default function RootLayout({
@@ -22,6 +30,7 @@ export default function RootLayout({
     <html lang="es">
       <body className={`${outfit.variable}`}>
         {children}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
