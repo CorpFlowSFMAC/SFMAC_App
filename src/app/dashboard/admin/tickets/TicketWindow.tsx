@@ -843,25 +843,35 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
 
-        const nuevoPago = {
+        // ✅ FIX CRÍTICO: La gestora crea una SOLICITUD de pago.
+        // NO se agrega al historialPagosTecnico (pagos ejecutados).
+        // El administrador debe aprobar y ejecutar el pago desde la Tesorería.
+        const nuevaSolicitud = {
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: amount,
-            referencia: `Solicitud Gestora: ${depositRequest.concepto}`,
-            tipo: "Adelanto" // Por defecto se descuenta de la rentabilidad/técnico
+            concepto: depositRequest.concepto,
+            tipo: "Adelanto",
+            estado: "pendiente",     // ← PENDIENTE hasta que admin pague
+            solicitadaPor: "gestora"
         };
 
-        const updatedHistorial = [...(ticketData.historialPagosTecnico || []), nuevoPago];
+        const solicitudesPrevias = ticketData.solicitudesDeposito || [];
         const updatedTicket = {
             ...ticketData,
-            historialPagosTecnico: updatedHistorial
+            solicitudesDeposito: [...solicitudesPrevias, nuevaSolicitud]
+            // ⚠️ NO tocamos historialPagosTecnico — ese es solo para pagos EJECUTADOS
         };
 
         setTicketData(updatedTicket);
         setDepositRequest({ concepto: "", monto: "" });
-        showToast("Pago Registrado", `Se registró el depósito de S/ ${amount.toFixed(2)} que afecta la rentabilidad del ticket.`, "success");
+        showToast(
+            "Solicitud Enviada",
+            `Solicitud de S/ ${amount.toFixed(2)} enviada a Tesorería. Pendiente de aprobación del Administrador.`,
+            "info"
+        );
         
-        // Sincronización inmediata
+        // Sincronización inmediata para que aparezca en Tesorería
         setTimeout(() => syncToSupabase(true), 100);
     };
 
@@ -2256,8 +2266,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <Wallet size={20} />
                                                     </div>
                                                     <div>
-                                                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e293b' }}>Solicitud de Pago/Depósito</h4>
-                                                        <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: 500 }}>Registre adelantos que afectarán la rentabilidad final</p>
+                                                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e293b' }}>Solicitar Pago al Técnico</h4>
+                                                        <p style={{ margin: 0, fontSize: '12px', color: '#0369a1', fontWeight: 600 }}>⏳ La solicitud queda pendiente — el Administrador ejecuta el pago desde Tesorería</p>
                                                     </div>
                                                 </div>
                                                 

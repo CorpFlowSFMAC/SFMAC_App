@@ -17,11 +17,13 @@ import styles from "./payments.module.css";
 
 interface PaymentItem {
     id: string;
-    tipo: 'Adelanto' | 'Refuerzo' | 'Liquidación Final' | 'Movilidad / Visita';
+    tipo: 'Adelanto' | 'Refuerzo' | 'Liquidación Final' | 'Movilidad / Visita' | 'Solicitud Gestora';
     monto: number;
     estado: 'pendiente' | 'pagado';
     fecha: string;
     voucherRef?: string | null;
+    concepto?: string;    // Para solicitudes de gestora
+    solicitudId?: string; // ID de la solicitud original para limpiarla al pagar
 }
 
 interface PaymentTicketGroup {
@@ -105,6 +107,8 @@ function flattenTicketForPayments(t: any) {
         solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
         solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
         solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+        // ✅ Solicitudes de depósito creadas por la Gestora (pendientes de aprobación del Admin)
+        solicitudesDeposito: (meta.solicitudesDeposito || []).filter((s: any) => s.estado === 'pendiente'),
         historialPagosTecnico: history,
         adelantoPagado: meta.adelantoPagado || hasPaidAdelanto || false,
         visitPaymentConfirmed: meta.visitPaymentConfirmed || hasPaidMobility || false,
@@ -358,6 +362,22 @@ export default function PaymentsPage() {
                     });
                 }
 
+                // 2b. Solicitudes de depósito de Gestora (NUEVO FLUJO CORRECTO)
+                // Estas son solicitudes PENDIENTES que el admin debe ejecutar
+                if (ticket.solicitudesDeposito && ticket.solicitudesDeposito.length > 0) {
+                    ticket.solicitudesDeposito.forEach((sol: any) => {
+                        items.push({
+                            id: `${ticket.id}_solicitud_${sol.id}`,
+                            tipo: 'Solicitud Gestora' as const,
+                            monto: sol.monto,
+                            estado: 'pendiente' as const,
+                            fecha: sol.fecha,
+                            concepto: sol.concepto,
+                            solicitudId: sol.id
+                        });
+                    });
+                }
+
                 // 3. Liquidación Final
                 const hasSolicitudLiquidacion = !!ticket.solicitudLiquidacion;
                 const isRelevantForFinal = ['documentacion_enviada', 'por_liquidar', 'ticket_cerrado'].includes(ticket.estadoId);
@@ -443,6 +463,67 @@ export default function PaymentsPage() {
 
         const additionalUpdates: any = { metadataFields: {} };
 
+        // ✅ SOLICITUD GESTORA: Cuando el admin confirma el pago de una solicitud de la gestora,
+        // se mueve del arreglo "solicitudesDeposito" (pendientes) al "historialPagosTecnico" (ejecutados)
+        if (item.tipo === 'Solicitud Gestora' && item.solicitudId) {
+            additionalUpdates.metadataFields = {
+                // Añadir al historial como pago confirmado
+                historialPagosTecnico_append: {
+                    id: `pago_${group.ticketId}_${item.solicitudId}_${Date.now()}`,
+                    fecha: new Date().toISOString(),
+                    monto: item.monto,
+                    tipo: 'Adelanto',
+                    estado: 'pagado',
+                    referencia: `Pago Autorizado: ${item.concepto || 'Solicitud Gestora'}`,
+                    voucherRef: voucherBase64 || null,
+                },
+                // Marcar la solicitud como pagada (para que no re-aparezca)
+                solicitudesDeposito_markPaid: item.solicitudId
+            };
+            // Usar función especial de actualización para este caso
+            try {
+                const { data: currentTicket } = await (supabase as any)
+                    .from('tickets')
+                    .select('metadata')
+                    .eq('id', group.ticketId)
+                    .single();
+
+                if (currentTicket?.metadata) {
+                    const meta = currentTicket.metadata;
+                    // Añadir al historial de pagos
+                    const historialActual = meta.historialPagosTecnico || [];
+                    const nuevoPago = {
+                        id: `pago_${item.solicitudId}_${Date.now()}`,
+                        fecha: new Date().toISOString(),
+                        monto: item.monto,
+                        tipo: 'Adelanto',
+                        estado: 'pagado',
+                        referencia: `Pago Autorizado Admin: ${item.concepto || 'Solicitud Gestora'}`,
+                        voucherRef: voucherBase64 || null,
+                    };
+                    // Marcar la solicitud como pagada en solicitudesDeposito
+                    const solicitudesActualizadas = (meta.solicitudesDeposito || []).map((s: any) =>
+                        s.id === item.solicitudId ? { ...s, estado: 'pagado', fechaPago: new Date().toISOString() } : s
+                    );
+                    const newMeta = {
+                        ...meta,
+                        historialPagosTecnico: [...historialActual, nuevoPago],
+                        solicitudesDeposito: solicitudesActualizadas
+                    };
+                    await (supabase as any)
+                        .from('tickets')
+                        .update({ metadata: newMeta })
+                        .eq('id', group.ticketId);
+                    await refresh();
+                    return; // Salir temprano — ya procesamos
+                }
+            } catch (err) {
+                console.error('[Payments] Error confirmando solicitud gestora:', err);
+                alert('Error al procesar el pago. Por favor intente de nuevo.');
+            }
+            return;
+        }
+
         if (item.tipo === 'Adelanto') {
             additionalUpdates.status_id = 'en_ejecucion';
             additionalUpdates.execution_date = new Date().toISOString();
@@ -522,6 +603,7 @@ export default function PaymentsPage() {
         'Refuerzo': { color: '#B45309', bg: '#FEF3C7', label: 'Refuerzo' },
         'Liquidación Final': { color: '#047857', bg: '#ECFDF5', label: 'Liquidación' },
         'Movilidad / Visita': { color: '#7C3AED', bg: '#F5F3FF', label: 'Movilidad' },
+        'Solicitud Gestora': { color: '#DC2626', bg: '#FEF2F2', label: '🔔 Solicitado' },
     };
 
     return (
@@ -807,8 +889,8 @@ export default function PaymentsPage() {
                                                             const cfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F8FAFC', label: item.tipo };
                                                             return (
                                                                 <div key={item.id} style={{
-                                                                    background: item.estado === 'pendiente' ? '#FFFBEB' : '#F0FDF4',
-                                                                    border: `1px solid ${item.estado === 'pendiente' ? '#FCD34D' : '#86EFAC'}`,
+                                                                    background: item.tipo === 'Solicitud Gestora' ? '#FEF2F2' : (item.estado === 'pendiente' ? '#FFFBEB' : '#F0FDF4'),
+                                                                    border: `1px solid ${item.tipo === 'Solicitud Gestora' ? '#FECACA' : (item.estado === 'pendiente' ? '#FCD34D' : '#86EFAC')}`,
                                                                     borderRadius: '8px', padding: '7px 9px'
                                                                 }}>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
@@ -819,6 +901,11 @@ export default function PaymentsPage() {
                                                                             S/ {formatSoles(item.monto)}
                                                                         </span>
                                                                     </div>
+                                                                    {item.concepto && (
+                                                                        <div style={{ fontSize: '0.68rem', color: '#7F1D1D', fontWeight: 600, marginBottom: '3px', fontStyle: 'italic' }}>
+                                                                            "{item.concepto}"
+                                                                        </div>
+                                                                    )}
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                         <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>
                                                                             {new Date(item.fecha).toLocaleDateString('es-PE')}
