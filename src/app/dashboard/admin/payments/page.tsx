@@ -244,14 +244,18 @@ export default function PaymentsPage() {
         // Los OS modernos ignoran window.location si el scheme no está instalado;
         // en ese caso el admin simplemente cambia de app manualmente.
         await new Promise(r => setTimeout(r, 300)); // pequeño delay para que el toast sea visible
-        const isAndroid = /android/i.test(navigator.userAgent || '');
         const deepLinks: Record<string, string> = {
-            yape: isAndroid ? 'intent://#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://',
-            plin: isAndroid ? 'intent://#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://',
-            banco: 'https://www.google.com', // placeholder
+            yape: 'yape://',
+            plin: 'plin://',
+            banco: 'https://bancadigital.com', // placeholder
         };
         try {
-            window.location.href = deepLinks[wallet];
+            const a = document.createElement('a');
+            a.href = deepLinks[wallet];
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { document.body.removeChild(a); }, 500);
         } catch { /* silencioso */ }
     }, [showToast]);
 
@@ -1109,13 +1113,17 @@ export default function PaymentsPage() {
                                     className={styles.uploadScreenshotBtn}
                                     style={{ background: '#F8FAFC', color: '#1E293B', border: '1px solid #E2E8F0', marginBottom: '12px' }}
                                     onClick={() => {
-                                        const isAndroid = /android/i.test(navigator.userAgent || '');
                                         const link = waitingVoucher.wallet === 'yape' 
-                                            ? (isAndroid ? 'intent://#Intent;scheme=yape;package=com.bcp.bank.bcp.yape;end;' : 'yape://')
+                                            ? 'yape://'
                                             : waitingVoucher.wallet === 'plin'
-                                                ? (isAndroid ? 'intent://#Intent;scheme=plin;package=com.interbank.banca.movil;end;' : 'plin://')
-                                                : 'https://www.google.com';
-                                        window.location.href = link;
+                                                ? 'plin://'
+                                                : 'https://bancadigital.com';
+                                        const a = document.createElement('a');
+                                        a.href = link;
+                                        a.style.display = 'none';
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        setTimeout(() => { document.body.removeChild(a); }, 500);
                                     }}
                                 >
                                     <ExternalLink size={16} />
