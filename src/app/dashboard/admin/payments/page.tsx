@@ -480,6 +480,16 @@ export default function PaymentsPage() {
                 .update({ metadata: meta })
                 .eq('id', group.ticketId);
 
+            // Optimistic local update to make it disappear instantly
+            setPaymentGroups(prev => 
+                prev.map(g => {
+                    if (g.ticketId === group.ticketId) {
+                        return { ...g, items: g.items.filter(i => i.id !== item.id) };
+                    }
+                    return g;
+                }).filter(g => g.items.length > 0 || g.historialDepositos.length > 0)
+            );
+
             showToast('❌ Solicitud de pago denegada');
             await refresh();
         } catch (err) {
