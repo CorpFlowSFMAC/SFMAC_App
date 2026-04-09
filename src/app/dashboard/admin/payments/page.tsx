@@ -247,15 +247,11 @@ export default function PaymentsPage() {
         const deepLinks: Record<string, string> = {
             yape: 'yape://',
             plin: 'plin://',
-            banco: 'https://bancadigital.com', // placeholder
+            banco: 'https://www.bcp.com.pe',
         };
         try {
-            const a = document.createElement('a');
-            a.href = deepLinks[wallet];
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => { document.body.removeChild(a); }, 500);
+            // Un pequeño delay para que el portapapeles se asiente y luego lanzamos el link
+            window.location.assign(deepLinks[wallet]);
         } catch { /* silencioso */ }
     }, [showToast]);
 
@@ -1109,26 +1105,22 @@ export default function PaymentsPage() {
                                 <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', marginBottom: '16px' }}>
                                     La galería se abrirá directamente en tus capturas recientes
                                 </p>
-                                <button 
+                                <a 
+                                    href={waitingVoucher.wallet === 'yape' ? 'yape://' : waitingVoucher.wallet === 'plin' ? 'plin://' : 'https://www.bcp.com.pe'}
                                     className={styles.uploadScreenshotBtn}
-                                    style={{ background: '#F8FAFC', color: '#1E293B', border: '1px solid #E2E8F0', marginBottom: '12px' }}
-                                    onClick={() => {
-                                        const link = waitingVoucher.wallet === 'yape' 
-                                            ? 'yape://'
-                                            : waitingVoucher.wallet === 'plin'
-                                                ? 'plin://'
-                                                : 'https://bancadigital.com';
-                                        const a = document.createElement('a');
-                                        a.href = link;
-                                        a.style.display = 'none';
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        setTimeout(() => { document.body.removeChild(a); }, 500);
+                                    style={{ 
+                                        background: '#F8FAFC', 
+                                        color: '#1E293B', 
+                                        border: '1px solid #E2E8F0', 
+                                        marginBottom: '12px',
+                                        textDecoration: 'none',
+                                        display: 'flex',
+                                        justifyContent: 'center'
                                     }}
                                 >
                                     <ExternalLink size={16} />
                                     Abrir Billetera Manualmente
-                                </button>
+                                </a>
                                 <label className={styles.uploadScreenshotBtn}>
                                     <Camera size={16} />
                                     Seleccionar captura de pantalla
