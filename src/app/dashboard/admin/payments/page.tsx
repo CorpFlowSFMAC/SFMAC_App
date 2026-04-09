@@ -448,6 +448,46 @@ export default function PaymentsPage() {
     // ★ USAMOS CONTEXTO PARA ACTUALIZACIÓN INMEDIATA EN DASHBOARD
     const { updatePaymentSafe } = useAppData();
 
+    const handleDenyPayment = async (group: PaymentTicketGroup, item: PaymentItem) => {
+        if (!confirm(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}? Esta acción cancelará la solicitud.`)) {
+            return;
+        }
+
+        try {
+            const { data: currentTicket } = await (supabase as any)
+                .from('tickets')
+                .select('metadata')
+                .eq('id', group.ticketId)
+                .single();
+
+            if (!currentTicket?.metadata) return;
+            const meta = { ...currentTicket.metadata };
+
+            if (item.tipo === 'Solicitud Gestora' && item.solicitudId) {
+                meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
+            } else if (item.tipo === 'Adelanto') {
+                meta.solicitudAdelanto = null;
+            } else if (item.tipo === 'Refuerzo') {
+                meta.solicitudAdelantoExtra = null;
+            } else if (item.tipo === 'Liquidación Final') {
+                meta.solicitudLiquidacion = null;
+            } else if (item.tipo === 'Movilidad / Visita') {
+                meta.solicitudPagoVisita = null;
+            }
+
+            await (supabase as any)
+                .from('tickets')
+                .update({ metadata: meta })
+                .eq('id', group.ticketId);
+
+            showToast('❌ Solicitud de pago denegada');
+            await refresh();
+        } catch (err) {
+            console.error('[Payments] Error denying payment:', err);
+            alert('Error al denegar el pago.');
+        }
+    };
+
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
         // Generar un ID único y determinista para el pago
         const pagoId = `pago_${group.ticketId}_${item.tipo.replace(/\s/g, '_')}_${Date.now()}`;
@@ -989,6 +1029,16 @@ export default function PaymentsPage() {
                                                                                 }
                                                                             }} />
                                                                     </label>
+
+                                                                    {/* Botón DENEGAR PAGO */}
+                                                                    <button
+                                                                        className={styles.btnDeny}
+                                                                        onClick={() => handleDenyPayment(group, item)}
+                                                                        title="Denegar y cancelar solicitud"
+                                                                    >
+                                                                        <X size={12} />
+                                                                        Denegar Pago
+                                                                    </button>
                                                                 </div>
                                                             );
                                                         })}

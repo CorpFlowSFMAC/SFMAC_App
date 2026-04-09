@@ -1246,4 +1246,28 @@
 .uploadScreenshotBtn:hover {
     transform: translateY(-2px);
     box-shadow: 0 12px 28px rgba(124, 58, 237, 0.55);
+}
+
+.btnDeny {
+    background: #FEF2F2;
+    color: #EF4444;
+    border: 1px solid #FEE2E2;
+    padding: 8px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-weight: 800;
+    font-size: 0.75rem;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 4px;
+    transition: all 0.2s;
+}
+
+.btnDeny:hover {
+    background: #FEE2E2;
+    border-color: #FECACA;
+    transform: translateY(-1px);
 }
