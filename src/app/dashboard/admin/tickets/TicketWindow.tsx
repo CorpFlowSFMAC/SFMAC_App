@@ -2390,7 +2390,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             </div>
                                                                             {!ticketData.solicitudAdelanto ? (
                                                                                 <div className={styles.percentageSelector}>
-                                                                                    {[0.4, 0.5, 0.6].map(p => (
+                                                                                    {[0.4, 0.5, 0.6, 1.0].map(p => (
                                                                                         <button
                                                                                             key={p}
                                                                                             className={`${styles.pctBtn} ${porcentajeAdelanto === p ? styles.pctActive : ''}`}
