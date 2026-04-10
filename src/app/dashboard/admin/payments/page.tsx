@@ -515,6 +515,47 @@ export default function PaymentsPage() {
         }
     };
 
+    const handleDeleteHistoryItem = async (group: PaymentTicketGroup, dep: any) => {
+        if (!confirm(`¿ESTÁ SEGURO DE ELIMINAR ESTE REGISTRO DE PAGO?
+⚠️ Esta acción es irreversible y afectará el balance del técnico.
+⚠️ Hágalo solo si el depósito realmente nunca se realizó.`)) {
+            return;
+        }
+
+        try {
+            const { data: currentTicket } = await (supabase as any)
+                .from('tickets')
+                .select('metadata')
+                .eq('id', group.ticketId)
+                .single();
+
+            if (!currentTicket?.metadata) return;
+            
+            const meta = JSON.parse(JSON.stringify(currentTicket.metadata));
+            const historial = meta.historialPagosTecnico || [];
+            
+            const nuevoHistorial = historial.filter((p: any) => 
+                p.id !== dep.id && (p.fecha !== dep.fecha || p.monto !== dep.monto)
+            );
+
+            const nuevoTotal = nuevoHistorial.reduce((sum: number, p: any) => sum + (p.monto || 0), 0);
+
+            meta.historialPagosTecnico = nuevoHistorial;
+            meta.montoAdelanto = nuevoTotal;
+
+            await (supabase as any)
+                .from('tickets')
+                .update({ metadata: meta })
+                .eq('id', group.ticketId);
+
+            showToast('🗑️ Registro de pago eliminado');
+            setTimeout(() => refresh(), 500);
+        } catch (err) {
+            console.error('[Payments] Error deleting history item:', err);
+            alert('Error al eliminar el registro.');
+        }
+    };
+
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
         // Generar un ID único y determinista para el pago
         const pagoId = `pago_${group.ticketId}_${item.tipo.replace(/\s/g, '_')}_${Date.now()}`;
@@ -800,9 +841,19 @@ export default function PaymentsPage() {
                 <div className={styles.tableHeader}>
                     <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E293B' }}>
                         <Wallet size={18} color="#3B82F6" />
-                        <span style={{ fontSize: '0.6rem', color: '#B45309', background: '#FEF3C7', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid #FCD34D' }}>
-                            SINFIMAC CORP - TESORERÍA v2.0
-                        </span>
+                        <span style={{ 
+                                background: 'linear-gradient(135deg, #1E293B, #0F172A)', 
+                                color: 'white', 
+                                padding: '4px 12px', 
+                                borderRadius: '20px', 
+                                fontSize: '0.65rem', 
+                                fontWeight: 900,
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                letterSpacing: '0.05em'
+                            }}>
+                                SINFIMAC CORP - TESORERÍA v2.3
+                            </span>
                         Peticiones de Fondos
                         <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
                             {filteredGroups.length} {filteredGroups.length === 1 ? 'registro' : 'registros'}
@@ -1107,7 +1158,6 @@ export default function PaymentsPage() {
                                                                             <span className={styles.historyDate}>{new Date(dep.fecha).toLocaleString('es-PE')}</span>
                                                                         </div>
                                                                         <div className={styles.historyBody}>
-                                                                            <span style={{ fontSize: '0.78rem', color: '#475569' }}>{dep.tipo || 'Depósito'}</span>
                                                                             <strong style={{ fontSize: '1.05rem', color: '#1E293B', fontFamily: 'monospace' }}>S/ {formatSoles(dep.monto)}</strong>
                                                                             {dep.voucherRef && (
                                                                                 <button onClick={() => {
