@@ -113,6 +113,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         url_comprobante: ''
     });
 
+    const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+    
     const showToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ visible: true, title, message, type });
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
@@ -1347,6 +1349,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             window.removeEventListener('mouseup', handleMouseUp);
         };
     }, [isDragging, dragOffset, isMaximized]);
+
+    const handleMinimize = () => {
+        setIsMinimized(!isMinimized);
+    };
 
     const handleMaximize = () => {
         const nextState = !isMaximized;
