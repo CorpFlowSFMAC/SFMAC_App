@@ -445,11 +445,22 @@ export default function PaymentsPage() {
     const { updatePaymentSafe } = useAppData();
 
     const handleDenyPayment = async (group: PaymentTicketGroup, item: PaymentItem) => {
-        if (!confirm(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}? Esta acción cancelará la solicitud.`)) {
+        if (!confirm(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}? Esta acción cancelará la solicitud permanentemente.`)) {
             return;
         }
 
+        // 1. Optimistic Update — Desaparece de inmediato de la UI local
+        setPaymentGroups(prev => 
+            prev.map(g => {
+                if (g.ticketId === group.ticketId) {
+                    return { ...g, items: g.items.filter(i => i.id !== item.id) };
+                }
+                return g;
+            })
+        );
+
         try {
+            // 2. Fetch fresh metadata
             const { data: currentTicket } = await (supabase as any)
                 .from('tickets')
                 .select('metadata')
@@ -457,12 +468,16 @@ export default function PaymentsPage() {
                 .single();
 
             if (!currentTicket?.metadata) return;
-            const meta = { ...currentTicket.metadata };
+            
+            // Clonar metadata para limpieza profunda
+            const meta = JSON.parse(JSON.stringify(currentTicket.metadata));
 
+            // Limpiar según tipo (cubrir todas las variantes posibles de nombres de campo)
             if (item.tipo === 'Solicitud Gestora' && item.solicitudId) {
                 meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
             } else if (item.tipo === 'Adelanto') {
                 meta.solicitudAdelanto = null;
+                meta.montoAdelanto = 0; // Limpiar monto persistente si existe
             } else if (item.tipo === 'Refuerzo') {
                 meta.solicitudAdelantoExtra = null;
             } else if (item.tipo === 'Liquidación Final') {
@@ -471,26 +486,20 @@ export default function PaymentsPage() {
                 meta.solicitudPagoVisita = null;
             }
 
+            // Guardar en DB
             await (supabase as any)
                 .from('tickets')
                 .update({ metadata: meta })
                 .eq('id', group.ticketId);
 
-            // Optimistic local update to make it disappear instantly
-            setPaymentGroups(prev => 
-                prev.map(g => {
-                    if (g.ticketId === group.ticketId) {
-                        return { ...g, items: g.items.filter(i => i.id !== item.id) };
-                    }
-                    return g;
-                }).filter(g => g.items.length > 0 || g.historialDepositos.length > 0)
-            );
-
-            showToast('❌ Solicitud de pago denegada');
-            await refresh();
+            showToast('✅ Solicitud denegada y eliminada');
+            
+            // 3. Refresh data for safety
+            setTimeout(() => refresh(), 500);
         } catch (err) {
             console.error('[Payments] Error denying payment:', err);
-            alert('Error al denegar el pago.');
+            alert('Error al sincronizar la denegación. Por favor actualice la página.');
+            refresh(); // Revertir si hay error
         }
     };
 
