@@ -333,24 +333,27 @@ export default function PaymentsPage() {
                     plin: ticket.tecnico?.plin
                 };
 
+                // 2026-04-10 13:20 - Treasury Fix: Solo mostrar solicitudes pendientes reales
                 const items: PaymentItem[] = [];
                 const saldoReal = round2(totalPactadoInclVisita - totalPagadoArray);
 
-                // Si el saldo es 0 o negativo, no mostramos solicitudes actuales (ya está todo pagado)
-                if (saldoReal > 0) {
+                // Solo procesamos solicitudes si hay saldo pendiente y el ticket no está cerrado
+                if (saldoReal > 0.01 && ticket.estadoId !== 'ticket_cerrado') {
                     const jobCostBase = round2(costoManoObra + costoMateriales);
 
-                    // 1. Adelanto (SOLO SI HAY SOLICITUD PENDIENTE)
+                    // 1. Adelanto (SOLO SI HAY SOLICITUD PENDIENTE Y NO ESTÁ PAGADO)
                     if (ticket.solicitudAdelanto && !ticket.adelantoPagado) {
                         const pct = ticket.solicitudAdelanto.porcentaje || 0.5;
                         const adelantoMonto = round2(ticket.solicitudAdelanto.monto || (jobCostBase * pct));
-                        items.push({
-                            id: `${ticket.id}_adelanto`,
-                            tipo: 'Adelanto',
-                            monto: adelantoMonto,
-                            estado: 'pendiente',
-                            fecha: ticket.solicitudAdelanto.fecha || new Date().toISOString()
-                        });
+                        if (adelantoMonto > 0) {
+                            items.push({
+                                id: `${ticket.id}_adelanto`,
+                                tipo: 'Adelanto',
+                                monto: adelantoMonto,
+                                estado: 'pendiente',
+                                fecha: ticket.solicitudAdelanto.fecha || new Date().toISOString()
+                            });
+                        }
                     }
 
                     // 2. Refuerzo (Extra)
@@ -382,11 +385,11 @@ export default function PaymentsPage() {
                     }
 
                     // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE)
-                    if (ticket.solicitudLiquidacion && ticket.estadoId !== 'ticket_cerrado') {
+                    if (ticket.solicitudLiquidacion) {
                         items.push({
                             id: `${ticket.id}_final`,
                             tipo: 'Liquidación Final',
-                            monto: round2(ticket.solicitudLiquidacion.monto),
+                            monto: round2(ticket.solicitudLiquidacion.monto || saldoReal),
                             estado: 'pendiente',
                             fecha: ticket.solicitudLiquidacion.fecha || new Date().toISOString()
                         });
@@ -414,7 +417,7 @@ export default function PaymentsPage() {
                         montoPactado: totalPactadoInclVisita,
                         montoAdelantado: totalPagadoArray,
                         saldoPendiente: totalPactadoInclVisita - totalPagadoArray,
-                        items,
+                        items: items.filter(i => i.estado === 'pendiente'), // Doble filtro de seguridad
                         historialDepositos: pagos,
                         costoVisita: visitCost,
                         voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
