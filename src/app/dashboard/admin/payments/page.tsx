@@ -1109,7 +1109,7 @@ export default function PaymentsPage() {
                                                                 </div>
                                                             )
                                                         ) : (
-                                                            round2(group.totalFacturado - group.totalPagado) <= 0.01 && (
+                                                            round2(group.montoPactado - group.montoAdelantado) <= 0.01 && (
                                                                 <div style={{ textAlign: 'center', padding: '8px 4px' }}>
                                                                     <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
                                                                         <CheckCircle2 size={18} color="#22C55E" />

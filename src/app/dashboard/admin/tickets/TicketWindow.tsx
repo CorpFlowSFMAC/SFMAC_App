@@ -330,7 +330,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [triageDescription, setTriageDescription] = useState("");
     const [sedesMibanco, setSedesMibanco] = useState<any[]>([]);
     const [loadingSedes, setLoadingSedes] = useState(false);
-    const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
+
 
     useEffect(() => {
         if (ticketData.estadoId === 'borrador' && ticketData.client_id === MIBANCO_ID) {
@@ -2810,7 +2810,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             </div>
                                                                             <button 
                                                                                 className={styles.submitCostBtn}
-                                                                                onClick={handleCreateCost}
+                                                                                onClick={handleSaveCost}
                                                                                 disabled={isSavingCost}
                                                                             >
                                                                                 {isSavingCost ? "Guardando..." : "Registrar y Enviar a Tesorería"}
