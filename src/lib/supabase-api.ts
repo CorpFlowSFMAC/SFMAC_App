@@ -760,3 +760,68 @@ export const gestorasTargetsAPI = {
     },
 };
 
+// ============================================
+// TICKET COSTS API
+// ============================================
+
+export const ticketCostsAPI = {
+    async getByTicket(ticketId: string) {
+        const { data, error } = await supabase
+            .from('ticket_costs')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async create(cost: {
+        ticket_id: string;
+        concepto: string;
+        categoria: string;
+        proveedor?: string;
+        monto: number;
+        estado_pago: string;
+        url_comprobante?: string;
+        solicitado_por?: string;
+    }) {
+        const { data, error } = await supabase
+            .from('ticket_costs')
+            .insert(cost)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async update(id: string, updates: Partial<{
+        concepto: string;
+        categoria: string;
+        proveedor: string;
+        monto: number;
+        estado_pago: string;
+        url_comprobante: string;
+    }>) {
+        const { data, error } = await supabase
+            .from('ticket_costs')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async delete(id: string) {
+        const { error } = await supabase
+            .from('ticket_costs')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    }
+};
+

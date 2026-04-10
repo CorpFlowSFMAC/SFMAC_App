@@ -17,13 +17,16 @@ import styles from "./payments.module.css";
 
 interface PaymentItem {
     id: string;
-    tipo: 'Adelanto' | 'Refuerzo' | 'Liquidación Final' | 'Movilidad / Visita' | 'Solicitud Gestora';
+    tipo: string;
     monto: number;
     estado: 'pendiente' | 'pagado';
     fecha: string;
     voucherRef?: string | null;
     concepto?: string;    // Para solicitudes de gestora
     solicitudId?: string; // ID de la solicitud original para limpiarla al pagar
+    isTableCost?: boolean;
+    costId?: string;
+    isLegacy?: boolean;   // Marca pagos que vienen de metadata
 }
 
 interface PaymentTicketGroup {
@@ -146,13 +149,27 @@ export default function PaymentsPage() {
         try {
             setLoading(true);
             const data = await ticketsAPI.getForPayments();
-            setTickets((data || []).map(flattenTicketForPayments));
+            
+            // Obtener costos pendientes de la tabla ticket_costs
+            const { data: costs } = await supabase
+                .from('ticket_costs')
+                .select('*')
+                .eq('estado_pago', 'pendiente');
+
+            const processed = (data || []).map(t => {
+                const flat = flattenTicketForPayments(t);
+                // Inyectar costos asociados
+                flat.pendingCosts = (costs || []).filter(c => c.ticket_id === t.id);
+                return flat;
+            });
+
+            setTickets(processed);
         } catch (err) {
             console.error('[Payments] Error fetching tickets:', err);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [flattenTicketForPayments]);
 
     useEffect(() => { fetchPaymentTickets(); }, [fetchPaymentTickets]);
 
@@ -371,20 +388,37 @@ export default function PaymentsPage() {
                         }
                     }
 
-                    // 3. Solicitudes de depósito de Gestora (Pendientes)
+                    // 3. Solicitudes de depósito de Gestora (Pendientes - Legacy Metadata)
                     if (ticket.solicitudesDeposito && ticket.solicitudesDeposito.length > 0) {
                         ticket.solicitudesDeposito.forEach((sol: any) => {
                             if (sol.estado === 'pendiente') {
                                 items.push({
                                     id: `${ticket.id}_solicitud_${sol.id}`,
-                                    tipo: 'Solicitud Gestora',
+                                    tipo: 'Solicitud Gestora (M)',
                                     monto: sol.monto,
                                     estado: 'pendiente',
                                     fecha: sol.fecha,
                                     concepto: sol.concepto,
-                                    solicitudId: sol.id
+                                    solicitudId: sol.id,
+                                    isLegacy: true
                                 });
                             }
+                        });
+                    }
+
+                    // 3b. NUEVO: Costos y Egresos (Tabla ticket_costs)
+                    if (ticket.pendingCosts && ticket.pendingCosts.length > 0) {
+                        ticket.pendingCosts.forEach((c: any) => {
+                            items.push({
+                                id: c.id,
+                                tipo: `Gasto: ${c.categoria}`,
+                                monto: c.monto,
+                                estado: 'pendiente',
+                                fecha: c.created_at,
+                                concepto: c.concepto,
+                                isTableCost: true,
+                                costId: c.id
+                            });
                         });
                     }
 
@@ -429,12 +463,12 @@ export default function PaymentsPage() {
                         montoPactado: totalPactadoInclVisita,
                         montoAdelantado: totalPagadoArray,
                         saldoPendiente: totalPactadoInclVisita - totalPagadoArray,
-                        items: items.filter(i => i.estado === 'pendiente'), // Doble filtro de seguridad
+                        items: items.filter(i => i.estado === 'pendiente'),
                         historialDepositos: pagos,
                         costoVisita: visitCost,
                         voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
                         montoFacturado: ticket.montoFacturado,
-                        utilidad: Math.max(0, ticket.montoFacturado - (totalPactadoInclVisita + visitCost)),
+                        utilidad: Math.max(0, (ticket.montoFacturado || 0) - (totalPactadoInclVisita + visitCost)),
                     });
                 }
             } catch (e) {
@@ -461,35 +495,33 @@ export default function PaymentsPage() {
             return;
         }
 
-        // 1. Optimistic Update — Desaparece de inmediato de la UI local
-        setPaymentGroups(prev => 
-            prev.map(g => {
-                if (g.ticketId === group.ticketId) {
-                    return { ...g, items: g.items.filter(i => i.id !== item.id) };
-                }
-                return g;
-            })
-        );
-
         try {
-            // 2. Fetch fresh metadata
-            const { data: currentTicket } = await (supabase as any)
+            // 1. SI ES COSTO DE TABLA (NUEVO)
+            if (item.isTableCost && item.costId) {
+                await supabase
+                    .from('ticket_costs')
+                    .delete()
+                    .eq('id', item.costId);
+                showToast('✅ Registro de costo eliminado');
+                refresh();
+                return;
+            }
+
+            // 2. FETCH FRESH METADATA (PARA LEGACY)
+            const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
                 .select('metadata')
                 .eq('id', group.ticketId)
                 .single();
 
-            if (!currentTicket?.metadata) return;
+            if (fetchErr || !currentTicket?.metadata) return;
             
-            // Clonar metadata para limpieza profunda
-            const meta = JSON.parse(JSON.stringify(currentTicket.metadata));
+            const meta = { ...currentTicket.metadata };
 
-            // Limpiar según tipo (cubrir todas las variantes posibles de nombres de campo)
-            if (item.tipo === 'Solicitud Gestora' && item.solicitudId) {
+            if (item.solicitudId) {
                 meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
             } else if (item.tipo === 'Adelanto') {
                 meta.solicitudAdelanto = null;
-                meta.montoAdelanto = 0; // Limpiar monto persistente si existe
             } else if (item.tipo === 'Refuerzo') {
                 meta.solicitudAdelantoExtra = null;
             } else if (item.tipo === 'Liquidación Final') {
@@ -498,32 +530,26 @@ export default function PaymentsPage() {
                 meta.solicitudPagoVisita = null;
             }
 
-            // Guardar en DB
-            await (supabase as any)
+            await supabase
                 .from('tickets')
                 .update({ metadata: meta })
                 .eq('id', group.ticketId);
 
-            showToast('✅ Solicitud denegada y eliminada');
-            
-            // 3. Refresh data for safety
-            setTimeout(() => refresh(), 500);
+            showToast('✅ Solicitud legacy denegada');
+            refresh();
         } catch (err) {
             console.error('[Payments] Error denying payment:', err);
-            alert('Error al sincronizar la denegación. Por favor actualice la página.');
-            refresh(); // Revertir si hay error
+            alert('Error al denegar el pago.');
         }
     };
 
     const handleDeleteHistoryItem = async (group: PaymentTicketGroup, dep: any) => {
-        if (!confirm(`¿ESTÁ SEGURO DE ELIMINAR ESTE REGISTRO DE PAGO?
-⚠️ Esta acción es irreversible y afectará el balance del técnico.
-⚠️ Hágalo solo si el depósito realmente nunca se realizó.`)) {
+        if (!confirm(`¿ESTÁ SEGURO DE ELIMINAR ESTE REGISTRO DE PAGO?\n⚠️ Esta acción es irreversible y afectará el balance del técnico.`)) {
             return;
         }
 
         try {
-            const { data: currentTicket } = await (supabase as any)
+            const { data: currentTicket } = await supabase
                 .from('tickets')
                 .select('metadata')
                 .eq('id', group.ticketId)
@@ -531,25 +557,22 @@ export default function PaymentsPage() {
 
             if (!currentTicket?.metadata) return;
             
-            const meta = JSON.parse(JSON.stringify(currentTicket.metadata));
+            const meta = { ...currentTicket.metadata };
             const historial = meta.historialPagosTecnico || [];
             
-            const nuevoHistorial = historial.filter((p: any) => 
-                p.id !== dep.id && (p.fecha !== dep.fecha || p.monto !== dep.monto)
-            );
-
+            const nuevoHistorial = historial.filter((p: any) => p.id !== dep.id);
             const nuevoTotal = nuevoHistorial.reduce((sum: number, p: any) => sum + (p.monto || 0), 0);
 
             meta.historialPagosTecnico = nuevoHistorial;
             meta.montoAdelanto = nuevoTotal;
 
-            await (supabase as any)
+            await supabase
                 .from('tickets')
                 .update({ metadata: meta })
                 .eq('id', group.ticketId);
 
             showToast('🗑️ Registro de pago eliminado');
-            setTimeout(() => refresh(), 500);
+            refresh();
         } catch (err) {
             console.error('[Payments] Error deleting history item:', err);
             alert('Error al eliminar el registro.');
@@ -557,131 +580,78 @@ export default function PaymentsPage() {
     };
 
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
-        // Generar un ID único y determinista para el pago
-        const pagoId = `pago_${group.ticketId}_${item.tipo.replace(/\s/g, '_')}_${Date.now()}`;
-
+        const pagoId = `pago_${group.ticketId}_${Date.now()}`;
         const nuevoPago = {
             id: pagoId,
             monto: item.monto,
             fecha: new Date().toISOString(),
             tipo: item.tipo,
             estado: 'pagado',
-            referencia: `Transferencia Web - ${item.tipo}`,
+            referencia: `Autorizado Admin: ${item.concepto || item.tipo}`,
             voucherRef: voucherBase64 || null,
         };
 
-        const additionalUpdates: any = { metadataFields: {} };
-
-        // ✅ SOLICITUD GESTORA: Cuando el admin confirma el pago de una solicitud de la gestora,
-        // se mueve del arreglo "solicitudesDeposito" (pendientes) al "historialPagosTecnico" (ejecutados)
-        if (item.tipo === 'Solicitud Gestora' && item.solicitudId) {
-            additionalUpdates.metadataFields = {
-                // Añadir al historial como pago confirmado
-                historialPagosTecnico_append: {
-                    id: `pago_${group.ticketId}_${item.solicitudId}_${Date.now()}`,
-                    fecha: new Date().toISOString(),
-                    monto: item.monto,
-                    tipo: 'Adelanto',
-                    estado: 'pagado',
-                    referencia: `Pago Autorizado: ${item.concepto || 'Solicitud Gestora'}`,
-                    voucherRef: voucherBase64 || null,
-                },
-                // Marcar la solicitud como pagada (para que no re-aparezca)
-                solicitudesDeposito_markPaid: item.solicitudId
-            };
-            // Usar función especial de actualización para este caso
-            try {
-                const { data: currentTicket } = await (supabase as any)
-                    .from('tickets')
-                    .select('metadata')
-                    .eq('id', group.ticketId)
-                    .single();
-
-                if (currentTicket?.metadata) {
-                    const meta = currentTicket.metadata;
-                    // Añadir al historial de pagos
-                    const historialActual = meta.historialPagosTecnico || [];
-                    const nuevoPago = {
-                        id: `pago_${item.solicitudId}_${Date.now()}`,
-                        fecha: new Date().toISOString(),
-                        monto: item.monto,
-                        tipo: 'Adelanto',
-                        estado: 'pagado',
-                        referencia: `Pago Autorizado Admin: ${item.concepto || 'Solicitud Gestora'}`,
-                        voucherRef: voucherBase64 || null,
-                    };
-                    // Marcar la solicitud como pagada en solicitudesDeposito
-                    const solicitudesActualizadas = (meta.solicitudesDeposito || []).map((s: any) =>
-                        s.id === item.solicitudId ? { ...s, estado: 'pagado', fechaPago: new Date().toISOString() } : s
-                    );
-                    const newMeta = {
-                        ...meta,
-                        historialPagosTecnico: [...historialActual, nuevoPago],
-                        solicitudesDeposito: solicitudesActualizadas
-                    };
-                    await (supabase as any)
-                        .from('tickets')
-                        .update({ metadata: newMeta })
-                        .eq('id', group.ticketId);
-                    await refresh();
-                    return; // Salir temprano — ya procesamos
-                }
-            } catch (err) {
-                console.error('[Payments] Error confirmando solicitud gestora:', err);
-                alert('Error al procesar el pago. Por favor intente de nuevo.');
+        try {
+            if (item.isTableCost && item.costId) {
+                await supabase
+                    .from('ticket_costs')
+                    .update({ 
+                        estado_pago: 'pagado', 
+                        url_comprobante: voucherBase64 || null,
+                        fecha_pago: new Date().toISOString()
+                    })
+                    .eq('id', item.costId);
+                
+                await ticketsAPI.updatePaymentSafe(group.ticketId, nuevoPago, { metadataFields: {} });
+                showToast('✅ Pago de costo registrado');
+                refresh();
+                return;
             }
-            return;
-        }
 
-        if (item.tipo === 'Adelanto') {
-            additionalUpdates.status_id = 'en_ejecucion';
-            additionalUpdates.execution_date = new Date().toISOString();
-            additionalUpdates.metadataFields = {
-                estadoId: 'en_ejecucion',
-                fechaInicioEjecucion: additionalUpdates.execution_date,
-                adelantoPagado: true,
-                fechaPagoAdelanto: additionalUpdates.execution_date,
-                solicitudAdelanto: null,
-            };
-        } else if (item.tipo === 'Refuerzo') {
-            additionalUpdates.metadataFields = {
-                solicitudAdelantoExtra: null,
-            };
-        } else if (item.tipo === 'Liquidación Final') {
-            additionalUpdates.status_id = 'ticket_cerrado';
-            additionalUpdates.closure_date = new Date().toISOString();
-            additionalUpdates.metadataFields = {
-                estadoId: 'ticket_cerrado',
-                fechaPagoFinal: additionalUpdates.closure_date,
-                solicitudLiquidacion: null,
-            };
-        } else if (item.tipo === 'Movilidad / Visita') {
-            try {
-                const { data: currentRow } = await (supabase as any)
-                    .from('tickets')
-                    .select('status_id')
-                    .eq('id', group.ticketId)
-                    .single();
+            const { data: currentTicket } = await supabase
+                .from('tickets')
+                .select('metadata, status_id')
+                .eq('id', group.ticketId)
+                .single();
+
+            if (!currentTicket) return;
+            const meta = { ...currentTicket.metadata };
+            const additionalUpdates: any = { metadataFields: {} };
+
+            if (item.id === `${group.ticketId}_adelanto`) {
+                additionalUpdates.status_id = 'en_ejecucion';
+                additionalUpdates.execution_date = new Date().toISOString();
+                meta.adelantoPagado = true;
+                meta.fechaPagoAdelanto = additionalUpdates.execution_date;
+                meta.solicitudAdelanto = null;
+            } else if (item.id === `${group.ticketId}_refuerzo`) {
+                meta.solicitudAdelantoExtra = null;
+            } else if (item.id === `${group.ticketId}_final`) {
+                additionalUpdates.status_id = 'ticket_cerrado';
+                additionalUpdates.closure_date = new Date().toISOString();
+                meta.fechaPagoFinal = additionalUpdates.closure_date;
+                meta.solicitudLiquidacion = null;
+            } else if (item.id === `${group.ticketId}_visita`) {
                 const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
-                if (currentRow && preInspectionStates.includes(currentRow.status_id)) {
+                if (preInspectionStates.includes(currentTicket.status_id)) {
                     additionalUpdates.status_id = 'en_inspeccion';
                 }
-            } catch (_) { /* bypass */ }
-            additionalUpdates.metadataFields = {
-                visitPaymentConfirmed: true,
-                fechaPagoVisita: new Date().toISOString(),
-                solicitudPagoVisita: null,
-            };
-        }
+                meta.visitPaymentConfirmed = true;
+                meta.fechaPagoVisita = new Date().toISOString();
+                meta.solicitudPagoVisita = null;
+            } else if (item.solicitudId) {
+                meta.solicitudesDeposito = (meta.solicitudesDeposito || []).map((s: any) =>
+                    s.id === item.solicitudId ? { ...s, estado: 'pagado', fechaPago: new Date().toISOString() } : s
+                );
+            }
 
-        try {
-            // USAMOS EL MÉTODO DEL CONTEXTO (AppDataContext)
-            // Esto actualiza la caché de TanStack Query inmediatamente para el Dashboard
+            additionalUpdates.metadataFields = meta;
             await updatePaymentSafe(group.ticketId, nuevoPago, additionalUpdates);
-            await refresh();
+            showToast('✅ Pago confirmado exitosamente');
+            refresh();
         } catch (err) {
             console.error('[Payments] Error confirming payment:', err);
-            alert('Error al procesar el pago. Por favor intente de nuevo.');
+            alert('Error al procesar el pago.');
         }
     };
 
@@ -691,10 +661,9 @@ export default function PaymentsPage() {
         return localStorage.getItem(ref) || "";
     };
 
-    // ─── Métricas ──────────────────────────────────────────────
     const currentMonthKey = getCurrentMonthKey();
     const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
-    const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s, v) => s + v, 0));
+    const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
 
     const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente').length, 0);
     const totalPendingAmount = round2(paymentGroups.reduce((acc, g) =>
@@ -714,6 +683,7 @@ export default function PaymentsPage() {
         'Movilidad / Visita': { color: '#7C3AED', bg: '#F5F3FF', label: 'Movilidad' },
         'Solicitud Gestora': { color: '#DC2626', bg: '#FEF2F2', label: '🔔 Solicitado' },
     };
+
 
     return (
         <div className={styles.paymentsContainer}>

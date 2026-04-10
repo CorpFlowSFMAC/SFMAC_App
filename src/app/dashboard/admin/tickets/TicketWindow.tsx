@@ -10,7 +10,7 @@ import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
-import { ticketsAPI, branchesAPI } from "@/lib/supabase-api";
+import { ticketsAPI, branchesAPI, ticketCostsAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
 import styles from "./TicketWindow.module.css";
@@ -99,6 +99,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // Toast Notification System
     const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
 
+    // GESTIÓN DE COSTOS Y EGRESOS
+    const [ticketCosts, setTicketCosts] = useState<any[]>([]);
+    const [loadingCosts, setLoadingCosts] = useState(false);
+    const [isSavingCost, setIsSavingCost] = useState(false);
+    const [showCostForm, setShowCostForm] = useState(false);
+    const [newCost, setNewCost] = useState({
+        concepto: '',
+        categoria: 'Materiales',
+        proveedor: '',
+        monto: '',
+        estado_pago: 'pendiente'
+    });
+
     const showToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ visible: true, title, message, type });
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
@@ -107,12 +120,26 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // 🔗 EFECTO 1: Carga completa al ABRIR el ticket (solo cuando cambia el ID)
     // Hace getById() para obtener toda la metadata desde Supabase.
     const hasLoadedRef = useRef<string | null>(null);
+    const loadCosts = useCallback(async () => {
+        if (!ticket?.id) return;
+        setLoadingCosts(true);
+        try {
+            const data = await ticketCostsAPI.getByTicket(ticket.id);
+            setTicketCosts(data || []);
+        } catch (err) {
+            console.error("Error loading costs:", err);
+        } finally {
+            setLoadingCosts(false);
+        }
+    }, [ticket?.id]);
+
     useEffect(() => {
         if (!ticket?.id || hasLoadedRef.current === ticket.id) return;
         hasLoadedRef.current = ticket.id;
 
         const load = async () => {
             try {
+                loadCosts(); // Cargar costos por separado
                 const fullTicket = await ticketsAPI.getById(ticket.id);
                 if (!fullTicket) return;
                 let meta = fullTicket.metadata || {};
@@ -777,43 +804,64 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleAddExpense = () => {
-        if (!newExpense.concepto || !newExpense.monto) return;
-        const amount = parseFloat(newExpense.monto);
-        if (isNaN(amount) || amount <= 0) {
+    const handleCreateCost = async () => {
+        if (!newCost.concepto || !newCost.monto) {
+            showToast("Campos Faltantes", "Concepto y Monto son obligatorios.", "error");
+            return;
+        }
+
+        const amountNum = parseFloat(newCost.monto);
+        if (isNaN(amountNum) || amountNum <= 0) {
             showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
             return;
         }
 
-        const isSpecialistPayment = ["Adelanto", "Viáticos", "Pago por Diagnóstico"].includes(newExpense.tipo);
-        let updatedTicket = { ...ticketData };
+        setIsSavingCost(true);
+        try {
+            await ticketCostsAPI.create({
+                ticket_id: ticketData.id,
+                concepto: newCost.concepto,
+                categoria: newCost.categoria,
+                proveedor: newCost.proveedor,
+                monto: amountNum,
+                estado_pago: newCost.estado_pago,
+                solicitado_por: ticketData.gestora?.id || null
+            });
 
-        if (isSpecialistPayment) {
-            // Si es un pago al técnico, lo registramos en el historial de pagos para la liquidación
-            const nuevoPago = {
-                id: Math.random().toString(36).substr(2, 9),
-                fecha: new Date().toISOString(),
-                monto: amount,
-                referencia: `${newExpense.tipo}: ${newExpense.concepto}`
-            };
-            const updatedHistorial = [...(ticketData.historialPagosTecnico || []), nuevoPago];
-            updatedTicket.historialPagosTecnico = updatedHistorial;
-            showToast("Pago Registrado", `${newExpense.tipo} registrado y descontado del saldo técnico.`, "success");
-        } else {
-            // Es un gasto operativo normal (no se descuenta del técnico)
-            const newEntry = { ...newExpense, id: Date.now(), monto: amount };
-            const updatedGastos = [...gastos, newEntry];
-            setGastos(updatedGastos);
-            updatedTicket.gastos = updatedGastos;
-            showToast("Gasto Registrado", "Gasto operativo agregado al ticket.", "success");
+            showToast("Costos Registrado", "El egreso ha sido registrado exitosamente.");
+            setNewCost({ concepto: '', categoria: 'Materiales', proveedor: '', monto: '', estado_pago: 'pendiente' });
+            setShowCostForm(false);
+            loadCosts();
+        } catch (err) {
+            console.error("Error creating cost:", err);
+            showToast("Error", "No se pudo registrar el costo.", "error");
+        } finally {
+            setIsSavingCost(false);
         }
-
-        setTicketData(updatedTicket);
-        setNewExpense({ concepto: "", monto: "", tipo: "Gasto Operativo" });
-        
-        // Sincronización inmediata
-        setTimeout(() => syncToSupabase(true), 100);
     };
+
+    const handleDeleteCost = async (costId: string) => {
+        if (!confirm("¿Está seguro de eliminar este registro de costo?")) return;
+        try {
+            await ticketCostsAPI.delete(costId);
+            showToast("Registro Eliminado", "El costo ha sido removido.");
+            loadCosts();
+        } catch (err) {
+            console.error("Error deleting cost:", err);
+            showToast("Error", "No se pudo eliminar el registro.", "error");
+        }
+    };
+
+    // Cálculos de Rentabilidad
+    const totalAprobado = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
+    const totalGastos = ticketCosts.reduce((sum, c) => sum + parseFloat(c.monto || 0), 0);
+    const margenReal = totalAprobado - totalGastos;
+    const capitalExpuesto = ticketCosts
+        .filter(c => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto')
+        .reduce((sum, c) => sum + parseFloat(c.monto || 0), 0);
+    
+    const percentageSpent = totalAprobado > 0 ? (totalGastos / totalAprobado) * 100 : 0;
+    const isOverLimit = percentageSpent > 70;
 
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 2) {
@@ -2631,33 +2679,180 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                     <div className={styles.executionMainGrid}>
                                                                 {/* El módulo de gastos y materiales se ha unificado en la parte superior del área operativa para accesibilidad total */}
-                                                                <div className={styles.executionCard} style={{ background: '#F8FAFC' }}>
-                                                                    <h4><Package size={18} /> GESTIÓN DE MATERIALES Y RECURSOS</h4>
-                                                                    <p style={{ fontSize: '0.8rem', color: '#64748B' }}>
-                                                                        Use el módulo de tesorería superior para registrar nuevas salidas de dinero, adelantos o facturas de materiales.
-                                                                    </p>
+                                                                {/* 💰 SUB-MÓDULO: GESTIÓN DE COSTOS Y EGRESOS */}
+                                                                <div className={styles.costsModule}>
+                                                                    <div className={styles.costsHeader}>
+                                                                        <div className={styles.costsTitle}>
+                                                                            <Calculator size={22} color="#3B82F6" />
+                                                                            <div>
+                                                                                <h4>Gestión de Costos y Egresos</h4>
+                                                                                <p>Auditoría de rentabilidad y control de gastos en tiempo real.</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button 
+                                                                            className={styles.addCostBtn}
+                                                                            onClick={() => setShowCostForm(!showCostForm)}
+                                                                        >
+                                                                            {showCostForm ? <X size={16} /> : <Plus size={16} />}
+                                                                            {showCostForm ? "Cerrar" : "Añadir Gasto/Pago"}
+                                                                        </button>
+                                                                    </div>
 
-                                                                    {gastos.length > 0 && (
-                                                                        <div style={{ marginTop: '10px' }}>
-                                                                             <p style={{ fontSize: '0.7rem', fontWeight: 700, marginBottom: '5px' }}>LISTADO DE MATERIALES/COMPRAS:</p>
-                                                                             <table className={styles.expenseTable}>
-                                                                                <thead>
-                                                                                    <tr>
-                                                                                        <th>Concepto</th>
-                                                                                        <th>Monto</th>
-                                                                                    </tr>
-                                                                                </thead>
-                                                                                <tbody>
-                                                                                    {gastos.map((g: any) => (
-                                                                                        <tr key={g.id}>
-                                                                                            <td>{g.concepto}</td>
-                                                                                            <td style={{ fontWeight: 800 }}>S/ {g.monto.toFixed(2)}</td>
-                                                                                        </tr>
-                                                                                    ))}
-                                                                                </tbody>
-                                                                            </table>
+                                                                    {/* Resumen de Rentabilidad (Cards) */}
+                                                                    <div className={styles.profitabilityGrid}>
+                                                                        <div className={styles.profitCard}>
+                                                                            <span className={styles.cardLabel}>Presupuesto Aprobado</span>
+                                                                            <strong className={styles.cardValue}>S/ {formatSoles(totalAprobado)}</strong>
+                                                                        </div>
+                                                                        <div className={`${styles.profitCard} ${isOverLimit ? styles.cardAlert : ''}`}>
+                                                                            <span className={styles.cardLabel}>Total Gastos Acum.</span>
+                                                                            <strong className={styles.cardValue} style={{ color: isOverLimit ? '#D97706' : '#1E293B' }}>
+                                                                                S/ {formatSoles(totalGastos)}
+                                                                            </strong>
+                                                                            {isOverLimit && <AlertTriangle size={14} className={styles.alertIcon} />}
+                                                                        </div>
+                                                                        <div className={styles.profitCard}>
+                                                                            <span className={styles.cardLabel}>Margen Bruto Real</span>
+                                                                            <strong className={styles.cardValue} style={{ color: margenReal > 0 ? '#059669' : '#DC2626' }}>
+                                                                                S/ {formatSoles(margenReal)}
+                                                                            </strong>
+                                                                        </div>
+                                                                        <div className={styles.profitCard} title="Gastos ya ejecutados o adelantados que deben ser cobrados al cliente">
+                                                                            <span className={styles.cardLabel}>Capital Expuesto</span>
+                                                                            <strong className={styles.cardValue} style={{ color: '#4F46E5' }}>S/ {formatSoles(capitalExpuesto)}</strong>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Barra de Progreso de Gastos */}
+                                                                    <div className={styles.budgetProgressContainer}>
+                                                                        <div className={styles.progressLabel}>
+                                                                            <span>Consumo del Presupuesto</span>
+                                                                            <span>{percentageSpent.toFixed(1)}%</span>
+                                                                        </div>
+                                                                        <div className={styles.progressBar}>
+                                                                            <div 
+                                                                                className={styles.progressFill} 
+                                                                                style={{ 
+                                                                                    width: `${Math.min(100, percentageSpent)}%`,
+                                                                                    backgroundColor: percentageSpent > 90 ? '#EF4444' : percentageSpent > 70 ? '#F59E0B' : '#3B82F6'
+                                                                                }} 
+                                                                            />
+                                                                        </div>
+                                                                        {isOverLimit && (
+                                                                            <div className={styles.limitWarning}>
+                                                                                <AlertTriangle size={12} />
+                                                                                <span>Atención: Los gastos superan el 70% del presupuesto aprobado.</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Formulario de Nuevo Gasto */}
+                                                                    {showCostForm && (
+                                                                        <div className={styles.costFormPanel}>
+                                                                            <div className={styles.formRow}>
+                                                                                <div className={styles.formGroup}>
+                                                                                    <label>Concepto / Glosa</label>
+                                                                                    <input 
+                                                                                        type="text" 
+                                                                                        placeholder="Ej: Compra de Frenos..."
+                                                                                        value={newCost.concepto}
+                                                                                        onChange={e => setNewCost({...newCost, concepto: e.target.value})}
+                                                                                    />
+                                                                                </div>
+                                                                                <div className={styles.formGroup}>
+                                                                                    <label>Categoría</label>
+                                                                                    <select 
+                                                                                        value={newCost.categoria}
+                                                                                        onChange={e => setNewCost({...newCost, categoria: e.target.value})}
+                                                                                    >
+                                                                                        <option value="Materiales">Materiales</option>
+                                                                                        <option value="Mano de Obra">Mano de Obra</option>
+                                                                                        <option value="Logística">Logística</option>
+                                                                                        <option value="Otros">Otros</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className={styles.formRow}>
+                                                                                <div className={styles.formGroup}>
+                                                                                    <label>Proveedor / Beneficiario</label>
+                                                                                    <input 
+                                                                                        type="text" 
+                                                                                        placeholder="Nombre del proveedor o técnico"
+                                                                                        value={newCost.proveedor}
+                                                                                        onChange={e => setNewCost({...newCost, proveedor: e.target.value})}
+                                                                                    />
+                                                                                </div>
+                                                                                <div className={styles.formGroup}>
+                                                                                    <label>Monto (S/)</label>
+                                                                                    <input 
+                                                                                        type="number" 
+                                                                                        placeholder="0.00"
+                                                                                        value={newCost.monto}
+                                                                                        onChange={e => setNewCost({...newCost, monto: e.target.value})}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                            <button 
+                                                                                className={styles.submitCostBtn}
+                                                                                onClick={handleCreateCost}
+                                                                                disabled={isSavingCost}
+                                                                            >
+                                                                                {isSavingCost ? "Guardando..." : "Registrar y Enviar a Tesorería"}
+                                                                            </button>
                                                                         </div>
                                                                     )}
+
+                                                                    {/* Listado de Costos */}
+                                                                    <div className={styles.costsTableContainer}>
+                                                                        <table className={styles.costsTable}>
+                                                                            <thead>
+                                                                                <tr>
+                                                                                    <th>Categoría</th>
+                                                                                    <th>Concepto</th>
+                                                                                    <th>Proveedor</th>
+                                                                                    <th>Estado</th>
+                                                                                    <th>Monto</th>
+                                                                                    <th style={{ width: 40 }}></th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {ticketCosts.length === 0 ? (
+                                                                                    <tr>
+                                                                                        <td colSpan={6} style={{ textAlign: 'center', padding: '20px', color: '#94A3B8', fontSize: '0.8rem' }}>
+                                                                                            No hay costos registrados aún.
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ) : (
+                                                                                    ticketCosts.map((c) => (
+                                                                                        <tr key={c.id}>
+                                                                                            <td>
+                                                                                                <span className={`${styles.catBadge} ${styles['cat' + c.categoria]}`}>
+                                                                                                    {c.categoria}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td className={styles.conceptCell}>{c.concepto}</td>
+                                                                                            <td className={styles.vendorCell}>{c.proveedor || '---'}</td>
+                                                                                            <td>
+                                                                                                <span className={`${styles.statusBadge} ${styles['status' + c.estado_pago]}`}>
+                                                                                                    {c.estado_pago.toUpperCase()}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td className={styles.amountCell}>S/ {formatSoles(c.monto)}</td>
+                                                                                            <td>
+                                                                                                <button 
+                                                                                                    className={styles.deleteCostBtn}
+                                                                                                    onClick={() => handleDeleteCost(c.id)}
+                                                                                                    title="Eliminar registro"
+                                                                                                >
+                                                                                                    <Trash2 size={14} />
+                                                                                                </button>
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    ))
+                                                                                )}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
                                                                 </div>
 
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
