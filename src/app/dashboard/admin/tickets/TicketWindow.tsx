@@ -294,12 +294,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // NUEVO: Estado para solicitud de depósito en etapa Enviada
     const [depositRequest, setDepositRequest] = useState({ concepto: "", monto: "" });
 
-    // Estados para Triage de Mibanco
+    // Estado para Triage de Mibanco
     const [triageSedeId, setTriageSedeId] = useState("");
     const [triageServiceType, setTriageServiceType] = useState("");
     const [triageDescription, setTriageDescription] = useState("");
     const [sedesMibanco, setSedesMibanco] = useState<any[]>([]);
     const [loadingSedes, setLoadingSedes] = useState(false);
+    const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
 
     useEffect(() => {
         if (ticketData.estadoId === 'borrador' && ticketData.client_id === MIBANCO_ID) {
@@ -977,7 +978,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleConfirmExtraAdvance = () => {
+    const handleConfirmExtraAdvance = async () => {
         const solicitud = ticketData.solicitudAdelantoExtra;
         if (!solicitud) return;
 
@@ -991,13 +992,31 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             referencia: "Adelanto Adicional (Ejecución)"
         };
 
-        setTicketData({
+        const updated = {
             ...ticketData,
             historialPagosTecnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + solicitud.monto,
             solicitudAdelantoExtra: null
-        });
-        showToast("DepÓsito Confirmado", `Se registró el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
+        };
+
+        setIsConfirmingPayment(true);
+        try {
+            await onUpdate(ticketData.id, {
+                metadata: {
+                    ...ticketData.metadata,
+                    historialPagosTecnico: updated.historialPagosTecnico,
+                    montoAdelanto: updated.montoAdelanto,
+                    solicitudAdelantoExtra: null
+                }
+            });
+            setTicketData(updated);
+            showToast("Depósito Confirmado", `Se registró el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
+        } catch (err) {
+            console.error("Error confirming extra advance:", err);
+            showToast("Error de Conexión", "No se pudo registrar el pago. Verifique su internet e intente de nuevo.", "error");
+        } finally {
+            setIsConfirmingPayment(false);
+        }
     };
 
     const handleRequestVisitPayment = () => {
@@ -1015,7 +1034,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         showToast("Solicitud Enviada", `Se solicitó pago de visita por S/ ${amount.toFixed(2)}.`, "info");
     };
 
-    const handleConfirmVisitPayment = () => {
+    const handleConfirmVisitPayment = async () => {
         // Solo permitir si hay solicitud o si es admin forzando (pero idealmente debería haber solicitud)
         const amount = parseFloat(ticketData.costoVisita || 0);
         const pagosPrevios = ticketData.historialPagosTecnico || [];
@@ -1027,7 +1046,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             referencia: "Pago de Visita Técnica (Gerencia)"
         };
 
-        setTicketData({
+        const updated = {
             ...ticketData,
             estadoId: "en_inspeccion",
             visitPaymentConfirmed: true,
@@ -1035,11 +1054,33 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             montoAdelanto: (ticketData.montoAdelanto || 0) + amount,
             fechaPagoVisita: new Date().toISOString(),
             solicitudPagoVisita: null // Limpiar solicitud
-        });
-        showToast("Pago de Visita Exitoso", `Se confirmó el depÓsito de S/ ${amount.toFixed(2)}.`, "success");
+        };
+
+        setIsConfirmingPayment(true);
+        try {
+            await onUpdate(ticketData.id, {
+                status_id: "en_inspeccion",
+                metadata: {
+                    ...ticketData.metadata,
+                    estadoId: "en_inspeccion",
+                    visitPaymentConfirmed: true,
+                    historialPagosTecnico: updated.historialPagosTecnico,
+                    montoAdelanto: updated.montoAdelanto,
+                    fechaPagoVisita: updated.fechaPagoVisita,
+                    solicitudPagoVisita: null
+                }
+            });
+            setTicketData(updated);
+            showToast("Pago de Visita Exitoso", `Se confirmó el depósito de S/ ${amount.toFixed(2)}.`, "success");
+        } catch (err) {
+            console.error("Error confirming visit payment:", err);
+            showToast("Error de Conexión", "No se pudo confirmar el pago. Verifique su internet.", "error");
+        } finally {
+            setIsConfirmingPayment(false);
+        }
     };
 
-    const handleConfirmAdvance = () => {
+    const handleConfirmAdvance = async () => {
         // Usar el porcentaje solicitado si existe, de lo contrario usar el seleccionado localmente
         const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
 
@@ -1073,12 +1114,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             historialPagosTecnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + amount,
             fechaPagoAdelanto: new Date().toISOString(),
-            // Limpiamos la solicitud ya que se atendiÓ
+            // Limpiamos la solicitud ya que se atendió
             solicitudAdelanto: null
         };
 
-        setTicketData(updated);
-        showToast("Adelanto Confirmado", `Se ha confirmado el depÓsito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
+        setIsConfirmingPayment(true);
+        try {
+            await onUpdate(ticketData.id, {
+                metadata: {
+                    ...ticketData.metadata,
+                    adelantoPagado: true,
+                    historialPagosTecnico: updated.historialPagosTecnico,
+                    montoAdelanto: updated.montoAdelanto,
+                    fechaPagoAdelanto: updated.fechaPagoAdelanto,
+                    solicitudAdelanto: null
+                }
+            });
+            setTicketData(updated);
+            showToast("Adelanto Confirmado", `Se ha confirmado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
+        } catch (err) {
+            console.error("Error confirming advance:", err);
+            showToast("Error de Conexión", "No se pudo registrar el adelanto. Verifique su internet e intente de nuevo.", "error");
+        } finally {
+            setIsConfirmingPayment(false);
+        }
     };
 
     const handleRequestAdvance = () => {
@@ -1123,7 +1182,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
-    const handleFinalLiquidationPay = () => {
+    const handleFinalLiquidationPay = async () => {
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
         const pagosPrevios = ticketData.historialPagosTecnico || [];
         const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
@@ -1146,11 +1205,31 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             estadoId: "ticket_cerrado",
             historialPagosTecnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + amount,
-            fechaPagoFinal: new Date().toISOString()
+            fechaPagoFinal: new Date().toISOString(),
+            solicitudLiquidacion: null
         };
 
-        setTicketData(updated);
-        showToast("Ticket Liquidado", `Se registró el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
+        setIsConfirmingPayment(true);
+        try {
+            await onUpdate(ticketData.id, {
+                status_id: "ticket_cerrado",
+                metadata: {
+                    ...ticketData.metadata,
+                    estadoId: "ticket_cerrado",
+                    historialPagosTecnico: updated.historialPagosTecnico,
+                    montoAdelanto: updated.montoAdelanto,
+                    fechaPagoFinal: updated.fechaPagoFinal,
+                    solicitudLiquidacion: null
+                }
+            });
+            setTicketData(updated);
+            showToast("Ticket Liquidado", `Se registró el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
+        } catch (err) {
+            console.error("Error confirming final liquidation:", err);
+            showToast("Error de Conexión", "No se pudo cerrar el ticket. Verifique su internet.", "error");
+        } finally {
+            setIsConfirmingPayment(false);
+        }
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1547,12 +1626,26 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
 
                                                     {userRole === 'admin' ? (
-                                                        <button className={styles.confirmAdvanceBtn} onClick={handleConfirmVisitPayment}>
-                                                            <CheckCircle size={18} />
-                                                            <span>
-                                                                CONFIRMAR DEPÓSITO VISITA
-                                                                {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
-                                                            </span>
+                                                        <button 
+                                                            className={styles.confirmAdvanceBtn} 
+                                                            onClick={handleConfirmVisitPayment}
+                                                            disabled={isConfirmingPayment}
+                                                            style={isConfirmingPayment ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
+                                                        >
+                                                            {isConfirmingPayment ? (
+                                                                <>
+                                                                    <Clock size={18} className={styles.spinIcon} />
+                                                                    <span>Confirmando...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <CheckCircle size={18} />
+                                                                    <span>
+                                                                        CONFIRMAR DEPÓSITO VISITA
+                                                                        {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
+                                                                    </span>
+                                                                </>
+                                                            )}
                                                         </button>
                                                     ) : (
                                                         !ticketData.solicitudPagoVisita ? (
@@ -2443,18 +2536,27 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             <button
                                                                                 className={styles.confirmAdvanceBtn}
                                                                                 onClick={handleConfirmAdvance}
-                                                                                disabled={!ticketData.solicitudAdelanto && porcentajeAdelanto === null}
-                                                                                style={(!ticketData.solicitudAdelanto && porcentajeAdelanto === null) ? { opacity: 0.5, cursor: 'not-allowed', filter: 'grayscale(1)' } : {}}
+                                                                                disabled={(!ticketData.solicitudAdelanto && porcentajeAdelanto === null) || isConfirmingPayment}
+                                                                                style={((!ticketData.solicitudAdelanto && porcentajeAdelanto === null) || isConfirmingPayment) ? { opacity: 0.5, cursor: 'not-allowed', filter: 'grayscale(1)' } : {}}
                                                                             >
-                                                                                <Wallet size={18} />
-                                                                                <span>
-                                                                                    {ticketData.solicitudAdelanto ?
-                                                                                        `CONFIRMAR DEPÓSITO (SOLICITUD: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%)` :
-                                                                                        porcentajeAdelanto !== null ?
-                                                                                            `CONFIRMAR DEPÓSITO S/ ${((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}` :
-                                                                                            "SELECCIONE % PARA CONFIRMAR"
-                                                                                    }
-                                                                                </span>
+                                                                                {isConfirmingPayment ? (
+                                                                                    <>
+                                                                                        <Clock size={18} className={styles.spinIcon} />
+                                                                                        <span>CONFIRMANDO...</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <Wallet size={18} />
+                                                                                        <span>
+                                                                                            {ticketData.solicitudAdelanto ?
+                                                                                                `CONFIRMAR DEPÓSITO (SOLICITUD: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%)` :
+                                                                                                porcentajeAdelanto !== null ?
+                                                                                                    `CONFIRMAR DEPÓSITO S/ ${((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}` :
+                                                                                                    "SELECCIONE % PARA CONFIRMAR"
+                                                                                            }
+                                                                                        </span>
+                                                                                    </>
+                                                                                )}
                                                                             </button>
                                                                         ) : (
                                                                             !ticketData.solicitudAdelanto ? (
@@ -2628,9 +2730,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>Monto solicitado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}</p>
 
                                                                         {userRole === 'admin' ? (
-                                                                            <button className={styles.confirmManagerDepositBtn} onClick={handleConfirmExtraAdvance}>
-                                                                                <CheckCircle size={14} />
-                                                                                CONFIRMAR DEPÓSITO MANUALMENTE
+                                                                            <button 
+                                                                                className={styles.confirmManagerDepositBtn} 
+                                                                                onClick={handleConfirmExtraAdvance}
+                                                                                disabled={isConfirmingPayment}
+                                                                                style={isConfirmingPayment ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
+                                                                            >
+                                                                                {isConfirmingPayment ? (
+                                                                                    <>
+                                                                                        <Clock size={14} className={styles.spinIcon} />
+                                                                                        <span>PROCESANDO...</span>
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <CheckCircle size={14} />
+                                                                                        <span>CONFIRMAR DEPÓSITO MANUALMENTE</span>
+                                                                                    </>
+                                                                                )}
                                                                             </button>
                                                                         ) : (
                                                                             <div className={styles.waitingForManager} style={{ marginTop: '0', padding: '12px' }}>
@@ -2970,12 +3086,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <button
                                                                 className={styles.confirmFinalPaymentBtn}
                                                                 onClick={handleFinalLiquidationPay}
+                                                                disabled={isConfirmingPayment}
+                                                                style={isConfirmingPayment ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
                                                             >
-                                                                <DollarSign size={20} />
-                                                                <span>
-                                                                    CONFIRMAR DEPÓSITO FINAL
-                                                                    {ticketData.solicitudLiquidacion && " (SOLICITADO)"}
-                                                                </span>
+                                                                {isConfirmingPayment ? (
+                                                                    <>
+                                                                        <Clock size={20} className={styles.spinIcon} />
+                                                                        <span>CONFIRMANDO...</span>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <DollarSign size={20} />
+                                                                        <span>
+                                                                            CONFIRMAR DEPÓSITO FINAL
+                                                                            {ticketData.solicitudLiquidacion && " (SOLICITADO)"}
+                                                                        </span>
+                                                                    </>
+                                                                )}
                                                             </button>
                                                         ) : (
                                                             !ticketData.solicitudLiquidacion ? (
