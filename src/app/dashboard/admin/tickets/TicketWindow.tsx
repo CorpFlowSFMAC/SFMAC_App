@@ -109,7 +109,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         categoria: 'Materiales',
         proveedor: '',
         monto: '',
-        estado_pago: 'pendiente'
+        estado_pago: 'pendiente',
+        url_comprobante: ''
     });
 
     const showToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -1353,10 +1354,78 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setIsMinimized(false);
     };
 
-    const handleMinimize = () => {
-        const nextState = !isMinimized;
-        setIsMinimized(nextState);
+    const handleSaveCost = async () => {
+        if (!newCost.concepto || !newCost.monto) {
+            showToast("Campos Faltantes", "Debe completar concepto y monto.", "error");
+            return;
+        }
+
+        setIsSavingCost(true);
+        try {
+            const costData = {
+                ticket_id: ticket.id,
+                concepto: newCost.concepto,
+                categoria: newCost.categoria,
+                proveedor: newCost.proveedor,
+                monto: parseFloat(newCost.monto),
+                estado_pago: newCost.estado_pago,
+                url_comprobante: newCost.url_comprobante,
+                solicitado_por: userRole === 'admin' ? undefined : (typeof window !== 'undefined' ? localStorage.getItem('userId') : null) as any
+            };
+
+            await ticketCostsAPI.create(costData);
+            await loadCosts();
+            setShowCostForm(false);
+            setNewCost({
+                concepto: '',
+                categoria: 'Materiales',
+                proveedor: '',
+                monto: '',
+                estado_pago: 'pendiente',
+                url_comprobante: ''
+            });
+            showToast("Gasto Registrado", "El costo ha sido asociado al ticket.", "success");
+        } catch (err) {
+            console.error("Error saving cost:", err);
+            showToast("Error", "No se pudo registrar el gasto.", "error");
+        } finally {
+            setIsSavingCost(false);
+        }
     };
+
+    const handleDeleteCost = async (costId: string) => {
+        if (!confirm("¿Está seguro de eliminar este registro de costo?")) return;
+        
+        try {
+            await ticketCostsAPI.delete(costId);
+            await loadCosts();
+            showToast("Registro Eliminado", "El costo ha sido quitado del desglose.", "info");
+        } catch (err) {
+            console.error("Error deleting cost:", err);
+            showToast("Error", "No se pudo eliminar el registro.", "error");
+        }
+    };
+
+    const handleCostVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files?.[0]) return;
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const b64 = event.target?.result as string;
+            setNewCost(prev => ({ ...prev, url_comprobante: b64 }));
+            showToast("Voucher Cargado", "La imagen ha sido preparada para el registro.", "info");
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Cálculos de Rentabilidad Rel Real-Time
+    const totalCosts = ticketCosts.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+    const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
+    const grossMargin = approvedAmount - totalCosts;
+    const capitalExposed = ticketCosts
+        .filter(c => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto')
+        .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+    const costPercentage = approvedAmount > 0 ? (totalCosts / approvedAmount) * 100 : 0;
 
     return (
         <>
@@ -3347,6 +3416,151 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 </>
                             )}
                         </div>
+
+                        {/* ========================================
+                            📊 GESTIÓN DE COSTOS Y EGRESOS
+                           ======================================== */}
+                        <div className={styles.costsSection}>
+                            <div className={styles.costsHeader}>
+                                <div className={styles.costsTitleGroup}>
+                                    <div style={{ background: '#1E293B', padding: '10px', borderRadius: '12px', color: 'white', display: 'flex' }}>
+                                        <Receipt size={22} />
+                                    </div>
+                                    <div>
+                                        <h3>Desglose de Costos y Pagos</h3>
+                                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>
+                                            Control de egresos y rentabilidad real del servicio
+                                        </p>
+                                    </div>
+                                </div>
+                                <button 
+                                    className={styles.addCostActionBtn}
+                                    onClick={() => setShowCostForm(true)}
+                                >
+                                    <Plus size={18} />
+                                    <span>Añadir Gasto / Pago</span>
+                                </button>
+                            </div>
+
+                            <div className={styles.costsStatsGrid}>
+                                <div className={styles.costStatCard}>
+                                    <span className={styles.statLabel}>Total Gastos Operativos</span>
+                                    <div className={styles.statValue}>S/ {totalCosts.toFixed(2)}</div>
+                                </div>
+                                <div className={styles.costStatCard}>
+                                    <span className={styles.statLabel}>Margen Bruto Real</span>
+                                    <div className={`${styles.statValue} ${grossMargin >= 0 ? styles.positive : styles.negative}`}>
+                                        S/ {grossMargin.toFixed(2)}
+                                    </div>
+                                </div>
+                                <div className={styles.costStatCard}>
+                                    <span className={styles.statLabel}>Capital Expuesto</span>
+                                    <div className={styles.statValue} style={{ color: '#F59E0B' }}>
+                                        S/ {capitalExposed.toFixed(2)}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {approvedAmount > 0 && (
+                                <div className={styles.profitabilityIndicator}>
+                                    <div className={styles.indicatorHeader}>
+                                        <span>Consumo del Presupuesto Aprobado</span>
+                                        <span style={{ 
+                                            color: costPercentage > 70 ? '#EF4444' : '#1E293B',
+                                            fontWeight: 800,
+                                            fontSize: '1rem'
+                                        }}>
+                                            {costPercentage.toFixed(1)}%
+                                        </span>
+                                    </div>
+                                    <div className={styles.progressBarWrapper}>
+                                        <div 
+                                            className={styles.progressBar}
+                                            style={{ 
+                                                width: `${Math.min(100, costPercentage)}%`,
+                                                backgroundColor: costPercentage > 90 ? '#EF4444' : costPercentage > 70 ? '#F59E0B' : '#10B981'
+                                            }}
+                                        />
+                                    </div>
+                                    {costPercentage > 70 && (
+                                        <div className={styles.progressAlert + " " + styles.alertWarning}>
+                                            <AlertTriangle size={18} />
+                                            <span>¡RENTABILIDAD CRÍTICA! Los gastos han superado el presupuesto base.</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className={styles.costsTableContainer}>
+                                {ticketCosts.length > 0 ? (
+                                    <table className={styles.costsTable}>
+                                        <thead>
+                                            <tr>
+                                                <th>Categoría</th>
+                                                <th>Concepto / Proveedor</th>
+                                                <th>Monto</th>
+                                                <th>Estado</th>
+                                                <th>Voucher</th>
+                                                <th style={{ textAlign: 'center' }}>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {ticketCosts.map((c) => (
+                                                <tr key={c.id}>
+                                                    <td>
+                                                        <span className={`${styles.costCategoryBadge} ${styles['cat-' + (c.categoria || 'Otros').replace(' ', '')]}`}>
+                                                            {c.categoria}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ fontWeight: 700, color: '#1E293B' }}>{c.concept || c.concepto}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 500 }}>{c.proveedor || 'Sin proveedor registrado'}</div>
+                                                    </td>
+                                                    <td style={{ fontWeight: 800, color: '#1E293B' }}>S/ {(parseFloat(c.monto) || 0).toFixed(2)}</td>
+                                                    <td>
+                                                        <span className={`${styles.costStatusBadge} ${styles['badge-' + (c.estado_pago || 'pendiente').toLowerCase()]}`}>
+                                                            {c.estado_pago}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        {c.url_comprobante ? (
+                                                            <button 
+                                                                className={styles.voucherViewBtn}
+                                                                onClick={() => window.open(c.url_comprobante, '_blank')}
+                                                            >
+                                                                <Camera size={16} />
+                                                                <span>Ver</span>
+                                                            </button>
+                                                        ) : (
+                                                            <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Sin adjunto</span>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <button 
+                                                            className={styles.deleteCostBtn}
+                                                            onClick={() => handleDeleteCost(c.id)}
+                                                            title="Eliminar gasto"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className={styles.emptyCostsState}>
+                                        <div style={{ background: '#F1F5F9', padding: '24px', borderRadius: '50%', color: '#94A3B8' }}>
+                                            <Calculator size={48} />
+                                        </div>
+                                        <div>
+                                            <p style={{ margin: 0, fontWeight: 800, color: '#475569', fontSize: '1.1rem' }}>Sin gastos registrados</p>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.9rem', color: '#94A3B8' }}>Ingrese los costos operativos para monitorear el margen de utilidad.</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -3437,6 +3651,119 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     onClose={() => setShowGestoraDrawer(false)}
                     onAssign={handleGestoraAssignment}
                 />
+
+                {/* Formulario Modal para Añadir Gasto */}
+                {showCostForm && (
+                    <div className={styles.costFormOverlay}>
+                        <div className={styles.costFormCard}>
+                            <div className={styles.costsHeader} style={{ marginBottom: '24px' }}>
+                                <div className={styles.costsTitleGroup}>
+                                    <Plus size={24} color="#8B5CF6" />
+                                    <h3>Nuevo Gasto / Pago</h3>
+                                </div>
+                                <button className={styles.closeBtn} onClick={() => setShowCostForm(false)} style={{ color: '#64748B' }}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.formGrid}>
+                                <div className={styles.formField}>
+                                    <label>Concepto del Gasto</label>
+                                    <input 
+                                        type="text" 
+                                        className={styles.formInput}
+                                        placeholder="Ej: Compra de frenos, Envío Courier..."
+                                        value={newCost.concepto}
+                                        onChange={(e) => setNewCost({...newCost, concepto: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className={styles.settingsRow}>
+                                    <div className={styles.formField}>
+                                        <label>Categoría</label>
+                                        <select 
+                                            className={styles.formSelect}
+                                            value={newCost.categoria}
+                                            onChange={(e) => setNewCost({...newCost, categoria: e.target.value})}
+                                        >
+                                            <option value="Materiales">Materiales</option>
+                                            <option value="Mano de Obra">Mano de Obra</option>
+                                            <option value="Logística">Logística</option>
+                                            <option value="Otros">Otros</option>
+                                        </select>
+                                    </div>
+                                    <div className={styles.formField}>
+                                        <label>Monto (S/)</label>
+                                        <input 
+                                            type="number" 
+                                            className={styles.formInput}
+                                            placeholder="0.00"
+                                            value={newCost.monto}
+                                            onChange={(e) => setNewCost({...newCost, monto: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className={styles.formField}>
+                                    <label>Entidad / Proveedor</label>
+                                    <input 
+                                        type="text" 
+                                        className={styles.formInput}
+                                        placeholder="Nombre del proveedor o especialista"
+                                        value={newCost.proveedor}
+                                        onChange={(e) => setNewCost({...newCost, proveedor: e.target.value})}
+                                    />
+                                </div>
+
+                                <div className={styles.formField}>
+                                    <label>Estado del Pago</label>
+                                    <select 
+                                        className={styles.formSelect}
+                                        value={newCost.estado_pago}
+                                        onChange={(e) => setNewCost({...newCost, estado_pago: e.target.value})}
+                                    >
+                                        <option value="pendiente">Pendiente</option>
+                                        <option value="pagado">Pagado</option>
+                                        <option value="adelanto">Adelanto</option>
+                                    </select>
+                                </div>
+
+                                <div className={styles.formField}>
+                                    <label>Comprobante (Voucher / Factura)</label>
+                                    <div className={styles.fileUploadArea} onClick={() => document.getElementById('costVoucherInput')?.click()}>
+                                        <Upload size={20} color="#8B5CF6" />
+                                        <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', fontWeight: 600 }}>
+                                            {newCost.url_comprobante ? "✅ Imagen cargada" : "Haz clic para subir imagen"}
+                                        </p>
+                                        <input 
+                                            type="file" 
+                                            id="costVoucherInput" 
+                                            hidden 
+                                            accept="image/*"
+                                            onChange={handleCostVoucherUpload}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className={styles.costFormActions}>
+                                    <button 
+                                        className={styles.cancelCostBtn}
+                                        onClick={() => setShowCostForm(false)}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        className={styles.saveCostBtn}
+                                        onClick={handleSaveCost}
+                                        disabled={isSavingCost}
+                                    >
+                                        {isSavingCost ? "Guardando..." : "Guardar Registro"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );

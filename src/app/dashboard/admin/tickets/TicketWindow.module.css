@@ -3611,6 +3611,318 @@
 .deleteCostBtn:hover {
     color: #EF4444;
     background: #FEE2E2;
+
+/* ========================================
+   📊 GESTIÓN DE COSTOS Y RENTABILIDAD
+   ======================================== */
+
+.costsSection {
+    background: white;
+    border-radius: 20px;
+    padding: 24px;
+    margin-top: 24px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
 }
+
+.costsHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.costsTitleGroup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.costsTitleGroup h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #1E293B;
+}
+
+.costsStatsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.costStatCard {
+    background: #F8FAFC;
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid #F1F5F9;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.statLabel {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.statValue {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #1E293B;
+}
+
+.statValue.positive { color: #10B981; }
+.statValue.negative { color: #EF4444; }
+.statValue.neutral { color: #3B82F6; }
+
+.profitabilityIndicator {
+    background: #F8FAFC;
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+}
+
+.indicatorHeader {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.indicatorHeader span {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.progressBarWrapper {
+    height: 12px;
+    background: #E2E8F0;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #CBD5E1;
+}
+
+.progressBar {
+    height: 100%;
+    transition: width 0.5s ease-out, background-color 0.3s;
+}
+
+.progressAlert {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    animation: fadeInHalf 0.3s ease-in;
+}
+
+@keyframes fadeInHalf {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.alertWarning { background: #FFF7ED; color: #C2410C; border: 1px solid #FFEDD5; }
+.alertDanger { background: #FEF2F2; color: #B91C1C; border: 1px solid #FEE2E2; }
+
+.addCostActionBtn {
+    background: #1E293B;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.addCostActionBtn:hover {
+    background: #334155;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.costsTableContainer {
+    overflow-x: auto;
+}
+
+.costsTable {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.costsTable th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #64748B;
+    text-transform: uppercase;
+    border-bottom: 2px solid #F1F5F9;
+}
+
+.costsTable td {
+    padding: 16px;
+    font-size: 0.9rem;
+    color: #334155;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.costsTable tr:hover td {
+    background: #F8FAFC;
+}
+
+.costCategoryBadge {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.cat-Materiales { background: #F5F3FF; color: #7C3AED; }
+.cat-ManoDeObra { background: #F0FDF4; color: #16A34A; }
+.cat-Logística { background: #EFF6FF; color: #3B82F6; }
+.cat-Otros { background: #F8FAFC; color: #64748B; }
+
+.costStatusBadge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.badge-pendiente { background: #F1F5F9; color: #475569; }
+.badge-pagado { background: #D1FAE5; color: #065F46; }
+.badge-adelanto { background: #DBEAFE; color: #1E40AF; }
+
+.costFormOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+}
+
+.costFormCard {
+    background: white;
+    width: 100%;
+    max-width: 500px;
+    border-radius: 24px;
+    padding: 32px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.formGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.formField {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.formField label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.formInput, .formSelect {
+    padding: 14px 16px;
+    border: 2px solid #E2E8F0;
+    border-radius: 14px;
+    font-size: 1rem;
+    color: #1E293B;
+    transition: all 0.2s;
+    background: #F8FAFC;
+}
+
+.formInput:focus, .formSelect:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+}
+
+.costFormActions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.saveCostBtn {
+    flex: 2;
+    background: #8B5CF6;
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 14px;
+    font-weight: 800;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.saveCostBtn:hover {
+    background: #7C3AED;
+    transform: translateY(-2px);
+}
+
+.cancelCostBtn {
+    flex: 1;
+    background: #F1F5F9;
+    color: #475569;
+    border: none;
+    padding: 14px;
+    border-radius: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.emptyCostsState {
+    padding: 60px;
+    text-align: center;
+    color: #94A3B8;
+    background: #F8FAFC;
+    border-radius: 20px;
+    border: 3px dashed #E2E8F0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
 
 
