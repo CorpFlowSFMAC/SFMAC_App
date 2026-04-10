@@ -805,53 +805,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleCreateCost = async () => {
-        if (!newCost.concepto || !newCost.monto) {
-            showToast("Campos Faltantes", "Concepto y Monto son obligatorios.", "error");
-            return;
-        }
-
-        const amountNum = parseFloat(newCost.monto);
-        if (isNaN(amountNum) || amountNum <= 0) {
-            showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
-            return;
-        }
-
-        setIsSavingCost(true);
-        try {
-            await ticketCostsAPI.create({
-                ticket_id: ticketData.id,
-                concepto: newCost.concepto,
-                categoria: newCost.categoria,
-                proveedor: newCost.proveedor,
-                monto: amountNum,
-                estado_pago: newCost.estado_pago,
-                solicitado_por: ticketData.gestora?.id || null
-            });
-
-            showToast("Costos Registrado", "El egreso ha sido registrado exitosamente.");
-            setNewCost({ concepto: '', categoria: 'Materiales', proveedor: '', monto: '', estado_pago: 'pendiente' });
-            setShowCostForm(false);
-            loadCosts();
-        } catch (err) {
-            console.error("Error creating cost:", err);
-            showToast("Error", "No se pudo registrar el costo.", "error");
-        } finally {
-            setIsSavingCost(false);
-        }
-    };
-
-    const handleDeleteCost = async (costId: string) => {
-        if (!confirm("¿Está seguro de eliminar este registro de costo?")) return;
-        try {
-            await ticketCostsAPI.delete(costId);
-            showToast("Registro Eliminado", "El costo ha sido removido.");
-            loadCosts();
-        } catch (err) {
-            console.error("Error deleting cost:", err);
-            showToast("Error", "No se pudo eliminar el registro.", "error");
-        }
-    };
 
     // Cálculos de Rentabilidad
     const totalAprobado = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
@@ -1423,7 +1376,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     return (
         <>
-            {isMaximized && !isMinimized && <div className={styles.overlay} onClick={onClose} style={{ zIndex: zIndex - 1 }} />}
+            {isMaximized && !isMinimized && <div className={styles.overlay} style={{ zIndex: zIndex - 1 }} />}
 
             <div
                 ref={windowRef}
@@ -1490,19 +1443,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
                     )}
 
-                    <div className={styles.windowControls}>
+                    <div className={styles.windowControls} onMouseDown={(e) => e.stopPropagation()}>
                         {!isMinimized && (
                             <>
                                 <button
                                     className={styles.controlBtn}
-                                    onClick={handleMinimize}
+                                    onClick={(e) => { e.stopPropagation(); handleMinimize(); }}
                                     title="Minimizar"
                                 >
                                     <Minimize2 size={16} />
                                 </button>
                                 <button
                                     className={styles.controlBtn}
-                                    onClick={handleMaximize}
+                                    onClick={(e) => { e.stopPropagation(); handleMaximize(); }}
                                     title={isMaximized ? "Restaurar" : "Maximizar"}
                                 >
                                     {isMaximized ? <Square size={14} /> : <Maximize2 size={16} />}
@@ -1511,7 +1464,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         )}
                         <button
                             className={`${styles.controlBtn} ${styles.closeBtn} ${isMinimized ? styles.minimizedClose : ''}`}
-                            onClick={onClose}
+                            onClick={(e) => { e.stopPropagation(); onClose(); }}
                             title="Cerrar"
                         >
                             <X size={16} />

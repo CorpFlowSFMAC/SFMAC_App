@@ -422,17 +422,17 @@ export default function PaymentsPage() {
                         });
                     }
 
-                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE O EL TICKET ESTÁ EN LIQUIDACIÓN)
-                    if (ticket.solicitudLiquidacion || ticket.estadoId === 'por_liquidar') {
+                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE O EL TICKET ESTÁ EN LIQUIDACIÓN O TIENE SALDO)
+                    if (ticket.solicitudLiquidacion || ticket.estadoId === 'por_liquidar' || (saldoReal > 0.01 && ticket.estadoId !== 'ticket_cerrado')) {
                         const liqMonto = round2(ticket.solicitudLiquidacion?.monto || saldoReal);
                         if (liqMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_final`,
-                                tipo: 'Liquidación Final',
+                                tipo: ticket.solicitudLiquidacion ? 'Liquidación Final' : 'Saldo Pendiente (Auto)',
                                 monto: liqMonto,
                                 estado: 'pendiente',
                                 fecha: ticket.solicitudLiquidacion?.fecha || new Date().toISOString(),
-                                concepto: !ticket.solicitudLiquidacion ? "Solicitud automática (Ticket en Liquidación)" : undefined
+                                concepto: !ticket.solicitudLiquidacion ? "Saldo detectado por el sistema" : undefined
                             });
                         }
                     }
@@ -1092,20 +1092,38 @@ export default function PaymentsPage() {
                                                                 </div>
                                                             );
                                                         })}
-                                                        {group.items.every(i => i.estado === 'pagado') && (
-                                                            <div style={{ textAlign: 'center', padding: '8px 4px' }}>
-                                                                <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
-                                                                    <CheckCircle2 size={18} color="#22C55E" />
+                                                        {group.items.length > 0 ? (
+                                                            group.items.every(i => i.estado === 'pagado') && (
+                                                                <div style={{ textAlign: 'center', padding: '8px 4px' }}>
+                                                                    <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
+                                                                        <CheckCircle2 size={18} color="#22C55E" />
+                                                                    </div>
+                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803D', display: 'block' }}>COMPLETADO</span>
+                                                                    {group.historialDepositos.length > 0 && (
+                                                                        <button className={styles.historyToggle}
+                                                                            style={{ marginTop: '6px', width: '100%' }}
+                                                                            onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}>
+                                                                            {expandedHistory === group.ticketId ? <ChevronUp size={14} /> : <History size={14} />}
+                                                                        </button>
+                                                                    )}
                                                                 </div>
-                                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803D', display: 'block' }}>COMPLETADO</span>
-                                                                {group.historialDepositos.length > 0 && (
-                                                                    <button className={styles.historyToggle}
-                                                                        style={{ marginTop: '6px', width: '100%' }}
-                                                                        onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}>
-                                                                        {expandedHistory === group.ticketId ? <ChevronUp size={14} /> : <History size={14} />}
-                                                                    </button>
-                                                                )}
-                                                            </div>
+                                                            )
+                                                        ) : (
+                                                            round2(group.totalFacturado - group.totalPagado) <= 0.01 && (
+                                                                <div style={{ textAlign: 'center', padding: '8px 4px' }}>
+                                                                    <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
+                                                                        <CheckCircle2 size={18} color="#22C55E" />
+                                                                    </div>
+                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803D', display: 'block' }}>COMPLETADO</span>
+                                                                    {group.historialDepositos.length > 0 && (
+                                                                        <button className={styles.historyToggle}
+                                                                            style={{ marginTop: '6px', width: '100%' }}
+                                                                            onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}>
+                                                                            {expandedHistory === group.ticketId ? <ChevronUp size={14} /> : <History size={14} />}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )
                                                         )}
                                                     </div>
                                                 </td>
