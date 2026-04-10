@@ -779,9 +779,12 @@ export default function PaymentsPage() {
                 <div className={styles.tableHeader}>
                     <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E293B' }}>
                         <Wallet size={18} color="#3B82F6" />
+                        <span style={{ fontSize: '0.6rem', color: '#B45309', background: '#FEF3C7', padding: '2px 8px', borderRadius: '6px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid #FCD34D' }}>
+                            SINFIMAC CORP - TESORERÍA v2.0
+                        </span>
                         Peticiones de Fondos
                         <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
-                            {filteredGroups.length} registros
+                            {filteredGroups.length} {filteredGroups.length === 1 ? 'registro' : 'registros'}
                         </span>
                     </h2>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -932,7 +935,7 @@ export default function PaymentsPage() {
                                                 {/* Col 4: Solicitud Actual */}
                                                 <td>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        {group.items.map((item) => {
+                                                        {group.items.filter(i => i.estado === 'pendiente').map((item) => {
                                                             const cfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F8FAFC', label: item.tipo };
                                                             return (
                                                                 <div key={item.id} style={{
