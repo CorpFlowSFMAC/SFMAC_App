@@ -422,22 +422,21 @@ export default function PaymentsPage() {
                         });
                     }
 
-                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE)
-                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE)
-                    if (ticket.solicitudLiquidacion) {
-                        const liqMonto = round2(ticket.solicitudLiquidacion.monto || saldoReal);
+                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE O EL TICKET ESTÁ EN LIQUIDACIÓN)
+                    if (ticket.solicitudLiquidacion || ticket.estadoId === 'por_liquidar') {
+                        const liqMonto = round2(ticket.solicitudLiquidacion?.monto || saldoReal);
                         if (liqMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_final`,
                                 tipo: 'Liquidación Final',
                                 monto: liqMonto,
                                 estado: 'pendiente',
-                                fecha: ticket.solicitudLiquidacion.fecha || new Date().toISOString()
+                                fecha: ticket.solicitudLiquidacion?.fecha || new Date().toISOString(),
+                                concepto: !ticket.solicitudLiquidacion ? "Solicitud automática (Ticket en Liquidación)" : undefined
                             });
                         }
                     }
 
-                    // 5. Movilidad / Visita (SOLO SI HAY SOLICITUD PENDIENTE)
                     // 5. Movilidad / Visita (SOLO SI HAY SOLICITUD PENDIENTE)
                     if (ticket.solicitudPagoVisita && !ticket.visitPaymentConfirmed) {
                         const visitaMonto = round2(ticket.solicitudPagoVisita.monto || visitCost);

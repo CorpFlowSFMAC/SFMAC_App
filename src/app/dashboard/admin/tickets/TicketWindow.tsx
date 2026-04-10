@@ -371,8 +371,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // 🚀 SINCRONIZACIÓN CON SUPABASE (Reemplaza localStorage)
     const lastSyncData = useRef<string>("");
 
-    const syncToSupabase = useCallback(async (isImmediate = false) => {
-        if (!onUpdate || !ticketData) return;
+    const syncToSupabase = useCallback(async (dataOverride?: any) => {
+        const dataToProcess = dataOverride || ticketData;
+        if (!onUpdate || !dataToProcess) return;
 
         // âš ï¸ OPTIMIZACIÓN: Solo sincronizar datos de negocio
         const {
@@ -380,7 +381,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             cliente, sede, tecnico, // Evital guardar objetos pesados en raíz de Supabase
             metadata: _unusedMetadata,
             ...businessData
-        } = ticketData;
+        } = dataToProcess;
 
         // Mapeo de campos UI (Español) -> Supabase (Inglés)
         // 🛠️¡ï¸ PROTECCIÓN DE ESCRITURA: Si no soy Admin, NO debo tocar campos de dinero o estado crítico
@@ -451,13 +452,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         // 🛠️¡ï¸ ANTI-OVERWRITE: Solo sincronizar si hay cambios reales respecto al último sync
         const currentDataStr = JSON.stringify(updates);
-        if (currentDataStr === lastSyncData.current) return;
+        if (currentDataStr === lastSyncData.current && !dataOverride) return;
 
         try {
             await onUpdate(ticket.id, updates);
-            lastSyncData.current = currentDataStr; // Actualizar marca de tiempo del sync
-            // Por redundancia UI local
-            localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(ticketData));
+            lastSyncData.current = currentDataStr;
+            localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(dataToProcess));
         } catch (err) {
             console.error("Error syncing ticket to Supabase:", err);
         }
@@ -667,8 +667,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         setTicketData(reportData);
-        // Sync inmediato para que el cambio de estado se vea en el dashboard
-        setTimeout(() => syncToSupabase(true), 100);
+        syncToSupabase(reportData);
     };
 
     const handleBcpFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -755,8 +754,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             omitirAjusteTecnico: false
         };
         setTicketData(approved);
-        // Sync inmediato para que Tesorería vea la habilitación del adelanto
-        setTimeout(() => syncToSupabase(true), 100);
+        syncToSupabase(approved);
     };
 
     const handleAuthorizeModification = () => {
@@ -916,15 +914,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         setTicketData(updatedTicket);
-        setDepositRequest({ concepto: "", monto: "" });
-        showToast(
-            "Solicitud Enviada",
-            `Solicitud de S/ ${amount.toFixed(2)} enviada a Tesorería. Pendiente de aprobación del Administrador.`,
-            "info"
-        );
-        
-        // Sincronización inmediata para que aparezca en Tesorería
-        setTimeout(() => syncToSupabase(true), 100);
+        syncToSupabase(updatedTicket);
     };
 
     const handleRequestExtraAdvance = () => {
@@ -945,17 +935,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 return;
             }
 
-            setTicketData({
+            const updated = {
                 ...ticketData,
                 solicitudAdelantoExtra: {
                     monto: val,
                     fecha: new Date().toISOString()
                 }
-            });
-            setShowExtraAdvanceInput(false);
-            setExtraAdvanceAmount("");
-            // Sync inmediato para que aparezca en pagos
-            setTimeout(() => syncToSupabase(true), 100);
+            };
+            setTicketData(updated);
+            syncToSupabase(updated);
             showToast("Petición Enviada", "Solicitud registrada. Esperando aprobación de Gerencia.", "info");
         } else {
             showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
@@ -1078,7 +1066,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(updated);
         // Sync inmediato para que aparezca en pagos
-        setTimeout(() => syncToSupabase(true), 100);
+        syncToSupabase(updated);
         showToast("Solicitud Enviada", `Se solicitó pago de visita por S/ ${amount.toFixed(2)}.`, "info");
     };
 
@@ -1207,7 +1195,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(updated);
         // Sync inmediato para que aparezca en pagos
-        setTimeout(() => syncToSupabase(true), 100);
+        syncToSupabase(updated);
         showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "info");
     };
 
@@ -1226,7 +1214,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(updated);
         // Sync inmediato para que aparezca en pagos
-        setTimeout(() => syncToSupabase(true), 100);
+        syncToSupabase(updated);
         showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
