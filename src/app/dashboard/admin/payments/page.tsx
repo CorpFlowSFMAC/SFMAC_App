@@ -342,10 +342,10 @@ export default function PaymentsPage() {
                     const jobCostBase = round2(costoManoObra + costoMateriales);
 
                     // 1. Adelanto (SOLO SI HAY SOLICITUD PENDIENTE Y NO ESTÁ PAGADO)
+                    // 1. Adelanto (SOLO SI HAY SOLICITUD EXPLÍCITA)
                     if (ticket.solicitudAdelanto && !ticket.adelantoPagado) {
-                        const pct = ticket.solicitudAdelanto.porcentaje || 0.5;
-                        const adelantoMonto = round2(ticket.solicitudAdelanto.monto || (jobCostBase * pct));
-                        if (adelantoMonto > 0) {
+                        const adelantoMonto = round2(ticket.solicitudAdelanto.monto || 0);
+                        if (adelantoMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_adelanto`,
                                 tipo: 'Adelanto',
@@ -357,14 +357,18 @@ export default function PaymentsPage() {
                     }
 
                     // 2. Refuerzo (Extra)
+                    // 2. Refuerzo (Extra)
                     if (ticket.solicitudAdelantoExtra && !ticket.solicitudAdelantoExtra.pagado) {
-                        items.push({
-                            id: `${ticket.id}_refuerzo`,
-                            tipo: 'Refuerzo',
-                            monto: ticket.solicitudAdelantoExtra.monto,
-                            estado: 'pendiente',
-                            fecha: ticket.solicitudAdelantoExtra.fecha
-                        });
+                        const refuerzoMonto = round2(ticket.solicitudAdelantoExtra.monto || 0);
+                        if (refuerzoMonto > 0.01) {
+                            items.push({
+                                id: `${ticket.id}_refuerzo`,
+                                tipo: 'Refuerzo',
+                                monto: refuerzoMonto,
+                                estado: 'pendiente',
+                                fecha: ticket.solicitudAdelantoExtra.fecha || new Date().toISOString()
+                            });
+                        }
                     }
 
                     // 3. Solicitudes de depósito de Gestora (Pendientes)
@@ -385,25 +389,33 @@ export default function PaymentsPage() {
                     }
 
                     // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE)
+                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE)
                     if (ticket.solicitudLiquidacion) {
-                        items.push({
-                            id: `${ticket.id}_final`,
-                            tipo: 'Liquidación Final',
-                            monto: round2(ticket.solicitudLiquidacion.monto || saldoReal),
-                            estado: 'pendiente',
-                            fecha: ticket.solicitudLiquidacion.fecha || new Date().toISOString()
-                        });
+                        const liqMonto = round2(ticket.solicitudLiquidacion.monto || saldoReal);
+                        if (liqMonto > 0.01) {
+                            items.push({
+                                id: `${ticket.id}_final`,
+                                tipo: 'Liquidación Final',
+                                monto: liqMonto,
+                                estado: 'pendiente',
+                                fecha: ticket.solicitudLiquidacion.fecha || new Date().toISOString()
+                            });
+                        }
                     }
 
                     // 5. Movilidad / Visita (SOLO SI HAY SOLICITUD PENDIENTE)
+                    // 5. Movilidad / Visita (SOLO SI HAY SOLICITUD PENDIENTE)
                     if (ticket.solicitudPagoVisita && !ticket.visitPaymentConfirmed) {
-                        items.push({
-                            id: `${ticket.id}_visita`,
-                            tipo: 'Movilidad / Visita',
-                            monto: round2(ticket.solicitudPagoVisita.monto || visitCost),
-                            estado: 'pendiente',
-                            fecha: ticket.solicitudPagoVisita.fecha || new Date().toISOString()
-                        });
+                        const visitaMonto = round2(ticket.solicitudPagoVisita.monto || visitCost);
+                        if (visitaMonto > 0.01) {
+                            items.push({
+                                id: `${ticket.id}_visita`,
+                                tipo: 'Movilidad / Visita',
+                                monto: visitaMonto,
+                                estado: 'pendiente',
+                                fecha: ticket.solicitudPagoVisita.fecha || new Date().toISOString()
+                            });
+                        }
                     }
                 }
 

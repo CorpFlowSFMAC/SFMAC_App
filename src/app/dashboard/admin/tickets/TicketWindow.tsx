@@ -966,10 +966,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 sede: normalizedSede, // ✅ FIX: Actualizar objeto sede local
             };
 
-            if (onUpdate) {
-                await onUpdate(ticketData.id, dbUpdates);
-            }
-
+            await onUpdate?.(ticketData.id, dbUpdates);
             setTicketData((prev: any) => ({ ...prev, ...localUpdates }));
             showToast("✅ Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
         } catch (error: any) {
@@ -1001,7 +998,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         setIsConfirmingPayment(true);
         try {
-            await onUpdate(ticketData.id, {
+            await onUpdate?.(ticketData.id, {
                 metadata: {
                     ...ticketData.metadata,
                     historialPagosTecnico: updated.historialPagosTecnico,
@@ -1058,7 +1055,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         setIsConfirmingPayment(true);
         try {
-            await onUpdate(ticketData.id, {
+            await onUpdate?.(ticketData.id, {
                 status_id: "en_inspeccion",
                 metadata: {
                     ...ticketData.metadata,
@@ -1120,7 +1117,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         setIsConfirmingPayment(true);
         try {
-            await onUpdate(ticketData.id, {
+            await onUpdate?.(ticketData.id, {
                 metadata: {
                     ...ticketData.metadata,
                     adelantoPagado: true,
@@ -1211,7 +1208,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         setIsConfirmingPayment(true);
         try {
-            await onUpdate(ticketData.id, {
+            await onUpdate?.(ticketData.id, {
                 status_id: "ticket_cerrado",
                 metadata: {
                     ...ticketData.metadata,
