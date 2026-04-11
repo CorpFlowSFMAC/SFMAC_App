@@ -28,7 +28,7 @@ interface TicketWindowProps {
 export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
     // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
     // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
-    // Cargar posición y estado de ventana desde localStorage (solo UI, NO datos de negocio)
+    // Cargar posiciÃ³n y estado de ventana desde localStorage (solo UI, NO datos de negocio)
     const [ticketData, setTicketData] = useState(() => ({
         ...ticket,
         estadoId: normalizeStateId(ticket.estadoId)
@@ -64,7 +64,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
     const [showGestoraDrawer, setShowGestoraDrawer] = useState(false);
 
-    // Solo persistimos la posición y el estado de la ventana en localStorage para preferencias de usuario
+    // Solo persistimos la posiciÃ³n y el estado de la ventana en localStorage para preferencias de usuario
     useEffect(() => {
         if (typeof window !== 'undefined') {
             localStorage.setItem(`ticket_ui_${ticket.id}`, JSON.stringify({
@@ -87,9 +87,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const quotationEditorRef = useRef<any>(null);
     const [partidasCotizacion, setPartidasCotizacion] = useState<any[]>(ticketData.partidas || []);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
-    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si está aprobada
+    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si estÃ¡ aprobada
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null); // Null forces explicit selection
-    // ★ FIX LOOP: Inicialización SÍNCRONA del userRole para evitar que el primer
+    // â˜… FIX LOOP: InicializaciÃ³n SÃNCRONA del userRole para evitar que el primer
     // syncToSupabase dispare con isAdmin=false y revierta el status_id al valor antiguo del servidor.
     const [userRole, setUserRole] = useState<string | null>(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('userRole');
@@ -99,7 +99,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // Toast Notification System
     const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
 
-    // GESTIÓN DE COSTOS Y EGRESOS
+    // GESTIÃ“N DE COSTOS Y EGRESOS
     const [ticketCosts, setTicketCosts] = useState<any[]>([]);
     const [loadingCosts, setLoadingCosts] = useState(false);
     const [isSavingCost, setIsSavingCost] = useState(false);
@@ -120,7 +120,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
 
-    // 🔗 EFECTO 1: Carga completa al ABRIR el ticket (solo cuando cambia el ID)
+    // ðŸ”— EFECTO 1: Carga completa al ABRIR el ticket (solo cuando cambia el ID)
     // Hace getById() para obtener toda la metadata desde Supabase.
     const hasLoadedRef = useRef<string | null>(null);
     const loadCosts = useCallback(async () => {
@@ -153,7 +153,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 const rawEstadoId = normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo');
                 const visitConfirmed = meta.visitPaymentConfirmed ?? false;
 
-                // ★ FIX AUTO-AVANCE: Si el pago de visita fue confirmado pero el estado quedó
+                // â˜… FIX AUTO-AVANCE: Si el pago de visita fue confirmado pero el estado quedÃ³
                 // atascado en 'esperando_pago_visita', avanzamos de inmediato a 'en_inspeccion'.
                 const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
                 const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
@@ -179,21 +179,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         load();
     }, [ticket?.id]);
 
-    // 🔄 EFECTO 2: Detecta cambios de estado desde el SERVIDOR (Realtime via AppDataContext).
-    // Usa una ref para comparar el status_id anterior y solo refetchear cuando CAMBIÓ EXTERNAMENTE.
-    // ⚠️ CRÍTICO: NUNCA resetea el estado local al estado del servidor directamente.
-    // El refetch via getById() es la única fuente de verdad para actualizar ticketData.
+    // ðŸ”„ EFECTO 2: Detecta cambios de estado desde el SERVIDOR (Realtime via AppDataContext).
+    // Usa una ref para comparar el status_id anterior y solo refetchear cuando CAMBIÃ“ EXTERNAMENTE.
+    // âš ï¸ CRÃTICO: NUNCA resetea el estado local al estado del servidor directamente.
+    // El refetch via getById() es la Ãºnica fuente de verdad para actualizar ticketData.
     const prevServerStatusRef = useRef<string | null>(null);
     useEffect(() => {
         const serverStatus = ticket?.status_id || null;
-        // Ignorar si el status_id no cambió desde el server
+        // Ignorar si el status_id no cambiÃ³ desde el server
         if (serverStatus === prevServerStatusRef.current) return;
         // Primera vez (abrir ticket) ya lo maneja el Efecto 1
         if (prevServerStatusRef.current === null) {
             prevServerStatusRef.current = serverStatus;
             return;
         }
-        // El status cambió en el servidor (Realtime) → hacer refetch completo
+        // El status cambiÃ³ en el servidor (Realtime) â†’ hacer refetch completo
         prevServerStatusRef.current = serverStatus;
         if (!ticket?.id) return;
 
@@ -223,7 +223,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
                     const prevOrder = E2_ORDER[prev.estadoId] ?? 0;
                     const finalEstadoId = incomingOrder >= prevOrder ? corregidoId2 : prev.estadoId;
-                    // ★ FIX: Merge de pagos por ID — nunca perdemos pagos del array local ni del servidor
+                    // â˜… FIX: Merge de pagos por ID â€” nunca perdemos pagos del array local ni del servidor
                     const serverPagos2: any[] = meta.historialPagosTecnico || [];
                     const localPagos2: any[] = prev.historialPagosTecnico || [];
                     const mergedById2 = new Map<string, any>();
@@ -249,12 +249,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         refetch();
     }, [ticket?.status_id, ticket?.id]);
 
-    // 💳 EFECTO 3: Aplica overrides de pagos confirmados desde el servidor.
+    // ðŸ’³ EFECTO 3: Aplica overrides de pagos confirmados desde el servidor.
     // SOLO usa dependencias primitivas (no el objeto ticket completo) para evitar loops
     // por referencias de objeto nuevas en cada render del componente padre.
     const serverAdelantoPagado = ticket?.adelantoPagado ?? ticket?.metadata?.adelantoPagado ?? false;
     const serverVisitPaymentConfirmed = ticket?.visitPaymentConfirmed ?? ticket?.metadata?.visitPaymentConfirmed ?? false;
-    // Usa la longitud del historial tanto del nivel raíz como del metadata
+    // Usa la longitud del historial tanto del nivel raÃ­z como del metadata
     const serverHistorialLen = Math.max(
         ticket?.historialPagosTecnico?.length ?? 0,
         ticket?.metadata?.historialPagosTecnico?.length ?? 0
@@ -266,7 +266,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             if (serverAdelantoPagado) overrides.solicitudAdelanto = null;
             if (serverVisitPaymentConfirmed) {
                 overrides.solicitudPagoVisita = null;
-                // ★ FIX: Avanzar desde CUALQUIER estado pre-inspección (no solo esperando_pago_visita)
+                // â˜… FIX: Avanzar desde CUALQUIER estado pre-inspecciÃ³n (no solo esperando_pago_visita)
                 const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita'];
                 if (preInspectionStates.includes(prev.estadoId)) {
                     overrides.estadoId = 'en_inspeccion';
@@ -281,15 +281,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 });
                 if (isPaid) overrides.solicitudAdelantoExtra = null;
             }
-            if (Object.keys(overrides).length === 0) return prev; // Sin cambios → no re-render
+            if (Object.keys(overrides).length === 0) return prev; // Sin cambios â†’ no re-render
             return { ...prev, ...overrides };
         });
         if (ticket?.gastos) setGastos(ticket.gastos);
         if (ticket?.evidenciasEjecucion) setEvidenciasEjecucion(ticket.evidenciasEjecucion);
     }, [serverAdelantoPagado, serverVisitPaymentConfirmed, serverHistorialLen]);
 
-    // userRole ya se inicializa síncronamente arriba. Este efecto solo mantiene
-    // sincronía si el rol cambia en tiempo de ejecución (ej: re-login).
+    // userRole ya se inicializa sÃ­ncronamente arriba. Este efecto solo mantiene
+    // sincronÃ­a si el rol cambia en tiempo de ejecuciÃ³n (ej: re-login).
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const role = localStorage.getItem('userRole');
@@ -297,9 +297,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Estados para Ejecución (Paso 11)
+    // Estados para EjecuciÃ³n (Paso 11)
     const [gastos, setGastos] = useState<any[]>(ticketData.gastos || []);
-    // Estados para Cierre y Documentación (Paso 9)
+    // Estados para Cierre y DocumentaciÃ³n (Paso 9)
     const [documentosChecklist, setDocumentosChecklist] = useState({
         actaConformidad: false,
         ats: false,
@@ -310,18 +310,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [newExpense, setNewExpense] = useState({ concepto: "", monto: "", tipo: "Gasto Operativo" });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Estados para Negociación de Costo
+    // Estados para NegociaciÃ³n de Costo
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
     const fieldEvidenceRef = useRef<HTMLInputElement>(null);
     const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
     const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
 
-    // Estado para Cotización BCP
+    // Estado para CotizaciÃ³n BCP
     const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizacionBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
 
-    // NUEVO: Estado para solicitud de depósito en etapa Enviada
+    // NUEVO: Estado para solicitud de depÃ³sito en etapa Enviada
     const [depositRequest, setDepositRequest] = useState({ concepto: "", monto: "" });
 
     // Estado para Triage de Mibanco
@@ -335,7 +335,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     useEffect(() => {
         if (ticketData.estadoId === 'borrador' && ticketData.client_id === MIBANCO_ID) {
             setLoadingSedes(true);
-            // Inicializar descripción editable con la descripción actual
+            // Inicializar descripciÃ³n editable con la descripciÃ³n actual
             setTriageDescription(ticketData.description || ticketData.descripcionProblema || '');
             branchesAPI.getByClient(MIBANCO_ID)
                 .then(data => setSedesMibanco(data))
@@ -368,23 +368,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const windowRef = useRef<HTMLDivElement>(null);
 
-    // 🚀 SINCRONIZACIÓN CON SUPABASE (Reemplaza localStorage)
+    // ðŸš€ SINCRONIZACIÃ“N CON SUPABASE (Reemplaza localStorage)
     const lastSyncData = useRef<string>("");
 
     const syncToSupabase = useCallback(async (dataOverride?: any) => {
         const dataToProcess = dataOverride || ticketData;
         if (!onUpdate || !dataToProcess) return;
 
-        // âš ï¸ OPTIMIZACIÓN: Solo sincronizar datos de negocio
+        // Ã¢Å¡Â Ã¯Â¸Â OPTIMIZACIÃ“N: Solo sincronizar datos de negocio
         const {
             isMaximized, isMinimized, position, zIndex,
-            cliente, sede, tecnico, // Evital guardar objetos pesados en raíz de Supabase
+            cliente, sede, tecnico, // Evital guardar objetos pesados en raÃ­z de Supabase
             metadata: _unusedMetadata,
             ...businessData
         } = dataToProcess;
 
-        // Mapeo de campos UI (Español) -> Supabase (Inglés)
-        // 🛠️¡ï¸ PROTECCIÓN DE ESCRITURA: Si no soy Admin, NO debo tocar campos de dinero o estado crítico
+        // Mapeo de campos UI (EspaÃ±ol) -> Supabase (InglÃ©s)
+        // ðŸ› ï¸Â¡Ã¯Â¸Â PROTECCIÃ“N DE ESCRITURA: Si no soy Admin, NO debo tocar campos de dinero o estado crÃ­tico
         const isAdmin = userRole === 'admin';
 
         // Estrategia de Merge: Si soy Admin, mi local state manda. Si soy Gestora, el Server (prop ticket) manda en temas de pagos.
@@ -423,12 +423,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
             metadata: {
                 ...businessData,
-                // ★★★ FIX UNIDIRECIONAL: Si alguien (Servidor o Local) dice que está pagado, SE QUEDA PAGADO.
+                // â˜…â˜…â˜… FIX UNIDIRECIONAL: Si alguien (Servidor o Local) dice que estÃ¡ pagado, SE QUEDA PAGADO.
                 // Esto protege contra estados locales stale de la Gestora/Admin. 
                 adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
                 fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
 
-                // ★★★ MERGE DE HISTORIAL: Unión por ID para no perder ningún depósito.
+                // â˜…â˜…â˜… MERGE DE HISTORIAL: UniÃ³n por ID para no perder ningÃºn depÃ³sito.
                 historialPagosTecnico: (() => {
                     const localPagos = businessData.historialPagosTecnico || [];
                     const serverPagos = ticket.historialPagosTecnico || ticket.metadata?.historialPagosTecnico || [];
@@ -442,15 +442,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 visitPaymentConfirmed: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed || false),
                 fechaPagoVisita: (businessData.fechaPagoVisita || sourceMetadata.fechaPagoVisita),
 
-                // Limpieza de solicitudes: si ya está pagado en cualquier punto, la solicitud DEBE morir
+                // Limpieza de solicitudes: si ya estÃ¡ pagado en cualquier punto, la solicitud DEBE morir
                 solicitudAdelanto: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado) ? null : businessData.solicitudAdelanto,
                 solicitudPagoVisita: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed) ? null : businessData.solicitudPagoVisita,
 
-                tecnico: tecnico // Preservamos datos del técnico
+                tecnico: tecnico // Preservamos datos del tÃ©cnico
             }
         };
 
-        // 🛠️¡ï¸ ANTI-OVERWRITE: Solo sincronizar si hay cambios reales respecto al último sync
+        // ðŸ› ï¸Â¡Ã¯Â¸Â ANTI-OVERWRITE: Solo sincronizar si hay cambios reales respecto al Ãºltimo sync
         const currentDataStr = JSON.stringify(updates);
         if (currentDataStr === lastSyncData.current && !dataOverride) return;
 
@@ -471,7 +471,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         return () => clearTimeout(syncTimeout);
     }, [ticketData, syncToSupabase]);
 
-    // Listener para sincronizar cambios externos (ej: confirmación del Gerente desde otra pestaña)
+    // Listener para sincronizar cambios externos (ej: confirmaciÃ³n del Gerente desde otra pestaÃ±a)
     useEffect(() => {
         const handleStorageUpdate = (e: any) => {
             // Si es un evento de storage real, verificamos la key
@@ -485,8 +485,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 try {
                     const parsed = JSON.parse(saved);
 
-                    // 🛠️¡ï¸ PROTECCIÓN CRÓTICA: Filtrar campos de negocio que NUNCA deben venir del localStorage
-                    // porque la fuente de verdad es Supabase. Esto evita que un caché viejo revierta pagos o estados.
+                    // ðŸ› ï¸Â¡Ã¯Â¸Â PROTECCIÃ“N CRÃ“ÂTICA: Filtrar campos de negocio que NUNCA deben venir del localStorage
+                    // porque la fuente de verdad es Supabase. Esto evita que un cachÃ© viejo revierta pagos o estados.
                     const {
                         adelantoPagado,
                         fechaPagoAdelanto,
@@ -543,7 +543,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             ? (hasVisitCost ? 'esperando_pago_visita' : 'en_inspeccion')
             : ticketData.estadoId;
 
-        // ★ FIX: Persistir en Supabase (antes solo era setTicketData local)
+        // â˜… FIX: Persistir en Supabase (antes solo era setTicketData local)
         const dbUpdates: any = {
             technician_id: assignmentData.tecnico?.id || null,
             visit_cost: visitaCost,
@@ -642,16 +642,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 gestora_id: gestora.id
             }));
             
-            showToast("Ticket Derivado", `El servicio ahora está a cargo de ${gestora.name}.`, "success");
+            showToast("Ticket Derivado", `El servicio ahora estÃ¡ a cargo de ${gestora.name}.`, "success");
         } catch (err) {
             console.error("Error assigned gestora:", err);
-            showToast("Error", "No se pudo completar la derivación.", "error");
+            showToast("Error", "No se pudo completar la derivaciÃ³n.", "error");
         }
     };
 
     const handleSendFieldReport = () => {
         if (!diagnostico) {
-            showToast("Diagnóstico Requerido", "Por favor ingrese el diagnóstico técnico antes de enviar.", "error");
+            showToast("DiagnÃ³stico Requerido", "Por favor ingrese el diagnÃ³stico tÃ©cnico antes de enviar.", "error");
             return;
         }
 
@@ -686,7 +686,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     fecha: new Date().toISOString()
                 });
 
-                // Actualizar también ticketData para persistencia en Supabase
+                // Actualizar tambiÃ©n ticketData para persistencia en Supabase
                 setTicketData((prev: any) => ({
                     ...prev,
                     archivoCotizacionBCP: {
@@ -739,7 +739,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         setTicketData(updated);
-        showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
+        showToast("CotizaciÃ³n Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
     };
 
     const handleApproveQuote = () => {
@@ -764,7 +764,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
-        showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+        showToast("EdiciÃ³n Habilitada", "La cotizaciÃ³n ha sido desbloqueada para realizar ajustes.", "info");
     };
 
     const handleProceedToExecution = () => {
@@ -799,14 +799,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             };
             setTicketData(updated);
             setShowNegotiationModal(false);
-            showToast("Costo Reacordado", `Nuevo monto técnico ajustado a S/ ${val.toFixed(2)}.`, "success");
+            showToast("Costo Reacordado", `Nuevo monto tÃ©cnico ajustado a S/ ${val.toFixed(2)}.`, "success");
         } else {
-            showToast("Monto Inválido", "Por favor ingrese un número válido para el costo.", "error");
+            showToast("Monto InvÃ¡lido", "Por favor ingrese un nÃºmero vÃ¡lido para el costo.", "error");
         }
     };
 
 
-    // Cálculos de Rentabilidad
+    // CÃ¡lculos de Rentabilidad
     const totalAprobado = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const totalGastos = ticketCosts.reduce((sum, c) => sum + parseFloat(c.monto || 0), 0);
     const margenReal = totalAprobado - totalGastos;
@@ -819,7 +819,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 2) {
-            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÉS).", "error");
+            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÃ‰S).", "error");
             return;
         }
         const updated = {
@@ -832,7 +832,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             evidencias: ticketData.evidencias || [] // Asegurar fotos del cliente
         };
         setTicketData(updated);
-        showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
+        showToast("Â¡EjecuciÃ³n Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 
     const handleRequestTechnicianDeposit = () => {
@@ -842,20 +842,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
         const amount = parseFloat(depositRequest.monto);
         if (isNaN(amount) || amount <= 0) {
-            showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
+            showToast("Monto InvÃ¡lido", "Por favor ingrese un monto vÃ¡lido.", "error");
             return;
         }
 
-        // ✅ FIX CRÍTICO: La gestora crea una SOLICITUD de pago.
+        // âœ… FIX CRÃTICO: La gestora crea una SOLICITUD de pago.
         // NO se agrega al historialPagosTecnico (pagos ejecutados).
-        // El administrador debe aprobar y ejecutar el pago desde la Tesorería.
+        // El administrador debe aprobar y ejecutar el pago desde la TesorerÃ­a.
         const nuevaSolicitud = {
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: amount,
             concepto: depositRequest.concepto,
             tipo: "Adelanto",
-            estado: "pendiente",     // ← PENDIENTE hasta que admin pague
+            estado: "pendiente",     // â† PENDIENTE hasta que admin pague
             solicitadaPor: "gestora"
         };
 
@@ -863,7 +863,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const updatedTicket = {
             ...ticketData,
             solicitudesDeposito: [...solicitudesPrevias, nuevaSolicitud]
-            // ⚠️ NO tocamos historialPagosTecnico — ese es solo para pagos EJECUTADOS
+            // âš ï¸ NO tocamos historialPagosTecnico â€” ese es solo para pagos EJECUTADOS
         };
 
         setTicketData(updatedTicket);
@@ -875,7 +875,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setShowExtraAdvanceInput(true);
     };
 
-    const submitExtraAdvanceRequest = () => {
         const monto = extraAdvanceAmount;
         if (monto && !isNaN(parseFloat(monto))) {
             const val = parseFloat(monto);
@@ -884,7 +883,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const costoRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
 
             if (totalPagado + val > costoRef + 0.01) {
-                showToast("Saldo Insuficiente", "El adelanto solicitado excede el saldo pendiente del técnico.", "error");
+                showToast("Saldo Insuficiente", "El adelanto solicitado excede el saldo pendiente del tÃ©cnico.", "error");
                 return;
             }
 
@@ -897,9 +896,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             };
             setTicketData(updated);
             syncToSupabase(updated);
-            showToast("Petición Enviada", "Solicitud registrada. Esperando aprobación de Gerencia.", "info");
+            showToast("PeticiÃ³n Enviada", "Solicitud registrada. Esperando aprobaciÃ³n de Gerencia.", "info");
         } else {
-            showToast("Monto Inválido", "Por favor ingrese un monto válido.", "error");
+            showToast("Monto InvÃ¡lido", "Por favor ingrese un monto vÃ¡lido.", "error");
         }
     };
 
@@ -925,12 +924,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 });
             }
 
-            // 2. Actualizar ticket en la BD - pasa a 'nuevo' para iniciar flujo estándar
+            // 2. Actualizar ticket en la BD - pasa a 'nuevo' para iniciar flujo estÃ¡ndar
             const dbUpdates = {
                 branch_id: finalSedeId,
                 service_type: triageServiceType,
                 description: triageDescription || ticketData.description || '',
-                status_id: 'nuevo', // ✅ Inicia el flujo operativo estándar
+                status_id: 'nuevo', // âœ… Inicia el flujo operativo estÃ¡ndar
                 metadata: {
                     ...ticketData.metadata,
                     triage_completado: true,
@@ -946,21 +945,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const normalizedSede = selectedSede ? {
                 ...selectedSede,
                 nombre: selectedSede.name || selectedSede.nombre || "Sin Sede",
-                direccion: selectedSede.address || selectedSede.direccion || "Sin dirección"
+                direccion: selectedSede.address || selectedSede.direccion || "Sin direcciÃ³n"
             } : null;
 
             const localUpdates = {
                 ...dbUpdates,
                 estadoId: 'nuevo',
                 descripcionProblema: dbUpdates.description,
-                // ★ FIX: InfoBarBase lee 'tipoServicio', no 'service_type'
+                // â˜… FIX: InfoBarBase lee 'tipoServicio', no 'service_type'
                 tipoServicio: triageServiceType,
-                sede: normalizedSede, // ✅ FIX: Actualizar objeto sede local
+                sede: normalizedSede, // âœ… FIX: Actualizar objeto sede local
             };
 
             await onUpdate?.(ticketData.id, dbUpdates);
             setTicketData((prev: any) => ({ ...prev, ...localUpdates }));
-            showToast("✅ Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
+            showToast("âœ… Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
         } catch (error: any) {
             console.error("Error en triage:", error);
             showToast("Error al Clasificar", `Detalle: ${error?.message || 'Error desconocido'}`, "error");
@@ -978,7 +977,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: solicitud.monto,
-            referencia: "Adelanto Adicional (Ejecución)"
+            referencia: "Adelanto Adicional (EjecuciÃ³n)"
         };
 
         const updated = {
@@ -999,10 +998,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 }
             });
             setTicketData(updated);
-            showToast("Depósito Confirmado", `Se registró el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
+            showToast("DepÃ³sito Confirmado", `Se registrÃ³ el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
         } catch (err) {
             console.error("Error confirming extra advance:", err);
-            showToast("Error de Conexión", "No se pudo registrar el pago. Verifique su internet e intente de nuevo.", "error");
+            showToast("Error de ConexiÃ³n", "No se pudo registrar el pago. Verifique su internet e intente de nuevo.", "error");
         } finally {
             setIsConfirmingPayment(false);
         }
@@ -1020,11 +1019,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTicketData(updated);
         // Sync inmediato para que aparezca en pagos
         syncToSupabase(updated);
-        showToast("Solicitud Enviada", `Se solicitó pago de visita por S/ ${amount.toFixed(2)}.`, "info");
+        showToast("Solicitud Enviada", `Se solicitÃ³ pago de visita por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleConfirmVisitPayment = async () => {
-        // Solo permitir si hay solicitud o si es admin forzando (pero idealmente debería haber solicitud)
+        // Solo permitir si hay solicitud o si es admin forzando (pero idealmente deberÃ­a haber solicitud)
         const amount = parseFloat(ticketData.costoVisita || 0);
         const pagosPrevios = ticketData.historialPagosTecnico || [];
 
@@ -1032,7 +1031,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: amount,
-            referencia: "Pago de Visita Técnica (Gerencia)"
+            referencia: "Pago de Visita TÃ©cnica (Gerencia)"
         };
 
         const updated = {
@@ -1060,10 +1059,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 }
             });
             setTicketData(updated);
-            showToast("Pago de Visita Exitoso", `Se confirmó el depósito de S/ ${amount.toFixed(2)}.`, "success");
+            showToast("Pago de Visita Exitoso", `Se confirmÃ³ el depÃ³sito de S/ ${amount.toFixed(2)}.`, "success");
         } catch (err) {
             console.error("Error confirming visit payment:", err);
-            showToast("Error de Conexión", "No se pudo confirmar el pago. Verifique su internet.", "error");
+            showToast("Error de ConexiÃ³n", "No se pudo confirmar el pago. Verifique su internet.", "error");
         } finally {
             setIsConfirmingPayment(false);
         }
@@ -1074,7 +1073,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
 
         if (!pctReal) {
-            showToast("Selección Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
+            showToast("SelecciÃ³n Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
             return;
         }
 
@@ -1085,7 +1084,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
 
         if (totalPagado + amount > costoReferencia + 0.01) {
-            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
+            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excederÃ­a el costo total pactado.`, "error");
             return;
         }
 
@@ -1103,7 +1102,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             historialPagosTecnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + amount,
             fechaPagoAdelanto: new Date().toISOString(),
-            // Limpiamos la solicitud ya que se atendió
+            // Limpiamos la solicitud ya que se atendiÃ³
             solicitudAdelanto: null
         };
 
@@ -1120,10 +1119,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 }
             });
             setTicketData(updated);
-            showToast("Adelanto Confirmado", `Se ha confirmado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
+            showToast("Adelanto Confirmado", `Se ha confirmado el depÃ³sito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
         } catch (err) {
             console.error("Error confirming advance:", err);
-            showToast("Error de Conexión", "No se pudo registrar el adelanto. Verifique su internet e intente de nuevo.", "error");
+            showToast("Error de ConexiÃ³n", "No se pudo registrar el adelanto. Verifique su internet e intente de nuevo.", "error");
         } finally {
             setIsConfirmingPayment(false);
         }
@@ -1131,7 +1130,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleRequestAdvance = () => {
         if (!porcentajeAdelanto) {
-            showToast("Selección Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
+            showToast("SelecciÃ³n Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
             return;
         }
 
@@ -1168,7 +1167,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTicketData(updated);
         // Sync inmediato para que aparezca en pagos
         syncToSupabase(updated);
-        showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
+        showToast("LiquidaciÃ³n Solicitada", `Solicitud de liquidaciÃ³n final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleFinalLiquidationPay = async () => {
@@ -1178,7 +1177,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const amount = costoReferencia - totalPagado;
 
         if (amount < 0) {
-            showToast("Balance Negativo", "El saldo es negativo. Verifique los depósitos previos.", "error");
+            showToast("Balance Negativo", "El saldo es negativo. Verifique los depÃ³sitos previos.", "error");
             return;
         }
 
@@ -1186,7 +1185,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             id: Math.random().toString(36).substr(2, 9),
             fecha: new Date().toISOString(),
             monto: amount,
-            referencia: "Liquidación Final del Servicio"
+            referencia: "LiquidaciÃ³n Final del Servicio"
         };
 
         const updated = {
@@ -1212,10 +1211,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 }
             });
             setTicketData(updated);
-            showToast("Ticket Liquidado", `Se registró el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
+            showToast("Ticket Liquidado", `Se registrÃ³ el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
         } catch (err) {
             console.error("Error confirming final liquidation:", err);
-            showToast("Error de Conexión", "No se pudo cerrar el ticket. Verifique su internet.", "error");
+            showToast("Error de ConexiÃ³n", "No se pudo cerrar el ticket. Verifique su internet.", "error");
         } finally {
             setIsConfirmingPayment(false);
         }
@@ -1233,7 +1232,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                 setEvidenciasEjecucion(prev => {
                     const updated = [...prev, newEvidence];
-                    // Actualizar también en ticketData para persistencia
+                    // Actualizar tambiÃ©n en ticketData para persistencia
                     setTicketData((current: any) => ({ ...current, evidenciasEjecucion: updated }));
                     return updated;
                 });
@@ -1341,7 +1340,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleDeleteCost = async (costId: string) => {
-        if (!confirm("¿Está seguro de eliminar este registro de costo?")) return;
+        if (!confirm("Â¿EstÃ¡ seguro de eliminar este registro de costo?")) return;
         
         try {
             await ticketCostsAPI.delete(costId);
@@ -1365,7 +1364,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         reader.readAsDataURL(file);
     };
 
-    // Cálculos de Rentabilidad Rel Real-Time
+    // CÃ¡lculos de Rentabilidad Rel Real-Time
     const totalCosts = ticketCosts.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const grossMargin = approvedAmount - totalCosts;
@@ -1410,7 +1409,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} />
                                     </div>
                                 ) : (
-                                    <div className={styles.ticketIcon}>ðŸŽ«</div>
+                                    <div className={styles.ticketIcon}>Ã°Å¸Å½Â«</div>
                                 )}
                                 <div className={styles.titleInfo}>
                                     <h3>
@@ -1483,7 +1482,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         <div className={styles.infoHistory}>
                             <InfoBarBase
                                 ticket={ticketData}
-                                title="Revisión Inicial"
+                                title="RevisiÃ³n Inicial"
                                 icon={FileText}
                                 color="#8B5CF6"
                                 gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"
@@ -1518,7 +1517,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         <div className={styles.operationalArea}>
                             {children || (
                                 <>
-                                    {/* El Módulo de Tesorería General ha sido removido según solicitud para evitar redundancia visual */}
+                                    {/* El MÃ³dulo de TesorerÃ­a General ha sido removido segÃºn solicitud para evitar redundancia visual */}
 
 
                                     {ticketData.estadoId === "borrador" && (
@@ -1527,14 +1526,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <Sparkles size={24} color="#8B5CF6" />
                                                 <div style={{ textAlign: 'left' }}>
                                                     <h3 className={styles.triageTitle}>Bandeja de Triage - Mibanco</h3>
-                                                    <p className={styles.triageSubtitle}>Clasificación y Validación de Ticket Automático</p>
+                                                    <p className={styles.triageSubtitle}>ClasificaciÃ³n y ValidaciÃ³n de Ticket AutomÃ¡tico</p>
                                                 </div>
                                             </div>
 
                                             <div className={styles.triageForm}>
-                                                {/* CAMPO EDITABLE: Descripción del Problema */}
+                                                {/* CAMPO EDITABLE: DescripciÃ³n del Problema */}
                                                 <div className={styles.triageField}>
-                                                    <label>✏️ Descripción del Problema (Editable):</label>
+                                                    <label>âœï¸ DescripciÃ³n del Problema (Editable):</label>
                                                     <textarea
                                                         value={triageDescription}
                                                         onChange={(e) => setTriageDescription(e.target.value)}
@@ -1547,7 +1546,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                 {/* CAMPO SOLO LECTURA: Sede Reportada por Banco */}
                                                 <div className={styles.triageField}>
-                                                    <label>🏦 Sede Reportada por Banco:</label>
+                                                    <label>ðŸ¦ Sede Reportada por Banco:</label>
                                                     <div className={styles.readonlyValue}>
                                                         {ticketData.sede_reportada_cliente || ticketData.metadata?.codigo_sede_extraido || "No especificada"}
                                                     </div>
@@ -1556,23 +1555,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 {!ticketData.branch_id && !triageSedeId && (
                                                     <div className={styles.triageAlert}>
                                                         <AlertTriangle size={16} />
-                                                        <span>Sede no mapeada automáticamente. Seleccione manualmente para entrenar al sistema.</span>
+                                                        <span>Sede no mapeada automÃ¡ticamente. Seleccione manualmente para entrenar al sistema.</span>
                                                     </div>
                                                 )}
 
                                                 {/* VINCULAR A SEDE REAL */}
                                                 <div className={styles.triageField}>
-                                                    <label>🏢 Vincular a Sede Real:</label>
+                                                    <label>ðŸ¢ Vincular a Sede Real:</label>
                                                     {ticketData.branch_id ? (
-                                                        // ★ FIX: Sede ya consolidada — bloquear modificación
+                                                        // â˜… FIX: Sede ya consolidada â€” bloquear modificaciÃ³n
                                                         <div className={styles.readonlyValue} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <span>🔒</span>
+                                                            <span>ðŸ”’</span>
                                                             <span style={{ fontWeight: 700, color: '#1E293B' }}>
                                                                 {sedesMibanco.find((s: any) => s.id === ticketData.branch_id)?.name
                                                                     || ticketData.sede?.nombre
                                                                     || ticketData.branch_id}
                                                             </span>
-                                                            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>(agencia ya consolidada — no modificable)</span>
+                                                            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>(agencia ya consolidada â€” no modificable)</span>
                                                         </div>
                                                     ) : (
                                                         <select
@@ -1591,9 +1590,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     )}
                                                 </div>
 
-                                                {/* TIPO DE SERVICIO - Desde módulo de Técnicos */}
+                                                {/* TIPO DE SERVICIO - Desde mÃ³dulo de TÃ©cnicos */}
                                                 <div className={styles.triageField}>
-                                                    <label>🔧 Tipo de Servicio (según catálogo de técnicos):</label>
+                                                    <label>ðŸ”§ Tipo de Servicio (segÃºn catÃ¡logo de tÃ©cnicos):</label>
                                                     <select
                                                         value={triageServiceType}
                                                         onChange={(e) => setTriageServiceType(e.target.value)}
@@ -1623,20 +1622,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {ticketData.estadoId === "nuevo" && (
                                         <div className={styles.stepActions}>
                                             <p className={styles.stepHint}>
-                                                Revise la información y proceda a la asignación del especialista.
+                                                Revise la informaciÃ³n y proceda a la asignaciÃ³n del especialista.
                                             </p>
                                             <button className={styles.mainActionBtn} onClick={handleProceedToAssignment}>
-                                                <span>Asignar Técnico</span>
+                                                <span>Asignar TÃ©cnico</span>
                                                 <ArrowRight size={18} />
                                             </button>
                                         </div>
                                     )}
 
-                                    {/* ★ ORDEN DE PAGO DE VISITA: Solo en el paso exacto donde corresponde.
-                                         La condición es ESTRICTA:
+                                    {/* â˜… ORDEN DE PAGO DE VISITA: Solo en el paso exacto donde corresponde.
+                                         La condiciÃ³n es ESTRICTA:
                                          1. El estadoId debe ser 'esperando_pago_visita' Y
                                          2. visitPaymentConfirmed debe ser falso Y
-                                         3. El ticket no debe haber avanzado más allá (ningún estado post-inspección)
+                                         3. El ticket no debe haber avanzado mÃ¡s allÃ¡ (ningÃºn estado post-inspecciÃ³n)
                                     */}
                                     {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && !([
                                         'en_inspeccion', 'visita_realizada', 'en_cotizacion',
@@ -1650,8 +1649,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <Coins size={20} />
                                                         </div>
                                                         <div className={styles.advanceTitleGroup}>
-                                                            <h4>ORDEN DE PAGO: VISITA TÉCNICA</h4>
-                                                            <span>Requiere confirmación de Gerencia</span>
+                                                            <h4>ORDEN DE PAGO: VISITA TÃ‰CNICA</h4>
+                                                            <span>Requiere confirmaciÃ³n de Gerencia</span>
                                                         </div>
                                                         <div className={styles.advanceAmountBadge}>
                                                             S/ {parseFloat(ticketData.costoVisita || 0).toFixed(2)}
@@ -1660,7 +1659,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                     <div className={styles.techBankDetails}>
                                                         <div className={styles.bankRow}>
-                                                            <strong>Técnico:</strong>
+                                                            <strong>TÃ©cnico:</strong>
                                                             <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
                                                         </div>
                                                         <div className={styles.bankRow}>
@@ -1668,7 +1667,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <span>{ticketData.tecnico?.banco || '---'}</span>
                                                         </div>
                                                         <div className={styles.bankRow}>
-                                                            <strong>Nº Cuenta:</strong>
+                                                            <strong>NÂº Cuenta:</strong>
                                                             <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                         </div>
                                                         <div className={styles.bankRow}>
@@ -1702,7 +1701,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 <>
                                                                     <CheckCircle size={18} />
                                                                     <span>
-                                                                        CONFIRMAR DEPÓSITO VISITA
+                                                                        CONFIRMAR DEPÃ“SITO VISITA
                                                                         {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
                                                                     </span>
                                                                 </>
@@ -1721,14 +1720,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         ) : (
                                                             <div className={styles.waitingForManager}>
                                                                 <Clock size={24} color="#3B82F6" />
-                                                                <span style={{ fontSize: '1.1rem' }}>¡ SOLICITUD ENVIADA !</span>
+                                                                <span style={{ fontSize: '1.1rem' }}>Â¡ SOLICITUD ENVIADA !</span>
                                                                 <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Estamos gestionando el pago de la visita con Gerencia.</span>
                                                             </div>
                                                         )
                                                     )}
 
                                                     <div className={styles.bankNote}>
-                                                        * Solo el Administrador puede confirmar depósitos bancarios.
+                                                        * Solo el Administrador puede confirmar depÃ³sitos bancarios.
                                                     </div>
                                                 </div>
                                             </div>
@@ -1740,9 +1739,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.schedulingHeader}>
                                                     <Calendar size={28} color="#8B5CF6" />
                                                     <div style={{ textAlign: 'left' }}>
-                                                        <h3 style={{ margin: 0, fontSize: '18px', color: '#1F2937' }}>Agendar Visita Técnica</h3>
+                                                        <h3 style={{ margin: 0, fontSize: '18px', color: '#1F2937' }}>Agendar Visita TÃ©cnica</h3>
                                                         <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#6B7280' }}>
-                                                            Seleccione la fecha de ejecución acordada
+                                                            Seleccione la fecha de ejecuciÃ³n acordada
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1775,13 +1774,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             const updated = {
                                                                 ...ticketData,
                                                                 fechaVisita: tomorrow.toISOString(),
-                                                                programacionLabel: "MAÑANA",
+                                                                programacionLabel: "MAÃ‘ANA",
                                                                 estadoId: "visita_realizada"
                                                             };
                                                             setTicketData(updated);
                                                         }}
                                                     >
-                                                        <span className={styles.optLabel}>MAÑANA</span>
+                                                        <span className={styles.optLabel}>MAÃ‘ANA</span>
                                                         <span className={styles.optDate}>
                                                             {new Date(Date.now() + 86400000).toLocaleDateString('es-PE', { day: '2-digit', month: 'long' })}
                                                         </span>
@@ -1797,16 +1796,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.headerTitleRow}>
                                                     <ClipboardCheck size={24} className={styles.optimisticIcon} />
                                                     <div style={{ textAlign: 'left' }}>
-                                                        <h3 className={styles.reportMainTitle}>Reporte Técnico de Campo</h3>
-                                                        <p className={styles.reportSubtitle}>Evaluación técnica y solución propuesta</p>
+                                                        <h3 className={styles.reportMainTitle}>Reporte TÃ©cnico de Campo</h3>
+                                                        <p className={styles.reportSubtitle}>EvaluaciÃ³n tÃ©cnica y soluciÃ³n propuesta</p>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div className={styles.diagnosticoArea}>
-                                                <label className={styles.optimisticLabel}>Diagnóstico Técnico Final</label>
+                                                <label className={styles.optimisticLabel}>DiagnÃ³stico TÃ©cnico Final</label>
                                                 <textarea
-                                                    placeholder="Describa el hallazgo y la solución técnica..."
+                                                    placeholder="Describa el hallazgo y la soluciÃ³n tÃ©cnica..."
                                                     value={diagnostico}
                                                     onChange={(e) => setDiagnostico(e.target.value)}
                                                     className={styles.formTextareaOptimistic}
@@ -1854,7 +1853,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <span style={{ fontSize: '0.65rem', fontWeight: 700 }}>FOTOS</span>
                                                                 </div>
                                                             )}
-                                                            {/* Botón flotante para agregar más si ya hay fotos */}
+                                                            {/* BotÃ³n flotante para agregar mÃ¡s si ya hay fotos */}
                                                             {evidenciasCampo.length > 0 && (
                                                                 <div
                                                                     className={styles.uploadBoxMini}
@@ -1914,7 +1913,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     className={styles.sendReportBtnOptimistic}
                                                     onClick={handleSendFieldReport}
                                                 >
-                                                    <span>FINALIZAR REPORTE TÉCNICO</span>
+                                                    <span>FINALIZAR REPORTE TÃ‰CNICO</span>
                                                     <ArrowRight size={18} />
                                                 </button>
                                             </div>
@@ -1927,12 +1926,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <FileSpreadsheet size={28} color="#10B981" />
                                                 <div style={{ textAlign: 'left', flex: 1 }}>
                                                     <h3 className={styles.quotationTitle} style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-                                                        {ticketData.estadoId === "en_cotizacion" ? "Elaboración de Cotización Formal" : "Cotización Aprobada y Registrada"}
+                                                        {ticketData.estadoId === "en_cotizacion" ? "ElaboraciÃ³n de CotizaciÃ³n Formal" : "CotizaciÃ³n Aprobada y Registrada"}
                                                     </h3>
                                                     <p className={styles.quotationSubtitle} style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
                                                         {ticketData.estadoId === "en_cotizacion"
                                                             ? "Prepare el presupuesto final usando la plantilla oficial"
-                                                            : isQuotationCollapsed ? "Pulse para ver detalles de la cotización" : "Documento oficial del servicio. Los cambios requieren autorización."
+                                                            : isQuotationCollapsed ? "Pulse para ver detalles de la cotizaciÃ³n" : "Documento oficial del servicio. Los cambios requieren autorizaciÃ³n."
                                                         }
                                                     </p>
                                                 </div>
@@ -1971,7 +1970,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <h4 className={styles.summaryTitle}>Meta de Rentabilidad</h4>
                                                             <div className={styles.profitabilityGrid}>
                                                                 <div className={styles.techCostCard}>
-                                                                    <span className={styles.techCostLabel}>PRESUPUESTO TÉCNICO</span>
+                                                                    <span className={styles.techCostLabel}>PRESUPUESTO TÃ‰CNICO</span>
                                                                     <div className={styles.techCostDetail}>
                                                                         <div className={styles.techRow}>
                                                                             <label>Mano de Obra:</label>
@@ -2017,11 +2016,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 return (
                                                                                     <div className={styles.lossWarning}>
                                                                                         <div className={styles.lossTitle}>
-                                                                                            <X size={16} /> {/* O AlertTriangle si estuviera importado, pero X está disponible */}
-                                                                                            <span>âš ï¸ PERDIDA DETECTADA</span>
+                                                                                            <X size={16} /> {/* O AlertTriangle si estuviera importado, pero X estÃ¡ disponible */}
+                                                                                            <span>Ã¢Å¡Â Ã¯Â¸Â PERDIDA DETECTADA</span>
                                                                                         </div>
                                                                                         <span className={styles.lossValue}>
-                                                                                            El presupuesto es menor al costo técnico (S/ {formatSoles(totalCostoTecnico)})
+                                                                                            El presupuesto es menor al costo tÃ©cnico (S/ {formatSoles(totalCostoTecnico)})
                                                                                         </span>
                                                                                     </div>
                                                                                 );
@@ -2050,21 +2049,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </div>
                                                             {ticketData.estadoId === "en_cotizacion" && (
                                                                 <p className={styles.profitabilityHint}>
-                                                                    ðŸ’¡ Ajuste los precios en el editor de la derecha para cubrir el costo técnico y alcanzar el margen operativo sugerido.
+                                                                    Ã°Å¸â€™Â¡ Ajuste los precios en el editor de la derecha para cubrir el costo tÃ©cnico y alcanzar el margen operativo sugerido.
                                                                 </p>
                                                             )}
 
                                                             {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
                                                                 <div className={styles.authorizationSection}>
-                                                                    <div className={styles.authLockIcon}>ðŸ”’</div>
+                                                                    <div className={styles.authLockIcon}>Ã°Å¸â€â€™</div>
                                                                     <p className={styles.authText}>
-                                                                        La cotización ya fue aprobada por el cliente. Para realizar cambios, se requiere el visto bueno de Gerencia.
+                                                                        La cotizaciÃ³n ya fue aprobada por el cliente. Para realizar cambios, se requiere el visto bueno de Gerencia.
                                                                     </p>
                                                                     <button
                                                                         className={styles.authorizeBtn}
                                                                         onClick={handleAuthorizeModification}
                                                                     >
-                                                                        Autorizar Modificación
+                                                                        Autorizar ModificaciÃ³n
                                                                     </button>
                                                                 </div>
 
@@ -2072,7 +2071,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
                                                     <div className={styles.quotationMainEditor}>
-                                                        {/* LÓgica Diferenciada: BCP vs Otros Clientes */}
+                                                        {/* LÃ“gica Diferenciada: BCP vs Otros Clientes */}
                                                         {ticketData.cliente?.nombre?.toUpperCase().includes("BCP") ? (
                                                             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
@@ -2080,14 +2079,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <FileSpreadsheet size={24} color="#ffffff" />
                                                                     </div>
                                                                     <div>
-                                                                        <h4 style={{ margin: 0, color: '#0f172a', fontSize: '17px', fontWeight: 800 }}>Cotización Formato BCP</h4>
+                                                                        <h4 style={{ margin: 0, color: '#0f172a', fontSize: '17px', fontWeight: 800 }}>CotizaciÃ³n Formato BCP</h4>
                                                                         <p style={{ margin: 0, color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
                                                                             Uso obligatorio de la plantilla oficial de Excel.
                                                                         </p>
                                                                     </div>
                                                                 </div>
 
-                                                                {/* Zona de Carga / Visualización */}
+                                                                {/* Zona de Carga / VisualizaciÃ³n */}
                                                                 {!bcpQuotationFile ? (
                                                                     <div
                                                                         onClick={() => (ticketData.estadoId === 'en_cotizacion' || ticketData.modificacionAutorizada) && bcpFileInputRef.current?.click()}
@@ -2124,7 +2123,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 <p style={{ margin: '0 0 4px 0', fontWeight: 600, fontSize: '15px', color: '#1e293b' }}>{bcpQuotationFile.name}</p>
                                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                                     <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>EXCEL</span>
-                                                                                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>â€¢ Subido el {new Date(bcpQuotationFile.fecha).toLocaleDateString()}</span>
+                                                                                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Ã¢â‚¬Â¢ Subido el {new Date(bcpQuotationFile.fecha).toLocaleDateString()}</span>
                                                                                 </div>
                                                                             </div>
                                                                             {(ticketData.estadoId === "en_cotizacion" || ticketData.modificacionAutorizada) && (
@@ -2224,7 +2223,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </div>
 
                                                                 <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '12px', fontStyle: 'italic' }}>
-                                                                    * El sistema calcula automáticamente el IGV (18%) y el Total basándose en el subtotal ingresado para garantizar la precisión.
+                                                                    * El sistema calcula automÃ¡ticamente el IGV (18%) y el Total basÃ¡ndose en el subtotal ingresado para garantizar la precisiÃ³n.
                                                                 </p>
                                                                 <input
                                                                     type='file'
@@ -2235,7 +2234,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 />
                                                             </div>
                                                         ) : (
-                                                            // --- VISTA ESTÓNDAR (EDITOR PDF) ---
+                                                            // --- VISTA ESTÃ“ÂNDAR (EDITOR PDF) ---
                                                             <OnlineQuotationEditor
                                                                 ref={quotationEditorRef}
                                                                 isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
@@ -2273,7 +2272,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             partidas: partidasCotizacion,
                                                                             fechaUltimaModificacion: new Date().toISOString()
                                                                         });
-                                                                        showToast("Cotización Guardada", "Cambios guardados y cotización bloqueada nuevamente.", "success");
+                                                                        showToast("CotizaciÃ³n Guardada", "Cambios guardados y cotizaciÃ³n bloqueada nuevamente.", "success");
                                                                     }}
                                                                 >
                                                                     <CheckCircle size={18} />
@@ -2281,7 +2280,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </button>
                                                             ) : (
                                                                 <div className={styles.readonlyNotice}>
-                                                                    La cotización se encuentra en modo lectura.
+                                                                    La cotizaciÃ³n se encuentra en modo lectura.
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2333,11 +2332,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                             <div>
                                                 <h3 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.04em' }}>
-                                                    Cotización Enviada con Éxito
+                                                    CotizaciÃ³n Enviada con Ã‰xito
                                                 </h3>
                                                 <p style={{ margin: 0, fontSize: '16px', color: '#64748b', lineHeight: 1.7, fontWeight: 500 }}>
                                                     El presupuesto formal ha sido enviado al correo del cliente.<br />
-                                                    El ticket permanecerá en pausa hasta recibir la <strong>aprobación</strong> o solicitud de ajuste.
+                                                    El ticket permanecerÃ¡ en pausa hasta recibir la <strong>aprobaciÃ³n</strong> o solicitud de ajuste.
                                                 </p>
                                             </div>
 
@@ -2353,7 +2352,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                             }}>
                                                 <Clock size={18} color='#c2410c' />
                                                 <span style={{ fontSize: '14px', fontWeight: 800, color: '#c2410c', letterSpacing: '0.03em' }}>
-                                                    ESPERANDO APROBACIÓN DEL CLIENTE
+                                                    ESPERANDO APROBACIÃ“N DEL CLIENTE
                                                 </span>
                                             </div>
 
@@ -2378,7 +2377,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     }}
                                                 >
                                                     <ThumbsUp size={22} />
-                                                    <span>REGISTRAR APROBACIÓN DEL CLIENTE</span>
+                                                    <span>REGISTRAR APROBACIÃ“N DEL CLIENTE</span>
                                                 </button>
 
                                                 <button
@@ -2402,100 +2401,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 </button>
                                             </div>
 
-                                            {/* SECCIÓN NUEVA: SOLICITUD DE DEPÓSITO EN ETAPA ENVIADA */}
-                                            <div style={{
-                                                marginTop: '10px',
-                                                padding: '24px',
-                                                background: '#f8fafc',
-                                                borderRadius: '24px',
-                                                border: '1px solid #e2e8f0',
-                                                width: '100%',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '16px',
-                                                boxShadow: '0 4px 12px rgba(0,0,0,0.02)'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <div style={{ padding: '8px', background: '#e0f2fe', borderRadius: '10px', color: '#0369a1' }}>
-                                                        <Wallet size={20} />
-                                                    </div>
-                                                    <div>
-                                                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e293b' }}>Solicitar Pago al Técnico</h4>
-                                                        <p style={{ margin: 0, fontSize: '12px', color: '#0369a1', fontWeight: 600 }}>⏳ La solicitud queda pendiente — el Administrador ejecuta el pago desde Tesorería</p>
-                                                    </div>
-                                                </div>
-                                                
-                                                {(ticketData.solicitudesDeposito || []).some((s: any) => s.estado === 'pendiente') ? (
-                                                    <div style={{ 
-                                                        marginTop: '8px', 
-                                                        padding: '16px', 
-                                                        background: '#fffbeb', 
-                                                        borderRadius: '12px', 
-                                                        border: '1px dashed #f59e0b',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '10px',
-                                                        color: '#d97706',
-                                                        fontWeight: 700
-                                                    }}>
-                                                        <Clock size={20} />
-                                                        <span>TIENES UNA SOLICITUD EN ESPERA DE APROBACIÓN POR TESORERÍA</span>
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="Concepto (ej: Adelanto para técnico)" 
-                                                            value={depositRequest.concepto}
-                                                            onChange={(e) => setDepositRequest({...depositRequest, concepto: e.target.value})}
-                                                            style={{ 
-                                                                flex: 2, 
-                                                                padding: '12px 16px', 
-                                                                borderRadius: '12px', 
-                                                                border: '2px solid #e2e8f0',
-                                                                fontSize: '14px',
-                                                                outline: 'none',
-                                                                transition: 'border-color 0.2s'
-                                                            }}
-                                                        />
-                                                        <div style={{ position: 'relative', flex: 1 }}>
-                                                            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#94a3b8', fontSize: '14px' }}>S/</span>
-                                                            <input 
-                                                                type="number" 
-                                                                placeholder="0.00" 
-                                                                value={depositRequest.monto}
-                                                                onChange={(e) => setDepositRequest({...depositRequest, monto: e.target.value})}
-                                                                style={{ 
-                                                                    width: '100%',
-                                                                    padding: '12px 16px 12px 32px', 
-                                                                    borderRadius: '12px', 
-                                                                    border: '2px solid #e2e8f0',
-                                                                    fontSize: '14px',
-                                                                    fontWeight: 700,
-                                                                    outline: 'none',
-                                                                    boxSizing: 'border-box'
-                                                                }}
-                                                            />
-                                                        </div>
-                                                        <button 
-                                                            onClick={handleRequestTechnicianDeposit}
-                                                            style={{ 
-                                                                background: '#0f172a', 
-                                                                color: 'white', 
-                                                                padding: '0 24px', 
-                                                                borderRadius: '12px', 
-                                                                fontWeight: 800, 
-                                                                fontSize: '14px',
-                                                                cursor: 'pointer',
-                                                                border: 'none',
-                                                                transition: 'all 0.2s'
-                                                            }}
-                                                        >
-                                                            Solicitar
-                                                        </button>
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -2504,316 +2409,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         <div className={styles.stepActions}>
                                             {ticketData.estadoId === "cotizacion_aprobada" && (
                                                 <div className={styles.approvedStatusNotice}>
-                                                    <div className={styles.approvedIcon}>ðŸŽ‰</div>
+                                                    <div className={styles.approvedIcon}>🎉</div>
                                                     <h3 style={{ margin: 0, color: '#065F46' }}>¡Presupuesto Aprobado!</h3>
                                                     <p style={{ margin: '8px 0 20px 0', fontSize: '14px', color: '#059669' }}>
                                                         {ticketData.adelantoPagado
-                                                            ? "El depÓsito técnico ha sido realizado. Puede proceder con la ejecución."
-                                                            : "Se requiere confirmar el depÓsito del técnico para iniciar el servicio."
-                                                        }
-                                                    </p>
-
-                                                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                                                        {!ticketData.adelantoPagado && (
-                                                            <div className={styles.negotiationWrapper}>
-                                                                {!ticketData.costoAjustadoPostAprobacion && !ticketData.omitirAjusteTecnico ? (
-                                                                    <div className={styles.negotiationCard}>
-                                                                        <div className={styles.negotiationIcon}>ðŸ¤</div>
-                                                                        <h4>Negociación con Técnico</h4>
-                                                                        <p>El presupuesto ha sido aprobado por el cliente. ¿Desea ajustar el costo con el técnico antes de generar el adelanto?</p>
-                                                                        <div className={styles.negotiationActions}>
-                                                                            <button className={styles.adjustBtn} onClick={handleAdjustTechnicianCost}>
-                                                                                <DollarSign size={16} />
-                                                                                SI, REAJUSTAR COSTO
-                                                                            </button>
-                                                                            <button className={styles.keepBtn} onClick={() => setTicketData({ ...ticketData, omitirAjusteTecnico: true })}>
-                                                                                <CheckCircle size={16} />
-                                                                                NO, MANTENER COSTO
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className={styles.advanceRequestCard}>
-                                                                        <div className={styles.advanceHeader}>
-                                                                            <div className={styles.advanceTitleGroup}>
-                                                                                <h4>Orden de Adelanto</h4>
-                                                                                <span>Pago operativo para el técnico</span>
-                                                                                {ticketData.costoAjustadoPostAprobacion && (
-                                                                                    <span className={styles.adjustedBadge}>¡COSTO REAJUSTADO!</span>
-                                                                                )}
-                                                                            </div>
-                                                                            {!ticketData.solicitudAdelanto ? (
-                                                                                <div className={styles.percentageSelector}>
-                                                                                    {[0.4, 0.5, 0.6, 1.0].map(p => (
-                                                                                        <button
-                                                                                            key={p}
-                                                                                            className={`${styles.pctBtn} ${porcentajeAdelanto === p ? styles.pctActive : ''}`}
-                                                                                            onClick={() => setPorcentajeAdelanto(p)}
-                                                                                        >
-                                                                                            {(p * 100).toFixed(0)}%
-                                                                                        </button>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div style={{ background: '#ECFDF5', padding: '4px 8px', borderRadius: '4px', border: '1px solid #10B981', color: '#047857', fontWeight: 'bold' }}>
-                                                                                    SOLICITADO: {(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-
-                                                                        <div className={styles.techBankDetails}>
-                                                                            <div className={styles.bankRow}>
-                                                                                <strong>Técnico:</strong>
-                                                                                <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
-                                                                            </div>
-                                                                            <div className={styles.bankRow}>
-                                                                                <strong>Banco:</strong>
-                                                                                <span>{ticketData.tecnico?.banco || '---'}</span>
-                                                                            </div>
-                                                                            <div className={styles.bankRow}>
-                                                                                <strong>Nº Cuenta:</strong>
-                                                                                <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
-                                                                            </div>
-                                                                            <div className={styles.bankRow}>
-                                                                                <strong>CCI:</strong>
-                                                                                <span>{ticketData.tecnico?.cci || '---'}</span>
-                                                                            </div>
-                                                                            {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
-                                                                                <div className={styles.bankRow} style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
-                                                                                    <strong>Billeteras:</strong>
-                                                                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                                                                        {ticketData.tecnico?.yape && <span style={{ color: '#7C3AED' }}>Yape: {ticketData.tecnico.yape}</span>}
-                                                                                        {ticketData.tecnico?.plin && <span style={{ color: '#00D1FF' }}>Plin: {ticketData.tecnico.plin}</span>}
-                                                                                    </div>
-                                                                                </div>
-                                                                            )}
-                                                                            <div className={styles.bankRow}>
-                                                                                <strong>Monto Base Re-pactado:</strong>
-                                                                                <span style={{ color: '#10B981', fontWeight: 800 }}>S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toFixed(2)}</span>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {userRole === 'admin' ? (
-                                                                            <button
-                                                                                className={styles.confirmAdvanceBtn}
-                                                                                onClick={handleConfirmAdvance}
-                                                                                disabled={(!ticketData.solicitudAdelanto && porcentajeAdelanto === null) || isConfirmingPayment}
-                                                                                style={((!ticketData.solicitudAdelanto && porcentajeAdelanto === null) || isConfirmingPayment) ? { opacity: 0.5, cursor: 'not-allowed', filter: 'grayscale(1)' } : {}}
-                                                                            >
-                                                                                {isConfirmingPayment ? (
-                                                                                    <>
-                                                                                        <Clock size={18} className={styles.spinIcon} />
-                                                                                        <span>CONFIRMANDO...</span>
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <>
-                                                                                        <Wallet size={18} />
-                                                                                        <span>
-                                                                                            {ticketData.solicitudAdelanto ?
-                                                                                                `CONFIRMAR DEPÓSITO (SOLICITUD: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}%)` :
-                                                                                                porcentajeAdelanto !== null ?
-                                                                                                    `CONFIRMAR DEPÓSITO S/ ${((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) * porcentajeAdelanto).toFixed(2)}` :
-                                                                                                    "SELECCIONE % PARA CONFIRMAR"
-                                                                                            }
-                                                                                        </span>
-                                                                                    </>
-                                                                                )}
-                                                                            </button>
-                                                                        ) : (
-                                                                            !ticketData.solicitudAdelanto ? (
-                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                                    {porcentajeAdelanto === null && (
-                                                                                        <p style={{ fontSize: '0.75rem', color: '#EF4444', textAlign: 'center', margin: 0, fontWeight: 700 }}>
-                                                                                            * Seleccione 40%, 50% o 60% arriba
-                                                                                        </p>
-                                                                                    )}
-                                                                                    <button
-                                                                                        className={styles.sendReportBtnOptimistic}
-                                                                                        onClick={handleRequestAdvance}
-                                                                                        disabled={porcentajeAdelanto === null}
-                                                                                        style={{
-                                                                                            width: '100%',
-                                                                                            marginTop: '4px',
-                                                                                            background: '#3B82F6',
-                                                                                            justifyContent: 'center',
-                                                                                            opacity: porcentajeAdelanto === null ? 0.5 : 1,
-                                                                                            cursor: porcentajeAdelanto === null ? 'not-allowed' : 'pointer'
-                                                                                        }}
-                                                                                    >
-                                                                                        <Send size={18} />
-                                                                                        <span>SOLICITAR PAGO A GERENCIA</span>
-                                                                                    </button>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div className={styles.waitingForManager}>
-                                                                                    <Clock size={24} color="#3B82F6" />
-                                                                                    <span style={{ fontSize: '1.1rem' }}>¡ ADELANTO SOLICITADO !</span>
-                                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>El pago está en proceso de aprobación por Gerencia.</span>
-                                                                                </div>
-                                                                            )
-                                                                        )}
-
-                                                                        {ticketData.solicitudAdelanto && userRole !== 'admin' && (
-                                                                            <button
-                                                                                style={{ marginTop: '8px', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline', width: '100%' }}
-                                                                                onClick={() => setTicketData({ ...ticketData, solicitudAdelanto: null })}
-                                                                            >
-                                                                                Cancelar o Modificar Solicitud
-                                                                            </button>
-                                                                        )}
-                                                                        <p className={styles.bankNote}>âš ï¸ Solo el Administrador puede confirmar transferencias.</p>
-
-                                                                        {ticketData.costoAjustadoPostAprobacion && (
-                                                                            <button className={styles.resetNegotiationBtn} onClick={() => setTicketData({ ...ticketData, costoAjustadoPostAprobacion: false, costoManoObra: ticketData.costoAnteriorTecnico, costoMateriales: 0 })}>
-                                                                                Deshacer Reajuste
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-
-                                                        {ticketData.adelantoPagado && (
-                                                            <button className={styles.startExecutionBtn} onClick={handleProceedToExecution}>
-                                                                <Hammer size={24} />
-                                                                <span>INICIAR EJECUCIÓN EN SEDE</span>
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {ticketData.estadoId === "en_ejecucion" && (
-                                                <div className={styles.executionContainer}>
-                                                    <div className={styles.executionHeader}>
-                                                        <Hammer size={32} />
-                                                        <div style={{ textAlign: 'left' }}>
-                                                            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Trabajos en Ejecución</h3>
-                                                            <p style={{ margin: '4px 0 0 0', opacity: 0.9 }}>Sede: {ticketData.sede?.nombre}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className={styles.executionMainGrid}>
-                                                                {/* El módulo de gastos y materiales se ha unificado en la parte superior del área operativa para accesibilidad total */}
-                                                                {/* 💰 SUB-MÓDULO: GESTIÓN DE COSTOS Y EGRESOS */}
-                                                                <div className={styles.costsModule}>
-                                                                    <div className={styles.costsHeader}>
-                                                                        <div className={styles.costsTitle}>
-                                                                            <Calculator size={22} color="#3B82F6" />
-                                                                            <div>
-                                                                                <h4>Gestión de Costos y Egresos</h4>
-                                                                                <p>Auditoría de rentabilidad y control de gastos en tiempo real.</p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <button 
-                                                                            className={styles.addCostBtn}
-                                                                            onClick={() => setShowCostForm(!showCostForm)}
-                                                                        >
-                                                                            {showCostForm ? <X size={16} /> : <Plus size={16} />}
-                                                                            {showCostForm ? "Cerrar" : "Añadir Gasto/Pago"}
-                                                                        </button>
-                                                                    </div>
-
-                                                                    {/* Resumen de Rentabilidad (Cards) */}
-                                                                    <div className={styles.profitabilityGrid}>
-                                                                        <div className={styles.profitCard}>
-                                                                            <span className={styles.cardLabel}>Presupuesto Aprobado</span>
-                                                                            <strong className={styles.cardValue}>S/ {formatSoles(totalAprobado)}</strong>
-                                                                        </div>
-                                                                        <div className={`${styles.profitCard} ${isOverLimit ? styles.cardAlert : ''}`}>
-                                                                            <span className={styles.cardLabel}>Total Gastos Acum.</span>
-                                                                            <strong className={styles.cardValue} style={{ color: isOverLimit ? '#D97706' : '#1E293B' }}>
-                                                                                S/ {formatSoles(totalGastos)}
-                                                                            </strong>
-                                                                            {isOverLimit && <AlertTriangle size={14} className={styles.alertIcon} />}
-                                                                        </div>
-                                                                        <div className={styles.profitCard}>
-                                                                            <span className={styles.cardLabel}>Margen Bruto Real</span>
-                                                                            <strong className={styles.cardValue} style={{ color: margenReal > 0 ? '#059669' : '#DC2626' }}>
-                                                                                S/ {formatSoles(margenReal)}
-                                                                            </strong>
-                                                                        </div>
-                                                                        <div className={styles.profitCard} title="Gastos ya ejecutados o adelantados que deben ser cobrados al cliente">
-                                                                            <span className={styles.cardLabel}>Capital Expuesto</span>
-                                                                            <strong className={styles.cardValue} style={{ color: '#4F46E5' }}>S/ {formatSoles(capitalExpuesto)}</strong>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    {/* Barra de Progreso de Gastos */}
-                                                                    <div className={styles.budgetProgressContainer}>
-                                                                        <div className={styles.progressLabel}>
-                                                                            <span>Consumo del Presupuesto</span>
-                                                                            <span>{percentageSpent.toFixed(1)}%</span>
-                                                                        </div>
-                                                                        <div className={styles.progressBar}>
-                                                                            <div 
-                                                                                className={styles.progressFill} 
-                                                                                style={{ 
-                                                                                    width: `${Math.min(100, percentageSpent)}%`,
-                                                                                    backgroundColor: percentageSpent > 90 ? '#EF4444' : percentageSpent > 70 ? '#F59E0B' : '#3B82F6'
-                                                                                }} 
-                                                                            />
-                                                                        </div>
-                                                                        {isOverLimit && (
-                                                                            <div className={styles.limitWarning}>
-                                                                                <AlertTriangle size={12} />
-                                                                                <span>Atención: Los gastos superan el 70% del presupuesto aprobado.</span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* Formulario de Nuevo Gasto */}
-                                                                    {showCostForm && (
-                                                                        <div className={styles.costFormPanel}>
-                                                                            <div className={styles.formRow}>
-                                                                                <div className={styles.formGroup}>
-                                                                                    <label>Concepto / Glosa</label>
-                                                                                    <input 
-                                                                                        type="text" 
-                                                                                        placeholder="Ej: Compra de Frenos..."
-                                                                                        value={newCost.concepto}
-                                                                                        onChange={e => setNewCost({...newCost, concepto: e.target.value})}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className={styles.formGroup}>
-                                                                                    <label>Categoría</label>
-                                                                                    <select 
-                                                                                        value={newCost.categoria}
-                                                                                        onChange={e => setNewCost({...newCost, categoria: e.target.value})}
-                                                                                    >
-                                                                                        <option value="Materiales">Materiales</option>
-                                                                                        <option value="Mano de Obra">Mano de Obra</option>
-                                                                                        <option value="Logística">Logística</option>
-                                                                                        <option value="Otros">Otros</option>
-                                                                                    </select>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className={styles.formRow}>
-                                                                                <div className={styles.formGroup}>
-                                                                                    <label>Proveedor / Beneficiario</label>
-                                                                                    <input 
-                                                                                        type="text" 
-                                                                                        placeholder="Nombre del proveedor o técnico"
-                                                                                        value={newCost.proveedor}
-                                                                                        onChange={e => setNewCost({...newCost, proveedor: e.target.value})}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className={styles.formGroup}>
-                                                                                    <label>Monto (S/)</label>
-                                                                                    <input 
-                                                                                        type="number" 
-                                                                                        placeholder="0.00"
-                                                                                        value={newCost.monto}
-                                                                                        onChange={e => setNewCost({...newCost, monto: e.target.value})}
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                            <button 
-                                                                                className={styles.submitCostBtn}
-                                                                                onClick={handleSaveCost}
-                                                                                disabled={isSavingCost}
-                                                                            >
-                                                                                {isSavingCost ? "Guardando..." : "Registrar y Enviar a Tesorería"}
                                                                             </button>
                                                                         </div>
                                                                     )}
@@ -2823,7 +2422,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <table className={styles.costsTable}>
                                                                             <thead>
                                                                                 <tr>
-                                                                                    <th>Categoría</th>
+                                                                                    <th>CategorÃ­a</th>
                                                                                     <th>Concepto</th>
                                                                                     <th>Proveedor</th>
                                                                                     <th>Estado</th>
@@ -2835,7 +2434,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 {ticketCosts.length === 0 ? (
                                                                                     <tr>
                                                                                         <td colSpan={6} style={{ textAlign: 'center', padding: '20px', color: '#94A3B8', fontSize: '0.8rem' }}>
-                                                                                            No hay costos registrados aún.
+                                                                                            No hay costos registrados aÃºn.
                                                                                         </td>
                                                                                     </tr>
                                                                                 ) : (
@@ -2872,109 +2471,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </div>
 
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                            <div className={`${styles.executionCard} ${styles.extraAdvanceRequest}`}>
-                                                                <h4><Coins size={18} /> GESTIÓN DE ANTICIPOS</h4>
-
-                                                                {/* Historial de refuerzos realizados */}
-                                                                {(() => {
-                                                                    const refuerzos = (ticketData.historialPagosTecnico || []).filter((p: any) =>
-                                                                        p.referencia?.includes("Adelanto Adicional") || p.tipo === "Refuerzo"
-                                                                    );
-                                                                    if (refuerzos.length === 0) return null;
-                                                                    return (
-                                                                        <div className={styles.reinforcementHistory}>
-                                                                            {refuerzos.map((r: any, idx: number) => (
-                                                                                <div key={r.id || idx} className={styles.reinforcementItem}>
-                                                                                    <CheckCircle size={14} color="#059669" />
-                                                                                    <span>S/ {r.monto.toFixed(2)}</span>
-                                                                                    <small>{new Date(r.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}</small>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    );
-                                                                })()}
-
-                                                                {!ticketData.solicitudAdelantoExtra ? (
-                                                                    <>
-                                                                        <p style={{ fontSize: '0.8rem', color: '#92400E' }}>Solicite fondos extra si el técnico requiere refuerzo operativo.</p>
-                                                                        {!showExtraAdvanceInput ? (
-                                                                            <button className={styles.extraAdvanceBtn} onClick={handleRequestExtraAdvance}>
-                                                                                <Wallet size={16} />
-                                                                                SOLICITAR REFUERZO ECONÓMICO
-                                                                            </button>
-                                                                        ) : (
-                                                                            <div className={styles.extraAdvanceForm}>
-                                                                                <input
-                                                                                    type="number"
-                                                                                    placeholder="Monto a solicitar (S/)"
-                                                                                    value={extraAdvanceAmount}
-                                                                                    onChange={(e) => setExtraAdvanceAmount(e.target.value)}
-                                                                                    className={styles.expenseInput}
-                                                                                    autoFocus
-                                                                                />
-                                                                                <div className={styles.miniActions}>
-                                                                                    <button
-                                                                                        className={styles.confirmSmallBtn}
-                                                                                        onClick={submitExtraAdvanceRequest}
-                                                                                    >
-                                                                                        <CheckCircle size={14} /> Enviar
-                                                                                    </button>
-                                                                                    <button
-                                                                                        className={styles.cancelSmallBtn}
-                                                                                        onClick={() => {
-                                                                                            setShowExtraAdvanceInput(false);
-                                                                                            setExtraAdvanceAmount("");
-                                                                                        }}
-                                                                                    >
-                                                                                        <X size={14} />
-                                                                                    </button>
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
-                                                                    <div className={styles.pendingAdvanceBox}>
-                                                                        <div className={styles.pendingBadge}>ESPERANDO DEPÓSITO</div>
-                                                                        <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#92400E' }}>Monto solicitado: S/ {ticketData.solicitudAdelantoExtra.monto.toFixed(2)}</p>
-
-                                                                        {userRole === 'admin' ? (
-                                                                            <button 
-                                                                                className={styles.confirmManagerDepositBtn} 
-                                                                                onClick={handleConfirmExtraAdvance}
-                                                                                disabled={isConfirmingPayment}
-                                                                                style={isConfirmingPayment ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
-                                                                            >
-                                                                                {isConfirmingPayment ? (
-                                                                                    <>
-                                                                                        <Clock size={14} className={styles.spinIcon} />
-                                                                                        <span>PROCESANDO...</span>
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <>
-                                                                                        <CheckCircle size={14} />
-                                                                                        <span>CONFIRMAR DEPÓSITO MANUALMENTE</span>
-                                                                                    </>
-                                                                                )}
-                                                                            </button>
-                                                                        ) : (
-                                                                            <div className={styles.waitingForManager} style={{ marginTop: '0', padding: '12px' }}>
-                                                                                <Clock size={20} color="#B45309" />
-                                                                                <span style={{ color: '#B45309' }}>¡ PETICIÓN ENVIADA !</span>
-                                                                                <span style={{ fontSize: '0.7rem', color: '#B45309', fontWeight: 500 }}>Esperando depÓsito extra del Gerente.</span>
-                                                                            </div>
-                                                                        )}
-
-                                                                        {userRole !== 'admin' && (
-                                                                            <button className={styles.cancelRequestBtn} onClick={() => setTicketData({ ...ticketData, solicitudAdelantoExtra: null })}>
-                                                                                Cancelar Petición
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                )}
+                                                                <h4><Coins size={18} /> GESTIÃ“N DE ANTICIPOS</h4>
                                                             </div>
 
                                                             <div className={styles.executionCard}>
-                                                                <h4><Camera size={18} /> EVIDENCIAS (DURANTE Y DESPUÉS)</h4>
+                                                                <h4><Camera size={18} /> EVIDENCIAS (DURANTE Y DESPUÃ‰S)</h4>
                                                                 <div className={styles.evidenceGridExecution}>
                                                                     {evidenciasEjecucion.map((ev, idx) => (
                                                                         <div key={idx} className={styles.evidenceThumbExecution}>
@@ -3008,7 +2509,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </div>
                                                                 </div>
                                                                 <p style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '8px' }}>
-                                                                    * Mínimo 2 fotos obligatorias para finalizar.
+                                                                    * MÃ­nimo 2 fotos obligatorias para finalizar.
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -3020,7 +2521,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         disabled={evidenciasEjecucion.length < 2}
                                                     >
                                                         <CheckCircle size={20} />
-                                                        FINALIZAR TODOS LOS TRABAJOS Y ENVIAR DOCUMENTACIÓN
+                                                        FINALIZAR TODOS LOS TRABAJOS Y ENVIAR DOCUMENTACIÃ“N
                                                     </button>
                                                 </div>
                                             )}
@@ -3033,8 +2534,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.checklistHeader}>
                                                     <ClipboardCheck size={32} color="#6366F1" />
                                                     <div style={{ textAlign: 'left' }}>
-                                                        <h3 className={styles.checklistTitle}>Checklist de Cierre y Documentación</h3>
-                                                        <p className={styles.checklistSubtitle}>Valide los documentos obligatorios para proceder a la liquidación</p>
+                                                        <h3 className={styles.checklistTitle}>Checklist de Cierre y DocumentaciÃ³n</h3>
+                                                        <p className={styles.checklistSubtitle}>Valide los documentos obligatorios para proceder a la liquidaciÃ³n</p>
                                                     </div>
                                                 </div>
 
@@ -3048,7 +2549,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                         <div className={styles.checkText}>
                                                             <strong>1. ACTA DE CONFORMIDAD FIRMADA</strong>
-                                                            <span>Sustento de recepción del cliente</span>
+                                                            <span>Sustento de recepciÃ³n del cliente</span>
                                                         </div>
                                                     </div>
 
@@ -3073,7 +2574,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             {documentosChecklist.declaracionJurada && <CheckCircle2 size={18} />}
                                                         </div>
                                                         <div className={styles.checkText}>
-                                                            <strong>3. DECLARACIÓN JURADA</strong>
+                                                            <strong>3. DECLARACIÃ“N JURADA</strong>
                                                             <span>Conformidad administrativa</span>
                                                         </div>
                                                     </div>
@@ -3091,7 +2592,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
 
-                                                    {/* Nuevo Item: Número de Ticket del Cliente */}
+                                                    {/* Nuevo Item: NÃºmero de Ticket del Cliente */}
                                                     <div
                                                         className={`${styles.checkItem} ${ticketData.numeroTicketCliente ? styles.checkItemActive : styles.checkItemAlert}`}
                                                         style={{ cursor: 'default' }}
@@ -3101,7 +2602,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                         <div className={styles.checkText}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <strong>5. NÓšMERO DE TICKET DEL CLIENTE</strong>
+                                                                <strong>5. NÃ“Å¡MERO DE TICKET DEL CLIENTE</strong>
                                                                 {ticketData.numeroTicketCliente && (
                                                                     <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
                                                                 )}
@@ -3112,7 +2613,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 placeholder={`EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`}
                                                                 value={ticketData.numeroTicketCliente || ""}
                                                                 autoFocus={!ticketData.numeroTicketCliente}
-                                                                // Si el ticket ya venía con número asignado (desde props), bloquear edición
+                                                                // Si el ticket ya venÃ­a con nÃºmero asignado (desde props), bloquear ediciÃ³n
                                                                 disabled={!!ticket.numeroTicketCliente}
                                                                 style={ticket.numeroTicketCliente ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
@@ -3123,18 +2624,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             />
                                                             {!ticketData.numeroTicketCliente && (
                                                                 <span style={{ color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    ¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
+                                                                    Â¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
                                                                 </span>
                                                             )}
                                                             {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
                                                                 <span style={{ color: '#F59E0B', fontSize: '0.65rem', fontWeight: 700, marginTop: '4px', lineHeight: '1.2' }}>
-                                                                    FORMATO REQUERIDO: MB + 6 DÓGITOS + PUNTO + AÓ‘O (26)<br />
+                                                                    FORMATO REQUERIDO: MB + 6 DÃ“ÂGITOS + PUNTO + AÃ“â€˜O (26)<br />
                                                                     Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
                                                                 </span>
                                                             )}
                                                             {ticketData.numeroTicketCliente && (/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
                                                                 <span style={{ color: '#059669', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    âœ“ FORMATO VÓLIDO
+                                                                    Ã¢Å“â€œ FORMATO VÃ“ÂLIDO
                                                                 </span>
                                                             )}
                                                         </div>
@@ -3152,16 +2653,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             documentosValidados: documentosChecklist
                                                         };
                                                         setTicketData(updated);
-                                                        showToast("Documentación Validada", "El ticket ha pasado a liquidación final.", "success");
+                                                        showToast("DocumentaciÃ³n Validada", "El ticket ha pasado a liquidaciÃ³n final.", "success");
                                                     }}
                                                 >
-                                                    <span>PASAR A LIQUIDACIÓN FINAL</span>
+                                                    <span>PASAR A LIQUIDACIÃ“N FINAL</span>
                                                     <ArrowRight size={20} />
                                                 </button>
 
                                                 {(!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente) && (
                                                     <p className={styles.checklistAlert}>
-                                                        * Todos los documentos y el número de ticket del cliente son obligatorios para continuar.
+                                                        * Todos los documentos y el nÃºmero de ticket del cliente son obligatorios para continuar.
                                                     </p>
                                                 )}
                                             </div>
@@ -3177,10 +2678,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
                                                     <div className={styles.liquidationTitles}>
                                                         <h3 style={ticketData.estadoId === "ticket_cerrado" ? { color: 'white' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidación Final de Servicio"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "LiquidaciÃ³n Final de Servicio"}
                                                         </h3>
                                                         <span style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la información financiera ha sido auditada y cerrada." : "Cálculo automático del saldo pendiente para el técnico"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la informaciÃ³n financiera ha sido auditada y cerrada." : "CÃ¡lculo automÃ¡tico del saldo pendiente para el tÃ©cnico"}
                                                         </span>
                                                     </div>
                                                     <div className={styles.liquidationTotalBadge}>
@@ -3197,7 +2698,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
 
                                                     <div className={styles.liquidationItem}>
-                                                        <span className={styles.liquidationLabel}>Total DepÓsitos Realizados</span>
+                                                        <span className={styles.liquidationLabel}>Total DepÃ“sitos Realizados</span>
                                                         <span className={styles.liquidationValue} style={{ color: '#059669' }}>
                                                             - S/ {(ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
@@ -3217,7 +2718,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 </div>
 
                                                 <div className={styles.techBankDetailsLiquidation}>
-                                                    <h4>Datos de Pago del Técnico: {ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</h4>
+                                                    <h4>Datos de Pago del TÃ©cnico: {ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</h4>
                                                     <div className={styles.bankGrid}>
                                                         <div className={styles.bankField}>
                                                             <strong>BANCO:</strong>
@@ -3306,7 +2807,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <>
                                                                         <DollarSign size={20} />
                                                                         <span>
-                                                                            CONFIRMAR DEPÓSITO FINAL
+                                                                            CONFIRMAR DEPÃ“SITO FINAL
                                                                             {ticketData.solicitudLiquidacion && " (SOLICITADO)"}
                                                                         </span>
                                                                     </>
@@ -3320,19 +2821,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     style={{ background: '#3B82F6', marginTop: '0' }}
                                                                 >
                                                                     <Send size={20} />
-                                                                    <span>SOLICITAR LIQUIDACIÓN FINAL</span>
+                                                                    <span>SOLICITAR LIQUIDACIÃ“N FINAL</span>
                                                                 </button>
                                                             ) : (
                                                                 <div className={styles.waitingForManager}>
                                                                     <Clock size={24} color="#3B82F6" />
-                                                                    <span style={{ fontSize: '1.1rem' }}>¡ LIQUIDACIÓN EN PROCESO !</span>
+                                                                    <span style={{ fontSize: '1.1rem' }}>Â¡ LIQUIDACIÃ“N EN PROCESO !</span>
                                                                     <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Solicitud de cierre enviada a Gerencia.</span>
                                                                 </div>
                                                             )
                                                         )}
 
                                                         <p className={styles.liquidationNote}>
-                                                            * Solo el Administrador puede cerrar financieramente el ticket mediante el depÓsito final.
+                                                            * Solo el Administrador puede cerrar financieramente el ticket mediante el depÃ“sito final.
                                                         </p>
                                                     </>
                                                 ) : (
@@ -3357,7 +2858,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.statusBadge}>{ticketData.estadoId?.replace('_', ' ')}</div>
-                                            <p>Este módulo operativo se encuentra en preparación.</p>
+                                            <p>Este mÃ³dulo operativo se encuentra en preparaciÃ³n.</p>
                                         </div>
                                     )}
                                 </>
@@ -3365,7 +2866,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
 
                         {/* ========================================
-                            📊 GESTIÓN DE COSTOS Y EGRESOS
+                            ðŸ“Š GESTIÃ“N DE COSTOS Y EGRESOS
                            ======================================== */}
                         <div className={styles.costsSection}>
                             <div className={styles.costsHeader}>
@@ -3380,13 +2881,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </p>
                                     </div>
                                 </div>
-                                <button 
-                                    className={styles.addCostActionBtn}
-                                    onClick={() => setShowCostForm(true)}
-                                >
-                                    <Plus size={18} />
-                                    <span>Añadir Gasto / Pago</span>
-                                </button>
                             </div>
 
                             <div className={styles.costsStatsGrid}>
@@ -3432,7 +2926,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {costPercentage > 70 && (
                                         <div className={styles.progressAlert + " " + styles.alertWarning}>
                                             <AlertTriangle size={18} />
-                                            <span>¡RENTABILIDAD CRÍTICA! Los gastos han superado el presupuesto base.</span>
+                                            <span>Â¡RENTABILIDAD CRÃTICA! Los gastos han superado el presupuesto base.</span>
                                         </div>
                                     )}
                                 </div>
@@ -3443,7 +2937,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     <table className={styles.costsTable}>
                                         <thead>
                                             <tr>
-                                                <th>Categoría</th>
+                                                <th>CategorÃ­a</th>
                                                 <th>Concepto / Proveedor</th>
                                                 <th>Monto</th>
                                                 <th>Estado</th>
@@ -3512,7 +3006,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 )}
 
 
-                {/* Modal de Negociación de Costo */}
+                {/* Modal de NegociaciÃ³n de Costo */}
                 {showNegotiationModal && (
                     <div className={styles.modalOverlay}>
                         <div className={styles.negotiationModalCard}>
@@ -3522,7 +3016,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 </div>
                                 <div className={styles.negoTitleGroup}>
                                     <h3>Ajuste de Costo Negociado</h3>
-                                    <span>Re-negociación con el técnico asignado</span>
+                                    <span>Re-negociaciÃ³n con el tÃ©cnico asignado</span>
                                 </div>
                                 <button className={styles.closeNegoBtn} onClick={() => setShowNegotiationModal(false)}>
                                     <X size={20} />
@@ -3550,7 +3044,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         />
                                     </div>
                                     <p className={styles.negoHelpText}>
-                                        * Este ajuste quedará registrado como costo de ejecución final para el técnico.
+                                        * Este ajuste quedarÃ¡ registrado como costo de ejecuciÃ³n final para el tÃ©cnico.
                                     </p>
                                 </div>
                             </div>
@@ -3599,16 +3093,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     onAssign={handleGestoraAssignment}
                 />
 
-                {/* Formulario Modal para Añadir Gasto */}
-                {showCostForm && (
-                    <div className={styles.costFormOverlay}>
-                        <div className={styles.costFormCard}>
-                            <div className={styles.costsHeader} style={{ marginBottom: '24px' }}>
-                                <div className={styles.costsTitleGroup}>
-                                    <Plus size={24} color="#8B5CF6" />
-                                    <h3>Nuevo Gasto / Pago</h3>
-                                </div>
-                                <button className={styles.closeBtn} onClick={() => setShowCostForm(false)} style={{ color: '#64748B' }}>
+                {/* Formulario Modal para AÃ±adir Gasto */}
+                => setShowCostForm(false)} style={{ color: '#64748B' }}>
                                     <X size={20} />
                                 </button>
                             </div>
@@ -3619,7 +3105,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     <input 
                                         type="text" 
                                         className={styles.formInput}
-                                        placeholder="Ej: Compra de frenos, Envío Courier..."
+                                        placeholder="Ej: Compra de frenos, EnvÃ­o Courier..."
                                         value={newCost.concepto}
                                         onChange={(e) => setNewCost({...newCost, concepto: e.target.value})}
                                     />
@@ -3627,7 +3113,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                 <div className={styles.settingsRow}>
                                     <div className={styles.formField}>
-                                        <label>Categoría</label>
+                                        <label>CategorÃ­a</label>
                                         <select 
                                             className={styles.formSelect}
                                             value={newCost.categoria}
@@ -3635,7 +3121,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         >
                                             <option value="Materiales">Materiales</option>
                                             <option value="Mano de Obra">Mano de Obra</option>
-                                            <option value="Logística">Logística</option>
+                                            <option value="LogÃ­stica">LogÃ­stica</option>
                                             <option value="Otros">Otros</option>
                                         </select>
                                     </div>
@@ -3680,7 +3166,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     <div className={styles.fileUploadArea} onClick={() => document.getElementById('costVoucherInput')?.click()}>
                                         <Upload size={20} color="#8B5CF6" />
                                         <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', fontWeight: 600 }}>
-                                            {newCost.url_comprobante ? "✅ Imagen cargada" : "Haz clic para subir imagen"}
+                                            {newCost.url_comprobante ? "âœ… Imagen cargada" : "Haz clic para subir imagen"}
                                         </p>
                                         <input 
                                             type="file" 
@@ -3715,3 +3201,4 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         </>
     );
 }
+
