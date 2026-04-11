@@ -3374,24 +3374,6 @@
     color: #64748B;
 }
 
-.addCostBtn {
-    background: #3B82F6;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.addCostBtn:hover {
-    background: #2563EB;
-}
 
 /* Rentabilidad Metrics */
 .profitabilityGrid {
@@ -3876,40 +3858,6 @@
     box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
 }
 
-.costFormActions {
-    display: flex;
-    gap: 12px;
-    margin-top: 12px;
-}
-
-.saveCostBtn {
-    flex: 2;
-    background: #8B5CF6;
-    color: white;
-    border: none;
-    padding: 14px;
-    border-radius: 14px;
-    font-weight: 800;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.saveCostBtn:hover {
-    background: #7C3AED;
-    transform: translateY(-2px);
-}
-
-.cancelCostBtn {
-    flex: 1;
-    background: #F1F5F9;
-    color: #475569;
-    border: none;
-    padding: 14px;
-    border-radius: 14px;
-    font-weight: 700;
-    cursor: pointer;
-}
 
 .emptyCostsState {
     padding: 60px;

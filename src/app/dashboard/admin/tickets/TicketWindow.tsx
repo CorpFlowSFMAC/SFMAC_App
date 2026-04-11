@@ -102,16 +102,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // GESTIÃ“N DE COSTOS Y EGRESOS
     const [ticketCosts, setTicketCosts] = useState<any[]>([]);
     const [loadingCosts, setLoadingCosts] = useState(false);
-    const [isSavingCost, setIsSavingCost] = useState(false);
-    const [showCostForm, setShowCostForm] = useState(false);
-    const [newCost, setNewCost] = useState({
-        concepto: '',
-        categoria: 'Materiales',
-        proveedor: '',
-        monto: '',
-        estado_pago: 'pendiente',
-        url_comprobante: ''
-    });
 
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
     
@@ -1300,44 +1290,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setIsMinimized(false);
     };
 
-    const handleSaveCost = async () => {
-        if (!newCost.concepto || !newCost.monto) {
-            showToast("Campos Faltantes", "Debe completar concepto y monto.", "error");
-            return;
-        }
-
-        setIsSavingCost(true);
-        try {
-            const costData = {
-                ticket_id: ticket.id,
-                concepto: newCost.concepto,
-                categoria: newCost.categoria,
-                proveedor: newCost.proveedor,
-                monto: parseFloat(newCost.monto),
-                estado_pago: newCost.estado_pago,
-                url_comprobante: newCost.url_comprobante,
-                solicitado_por: userRole === 'admin' ? undefined : (typeof window !== 'undefined' ? localStorage.getItem('userId') : null) as any
-            };
-
-            await ticketCostsAPI.create(costData);
-            await loadCosts();
-            setShowCostForm(false);
-            setNewCost({
-                concepto: '',
-                categoria: 'Materiales',
-                proveedor: '',
-                monto: '',
-                estado_pago: 'pendiente',
-                url_comprobante: ''
-            });
-            showToast("Gasto Registrado", "El costo ha sido asociado al ticket.", "success");
-        } catch (err) {
-            console.error("Error saving cost:", err);
-            showToast("Error", "No se pudo registrar el gasto.", "error");
-        } finally {
-            setIsSavingCost(false);
-        }
-    };
 
     const handleDeleteCost = async (costId: string) => {
         if (!confirm("Â¿EstÃ¡ seguro de eliminar este registro de costo?")) return;
@@ -1352,17 +1304,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleCostVoucherUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files?.[0]) return;
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const b64 = event.target?.result as string;
-            setNewCost(prev => ({ ...prev, url_comprobante: b64 }));
-            showToast("Voucher Cargado", "La imagen ha sido preparada para el registro.", "info");
-        };
-        reader.readAsDataURL(file);
-    };
 
     // CÃ¡lculos de Rentabilidad Rel Real-Time
     const totalCosts = ticketCosts.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
@@ -3093,112 +3034,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     onAssign={handleGestoraAssignment}
                 />
 
-                {/* Formulario Modal para AÃ±adir Gasto */}
-                => setShowCostForm(false)} style={{ color: '#64748B' }}>
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            <div className={styles.formGrid}>
-                                <div className={styles.formField}>
-                                    <label>Concepto del Gasto</label>
-                                    <input 
-                                        type="text" 
-                                        className={styles.formInput}
-                                        placeholder="Ej: Compra de frenos, EnvÃ­o Courier..."
-                                        value={newCost.concepto}
-                                        onChange={(e) => setNewCost({...newCost, concepto: e.target.value})}
-                                    />
-                                </div>
-
-                                <div className={styles.settingsRow}>
-                                    <div className={styles.formField}>
-                                        <label>CategorÃ­a</label>
-                                        <select 
-                                            className={styles.formSelect}
-                                            value={newCost.categoria}
-                                            onChange={(e) => setNewCost({...newCost, categoria: e.target.value})}
-                                        >
-                                            <option value="Materiales">Materiales</option>
-                                            <option value="Mano de Obra">Mano de Obra</option>
-                                            <option value="LogÃ­stica">LogÃ­stica</option>
-                                            <option value="Otros">Otros</option>
-                                        </select>
-                                    </div>
-                                    <div className={styles.formField}>
-                                        <label>Monto (S/)</label>
-                                        <input 
-                                            type="number" 
-                                            className={styles.formInput}
-                                            placeholder="0.00"
-                                            value={newCost.monto}
-                                            onChange={(e) => setNewCost({...newCost, monto: e.target.value})}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className={styles.formField}>
-                                    <label>Entidad / Proveedor</label>
-                                    <input 
-                                        type="text" 
-                                        className={styles.formInput}
-                                        placeholder="Nombre del proveedor o especialista"
-                                        value={newCost.proveedor}
-                                        onChange={(e) => setNewCost({...newCost, proveedor: e.target.value})}
-                                    />
-                                </div>
-
-                                <div className={styles.formField}>
-                                    <label>Estado del Pago</label>
-                                    <select 
-                                        className={styles.formSelect}
-                                        value={newCost.estado_pago}
-                                        onChange={(e) => setNewCost({...newCost, estado_pago: e.target.value})}
-                                    >
-                                        <option value="pendiente">Pendiente</option>
-                                        <option value="pagado">Pagado</option>
-                                        <option value="adelanto">Adelanto</option>
-                                    </select>
-                                </div>
-
-                                <div className={styles.formField}>
-                                    <label>Comprobante (Voucher / Factura)</label>
-                                    <div className={styles.fileUploadArea} onClick={() => document.getElementById('costVoucherInput')?.click()}>
-                                        <Upload size={20} color="#8B5CF6" />
-                                        <p style={{ margin: '8px 0 0 0', fontSize: '0.85rem', fontWeight: 600 }}>
-                                            {newCost.url_comprobante ? "âœ… Imagen cargada" : "Haz clic para subir imagen"}
-                                        </p>
-                                        <input 
-                                            type="file" 
-                                            id="costVoucherInput" 
-                                            hidden 
-                                            accept="image/*"
-                                            onChange={handleCostVoucherUpload}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className={styles.costFormActions}>
-                                    <button 
-                                        className={styles.cancelCostBtn}
-                                        onClick={() => setShowCostForm(false)}
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <button 
-                                        className={styles.saveCostBtn}
-                                        onClick={handleSaveCost}
-                                        disabled={isSavingCost}
-                                    >
-                                        {isSavingCost ? "Guardando..." : "Guardar Registro"}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </>
     );
 }
+
 
