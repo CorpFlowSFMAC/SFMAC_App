@@ -768,7 +768,7 @@ export const ticketCostsAPI = {
     async getByTicket(ticketId: string) {
         const { data, error } = await supabase
             .from('ticket_costs')
-            .select('*')
+            .select('*, technicians(id, name, first_name, last_name, document_number, phone, bank_name, account_number, cci, yape_number, plin_number)')
             .eq('ticket_id', ticketId)
             .order('created_at', { ascending: true });
 
@@ -781,6 +781,7 @@ export const ticketCostsAPI = {
         concepto: string;
         categoria: string;
         proveedor?: string;
+        specialist_id?: string;
         monto: number;
         estado_pago: string;
         url_comprobante?: string;
@@ -789,7 +790,7 @@ export const ticketCostsAPI = {
         const { data, error } = await supabase
             .from('ticket_costs')
             .insert(cost)
-            .select()
+            .select('*, technicians(*)')
             .single();
 
         if (error) throw error;
@@ -800,6 +801,7 @@ export const ticketCostsAPI = {
         concepto: string;
         categoria: string;
         proveedor: string;
+        specialist_id: string | null;
         monto: number;
         estado_pago: string;
         url_comprobante: string;
@@ -808,7 +810,7 @@ export const ticketCostsAPI = {
             .from('ticket_costs')
             .update(updates)
             .eq('id', id)
-            .select()
+            .select('*, technicians(*)')
             .single();
 
         if (error) throw error;

@@ -27,6 +27,10 @@ interface PaymentItem {
     isTableCost?: boolean;
     costId?: string;
     isLegacy?: boolean;   // Marca pagos que vienen de metadata
+    specialistName?: string; // Nombre del técnico vinculado al costo
+    specialistBanco?: string;
+    specialistCCI?: string;
+    specialistYape?: string;
 }
 
 interface PaymentTicketGroup {
@@ -150,10 +154,10 @@ export default function PaymentsPage() {
             setLoading(true);
             const data = await ticketsAPI.getForPayments();
             
-            // Obtener costos pendientes de la tabla ticket_costs
+            // Obtener costos pendientes de la tabla ticket_costs (con datos del especialista)
             const { data: costs } = await supabase
                 .from('ticket_costs')
-                .select('*')
+                .select('*, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)')
                 .eq('estado_pago', 'pendiente');
 
             const processed = (data || []).map(t => {
@@ -406,18 +410,26 @@ export default function PaymentsPage() {
                         });
                     }
 
-                    // 3b. NUEVO: Costos y Egresos (Tabla ticket_costs)
+                    // 3b. NUEVO: Costos y Egresos (Tabla ticket_costs) — agrupados por especialista
                     if (ticket.pendingCosts && ticket.pendingCosts.length > 0) {
                         ticket.pendingCosts.forEach((c: any) => {
+                            const tech = c.technicians;
+                            const specialistName = tech
+                                ? (tech.name || `${tech.first_name || ''} ${tech.last_name || ''}`.trim())
+                                : undefined;
                             items.push({
                                 id: c.id,
                                 tipo: `Gasto: ${c.categoria}`,
                                 monto: c.monto,
                                 estado: 'pendiente',
                                 fecha: c.created_at,
-                                concepto: c.concepto,
+                                concepto: specialistName ? `${c.concepto} · ${specialistName}` : c.concepto,
                                 isTableCost: true,
-                                costId: c.id
+                                costId: c.id,
+                                specialistName,
+                                specialistBanco: tech?.bank_name,
+                                specialistCCI: tech?.cci,
+                                specialistYape: tech?.yape_number,
                             });
                         });
                     }
