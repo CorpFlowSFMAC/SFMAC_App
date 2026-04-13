@@ -57,18 +57,23 @@
     margin-bottom: 25px;
 }
 
+.docInfo {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+}
+
 .logoContainer {
     margin-bottom: 8px;
     display: inline-block;
 }
 
 .logoImage {
-    height: 160px;
+    height: 120px;
     width: auto;
     object-fit: contain;
     display: block;
     mix-blend-mode: multiply;
-    filter: contrast(1.1) brightness(1.02);
 }
 
 .supplierRow {

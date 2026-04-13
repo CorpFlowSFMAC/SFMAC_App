@@ -183,7 +183,7 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                     </div>
                     <div className={styles.quoteStatusCard}>
                         <div className={styles.quoteInfoBox}>
-                            <h3>COTIZACION DE SERVICIO</h3>
+                            <h3>COTIZACIÓN DE SERVICIO</h3>
                             <div className={styles.quoteNumber}>
                                 <strong>N° 001-2026-MB</strong>
                             </div>
