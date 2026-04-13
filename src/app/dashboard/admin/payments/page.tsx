@@ -56,6 +56,7 @@ interface PaymentTicketGroup {
     voucherVisita?: string | null;
     montoFacturado: number;
     utilidad: number;
+    descripcion?: string;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -105,6 +106,8 @@ function flattenTicketForPayments(t: any) {
 
     return {
         ...t,
+        metadata: meta, // Aseguramos que el metadata del objeto retornado esté aplanado
+        descripcionServicio: meta.descripcion || meta.titulo || t.description || "", 
         estadoId: normalizeStateId(t.status_id || meta.estadoId || "nuevo"),
         numeroTicketCliente: t.client_ticket_number || meta.numeroTicketCliente || "",
         costoManoObra: parseFloat(t.labor_cost ?? meta.costoManoObra ?? 0),
@@ -480,6 +483,7 @@ export default function PaymentsPage() {
                         voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
                         montoFacturado: ticket.montoFacturado,
                         utilidad: Math.max(0, (ticket.montoFacturado || 0) - (totalPactadoInclVisita + visitCost)),
+                        descripcion: ticket.descripcionServicio || '',
                     });
                 }
             } catch (e) {
@@ -941,6 +945,22 @@ export default function PaymentsPage() {
                                                                 </div>
                                                             )}
                                                         </div>
+                                                        {group.descripcion && (
+                                                            <div style={{ 
+                                                                fontSize: '0.72rem', 
+                                                                color: '#475569', 
+                                                                fontStyle: 'italic', 
+                                                                lineHeight: 1.3, 
+                                                                padding: '6px 8px',
+                                                                background: '#F1F5F9',
+                                                                borderRadius: '6px',
+                                                                borderLeft: '3px solid #CBD5E1',
+                                                                marginTop: '4px',
+                                                                whiteSpace: 'pre-wrap'
+                                                            }}>
+                                                                {group.descripcion}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
 

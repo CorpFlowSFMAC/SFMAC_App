@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight } from "lucide-react";
+import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -844,6 +844,8 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
 
 interface FinancialLiquidationBarProps {
     ticket: any;
+    onOpenMaterials?: () => void;
+    costos?: any[];
 }
 
 export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
@@ -1020,21 +1022,32 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
 }
 
 
-export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps) {
+export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: FinancialLiquidationBarProps) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
     if (!ticket.montoFinal && !ticket.montoTotalCotizado && !ticket.costoManoObra) return null;
 
     const visitCost = round2(ticket.costoVisita || ticket.costoPasaje || 0);
-    const jobCostBase = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
+    
+    // Sumar compras de materiales adicionales registradas en el desglose
+    const materialPurchases = (costos || [])
+        .filter(c => c.categoria === 'Materiales')
+        .reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
+        
+    const jobCostBase = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0) + materialPurchases);
     // El costo de referencia (Costo Operativo) es lo pactado. 
     // Si hay trabajo, usamos MO+Mat. Si solo es visita, usamos el costo de visita.
     const costoReferencia = jobCostBase > 0 ? jobCostBase : visitCost;
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
 
-    // Sumar todos los depósitos realizados al técnico
-    const totalPagadoTecnico = round2((ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+    // Sumar todos los depósitos realizados al técnico (Legacy + Modern)
+    const totalPagadoLegacy = (ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+    const totalPagadoModern = (costos || [])
+        .filter(c => c.estado_pago === 'pagado')
+        .reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
+        
+    const totalPagadoTecnico = round2(totalPagadoLegacy + totalPagadoModern);
     const montoAdelanto = totalPagadoTecnico || round2(ticket.montoAdelanto || 0);
     const pctReal = (montoAdelanto / (costoReferencia || 1)) * 100;
 
@@ -1083,15 +1096,16 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
 
             <div className={styles.infoItem} style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
                 <span className={styles.infoLabel}>Historial de Depósitos ({pctReal.toFixed(0)}%)</span>
-                {(ticket.historialPagosTecnico && ticket.historialPagosTecnico.length > 0) ? (
+                {((ticket.historialPagosTecnico && ticket.historialPagosTecnico.length > 0) || totalPagadoModern > 0) ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {ticket.historialPagosTecnico.map((p: any, idx: number) => (
-                            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Legacy Payments */}
+                        {ticket.historialPagosTecnico?.map((p: any, idx: number) => (
+                            <div key={p.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                    {idx + 1}º S/ {formatSoles(p.monto)}
+                                    Lº S/ {formatSoles(p.monto)}
                                 </span>
                                 <span style={{ fontSize: '9px', color: '#B45309', opacity: 0.7, fontWeight: 600 }}>
-                                    ({new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })})
+                                    ({p.fecha ? new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) : '---'})
                                 </span>
                                 {(p.voucher || p.voucherRef) && (
                                     <button
@@ -1100,6 +1114,27 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                                                 || (p.voucherRef?.startsWith('data:image') ? p.voucherRef : localStorage.getItem(p.voucherRef) || p.voucherRef || '');
                                             if (src) setViewingVoucher(src);
                                         }}
+                                        style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#6366F1' }}
+                                        title="Ver Voucher"
+                                    >
+                                        <Eye size={12} />
+                                    </button>
+                                )}
+                                <CheckCircle2 size={10} color="#059669" />
+                            </div>
+                        ))}
+                        {/* Modern Paid Costs */}
+                        {(costos || []).filter(c => c.estado_pago === 'pagado').map((c: any) => (
+                            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                    Pº S/ {formatSoles(c.monto)}
+                                </span>
+                                <span style={{ fontSize: '9px', color: '#B45309', opacity: 0.7, fontWeight: 600 }} title={c.concepto}>
+                                    ({c.updated_at ? new Date(c.updated_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) : '---'})
+                                </span>
+                                {c.url_comprobante && (
+                                    <button
+                                        onClick={() => setViewingVoucher(c.url_comprobante)}
                                         style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#6366F1' }}
                                         title="Ver Voucher"
                                     >
@@ -1137,6 +1172,16 @@ export function FinancialLiquidationBar({ ticket }: FinancialLiquidationBarProps
                     )}
                 </div>
             </div>
+
+            {onOpenMaterials && ticket.estadoId !== 'ticket_cerrado' && (
+                <button 
+                    className={styles.purchaseBtn}
+                    onClick={onOpenMaterials}
+                >
+                    <Package size={14} />
+                    <span>Compras</span>
+                </button>
+            )}
 
             <div className={styles.verticalDivider} style={{ opacity: 0.5, borderStyle: 'dashed' }} />
 
@@ -1376,9 +1421,11 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
 interface TicketSummaryProps {
     ticket: any;
     onProceed: () => void;
+    onOpenMaterials?: () => void;
+    costos?: any[];
 }
 
-export function TicketSummary({ ticket, onProceed }: TicketSummaryProps) {
+export function TicketSummary({ ticket, onProceed, onOpenMaterials, costos }: TicketSummaryProps) {
     return (
         <div className={styles.container}>
             <InfoBarBase
@@ -1393,7 +1440,7 @@ export function TicketSummary({ ticket, onProceed }: TicketSummaryProps) {
             <DiagnosisInfoBar ticket={ticket} />
             <QuoteAssistantBar ticket={ticket} />
             <QuotationInfoBar ticket={ticket} />
-            <FinancialLiquidationBar ticket={ticket} />
+            <FinancialLiquidationBar ticket={ticket} onOpenMaterials={onOpenMaterials} costos={costos} />
             <PaymentHistoryBar ticket={ticket} />
             <UnifiedEvidenceBar ticket={ticket} />
             <DocumentationSummaryBar ticket={ticket} />

@@ -355,3 +355,29 @@
         display: none;
     }
 }
+.purchaseBtn {
+    background: #FFEDD5;
+    color: #C2410C;
+    border: 1.5px solid #FED7AA;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    margin-left: auto;
+}
+
+.purchaseBtn:hover {
+    background: #F97316;
+    color: white;
+    border-color: #F97316;
+    box-shadow: 0 4px 10px rgba(249, 115, 22, 0.2);
+}
+
+.purchaseBtn svg {
+    flex-shrink: 0;
+}

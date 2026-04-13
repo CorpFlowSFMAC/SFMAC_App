@@ -1112,7 +1112,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                             <DiagnosisInfoBar ticket={ticketData} />
                             <QuoteAssistantBar ticket={ticketData} />
                             <QuotationInfoBar ticket={ticketData} />
-                            <FinancialLiquidationBar ticket={ticketData} />
+                            <FinancialLiquidationBar 
+                                ticket={ticketData} 
+                                onOpenMaterials={() => setShowMaterialsModal(true)} 
+                                costos={ticketCosts}
+                            />
                             <PaymentHistoryBar ticket={ticketData} />
                             <UnifiedEvidenceBar ticket={ticketData} />
                             <DocumentationSummaryBar ticket={ticketData} />
