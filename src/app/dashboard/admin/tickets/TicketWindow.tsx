@@ -1800,11 +1800,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                             <div>
                                                 <h3 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.04em' }}>
-                                                    CotizaciÃ³n Enviada con Ã‰xito
+                                                    Cotización Enviada con Éxito
                                                 </h3>
                                                 <p style={{ margin: 0, fontSize: '16px', color: '#64748b', lineHeight: 1.7, fontWeight: 500 }}>
                                                     El presupuesto formal ha sido enviado al correo del cliente.<br />
-                                                    El ticket permanecerÃ¡ en pausa hasta recibir la <strong>aprobaciÃ³n</strong> o solicitud de ajuste.
+                                                    El ticket permanecerá en pausa hasta esperar <strong>aprobación</strong> o solicitud de ajuste.
                                                 </p>
                                             </div>
 
@@ -1820,7 +1820,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                             }}>
                                                 <Clock size={18} color='#c2410c' />
                                                 <span style={{ fontSize: '14px', fontWeight: 800, color: '#c2410c', letterSpacing: '0.03em' }}>
-                                                    ESPERANDO APROBACIÃ“N DEL CLIENTE
+                                                    ESPERANDO APROBACIÓN DEL CLIENTE
                                                 </span>
                                             </div>
 
@@ -1845,7 +1845,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     }}
                                                 >
                                                     <ThumbsUp size={22} />
-                                                    <span>REGISTRAR APROBACIÃ“N DEL CLIENTE</span>
+                                                    <span>REGISTRAR APROBACIÓN DEL CLIENTE</span>
                                                 </button>
 
                                                 <button
@@ -1865,7 +1865,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         transition: 'all 0.2s ease'
                                                     }}
                                                 >
-                                                    RENEGOCIAR COTIZACIÃ“N
+                                                    RENEGOCIAR COTIZACIÓN
                                                 </button>
                                             </div>
                                         </div>
