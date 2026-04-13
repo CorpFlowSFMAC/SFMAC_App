@@ -87,19 +87,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const quotationEditorRef = useRef<any>(null);
     const [partidasCotizacion, setPartidasCotizacion] = useState<any[]>(ticketData.partidas || []);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
-    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true); // Por defecto colapsada si estÃ¡ aprobada
-    const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null); // Null forces explicit selection
-    // â˜… FIX LOOP: InicializaciÃ³n SÃNCRONA del userRole para evitar que el primer
-    // syncToSupabase dispare con isAdmin=false y revierta el status_id al valor antiguo del servidor.
+    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
+    const [isSavingCost, setIsSavingCost] = useState(false);
+    const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
+
     const [userRole, setUserRole] = useState<string | null>(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('userRole');
         return null;
     });
 
-    // Toast Notification System
     const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
 
-    // GESTIÃ“N DE COSTOS Y EGRESOS
     const [ticketCosts, setTicketCosts] = useState<any[]>([]);
     const [loadingCosts, setLoadingCosts] = useState(false);
 
@@ -110,8 +108,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
 
-    // ðŸ”— EFECTO 1: Carga completa al ABRIR el ticket (solo cuando cambia el ID)
-    // Hace getById() para obtener toda la metadata desde Supabase.
     const hasLoadedRef = useRef<string | null>(null);
     const loadCosts = useCallback(async () => {
         if (!ticket?.id) return;
@@ -132,7 +128,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         const load = async () => {
             try {
-                loadCosts(); // Cargar costos por separado
+                loadCosts();
                 const fullTicket = await ticketsAPI.getById(ticket.id);
                 if (!fullTicket) return;
                 let meta = fullTicket.metadata || {};
@@ -143,8 +139,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 const rawEstadoId = normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo');
                 const visitConfirmed = meta.visitPaymentConfirmed ?? false;
 
-                // â˜… FIX AUTO-AVANCE: Si el pago de visita fue confirmado pero el estado quedÃ³
-                // atascado en 'esperando_pago_visita', avanzamos de inmediato a 'en_inspeccion'.
                 const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
                 const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
                     ? 'en_inspeccion'
@@ -169,21 +163,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         load();
     }, [ticket?.id]);
 
-    // ðŸ”„ EFECTO 2: Detecta cambios de estado desde el SERVIDOR (Realtime via AppDataContext).
-    // Usa una ref para comparar el status_id anterior y solo refetchear cuando CAMBIÃ“ EXTERNAMENTE.
-    // âš ï¸ CRÃTICO: NUNCA resetea el estado local al estado del servidor directamente.
-    // El refetch via getById() es la Ãºnica fuente de verdad para actualizar ticketData.
     const prevServerStatusRef = useRef<string | null>(null);
     useEffect(() => {
         const serverStatus = ticket?.status_id || null;
-        // Ignorar si el status_id no cambiÃ³ desde el server
         if (serverStatus === prevServerStatusRef.current) return;
-        // Primera vez (abrir ticket) ya lo maneja el Efecto 1
         if (prevServerStatusRef.current === null) {
             prevServerStatusRef.current = serverStatus;
             return;
         }
-        // El status cambiÃ³ en el servidor (Realtime) â†’ hacer refetch completo
         prevServerStatusRef.current = serverStatus;
         if (!ticket?.id) return;
 
@@ -202,7 +189,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 const corregidoId2 = (visitConf2 && PRE_STATES.includes(rawId2)) ? 'en_inspeccion' : rawId2;
 
                 setTicketData((prev: any) => {
-                    // FIX LOOP: nunca retroceder el estadoId local con un estado del servidor menos avanzado.
                     const E2_ORDER: Record<string, number> = {
                         'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
                         'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
@@ -213,7 +199,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
                     const prevOrder = E2_ORDER[prev.estadoId] ?? 0;
                     const finalEstadoId = incomingOrder >= prevOrder ? corregidoId2 : prev.estadoId;
-                    // â˜… FIX: Merge de pagos por ID â€” nunca perdemos pagos del array local ni del servidor
                     const serverPagos2: any[] = meta.historialPagosTecnico || [];
                     const localPagos2: any[] = prev.historialPagosTecnico || [];
                     const mergedById2 = new Map<string, any>();
@@ -239,12 +224,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         refetch();
     }, [ticket?.status_id, ticket?.id]);
 
-    // ðŸ’³ EFECTO 3: Aplica overrides de pagos confirmados desde el servidor.
-    // SOLO usa dependencias primitivas (no el objeto ticket completo) para evitar loops
-    // por referencias de objeto nuevas en cada render del componente padre.
     const serverAdelantoPagado = ticket?.adelantoPagado ?? ticket?.metadata?.adelantoPagado ?? false;
     const serverVisitPaymentConfirmed = ticket?.visitPaymentConfirmed ?? ticket?.metadata?.visitPaymentConfirmed ?? false;
-    // Usa la longitud del historial tanto del nivel raÃ­z como del metadata
     const serverHistorialLen = Math.max(
         ticket?.historialPagosTecnico?.length ?? 0,
         ticket?.metadata?.historialPagosTecnico?.length ?? 0
@@ -256,7 +237,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             if (serverAdelantoPagado) overrides.solicitudAdelanto = null;
             if (serverVisitPaymentConfirmed) {
                 overrides.solicitudPagoVisita = null;
-                // â˜… FIX: Avanzar desde CUALQUIER estado pre-inspecciÃ³n (no solo esperando_pago_visita)
                 const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita'];
                 if (preInspectionStates.includes(prev.estadoId)) {
                     overrides.estadoId = 'en_inspeccion';
@@ -271,25 +251,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 });
                 if (isPaid) overrides.solicitudAdelantoExtra = null;
             }
-            if (Object.keys(overrides).length === 0) return prev; // Sin cambios â†’ no re-render
+            if (Object.keys(overrides).length === 0) return prev;
             return { ...prev, ...overrides };
         });
         if (ticket?.gastos) setGastos(ticket.gastos);
         if (ticket?.evidenciasEjecucion) setEvidenciasEjecucion(ticket.evidenciasEjecucion);
     }, [serverAdelantoPagado, serverVisitPaymentConfirmed, serverHistorialLen]);
 
-    // userRole ya se inicializa sÃ­ncronamente arriba. Este efecto solo mantiene
-    // sincronÃ­a si el rol cambia en tiempo de ejecuciÃ³n (ej: re-login).
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const role = localStorage.getItem('userRole');
             if (role !== userRole) setUserRole(role);
         }
-    }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);
 
-    // Estados para EjecuciÃ³n (Paso 11)
     const [gastos, setGastos] = useState<any[]>(ticketData.gastos || []);
-    // Estados para Cierre y DocumentaciÃ³n (Paso 9)
     const [documentosChecklist, setDocumentosChecklist] = useState({
         actaConformidad: false,
         ats: false,
@@ -300,32 +276,26 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [newExpense, setNewExpense] = useState({ concepto: "", monto: "", tipo: "Gasto Operativo" });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Estados para NegociaciÃ³n de Costo
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
     const fieldEvidenceRef = useRef<HTMLInputElement>(null);
     const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
     const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
 
-    // Estado para CotizaciÃ³n BCP
     const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizacionBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
 
-    // NUEVO: Estado para solicitud de depÃ³sito en etapa Enviada
-    const [depositRequest, setDepositRequest] = useState({ concepto: "", monto: "" });
 
-    // Estado para Triage de Mibanco
+
     const [triageSedeId, setTriageSedeId] = useState("");
     const [triageServiceType, setTriageServiceType] = useState("");
     const [triageDescription, setTriageDescription] = useState("");
     const [sedesMibanco, setSedesMibanco] = useState<any[]>([]);
     const [loadingSedes, setLoadingSedes] = useState(false);
 
-
     useEffect(() => {
         if (ticketData.estadoId === 'borrador' && ticketData.client_id === MIBANCO_ID) {
             setLoadingSedes(true);
-            // Inicializar descripciÃ³n editable con la descripciÃ³n actual
             setTriageDescription(ticketData.description || ticketData.descripcionProblema || '');
             branchesAPI.getByClient(MIBANCO_ID)
                 .then(data => setSedesMibanco(data))
@@ -358,31 +328,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const windowRef = useRef<HTMLDivElement>(null);
 
-    // ðŸš€ SINCRONIZACIÃ“N CON SUPABASE (Reemplaza localStorage)
     const lastSyncData = useRef<string>("");
 
     const syncToSupabase = useCallback(async (dataOverride?: any) => {
         const dataToProcess = dataOverride || ticketData;
         if (!onUpdate || !dataToProcess) return;
 
-        // Ã¢Å¡Â Ã¯Â¸Â OPTIMIZACIÃ“N: Solo sincronizar datos de negocio
         const {
             isMaximized, isMinimized, position, zIndex,
-            cliente, sede, tecnico, // Evital guardar objetos pesados en raÃ­z de Supabase
+            cliente, sede, tecnico,
             metadata: _unusedMetadata,
             ...businessData
         } = dataToProcess;
 
-        // Mapeo de campos UI (EspaÃ±ol) -> Supabase (InglÃ©s)
-        // ðŸ› ï¸Â¡Ã¯Â¸Â PROTECCIÃ“N DE ESCRITURA: Si no soy Admin, NO debo tocar campos de dinero o estado crÃ­tico
         const isAdmin = userRole === 'admin';
-
-        // Estrategia de Merge: Si soy Admin, mi local state manda. Si soy Gestora, el Server (prop ticket) manda en temas de pagos.
         const sourceForPayments = isAdmin ? businessData : ticket;
         const sourceMetadata = isAdmin ? businessData : (ticket.metadata || {});
 
-        // FIX LOOP: NUNCA escribir un status_id menos avanzado que el que ya tiene Supabase.
-        // Siempre ganamos si avanzamos (localOrder >= serverOrder). Si hay regresion local, respetamos el servidor.
         const STATE_ORDER: Record<string, number> = {
             'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
             'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
@@ -396,9 +358,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         const updates: any = {
             status_id: resolvedStatusId,
-            description: businessData.descripcionProblema, // Gestora edita esto
-            client_ticket_number: businessData.numeroTicketCliente, // Gestora edita esto
-            diagnosis: businessData.diagnostico, // Gestora edita esto
+            description: businessData.descripcionProblema,
+            client_ticket_number: businessData.numeroTicketCliente,
+            diagnosis: businessData.diagnostico,
             labor_cost: parseFloat(sourceForPayments.costoManoObra || 0),
             materials_cost: parseFloat(sourceForPayments.costoMateriales || 0),
             visit_cost: parseFloat(sourceForPayments.costoVisita || 0),
@@ -413,12 +375,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
             metadata: {
                 ...businessData,
-                // â˜…â˜…â˜… FIX UNIDIRECIONAL: Si alguien (Servidor o Local) dice que estÃ¡ pagado, SE QUEDA PAGADO.
-                // Esto protege contra estados locales stale de la Gestora/Admin. 
                 adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
                 fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
 
-                // â˜…â˜…â˜… MERGE DE HISTORIAL: UniÃ³n por ID para no perder ningÃºn depÃ³sito.
                 historialPagosTecnico: (() => {
                     const localPagos = businessData.historialPagosTecnico || [];
                     const serverPagos = ticket.historialPagosTecnico || ticket.metadata?.historialPagosTecnico || [];
@@ -432,15 +391,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 visitPaymentConfirmed: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed || false),
                 fechaPagoVisita: (businessData.fechaPagoVisita || sourceMetadata.fechaPagoVisita),
 
-                // Limpieza de solicitudes: si ya estÃ¡ pagado en cualquier punto, la solicitud DEBE morir
                 solicitudAdelanto: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado) ? null : businessData.solicitudAdelanto,
                 solicitudPagoVisita: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed) ? null : businessData.solicitudPagoVisita,
 
-                tecnico: tecnico // Preservamos datos del tÃ©cnico
+                tecnico: tecnico
             }
         };
 
-        // ðŸ› ï¸Â¡Ã¯Â¸Â ANTI-OVERWRITE: Solo sincronizar si hay cambios reales respecto al Ãºltimo sync
         const currentDataStr = JSON.stringify(updates);
         if (currentDataStr === lastSyncData.current && !dataOverride) return;
 
@@ -461,22 +418,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         return () => clearTimeout(syncTimeout);
     }, [ticketData, syncToSupabase]);
 
-    // Listener para sincronizar cambios externos (ej: confirmaciÃ³n del Gerente desde otra pestaÃ±a)
     useEffect(() => {
         const handleStorageUpdate = (e: any) => {
-            // Si es un evento de storage real, verificamos la key
             if (e.type === 'storage' && e.key !== `ticket_state_${ticket.id}` && e.key !== 'tickets') {
                 return;
             }
 
-            // Recargar datos desde localStorage
             const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
 
-                    // ðŸ› ï¸Â¡Ã¯Â¸Â PROTECCIÃ“N CRÃ“ÂTICA: Filtrar campos de negocio que NUNCA deben venir del localStorage
-                    // porque la fuente de verdad es Supabase. Esto evita que un cachÃ© viejo revierta pagos o estados.
                     const {
                         adelantoPagado,
                         fechaPagoAdelanto,
@@ -487,13 +439,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         solicitudAdelanto,
                         fechaPagoVisita,
                         solicitudPagoVisita,
-                        montoFinal, // El monto aprobado es sagrado
+                        montoFinal,
                         ...safeToRestore
                     } = parsed;
 
-                    // Actualizamos el estado local PERO respetando los datos sensibles del servidor
                     setTicketData((prev: any) => {
-                        // Evitar updates innecesarios si ya son iguales
                         if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
                         return { ...prev, ...safeToRestore };
                     });
@@ -527,13 +477,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const visitaCost = parseFloat(assignmentData.costoVisita || 0);
         const hasVisitCost = visitaCost > 0;
 
-        // Determinar nuevo estado: avanzar desde cualquier estado pre-inspeccion
         const PRE_ASSIGNMENT_STATES = ['nuevo', 'borrador', 'pendiente', 'tecnico_asignado'];
         const newEstadoId = PRE_ASSIGNMENT_STATES.includes(ticketData.estadoId)
             ? (hasVisitCost ? 'esperando_pago_visita' : 'en_inspeccion')
             : ticketData.estadoId;
 
-        // â˜… FIX: Persistir en Supabase (antes solo era setTicketData local)
         const dbUpdates: any = {
             technician_id: assignmentData.tecnico?.id || null,
             visit_cost: visitaCost,
@@ -544,7 +492,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 costoVisita: visitaCost,
                 fechaAsignacion: assignmentData.fechaAsignacion,
                 estadoId: newEstadoId,
-                // Crear solicitud de pago de visita si aplica
                 ...(hasVisitCost ? {
                     solicitudPagoVisita: {
                         monto: visitaCost,
@@ -565,7 +512,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             console.error('Error persisting assignment to Supabase:', err);
         }
 
-        // Actualizar estado local (optimistic)
         setTicketData((prev: any) => ({
             ...prev,
             ...assignmentData,
@@ -632,16 +578,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 gestora_id: gestora.id
             }));
             
-            showToast("Ticket Derivado", `El servicio ahora estÃ¡ a cargo de ${gestora.name}.`, "success");
+            showToast("Ticket Derivado", `El servicio ahora está a cargo de ${gestora.name}.`, "success");
         } catch (err) {
             console.error("Error assigned gestora:", err);
-            showToast("Error", "No se pudo completar la derivaciÃ³n.", "error");
+            showToast("Error", "No se pudo completar la derivación.", "error");
         }
     };
 
     const handleSendFieldReport = () => {
         if (!diagnostico) {
-            showToast("DiagnÃ³stico Requerido", "Por favor ingrese el diagnÃ³stico tÃ©cnico antes de enviar.", "error");
+            showToast("Diagnóstico Requerido", "Por favor ingrese el diagnóstico técnico antes de enviar.", "error");
             return;
         }
 
@@ -664,7 +610,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
 
-            // 1. Process for storage (Base64) - Original logic
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = () => {
@@ -676,7 +621,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     fecha: new Date().toISOString()
                 });
 
-                // Actualizar tambiÃ©n ticketData para persistencia en Supabase
                 setTicketData((prev: any) => ({
                     ...prev,
                     archivoCotizacionBCP: {
@@ -693,9 +637,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-
-
-
     const handleSendQuote = async () => {
         const isBCP = ticketData.cliente?.nombre?.toUpperCase().includes("BCP");
 
@@ -705,7 +646,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 return;
             }
         } else {
-            // Flujo normal (No BCP)
             if (quotationEditorRef.current) {
                 try {
                     await quotationEditorRef.current.downloadPDF();
@@ -729,7 +669,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         setTicketData(updated);
-        showToast("CotizaciÃ³n Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
+        showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
     };
 
     const handleApproveQuote = () => {
@@ -754,7 +694,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
-        showToast("EdiciÃ³n Habilitada", "La cotizaciÃ³n ha sido desbloqueada para realizar ajustes.", "info");
+        showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
     };
 
     const handleProceedToExecution = () => {
@@ -789,27 +729,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             };
             setTicketData(updated);
             setShowNegotiationModal(false);
-            showToast("Costo Reacordado", `Nuevo monto tÃ©cnico ajustado a S/ ${val.toFixed(2)}.`, "success");
+            showToast("Costo Reacordado", `Nuevo monto técnico ajustado a S/ ${val.toFixed(2)}.`, "success");
         } else {
-            showToast("Monto InvÃ¡lido", "Por favor ingrese un nÃºmero vÃ¡lido para el costo.", "error");
+            showToast("Monto Inválido", "Por favor ingrese un número válido para el costo.", "error");
         }
     };
 
-
-    // CÃ¡lculos de Rentabilidad
-    const totalAprobado = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
-    const totalGastos = ticketCosts.reduce((sum, c) => sum + parseFloat(c.monto || 0), 0);
-    const margenReal = totalAprobado - totalGastos;
-    const capitalExpuesto = ticketCosts
-        .filter(c => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto')
-        .reduce((sum, c) => sum + parseFloat(c.monto || 0), 0);
-    
-    const percentageSpent = totalAprobado > 0 ? (totalGastos / totalAprobado) * 100 : 0;
-    const isOverLimit = percentageSpent > 70;
-
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 2) {
-            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÃ‰S).", "error");
+            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÉS).", "error");
             return;
         }
         const updated = {
@@ -818,79 +746,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             fechaFinEjecucion: new Date().toISOString(),
             gastos: gastos,
             evidenciasEjecucion: evidenciasEjecucion,
-            evidenciasCampo: ticketData.evidenciasCampo || [], // Asegurar persistencia del antes
-            evidencias: ticketData.evidencias || [] // Asegurar fotos del cliente
+            evidenciasCampo: ticketData.evidenciasCampo || [],
+            evidencias: ticketData.evidencias || []
         };
         setTicketData(updated);
-        showToast("Â¡EjecuciÃ³n Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
+        showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 
-    const handleRequestTechnicianDeposit = () => {
-        if (!depositRequest.concepto || !depositRequest.monto) {
-            showToast("Campos Incompletos", "Debe ingresar concepto y monto.", "error");
-            return;
-        }
-        const amount = parseFloat(depositRequest.monto);
-        if (isNaN(amount) || amount <= 0) {
-            showToast("Monto InvÃ¡lido", "Por favor ingrese un monto vÃ¡lido.", "error");
-            return;
-        }
-
-        // âœ… FIX CRÃTICO: La gestora crea una SOLICITUD de pago.
-        // NO se agrega al historialPagosTecnico (pagos ejecutados).
-        // El administrador debe aprobar y ejecutar el pago desde la TesorerÃ­a.
-        const nuevaSolicitud = {
-            id: Math.random().toString(36).substr(2, 9),
-            fecha: new Date().toISOString(),
-            monto: amount,
-            concepto: depositRequest.concepto,
-            tipo: "Adelanto",
-            estado: "pendiente",     // â† PENDIENTE hasta que admin pague
-            solicitadaPor: "gestora"
-        };
-
-        const solicitudesPrevias = ticketData.solicitudesDeposito || [];
-        const updatedTicket = {
-            ...ticketData,
-            solicitudesDeposito: [...solicitudesPrevias, nuevaSolicitud]
-            // âš ï¸ NO tocamos historialPagosTecnico â€” ese es solo para pagos EJECUTADOS
-        };
-
-        setTicketData(updatedTicket);
-        syncToSupabase(updatedTicket);
-    };
-
-    const handleRequestExtraAdvance = () => {
-        // Toggle input visibility instead of using prompt
-        setShowExtraAdvanceInput(true);
-    };
-
-        const monto = extraAdvanceAmount;
-        if (monto && !isNaN(parseFloat(monto))) {
-            const val = parseFloat(monto);
-            const pagosPrevios = ticketData.historialPagosTecnico || [];
-            const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
-            const costoRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-
-            if (totalPagado + val > costoRef + 0.01) {
-                showToast("Saldo Insuficiente", "El adelanto solicitado excede el saldo pendiente del tÃ©cnico.", "error");
-                return;
-            }
-
-            const updated = {
-                ...ticketData,
-                solicitudAdelantoExtra: {
-                    monto: val,
-                    fecha: new Date().toISOString()
-                }
-            };
-            setTicketData(updated);
-            syncToSupabase(updated);
-            showToast("PeticiÃ³n Enviada", "Solicitud registrada. Esperando aprobaciÃ³n de Gerencia.", "info");
-        } else {
-            showToast("Monto InvÃ¡lido", "Por favor ingrese un monto vÃ¡lido.", "error");
-        }
-    };
 
     const handleClasificarYActivar = async () => {
         const finalSedeId = triageSedeId || ticketData.branch_id;
@@ -907,19 +769,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
 
         try {
-            // 1. Self-Learning: Guardar codigo_sede en la sede seleccionada
             if (finalSedeId && codigoSedeExtraido) {
                 await branchesAPI.update(finalSedeId, {
                     codigo_cliente: codigoSedeExtraido
                 });
             }
 
-            // 2. Actualizar ticket en la BD - pasa a 'nuevo' para iniciar flujo estÃ¡ndar
             const dbUpdates = {
                 branch_id: finalSedeId,
                 service_type: triageServiceType,
                 description: triageDescription || ticketData.description || '',
-                status_id: 'nuevo', // âœ… Inicia el flujo operativo estÃ¡ndar
+                status_id: 'nuevo',
                 metadata: {
                     ...ticketData.metadata,
                     triage_completado: true,
@@ -927,288 +787,32 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 }
             };
 
-            // 3. Guardar en Supabase
             await ticketsAPI.update(ticketData.id, dbUpdates);
 
-            // 4. Actualizar estado local de UI
             const selectedSede = sedesMibanco.find(s => s.id === finalSedeId);
             const normalizedSede = selectedSede ? {
                 ...selectedSede,
                 nombre: selectedSede.name || selectedSede.nombre || "Sin Sede",
-                direccion: selectedSede.address || selectedSede.direccion || "Sin direcciÃ³n"
+                direccion: selectedSede.address || selectedSede.direccion || "Sin dirección"
             } : null;
 
             const localUpdates = {
                 ...dbUpdates,
                 estadoId: 'nuevo',
                 descripcionProblema: dbUpdates.description,
-                // â˜… FIX: InfoBarBase lee 'tipoServicio', no 'service_type'
                 tipoServicio: triageServiceType,
-                sede: normalizedSede, // âœ… FIX: Actualizar objeto sede local
+                sede: normalizedSede,
             };
 
             await onUpdate?.(ticketData.id, dbUpdates);
             setTicketData((prev: any) => ({ ...prev, ...localUpdates }));
-            showToast("âœ… Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
+            showToast("✅ Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
         } catch (error: any) {
             console.error("Error en triage:", error);
             showToast("Error al Clasificar", `Detalle: ${error?.message || 'Error desconocido'}`, "error");
         }
     };
 
-    const handleConfirmExtraAdvance = async () => {
-        const solicitud = ticketData.solicitudAdelantoExtra;
-        if (!solicitud) return;
-
-        const pagosPrevios = ticketData.historialPagosTecnico || [];
-        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
-
-        const nuevoPago = {
-            id: Math.random().toString(36).substr(2, 9),
-            fecha: new Date().toISOString(),
-            monto: solicitud.monto,
-            referencia: "Adelanto Adicional (EjecuciÃ³n)"
-        };
-
-        const updated = {
-            ...ticketData,
-            historialPagosTecnico: [...pagosPrevios, nuevoPago],
-            montoAdelanto: totalPagado + solicitud.monto,
-            solicitudAdelantoExtra: null
-        };
-
-        setIsConfirmingPayment(true);
-        try {
-            await onUpdate?.(ticketData.id, {
-                metadata: {
-                    ...ticketData.metadata,
-                    historialPagosTecnico: updated.historialPagosTecnico,
-                    montoAdelanto: updated.montoAdelanto,
-                    solicitudAdelantoExtra: null
-                }
-            });
-            setTicketData(updated);
-            showToast("DepÃ³sito Confirmado", `Se registrÃ³ el adelanto extra de S/ ${solicitud.monto.toFixed(2)}.`, "success");
-        } catch (err) {
-            console.error("Error confirming extra advance:", err);
-            showToast("Error de ConexiÃ³n", "No se pudo registrar el pago. Verifique su internet e intente de nuevo.", "error");
-        } finally {
-            setIsConfirmingPayment(false);
-        }
-    };
-
-    const handleRequestVisitPayment = () => {
-        const amount = parseFloat(ticketData.costoVisita || 0);
-        const updated = {
-            ...ticketData,
-            solicitudPagoVisita: {
-                monto: amount,
-                fecha: new Date().toISOString()
-            }
-        };
-        setTicketData(updated);
-        // Sync inmediato para que aparezca en pagos
-        syncToSupabase(updated);
-        showToast("Solicitud Enviada", `Se solicitÃ³ pago de visita por S/ ${amount.toFixed(2)}.`, "info");
-    };
-
-    const handleConfirmVisitPayment = async () => {
-        // Solo permitir si hay solicitud o si es admin forzando (pero idealmente deberÃ­a haber solicitud)
-        const amount = parseFloat(ticketData.costoVisita || 0);
-        const pagosPrevios = ticketData.historialPagosTecnico || [];
-
-        const nuevoPago = {
-            id: Math.random().toString(36).substr(2, 9),
-            fecha: new Date().toISOString(),
-            monto: amount,
-            referencia: "Pago de Visita TÃ©cnica (Gerencia)"
-        };
-
-        const updated = {
-            ...ticketData,
-            estadoId: "en_inspeccion",
-            visitPaymentConfirmed: true,
-            historialPagosTecnico: [...pagosPrevios, nuevoPago],
-            montoAdelanto: (ticketData.montoAdelanto || 0) + amount,
-            fechaPagoVisita: new Date().toISOString(),
-            solicitudPagoVisita: null // Limpiar solicitud
-        };
-
-        setIsConfirmingPayment(true);
-        try {
-            await onUpdate?.(ticketData.id, {
-                status_id: "en_inspeccion",
-                metadata: {
-                    ...ticketData.metadata,
-                    estadoId: "en_inspeccion",
-                    visitPaymentConfirmed: true,
-                    historialPagosTecnico: updated.historialPagosTecnico,
-                    montoAdelanto: updated.montoAdelanto,
-                    fechaPagoVisita: updated.fechaPagoVisita,
-                    solicitudPagoVisita: null
-                }
-            });
-            setTicketData(updated);
-            showToast("Pago de Visita Exitoso", `Se confirmÃ³ el depÃ³sito de S/ ${amount.toFixed(2)}.`, "success");
-        } catch (err) {
-            console.error("Error confirming visit payment:", err);
-            showToast("Error de ConexiÃ³n", "No se pudo confirmar el pago. Verifique su internet.", "error");
-        } finally {
-            setIsConfirmingPayment(false);
-        }
-    };
-
-    const handleConfirmAdvance = async () => {
-        // Usar el porcentaje solicitado si existe, de lo contrario usar el seleccionado localmente
-        const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
-
-        if (!pctReal) {
-            showToast("SelecciÃ³n Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
-            return;
-        }
-
-        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costoReferencia * pctReal;
-
-        const pagosPrevios = ticketData.historialPagosTecnico || [];
-        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
-
-        if (totalPagado + amount > costoReferencia + 0.01) {
-            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excederÃ­a el costo total pactado.`, "error");
-            return;
-        }
-
-        const nuevoPago = {
-            id: Math.random().toString(36).substr(2, 9),
-            fecha: new Date().toISOString(),
-            monto: amount,
-            porcentaje: pctReal,
-            referencia: "Adelanto Operativo"
-        };
-
-        const updated = {
-            ...ticketData,
-            adelantoPagado: true,
-            historialPagosTecnico: [...pagosPrevios, nuevoPago],
-            montoAdelanto: totalPagado + amount,
-            fechaPagoAdelanto: new Date().toISOString(),
-            // Limpiamos la solicitud ya que se atendiÃ³
-            solicitudAdelanto: null
-        };
-
-        setIsConfirmingPayment(true);
-        try {
-            await onUpdate?.(ticketData.id, {
-                metadata: {
-                    ...ticketData.metadata,
-                    adelantoPagado: true,
-                    historialPagosTecnico: updated.historialPagosTecnico,
-                    montoAdelanto: updated.montoAdelanto,
-                    fechaPagoAdelanto: updated.fechaPagoAdelanto,
-                    solicitudAdelanto: null
-                }
-            });
-            setTicketData(updated);
-            showToast("Adelanto Confirmado", `Se ha confirmado el depÃ³sito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
-        } catch (err) {
-            console.error("Error confirming advance:", err);
-            showToast("Error de ConexiÃ³n", "No se pudo registrar el adelanto. Verifique su internet e intente de nuevo.", "error");
-        } finally {
-            setIsConfirmingPayment(false);
-        }
-    };
-
-    const handleRequestAdvance = () => {
-        if (!porcentajeAdelanto) {
-            showToast("SelecciÃ³n Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
-            return;
-        }
-
-        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costoReferencia * porcentajeAdelanto;
-
-        const updated = {
-            ...ticketData,
-            solicitudAdelanto: {
-                porcentaje: porcentajeAdelanto,
-                monto: amount,
-                fecha: new Date().toISOString()
-            }
-        };
-        setTicketData(updated);
-        // Sync inmediato para que aparezca en pagos
-        syncToSupabase(updated);
-        showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "info");
-    };
-
-    const handleRequestFinalLiquidation = () => {
-        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const pagosPrevios = ticketData.historialPagosTecnico || [];
-        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
-        const amount = costoReferencia - totalPagado;
-
-        const updated = {
-            ...ticketData,
-            solicitudLiquidacion: {
-                monto: amount,
-                fecha: new Date().toISOString()
-            }
-        };
-        setTicketData(updated);
-        // Sync inmediato para que aparezca en pagos
-        syncToSupabase(updated);
-        showToast("LiquidaciÃ³n Solicitada", `Solicitud de liquidaciÃ³n final enviada por S/ ${amount.toFixed(2)}.`, "info");
-    };
-
-    const handleFinalLiquidationPay = async () => {
-        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const pagosPrevios = ticketData.historialPagosTecnico || [];
-        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
-        const amount = costoReferencia - totalPagado;
-
-        if (amount < 0) {
-            showToast("Balance Negativo", "El saldo es negativo. Verifique los depÃ³sitos previos.", "error");
-            return;
-        }
-
-        const nuevoPago = {
-            id: Math.random().toString(36).substr(2, 9),
-            fecha: new Date().toISOString(),
-            monto: amount,
-            referencia: "LiquidaciÃ³n Final del Servicio"
-        };
-
-        const updated = {
-            ...ticketData,
-            estadoId: "ticket_cerrado",
-            historialPagosTecnico: [...pagosPrevios, nuevoPago],
-            montoAdelanto: totalPagado + amount,
-            fechaPagoFinal: new Date().toISOString(),
-            solicitudLiquidacion: null
-        };
-
-        setIsConfirmingPayment(true);
-        try {
-            await onUpdate?.(ticketData.id, {
-                status_id: "ticket_cerrado",
-                metadata: {
-                    ...ticketData.metadata,
-                    estadoId: "ticket_cerrado",
-                    historialPagosTecnico: updated.historialPagosTecnico,
-                    montoAdelanto: updated.montoAdelanto,
-                    fechaPagoFinal: updated.fechaPagoFinal,
-                    solicitudLiquidacion: null
-                }
-            });
-            setTicketData(updated);
-            showToast("Ticket Liquidado", `Se registrÃ³ el pago final de S/ ${amount.toFixed(2)}. Ticket CERRADO.`, "success");
-        } catch (err) {
-            console.error("Error confirming final liquidation:", err);
-            showToast("Error de ConexiÃ³n", "No se pudo cerrar el ticket. Verifique su internet.", "error");
-        } finally {
-            setIsConfirmingPayment(false);
-        }
-    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -1578,97 +1182,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                          2. visitPaymentConfirmed debe ser falso Y
                                          3. El ticket no debe haber avanzado mÃ¡s allÃ¡ (ningÃºn estado post-inspecciÃ³n)
                                     */}
-                                    {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && !([
-                                        'en_inspeccion', 'visita_realizada', 'en_cotizacion',
-                                        'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion',
-                                        'documentacion_enviada', 'por_liquidar', 'pago_realizado', 'ticket_cerrado'
-                                    ].includes(ticketData.estadoId)) && (
+                                    {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && (
                                             <div className={styles.stepPlaceholder}>
-                                                <div className={styles.advanceRequestCard}>
-                                                    <div className={styles.advanceHeader}>
-                                                        <div className={styles.titleIcon} style={{ background: '#F59E0B' }}>
-                                                            <Coins size={20} />
-                                                        </div>
-                                                        <div className={styles.advanceTitleGroup}>
-                                                            <h4>ORDEN DE PAGO: VISITA TÃ‰CNICA</h4>
-                                                            <span>Requiere confirmaciÃ³n de Gerencia</span>
-                                                        </div>
-                                                        <div className={styles.advanceAmountBadge}>
-                                                            S/ {parseFloat(ticketData.costoVisita || 0).toFixed(2)}
-                                                        </div>
+                                                <div className={styles.waitingForManager} style={{ padding: '40px', background: '#F8FAFC', borderRadius: '24px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
+                                                    <div style={{ background: '#3B82F6', padding: '15px', borderRadius: '50%', color: 'white', display: 'flex' }}>
+                                                        <Coins size={32} />
                                                     </div>
-
-                                                    <div className={styles.techBankDetails}>
-                                                        <div className={styles.bankRow}>
-                                                            <strong>TÃ©cnico:</strong>
-                                                            <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
-                                                        </div>
-                                                        <div className={styles.bankRow}>
-                                                            <strong>Banco:</strong>
-                                                            <span>{ticketData.tecnico?.banco || '---'}</span>
-                                                        </div>
-                                                        <div className={styles.bankRow}>
-                                                            <strong>NÂº Cuenta:</strong>
-                                                            <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
-                                                        </div>
-                                                        <div className={styles.bankRow}>
-                                                            <strong>CCI:</strong>
-                                                            <span>{ticketData.tecnico?.cci || '---'}</span>
-                                                        </div>
-                                                        {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
-                                                            <div className={styles.bankRow} style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #E2E8F0' }}>
-                                                                <strong>Billeteras:</strong>
-                                                                <div style={{ display: 'flex', gap: '10px' }}>
-                                                                    {ticketData.tecnico?.yape && <span style={{ color: '#7C3AED' }}>Yape: {ticketData.tecnico.yape}</span>}
-                                                                    {ticketData.tecnico?.plin && <span style={{ color: '#00D1FF' }}>Plin: {ticketData.tecnico.plin}</span>}
-                                                                </div>
-                                                            </div>
-                                                        )}
+                                                    <div style={{ textAlign: 'center' }}>
+                                                        <h3 style={{ margin: 0, color: '#1E293B', fontSize: '1.2rem', fontWeight: 800 }}>PAGO DE VISITA EN PROCESO</h3>
+                                                        <p style={{ margin: '5px 0 0 0', color: '#64748B', fontWeight: 500 }}>
+                                                            La gestiÃ³n financiera se realiza exclusivamente en el panel inferior "Desglose de Costos y Pagos".
+                                                        </p>
                                                     </div>
-
-                                                    {userRole === 'admin' ? (
-                                                        <button 
-                                                            className={styles.confirmAdvanceBtn} 
-                                                            onClick={handleConfirmVisitPayment}
-                                                            disabled={isConfirmingPayment}
-                                                            style={isConfirmingPayment ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
-                                                        >
-                                                            {isConfirmingPayment ? (
-                                                                <>
-                                                                    <Clock size={18} className={styles.spinIcon} />
-                                                                    <span>Confirmando...</span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <CheckCircle size={18} />
-                                                                    <span>
-                                                                        CONFIRMAR DEPÃ“SITO VISITA
-                                                                        {ticketData.solicitudPagoVisita && " (SOLICITADO)"}
-                                                                    </span>
-                                                                </>
-                                                            )}
-                                                        </button>
-                                                    ) : (
-                                                        !ticketData.solicitudPagoVisita ? (
-                                                            <button
-                                                                className={styles.sendReportBtnOptimistic}
-                                                                onClick={handleRequestVisitPayment}
-                                                                style={{ width: '100%', marginTop: '12px', background: '#3B82F6', justifyContent: 'center' }}
-                                                            >
-                                                                <Send size={18} />
-                                                                <span>SOLICITAR PAGO A GERENCIA</span>
-                                                            </button>
-                                                        ) : (
-                                                            <div className={styles.waitingForManager}>
-                                                                <Clock size={24} color="#3B82F6" />
-                                                                <span style={{ fontSize: '1.1rem' }}>Â¡ SOLICITUD ENVIADA !</span>
-                                                                <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Estamos gestionando el pago de la visita con Gerencia.</span>
-                                                            </div>
-                                                        )
-                                                    )}
-
-                                                    <div className={styles.bankNote}>
-                                                        * Solo el Administrador puede confirmar depÃ³sitos bancarios.
+                                                    <div style={{ background: '#EFF6FF', color: '#3B82F6', padding: '8px 16px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700 }}>
+                                                        ESPERANDO CONFIRMACIÃ“N DE TESORERÃ“A
                                                     </div>
                                                 </div>
                                             </div>
@@ -2334,138 +1861,89 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         cursor: 'pointer',
                                                         display: 'flex',
                                                         alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '8px'
+                                                        gap: '10px',
+                                                        transition: 'all 0.2s ease'
                                                     }}
                                                 >
-                                                    <ArrowRight size={16} /> Corregir Presupuesto o Reenviar
+                                                    RENEGOCIAR COTIZACIÃ“N
                                                 </button>
-                                            </div>
-
                                             </div>
                                         </div>
                                     )}
 
                                     {["cotizacion_aprobada", "en_ejecucion"].includes(ticketData.estadoId) && (
                                         <div className={styles.stepActions}>
-                                            {ticketData.estadoId === "cotizacion_aprobada" && (
-                                                <div className={styles.approvedStatusNotice}>
-                                                    <div className={styles.approvedIcon}>🎉</div>
-                                                    <h3 style={{ margin: 0, color: '#065F46' }}>¡Presupuesto Aprobado!</h3>
-                                                    <p style={{ margin: '8px 0 20px 0', fontSize: '14px', color: '#059669' }}>
-                                                        {ticketData.adelantoPagado
-                                                                            </button>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Listado de Costos */}
-                                                                    <div className={styles.costsTableContainer}>
-                                                                        <table className={styles.costsTable}>
-                                                                            <thead>
-                                                                                <tr>
-                                                                                    <th>CategorÃ­a</th>
-                                                                                    <th>Concepto</th>
-                                                                                    <th>Proveedor</th>
-                                                                                    <th>Estado</th>
-                                                                                    <th>Monto</th>
-                                                                                    <th style={{ width: 40 }}></th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody>
-                                                                                {ticketCosts.length === 0 ? (
-                                                                                    <tr>
-                                                                                        <td colSpan={6} style={{ textAlign: 'center', padding: '20px', color: '#94A3B8', fontSize: '0.8rem' }}>
-                                                                                            No hay costos registrados aÃºn.
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                ) : (
-                                                                                    ticketCosts.map((c) => (
-                                                                                        <tr key={c.id}>
-                                                                                            <td>
-                                                                                                <span className={`${styles.catBadge} ${styles['cat' + c.categoria]}`}>
-                                                                                                    {c.categoria}
-                                                                                                </span>
-                                                                                            </td>
-                                                                                            <td className={styles.conceptCell}>{c.concepto}</td>
-                                                                                            <td className={styles.vendorCell}>{c.proveedor || '---'}</td>
-                                                                                            <td>
-                                                                                                <span className={`${styles.statusBadge} ${styles['status' + c.estado_pago]}`}>
-                                                                                                    {c.estado_pago.toUpperCase()}
-                                                                                                </span>
-                                                                                            </td>
-                                                                                            <td className={styles.amountCell}>S/ {formatSoles(c.monto)}</td>
-                                                                                            <td>
-                                                                                                <button 
-                                                                                                    className={styles.deleteCostBtn}
-                                                                                                    onClick={() => handleDeleteCost(c.id)}
-                                                                                                    title="Eliminar registro"
-                                                                                                >
-                                                                                                    <Trash2 size={14} />
-                                                                                                </button>
-                                                                                            </td>
-                                                                                        </tr>
-                                                                                    ))
-                                                                                )}
-                                                                            </tbody>
-                                                                        </table>
-                                                                    </div>
-                                                                </div>
-
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                                                <h4><Coins size={18} /> GESTIÃ“N DE ANTICIPOS</h4>
-                                                            </div>
-
-                                                            <div className={styles.executionCard}>
-                                                                <h4><Camera size={18} /> EVIDENCIAS (DURANTE Y DESPUÃ‰S)</h4>
-                                                                <div className={styles.evidenceGridExecution}>
-                                                                    {evidenciasEjecucion.map((ev, idx) => (
-                                                                        <div key={idx} className={styles.evidenceThumbExecution}>
-                                                                            <img src={ev.url} alt={`Evidencia ${idx + 1}`} />
-                                                                            <button
-                                                                                className={styles.removeEvidenceBtn}
-                                                                                onClick={() => {
-                                                                                    const updated = evidenciasEjecucion.filter((_, i) => i !== idx);
-                                                                                    setEvidenciasEjecucion(updated);
-                                                                                    setTicketData({ ...ticketData, evidenciasEjecucion: updated });
-                                                                                }}
-                                                                            >
-                                                                                <X size={12} />
-                                                                            </button>
-                                                                        </div>
-                                                                    ))}
-                                                                    <div
-                                                                        className={styles.dropZoneExecution}
-                                                                        onClick={() => fileInputRef.current?.click()}
-                                                                    >
-                                                                        <Upload size={20} />
-                                                                        <span style={{ fontSize: '0.65rem' }}>Adjuntar Foto</span>
-                                                                        <input
-                                                                            type="file"
-                                                                            ref={fileInputRef}
-                                                                            style={{ display: 'none' }}
-                                                                            accept="image/*"
-                                                                            multiple
-                                                                            onChange={handleFileChange}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <p style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '8px' }}>
-                                                                    * MÃ­nimo 2 fotos obligatorias para finalizar.
-                                                                </p>
-                                                            </div>
+                                            <div className={styles.operationalFlowCard}>
+                                                {ticketData.estadoId === "cotizacion_aprobada" && (
+                                                    <div className={styles.approvedStatusNotice}>
+                                                        <div className={styles.approvedIcon}>âœ…</div>
+                                                        <div style={{ textAlign: 'left' }}>
+                                                            <h3 style={{ margin: 0, color: '#065F46', fontSize: '1.2rem', fontWeight: 800 }}>Presupuesto Aprobado por Cliente</h3>
+                                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.9rem', color: '#059669', fontWeight: 500 }}>
+                                                                Proceda con la ejecuciÃ³n de los trabajos segÃºn lo cotizado.
+                                                            </p>
                                                         </div>
                                                     </div>
+                                                )}
 
-                                                    <button
-                                                        className={styles.finishWorkBtn}
-                                                        onClick={handleFinishExecution}
-                                                        disabled={evidenciasEjecucion.length < 2}
-                                                    >
-                                                        <CheckCircle size={20} />
-                                                        FINALIZAR TODOS LOS TRABAJOS Y ENVIAR DOCUMENTACIÃ“N
-                                                    </button>
+                                                <div className={styles.executionGrid}>
+                                                    <div className={styles.evidenceSection}>
+                                                        <div className={styles.sectionHeaderMini}>
+                                                            <Camera size={18} />
+                                                            <h4>EVIDENCIAS DE EJECUCIÃ“N</h4>
+                                                        </div>
+                                                        <div className={styles.evidenceGridExecution}>
+                                                            {evidenciasEjecucion.map((ev, idx) => (
+                                                                <div key={idx} className={styles.evidenceThumbExecution}>
+                                                                    <img src={ev.url} alt={`Evidencia ${idx + 1}`} />
+                                                                    <button
+                                                                        className={styles.removeEvidenceBtn}
+                                                                        onClick={() => {
+                                                                            const updated = evidenciasEjecucion.filter((_, i) => i !== idx);
+                                                                            setEvidenciasEjecucion(updated);
+                                                                            setTicketData({ ...ticketData, evidenciasEjecucion: updated });
+                                                                        }}
+                                                                    >
+                                                                        <X size={12} />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                            <div
+                                                                className={styles.dropZoneExecution}
+                                                                onClick={() => fileInputRef.current?.click()}
+                                                            >
+                                                                <Upload size={20} />
+                                                                <span>Adjuntar Foto</span>
+                                                                <input
+                                                                    type="file"
+                                                                    ref={fileInputRef}
+                                                                    style={{ display: 'none' }}
+                                                                    accept="image/*"
+                                                                    multiple
+                                                                    onChange={handleFileChange}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <p className={styles.operationalHint}>
+                                                            * Se requieren al menos 2 evidencias para finalizar el trabajo.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className={styles.flowActionsSection}>
+                                                        <button
+                                                            className={styles.finishWorkBtn}
+                                                            onClick={handleFinishExecution}
+                                                            disabled={evidenciasEjecucion.length < 2}
+                                                        >
+                                                            <CheckCircle size={20} />
+                                                            <span>FINALIZAR TRABAJOS Y ENVIAR DOCUMENTACIÃ“N</span>
+                                                        </button>
+                                                        <p style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '10px', textAlign: 'center' }}>
+                                                            La gestiÃ³n financiera de este ticket se realiza exclusivamente en el panel inferior.
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                     )}
 
@@ -2730,54 +2208,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
                                                 </div>
 
-                                                {ticketData.estadoId === "por_liquidar" ? (
-                                                    <>
-                                                        {userRole === 'admin' ? (
-                                                            <button
-                                                                className={styles.confirmFinalPaymentBtn}
-                                                                onClick={handleFinalLiquidationPay}
-                                                                disabled={isConfirmingPayment}
-                                                                style={isConfirmingPayment ? { opacity: 0.7, cursor: 'not-allowed' } : {}}
-                                                            >
-                                                                {isConfirmingPayment ? (
-                                                                    <>
-                                                                        <Clock size={20} className={styles.spinIcon} />
-                                                                        <span>CONFIRMANDO...</span>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <DollarSign size={20} />
-                                                                        <span>
-                                                                            CONFIRMAR DEPÃ“SITO FINAL
-                                                                            {ticketData.solicitudLiquidacion && " (SOLICITADO)"}
-                                                                        </span>
-                                                                    </>
-                                                                )}
-                                                            </button>
-                                                        ) : (
-                                                            !ticketData.solicitudLiquidacion ? (
-                                                                <button
-                                                                    className={styles.proceedToLiquidationBtn}
-                                                                    onClick={handleRequestFinalLiquidation}
-                                                                    style={{ background: '#3B82F6', marginTop: '0' }}
-                                                                >
-                                                                    <Send size={20} />
-                                                                    <span>SOLICITAR LIQUIDACIÃ“N FINAL</span>
-                                                                </button>
-                                                            ) : (
-                                                                <div className={styles.waitingForManager}>
-                                                                    <Clock size={24} color="#3B82F6" />
-                                                                    <span style={{ fontSize: '1.1rem' }}>Â¡ LIQUIDACIÃ“N EN PROCESO !</span>
-                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Solicitud de cierre enviada a Gerencia.</span>
-                                                                </div>
-                                                            )
-                                                        )}
+                                                {ticketData.estadoId === "por_liquidar" && (
+                                                    <div className={styles.waitingForManager} style={{ padding: '30px', background: '#F8FAFC', borderRadius: '20px', border: '1px solid #E2E8F0', marginTop: '20px' }}>
+                                                        <Clock size={28} color="#3B82F6" />
+                                                        <span style={{ fontSize: '1.2rem', color: '#1E293B', fontWeight: 800 }}>LIQUIDACIÃ“N EN PROCESO</span>
+                                                        <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 500, maxWidth: '400px', textAlign: 'center' }}>
+                                                            Registre el depÃ³sito final en el panel de <strong>TesorerÃ­a</strong> inferior para cerrar este ticket definitivamente.
+                                                        </span>
+                                                    </div>
+                                                )}
 
-                                                        <p className={styles.liquidationNote}>
-                                                            * Solo el Administrador puede cerrar financieramente el ticket mediante el depÃ“sito final.
-                                                        </p>
-                                                    </>
-                                                ) : (
+                                                {ticketData.estadoId === "ticket_cerrado" && (
                                                     <div className={styles.closedFooterActions}>
                                                         <div className={styles.closedStatusBanner}>
                                                             <CheckCircle size={20} />
