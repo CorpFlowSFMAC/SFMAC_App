@@ -273,16 +273,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         excelSeguridad: false
     });
     const [evidenciasEjecucion, setEvidenciasEjecucion] = useState<any[]>(ticketData.evidenciasEjecucion || []);
-    const [newExpense, setNewExpense] = useState({
-        concepto: "",
-        monto: "",
-        categoria: "Mano de Obra",
-        specialist_id: "",
-        proveedor: ""
-    });
     const [allTechnicians, setAllTechnicians] = useState<any[]>([]);
-    const [techSearchQuery, setTechSearchQuery] = useState("");
-    const [showTechDropdown, setShowTechDropdown] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
@@ -599,16 +591,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 gestora_id: gestora.id
             }));
             
-            showToast("Ticket Derivado", `El servicio ahora estÃ¡ a cargo de ${gestora.name}.`, "success");
+            showToast("Ticket Derivado", `El servicio ahora está a cargo de ${gestora.name}.`, "success");
         } catch (err) {
             console.error("Error assigned gestora:", err);
-            showToast("Error", "No se pudo completar la derivaciÃ³n.", "error");
+            showToast("Error", "No se pudo completar la derivación.", "error");
         }
     };
 
     const handleSendFieldReport = () => {
         if (!diagnostico) {
-            showToast("DiagnÃ³stico Requerido", "Por favor ingrese el diagnÃ³stico tÃ©cnico antes de enviar.", "error");
+            showToast("Diagnóstico Requerido", "Por favor ingrese el diagnóstico técnico antes de enviar.", "error");
             return;
         }
 
@@ -690,18 +682,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         setTicketData(updated);
-        showToast("CotizaciÃ³n Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
+        showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
     };
 
     const handleApproveQuote = () => {
         const approved = {
             ...ticketData,
             estadoId: "cotizacion_aprobada",
-            fechaAprobacion: new Date().toISOString(),
+            fechaAprobación: new Date().toISOString(),
             pausadoSLA: false,
             fechaReactivacion: new Date().toISOString(),
             modificacionAutorizada: false,
-            costoAjustadoPostAprobacion: false,
+            costoAjustadoPostAprobación: false,
             omitirAjusteTecnico: false
         };
         setTicketData(approved);
@@ -715,7 +707,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
-        showToast("EdiciÃ³n Habilitada", "La cotizaciÃ³n ha sido desbloqueada para realizar ajustes.", "info");
+        showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
     };
 
     const handleProceedToExecution = () => {
@@ -745,14 +737,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 ...ticketData,
                 costoManoObra: val,
                 costoMateriales: 0,
-                costoAjustadoPostAprobacion: true,
+                costoAjustadoPostAprobación: true,
                 costoAnteriorTecnico: currentMO + currentMAT
             };
             setTicketData(updated);
             setShowNegotiationModal(false);
-            showToast("Costo Reacordado", `Nuevo monto tÃ©cnico ajustado a S/ ${val.toFixed(2)}.`, "success");
+            showToast("Costo Reacordado", `Nuevo monto técnico ajustado a S/ ${val.toFixed(2)}.`, "success");
         } else {
-            showToast("Monto InvÃ¡lido", "Por favor ingrese un nÃºmero vÃ¡lido para el costo.", "error");
+            showToast("Monto Inválido", "Por favor ingrese un número válido para el costo.", "error");
         }
     };
 
@@ -771,7 +763,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             evidencias: ticketData.evidencias || []
         };
         setTicketData(updated);
-        showToast("Â¡EjecuciÃ³n Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
+        showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 
 
@@ -814,7 +806,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const normalizedSede = selectedSede ? {
                 ...selectedSede,
                 nombre: selectedSede.name || selectedSede.nombre || "Sin Sede",
-                direccion: selectedSede.address || selectedSede.direccion || "Sin direcciÃ³n"
+                direccion: selectedSede.address || selectedSede.direccion || "Sin dirección"
             } : null;
 
             const localUpdates = {
@@ -917,7 +909,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
 
     const handleDeleteCost = async (costId: string) => {
-        if (!confirm("Â¿EstÃ¡ seguro de eliminar este registro de costo?")) return;
+        if (!confirm("¿Está seguro de eliminar este registro de costo?")) return;
         try {
             await ticketCostsAPI.delete(costId);
             await loadCosts();
@@ -928,38 +920,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleAddExpense = async () => {
-        if (!newExpense.concepto.trim() || !newExpense.monto) {
-            showToast("Campos incompletos", "El concepto y el monto son obligatorios.", "error");
-            return;
-        }
-        if (newExpense.categoria === "Mano de Obra" && !newExpense.specialist_id) {
-            showToast("Especialista requerido", "Para Mano de Obra debe seleccionar un tÃ©cnico de la base de datos.", "error");
-            return;
-        }
-        setIsSavingCost(true);
-        try {
-            await ticketCostsAPI.create({
-                ticket_id: ticket.id,
-                concepto: newExpense.concepto.trim(),
-                categoria: newExpense.categoria,
-                specialist_id: newExpense.specialist_id || undefined,
-                proveedor: newExpense.proveedor.trim() || undefined,
-                monto: parseFloat(newExpense.monto),
-                estado_pago: 'pendiente',
-                solicitado_por: userRole || 'gestora'
-            });
-            await loadCosts();
-            setNewExpense({ concepto: "", monto: "", categoria: "Mano de Obra", specialist_id: "", proveedor: "" });
-            setTechSearchQuery("");
-            showToast("Gasto Registrado", "El egreso fue aÃ±adido y estÃ¡ pendiente de abono desde TesorerÃ­a.", "success");
-        } catch (err) {
-            console.error("Error adding expense:", err);
-            showToast("Error", "No se pudo registrar el gasto.", "error");
-        } finally {
-            setIsSavingCost(false);
-        }
-    };
+    
 
     // Cargar técnicos para el Combobox
     useEffect(() => {
@@ -1007,7 +968,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
 
-    // CÃƒÂ¡lculos de Rentabilidad Rel Real-Time
+    // CÃƒ¡lculos de Rentabilidad Rel Real-Time
     const totalCosts = ticketCosts.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const grossMargin = approvedAmount - totalCosts;
@@ -1169,7 +1130,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <Sparkles size={24} color="#8B5CF6" />
                                                 <div style={{ textAlign: 'left' }}>
                                                     <h3 className={styles.triageTitle}>Bandeja de Triage - Mibanco</h3>
-                                                    <p className={styles.triageSubtitle}>ClasificaciÃƒÂ³n y ValidaciÃƒÂ³n de Ticket AutomÃƒÂ¡tico</p>
+                                                    <p className={styles.triageSubtitle}>ClasificaciÃƒÂ³n y ValidaciÃƒÂ³n de Ticket AutomÃƒ¡tico</p>
                                                 </div>
                                             </div>
 
@@ -1198,7 +1159,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 {!ticketData.branch_id && !triageSedeId && (
                                                     <div className={styles.triageAlert}>
                                                         <AlertTriangle size={16} />
-                                                        <span>Sede no mapeada automÃƒÂ¡ticamente. Seleccione manualmente para entrenar al sistema.</span>
+                                                        <span>Sede no mapeada automÃƒ¡ticamente. Seleccione manualmente para entrenar al sistema.</span>
                                                     </div>
                                                 )}
 
@@ -1235,7 +1196,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                 {/* TIPO DE SERVICIO - Desde mÃƒÂ³dulo de TÃƒÂ©cnicos */}
                                                 <div className={styles.triageField}>
-                                                    <label>Ã°Å¸â€Â§ Tipo de Servicio (segÃƒÂºn catÃƒÂ¡logo de tÃƒÂ©cnicos):</label>
+                                                    <label>Ã°Å¸â€Â§ Tipo de Servicio (segÃƒÂºn catÃƒ¡logo de tÃƒÂ©cnicos):</label>
                                                     <select
                                                         value={triageServiceType}
                                                         onChange={(e) => setTriageServiceType(e.target.value)}
@@ -1278,7 +1239,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                          La condiciÃƒÂ³n es ESTRICTA:
                                          1. El estadoId debe ser 'esperando_pago_visita' Y
                                          2. visitPaymentConfirmed debe ser falso Y
-                                         3. El ticket no debe haber avanzado mÃƒÂ¡s allÃƒÂ¡ (ningÃƒÂºn estado post-inspecciÃƒÂ³n)
+                                         3. El ticket no debe haber avanzado mÃƒ¡s allÃƒ¡ (ningÃƒÂºn estado post-inspecciÃƒÂ³n)
                                     */}
                                     {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && (
                                             <div className={styles.stepPlaceholder}>
@@ -1419,7 +1380,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <span style={{ fontSize: '0.65rem', fontWeight: 700 }}>FOTOS</span>
                                                                 </div>
                                                             )}
-                                                            {/* BotÃƒÂ³n flotante para agregar mÃƒÂ¡s si ya hay fotos */}
+                                                            {/* BotÃƒÂ³n flotante para agregar mÃƒ¡s si ya hay fotos */}
                                                             {evidenciasCampo.length > 0 && (
                                                                 <div
                                                                     className={styles.uploadBoxMini}
@@ -1582,8 +1543,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 return (
                                                                                     <div className={styles.lossWarning}>
                                                                                         <div className={styles.lossTitle}>
-                                                                                            <X size={16} /> {/* O AlertTriangle si estuviera importado, pero X estÃƒÂ¡ disponible */}
-                                                                                            <span>ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â PERDIDA DETECTADA</span>
+                                                                                            <X size={16} /> {/* O AlertTriangle si estuviera importado, pero X estÃƒ¡ disponible */}
+                                                                                            <span>ÃƒÂ¢Ã…¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â PERDIDA DETECTADA</span>
                                                                                         </div>
                                                                                         <span className={styles.lossValue}>
                                                                                             El presupuesto es menor al costo tÃƒÂ©cnico (S/ {formatSoles(totalCostoTecnico)})
@@ -1615,7 +1576,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </div>
                                                             {ticketData.estadoId === "en_cotizacion" && (
                                                                 <p className={styles.profitabilityHint}>
-                                                                    ÃƒÂ°Ã…Â¸Ã¢â‚¬â„¢Ã‚Â¡ Ajuste los precios en el editor de la derecha para cubrir el costo tÃƒÂ©cnico y alcanzar el margen operativo sugerido.
+                                                                    ÃƒÂ°Ã…Â¸Ã¢â‚¬â„¢Ã‚¡ Ajuste los precios en el editor de la derecha para cubrir el costo tÃƒÂ©cnico y alcanzar el margen operativo sugerido.
                                                                 </p>
                                                             )}
 
@@ -1789,7 +1750,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </div>
 
                                                                 <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '12px', fontStyle: 'italic' }}>
-                                                                    * El sistema calcula automÃƒÂ¡ticamente el IGV (18%) y el Total basÃƒÂ¡ndose en el subtotal ingresado para garantizar la precisiÃƒÂ³n.
+                                                                    * El sistema calcula automÃƒ¡ticamente el IGV (18%) y el Total basÃƒ¡ndose en el subtotal ingresado para garantizar la precisiÃƒÂ³n.
                                                                 </p>
                                                                 <input
                                                                     type='file'
@@ -1898,11 +1859,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                             <div>
                                                 <h3 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.04em' }}>
-                                                    CotizaciÃ³n Enviada con Ã‰xito
+                                                    Cotización Enviada con Éxito
                                                 </h3>
                                                 <p style={{ margin: 0, fontSize: '16px', color: '#64748b', lineHeight: 1.7, fontWeight: 500 }}>
                                                     El presupuesto formal ha sido enviado al correo del cliente.<br />
-                                                    El ticket permanecerÃ¡ en pausa hasta esperar <strong>aprobaciÃ³n</strong> o solicitud de ajuste.
+                                                    El ticket permanecerá en pausa hasta esperar <strong>aprobación</strong> o solicitud de ajuste.
                                                 </p>
                                             </div>
 
@@ -2145,7 +2106,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                         <div className={styles.checkText}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <strong>5. NÃƒâ€œÃ…Â¡MERO DE TICKET DEL CLIENTE</strong>
+                                                                <strong>5. NÃƒâ€œÃ…¡MERO DE TICKET DEL CLIENTE</strong>
                                                                 {ticketData.numeroTicketCliente && (
                                                                     <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
                                                                 )}
@@ -2167,7 +2128,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             />
                                                             {!ticketData.numeroTicketCliente && (
                                                                 <span style={{ color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    Ã‚Â¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
+                                                                    Ã‚¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
                                                                 </span>
                                                             )}
                                                             {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
@@ -2224,7 +2185,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "LiquidaciÃƒÂ³n Final de Servicio"}
                                                         </h3>
                                                         <span style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la informaciÃƒÂ³n financiera ha sido auditada y cerrada." : "CÃƒÂ¡lculo automÃƒÂ¡tico del saldo pendiente para el tÃƒÂ©cnico"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la informaciÃƒÂ³n financiera ha sido auditada y cerrada." : "CÃƒ¡lculo automÃƒ¡tico del saldo pendiente para el tÃƒÂ©cnico"}
                                                         </span>
                                                     </div>
                                                     <div className={styles.liquidationTotalBadge}>
@@ -2464,7 +2425,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     <table className={styles.costsTable}>
                                         <thead>
                                             <tr>
-                                                <th>CategorÃ­a</th>
+                                                <th>Categoría</th>
                                                 <th>Concepto / Especialista</th>
                                                 <th>Monto</th>
                                                 <th>Estado</th>
@@ -2546,7 +2507,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         return (
                                             <div style={{ marginTop: '14px', background: 'linear-gradient(135deg, #EEF2FF, #F5F3FF)', border: '1px solid #C7D2FE', borderRadius: '14px', padding: '14px 18px' }}>
                                                 <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4338CA', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <User size={13} /> LiquidaciÃ³n por Especialista
+                                                    <User size={13} /> Liquidación por Especialista
                                                 </div>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                     {Object.entries(grouped).map(([id, g]) => (
@@ -2586,134 +2547,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                         <div>
                                             <p style={{ margin: 0, fontWeight: 800, color: '#475569', fontSize: '1.1rem' }}>Sin gastos registrados</p>
-                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.9rem', color: '#94A3B8' }}>Ingrese los costos operativos para monitorear el margen de utilidad.</p>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.9rem', color: '#94A3B8' }}>Consulte a tesorería para ver los pagos pendientes.</p>
                                         </div>
                                     </div>
                                 )}
-                            </div>
-
-                            {/* â€” FORMULARIO AÃ‘ADIR GASTO â€” */}
-                            <div style={{ marginTop: '20px', background: 'linear-gradient(135deg, #F8FAFC, #F1F5F9)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px 22px' }}>
-                                <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <Plus size={13} /> Registrar Egreso (Pasa por TesorerÃ­a)
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                                    {/* Concepto */}
-                                    <input
-                                        type="text"
-                                        placeholder="Concepto del gasto..."
-                                        value={newExpense.concepto}
-                                        onChange={e => setNewExpense(prev => ({ ...prev, concepto: e.target.value }))}
-                                        style={{ padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', fontSize: '0.875rem', fontWeight: 600, color: '#1E293B', background: 'white', outline: 'none' }}
-                                    />
-                                    {/* CatÃ©goria */}
-                                    <select
-                                        value={newExpense.categoria}
-                                        onChange={e => setNewExpense(prev => ({ ...prev, categoria: e.target.value, specialist_id: '', proveedor: '' }))}
-                                        style={{ padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', fontSize: '0.875rem', fontWeight: 700, color: '#1E293B', background: 'white', outline: 'none' }}
-                                    >
-                                        <option value="Mano de Obra">Mano de Obra</option>
-                                        <option value="Materiales">Materiales</option>
-                                        <option value="Movilidad">Movilidad</option>
-                                        <option value="Herramientas">Herramientas</option>
-                                        <option value="Otros">Otros</option>
-                                    </select>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-                                    {/* Monto */}
-                                    <div style={{ position: 'relative' }}>
-                                        <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 800, color: '#475569', fontSize: '0.85rem' }}>S/</span>
-                                        <input
-                                            type="number"
-                                            placeholder="0.00"
-                                            value={newExpense.monto}
-                                            onChange={e => setNewExpense(prev => ({ ...prev, monto: e.target.value }))}
-                                            style={{ width: '100%', padding: '10px 14px 10px 30px', borderRadius: '10px', border: '1.5px solid #E2E8F0', fontSize: '0.875rem', fontWeight: 700, color: '#1E293B', background: 'white', outline: 'none', boxSizing: 'border-box' }}
-                                        />
-                                    </div>
-
-                                    {/* Especialista (Combobox) / Proveedor libre */}
-                                    {newExpense.categoria === 'Mano de Obra' ? (
-                                        <div style={{ position: 'relative' }}>
-                                            <input
-                                                type="text"
-                                                placeholder="Buscar tÃ©cnico..."
-                                                value={techSearchQuery}
-                                                onChange={e => {
-                                                    setTechSearchQuery(e.target.value);
-                                                    setNewExpense(prev => ({ ...prev, specialist_id: '', proveedor: '' }));
-                                                    setShowTechDropdown(true);
-                                                }}
-                                                onFocus={() => setShowTechDropdown(true)}
-                                                onBlur={() => setTimeout(() => setShowTechDropdown(false), 150)}
-                                                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: newExpense.specialist_id ? '1.5px solid #6366F1' : '1.5px solid #E2E8F0', fontSize: '0.875rem', fontWeight: 600, color: '#1E293B', background: newExpense.specialist_id ? '#EEF2FF' : 'white', outline: 'none', boxSizing: 'border-box' }}
-                                            />
-                                            {showTechDropdown && techSearchQuery && (
-                                                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #E2E8F0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 9999, maxHeight: '200px', overflowY: 'auto', marginTop: '4px' }}>
-                                                    {allTechnicians
-                                                        .filter(t => {
-                                                            const q = techSearchQuery.toLowerCase();
-                                                            const n = (t.name || `${t.first_name || ''} ${t.last_name || ''}`).toLowerCase();
-                                                            return n.includes(q);
-                                                        })
-                                                        .map(t => {
-                                                            const tname = t.name || `${t.first_name || ''} ${t.last_name || ''}`.trim();
-                                                            return (
-                                                                <div
-                                                                    key={t.id}
-                                                                    onMouseDown={() => {
-                                                                        setNewExpense(prev => ({ ...prev, specialist_id: t.id, proveedor: tname }));
-                                                                        setTechSearchQuery(tname);
-                                                                        setShowTechDropdown(false);
-                                                                    }}
-                                                                    style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                                >
-                                                                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#6366F1', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800, flexShrink: 0 }}>
-                                                                        {tname.charAt(0)}
-                                                                    </div>
-                                                                    <div>
-                                                                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1E293B' }}>{tname}</div>
-                                                                        {t.specialties?.length > 0 && <div style={{ fontSize: '0.7rem', color: '#64748B' }}>{t.specialties.join(', ')}</div>}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })
-                                                    }
-                                                    {allTechnicians.filter(t => {
-                                                        const q = techSearchQuery.toLowerCase();
-                                                        const n = (t.name || `${t.first_name || ''} ${t.last_name || ''}`).toLowerCase();
-                                                        return n.includes(q);
-                                                    }).length === 0 && (
-                                                        <div style={{ padding: '12px 14px', fontSize: '0.8rem', color: '#94A3B8', textAlign: 'center' }}>Sin resultados</div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <input
-                                            type="text"
-                                            placeholder="Proveedor externo (opcional)"
-                                            value={newExpense.proveedor}
-                                            onChange={e => setNewExpense(prev => ({ ...prev, proveedor: e.target.value }))}
-                                            style={{ padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', fontSize: '0.875rem', fontWeight: 600, color: '#1E293B', background: 'white', outline: 'none' }}
-                                        />
-                                    )}
-                                </div>
-
-                                {newExpense.categoria === 'Mano de Obra' && !newExpense.specialist_id && (
-                                    <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: '#B45309', fontWeight: 600 }}>
-                                        âš ï¸ Para Mano de Obra debe seleccionar un tÃ©cnico registrado.
-                                    </p>
-                                )}
-
-                                <button
-                                    onClick={handleAddExpense}
-                                    disabled={isSavingCost}
-                                    style={{ width: '100%', padding: '12px', borderRadius: '12px', background: isSavingCost ? '#94A3B8' : 'linear-gradient(135deg, #1E293B, #334155)', color: 'white', border: 'none', fontWeight: 800, fontSize: '0.9rem', cursor: isSavingCost ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' }}
-                                >
-                                    {isSavingCost ? <Clock size={16} /> : <Plus size={16} />}
-                                    {isSavingCost ? 'Registrando...' : 'Registrar Egreso â†’ TesorerÃ­a'}
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -2730,7 +2567,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 </div>
                                 <div className={styles.negoTitleGroup}>
                                     <h3>Ajuste de Costo Negociado</h3>
-                                    <span>Re-negociaciÃƒÂ³n con el tÃƒÂ©cnico asignado</span>
+                                    <span>Re-negociación con el técnico asignado</span>
                                 </div>
                                 <button className={styles.closeNegoBtn} onClick={() => setShowNegotiationModal(false)}>
                                     <X size={20} />
@@ -2758,7 +2595,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         />
                                     </div>
                                     <p className={styles.negoHelpText}>
-                                        * Este ajuste quedarÃƒÂ¡ registrado como costo de ejecuciÃƒÂ³n final para el tÃƒÂ©cnico.
+                                        * Este ajuste quedará registrado como costo de ejecución final para el técnico.
                                     </p>
                                 </div>
                             </div>
