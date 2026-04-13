@@ -291,6 +291,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
     const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
 
+    // Modal: Solicitud de Pago de Materiales (etapa ejecución)
+    const [showMaterialsModal, setShowMaterialsModal] = useState(false);
+    const [materialsForm, setMaterialsForm] = useState({
+        concepto: "",
+        monto: "",
+        specialist_id: "",
+        specialistName: "",
+        searchQuery: "",
+        showDropdown: false,
+    });
+    const [isSavingMaterials, setIsSavingMaterials] = useState(false);
+
     const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizacionBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -955,6 +967,44 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             .then((data: any[]) => setAllTechnicians(data || []))
             .catch((e: any) => console.error("Error loading technicians:", e));
     }, []);
+
+    // Handler: Solicitud de Pago de Materiales → pasa por Tesorería vía ticket_costs
+    const handleSubmitMaterialsRequest = async () => {
+        if (!materialsForm.concepto.trim() || !materialsForm.monto) {
+            showToast("Campos incompletos", "El concepto y el monto son obligatorios.", "error");
+            return;
+        }
+        if (!materialsForm.specialist_id) {
+            showToast("Técnico requerido", "Seleccione el técnico externo para esta compra.", "error");
+            return;
+        }
+        setIsSavingMaterials(true);
+        try {
+            await ticketCostsAPI.create({
+                ticket_id: ticket.id,
+                concepto: materialsForm.concepto.trim(),
+                categoria: "Materiales",
+                specialist_id: materialsForm.specialist_id,
+                proveedor: materialsForm.specialistName,
+                monto: parseFloat(materialsForm.monto),
+                estado_pago: "pendiente",
+                solicitado_por: userRole || "gestora",
+            });
+            await loadCosts();
+            setShowMaterialsModal(false);
+            setMaterialsForm({ concepto: "", monto: "", specialist_id: "", specialistName: "", searchQuery: "", showDropdown: false });
+            showToast(
+                "Solicitud Enviada a Tesorería",
+                `Compra de materiales para ${materialsForm.specialistName} registrada. Pendiente de abono.`,
+                "success"
+            );
+        } catch (err) {
+            console.error("Error saving materials request:", err);
+            showToast("Error", "No se pudo registrar la solicitud.", "error");
+        } finally {
+            setIsSavingMaterials(false);
+        }
+    };
 
 
     // CÃƒÂ¡lculos de Rentabilidad Rel Real-Time
@@ -1984,10 +2034,36 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             disabled={evidenciasEjecucion.length < 2}
                                                         >
                                                             <CheckCircle size={20} />
-                                                            <span>FINALIZAR TRABAJOS Y ENVIAR DOCUMENTACIÃƒâ€œN</span>
+                                                            <span>FINALIZAR TRABAJOS Y ENVIAR DOCUMENTACIÓN</span>
                                                         </button>
+
+                                                        <button
+                                                            className={styles.secondaryActionBtn}
+                                                            onClick={() => setShowMaterialsModal(true)}
+                                                            style={{ 
+                                                                marginTop: '10px', 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                justifyContent: 'center', 
+                                                                gap: '8px', 
+                                                                width: '100%', 
+                                                                padding: '12px', 
+                                                                borderRadius: '12px', 
+                                                                border: '2px solid #E2E8F0', 
+                                                                background: '#F8FAFC', 
+                                                                color: '#475569', 
+                                                                fontWeight: 700, 
+                                                                fontSize: '0.85rem', 
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s ease'
+                                                            }}
+                                                        >
+                                                            <Package size={18} />
+                                                            <span>Solicitar Pago Materiales (Técnico Externo)</span>
+                                                        </button>
+
                                                         <p style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '10px', textAlign: 'center' }}>
-                                                            La gestiÃƒÂ³n financiera de este ticket se realiza exclusivamente en el panel inferior.
+                                                            La gestión financiera de este ticket se realiza exclusivamente en el panel inferior.
                                                         </p>
                                                     </div>
                                                 </div>
@@ -2694,6 +2770,147 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 <button className={styles.negoConfirmBtn} onClick={confirmNegotiatedCost}>
                                     <CheckCircle size={18} />
                                     Confirmar Nuevo Costo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal: Solicitud de Pago de Materiales */}
+                {showMaterialsModal && (
+                    <div className={styles.modalOverlay}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '450px' }}>
+                            <div className={styles.negotiationModalHeader}>
+                                <div className={styles.negoIconWrapper} style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>
+                                    <Package size={24} />
+                                </div>
+                                <div className={styles.negoTitleGroup}>
+                                    <h3>Solicitud Pago de Materiales</h3>
+                                    <span>Registro de egreso para técnico externo</span>
+                                </div>
+                                <button className={styles.closeNegoBtn} onClick={() => setShowMaterialsModal(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {/* Concepto */}
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Concepto / Referencia</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ej. Compra de pintura y brochas..."
+                                            value={materialsForm.concepto}
+                                            onChange={e => setMaterialsForm(prev => ({ ...prev, concepto: e.target.value }))}
+                                            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', outline: 'none', background: 'white', color: '#1E293B', fontWeight: 500 }}
+                                        />
+                                    </div>
+
+                                    {/* Monto */}
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Monto a Depositar</label>
+                                        <div className={styles.negoInputGroup}>
+                                            <div className={styles.negoInputPrefix}>S/</div>
+                                            <input
+                                                type="number"
+                                                placeholder="0.00"
+                                                value={materialsForm.monto}
+                                                onChange={e => setMaterialsForm(prev => ({ ...prev, monto: e.target.value }))}
+                                                style={{ width: '100%', padding: '10px 14px 10px 30px', borderRadius: '10px', border: '1.5px solid #E2E8F0', outline: 'none', color: '#1E293B', fontWeight: 700 }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Buscador de Técnico */}
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Seleccionar Técnico (Base de Datos)</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Buscar por nombre..."
+                                                value={materialsForm.searchQuery}
+                                                onChange={e => {
+                                                    const q = e.target.value;
+                                                    setMaterialsForm(prev => ({ ...prev, searchQuery: q, specialist_id: '', specialistName: '', showDropdown: true }));
+                                                }}
+                                                onFocus={() => setMaterialsForm(prev => ({ ...prev, showDropdown: true }))}
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '10px 14px', 
+                                                    borderRadius: '10px', 
+                                                    border: materialsForm.specialist_id ? '2px solid #6366F1' : '1.5px solid #E2E8F0', 
+                                                    outline: 'none',
+                                                    background: materialsForm.specialist_id ? '#F5F7FF' : 'white',
+                                                    color: '#1E293B',
+                                                    fontWeight: 600
+                                                }}
+                                            />
+                                            {materialsForm.showDropdown && materialsForm.searchQuery && (
+                                                <div style={{ 
+                                                    position: 'absolute', 
+                                                    top: '100%', 
+                                                    left: 0, 
+                                                    right: 0, 
+                                                    background: 'white', 
+                                                    border: '1px solid #E2E8F0', 
+                                                    borderRadius: '10px', 
+                                                    boxShadow: '0 10px 25px rgba(0,0,0,0.1)', 
+                                                    zIndex: 100, 
+                                                    maxHeight: '200px', 
+                                                    overflowY: 'auto',
+                                                    marginTop: '5px'
+                                                }}>
+                                                    {allTechnicians
+                                                        .filter(t => {
+                                                            const n = (t.name || `${t.first_name || ''} ${t.last_name || ''}`).toLowerCase();
+                                                            return n.includes(materialsForm.searchQuery.toLowerCase());
+                                                        })
+                                                        .map(t => {
+                                                            const tname = t.name || `${t.first_name || ''} ${t.last_name || ''}`.trim();
+                                                            return (
+                                                                <div 
+                                                                    key={t.id}
+                                                                    onClick={() => {
+                                                                        setMaterialsForm(prev => ({ 
+                                                                            ...prev, 
+                                                                            specialist_id: t.id, 
+                                                                            specialistName: tname, 
+                                                                            searchQuery: tname,
+                                                                            showDropdown: false 
+                                                                        }));
+                                                                    }}
+                                                                    style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                                >
+                                                                    <User size={14} color="#6366F1" />
+                                                                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B' }}>{tname}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {materialsForm.specialist_id && (
+                                            <p style={{ margin: '6px 0 0 0', fontSize: '0.75rem', color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <CheckCircle size={12} /> Técnico vinculado correctamente
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowMaterialsModal(false)}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={handleSubmitMaterialsRequest}
+                                    disabled={isSavingMaterials}
+                                    style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}
+                                >
+                                    {isSavingMaterials ? <Clock size={18} className={styles.spinner} /> : <Send size={18} />}
+                                    <span>Enviar a Tesorería</span>
                                 </button>
                             </div>
                         </div>
