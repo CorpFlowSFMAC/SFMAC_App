@@ -942,14 +942,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setIsSavingMaterials(true);
         try {
             await ticketCostsAPI.create({
-                ticket_id: ticket.id,
+                ticket_id: ticketData.id,
                 concepto: materialsForm.concepto.trim(),
                 categoria: "Materiales",
                 specialist_id: materialsForm.specialist_id,
                 proveedor: materialsForm.specialistName,
                 monto: parseFloat(materialsForm.monto),
                 estado_pago: "pendiente",
-                solicitado_por: userRole || "gestora",
             });
             await loadCosts();
             setShowMaterialsModal(false);
