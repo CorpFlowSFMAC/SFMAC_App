@@ -727,135 +727,153 @@
     letter-spacing: 0.5px;
 }
 
-.profitabilityGrid {
+.sidebarProfitabilityGrid {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
+    margin-top: 10px;
 }
 
 .techCostCard, .suggestedTotal, .missingAmountCard {
     width: 100%;
+    border-radius: 18px;
+    padding: 20px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.05);
 }
 
 .techCostCard {
     background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
 }
 
 .techCostLabel {
     display: block;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     font-weight: 800;
-    color: #64748B;
-    margin-bottom: 8px;
-    letter-spacing: 0.5px;
-}
-
-.techCostDetail {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    color: #475569;
+    margin-bottom: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }
 
 .techRow {
     display: flex;
     justify-content: space-between;
-    font-size: 0.75rem;
-    color: #475569;
+    font-size: 0.85rem;
+    color: #64748B;
+    margin-bottom: 6px;
+}
+
+.techRow strong, .techRow span {
+    color: #1E293B;
+    font-weight: 700;
 }
 
 .techRowTotal {
     display: flex;
     justify-content: space-between;
-    margin-top: 4px;
-    padding-top: 4px;
+    margin-top: 10px;
+    padding-top: 10px;
     border-top: 1px dashed #E2E8F0;
-    font-size: 0.8rem;
-    color: #1E293B;
+    font-size: 1rem;
+    color: #0F172A;
+    font-weight: 900;
+}
+
+.suggestedTotal {
+    background: linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%);
+    border: 1px solid #99F6E4;
+    box-shadow: 0 8px 20px rgba(20, 184, 166, 0.12);
+    text-align: center;
+}
+
+.suggestedTotal::after {
+    content: '';
+    position: absolute;
+    top: -20%;
+    right: -10%;
+    width: 100px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    filter: blur(20px);
+}
+
+.suggestedTotal span {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #0D9488;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    position: relative;
+    z-index: 1;
+}
+
+.suggestedValue {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #0F766E;
+    letter-spacing: -0.03em;
+    margin-top: 4px;
+    position: relative;
+    z-index: 1;
 }
 
 .missingAmountCard {
-    background: #FFF7ED;
+    background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
     border: 1px solid #FED7AA;
-    border-radius: 16px;
-    padding: 20px;
+    box-shadow: 0 8px 20px rgba(249, 115, 22, 0.08);
 }
 
 .missingHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 }
 
 .missingHeader span {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 800;
     color: #9A3412;
     text-transform: uppercase;
 }
 
 .missingHeader strong {
-    font-size: 0.9rem;
+    font-size: 1.1rem;
     color: #EA580C;
-}
-
-.missingValue {
-    display: flex;
-    flex-direction: column;
+    font-weight: 900;
 }
 
 .missingLabel {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: #9A3412;
-    font-weight: 600;
+    font-weight: 700;
+    margin-bottom: 4px;
 }
 
 .missingAmount {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     font-weight: 900;
     color: #C2410C;
+    letter-spacing: -0.03em;
 }
 
 .goalReached {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    background: #DCFCE7;
+    gap: 8px;
+    background: rgba(22, 163, 74, 0.1);
     color: #166534;
-    padding: 8px;
-    border-radius: 8px;
-    font-weight: 800;
-    font-size: 0.75rem;
-}
-
-.suggestedTotal {
-    background: linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%);
-    border: 1px solid #99F6E4;
-    padding: 20px;
-    border-radius: 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    box-shadow: 0 4px 15px rgba(20, 184, 166, 0.08);
-}
-
-.suggestedTotal span {
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #0D9488;
-    text-transform: uppercase;
-}
-
-.suggestedValue {
-    font-size: 1.5rem;
+    padding: 12px;
+    border-radius: 12px;
     font-weight: 900;
-    color: #0F766E;
-    letter-spacing: -0.02em;
+    font-size: 0.85rem;
+    border: 1px solid rgba(22, 163, 74, 0.2);
 }
 
 .profitabilityHint {
