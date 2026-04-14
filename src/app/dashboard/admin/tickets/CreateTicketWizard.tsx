@@ -3,21 +3,37 @@
 import { useState, useEffect } from "react";
 import {
     X, ChevronLeft, ChevronRight, Check, Search, MapPin, Building2,
-    Upload, Image as ImageIcon, FileText, Trash2, CheckCircle, Wrench, Users, Monitor, Sparkles
+    Upload, Image as ImageIcon, FileText, Trash2, CheckCircle, Wrench, Users, Monitor, Sparkles,
+    ShieldCheck, UserCheck, RefreshCw
 } from "lucide-react";
 import styles from "./CreateTicketWizard.module.css";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { useAppData } from "@/lib/AppDataContext";
 import { useBranches } from "@/hooks/useSupabaseData";
+import { gestorasAPI } from "@/lib/routing-api";
 
 interface CreateTicketWizardProps {
     onClose: () => void;
     onCreateTicket: (ticket: any) => void;
+    // Assignment policy context
+    creatorRole?: 'ADMIN' | 'GESTORA' | string;
+    creatorGestoraId?: string | null;
+    creatorGestoraNombre?: string | null;
 }
 
-export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTicketWizardProps) {
-    const [currentStep, setCurrentStep] = useState(1);
+export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRole, creatorGestoraId, creatorGestoraNombre }: CreateTicketWizardProps) {
+    // Policy: ADMIN starts at step 0 (gestor selection), GESTORA starts at step 1
+    const isAdmin = creatorRole === 'ADMIN' || creatorRole === 'SUPERADMIN';
+    const startStep = isAdmin ? 0 : 1;
+    const [currentStep, setCurrentStep] = useState(startStep);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Gestor selection state (step 0 - Admin only)
+    const [availableGestores, setAvailableGestores] = useState<any[]>([]);
+    const [loadingGestores, setLoadingGestores] = useState(false);
+    const [gestorSearch, setGestorSearch] = useState("");
+    const [selectedGestor, setSelectedGestor] = useState<any | null>(null);
+
     const [formData, setFormData] = useState({
         cliente: null as any,
         clienteId: "",
@@ -29,9 +45,31 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         tieneNumeroCliente: false,
         numeroTicketCliente: "",
         evidencias: [] as File[],
-        creadoPor: typeof window !== 'undefined' ? (localStorage.getItem("userRole") === 'admin' ? "Administrador" : "Gestora Operativa") : "Sistema",
+        creadoPor: typeof window !== 'undefined' ? (localStorage.getItem("userRole") === 'admin' ? "Administrador" : "Gestor(a) Operativo(a)") : "Sistema",
         fechaCreacion: new Date().toISOString(),
     });
+
+    // Load gestores for Admin step 0
+    useEffect(() => {
+        if (!isAdmin) return;
+        setLoadingGestores(true);
+        gestorasAPI.getAll()
+            .then(data => setAvailableGestores(data || []))
+            .catch(err => console.error("Error loading gestores:", err))
+            .finally(() => setLoadingGestores(false));
+    }, [isAdmin]);
+
+    // Auto-assign if Gestora role (Regla 1)
+    useEffect(() => {
+        if (!isAdmin && creatorGestoraId) {
+            setSelectedGestor({ id: creatorGestoraId, name: creatorGestoraNombre || 'Mi cuenta' });
+        }
+    }, [isAdmin, creatorGestoraId, creatorGestoraNombre]);
+
+    const filteredGestores = availableGestores.filter(g =>
+        (g.name || "").toLowerCase().includes(gestorSearch.toLowerCase()) ||
+        (g.email || "").toLowerCase().includes(gestorSearch.toLowerCase())
+    );
 
     // 🔗 INTEGRACIÓN CON CONTEXTO GLOBAL (Realtime compartido)
     const { clients: rawClients, loadingClients, tickets: allExistingTickets } = useAppData();
@@ -125,6 +163,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
 
     const canProceed = (): boolean => {
         switch (currentStep) {
+            case 0: return isAdmin ? !!selectedGestor : true; // Admin must pick a gestor
             case 1: return !!formData.clienteId;
             case 2: return !!formData.sedeId;
             case 3: return (
@@ -139,12 +178,15 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
         }
     };
 
+    const TOTAL_STEPS = isAdmin ? 6 : 5; // Admin has extra step 0
+    const displayStep = isAdmin ? currentStep + 1 : currentStep; // For display "Paso X/Y"
+
     const handleNext = () => {
         if (canProceed() && currentStep < 5) setCurrentStep(currentStep + 1);
     };
 
     const handleBack = () => {
-        if (currentStep > 1) setCurrentStep(currentStep - 1);
+        if (currentStep > startStep) setCurrentStep(currentStep - 1);
     };
 
     const handleSelectCliente = (cliente: any) => {
@@ -194,6 +236,21 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
 
         const evidenciasBase64 = await processFiles();
 
+        const now = new Date().toISOString();
+        // Resolve gestor assignment according to policy:
+        // Regla 1: Gestor → forced self-assignment
+        // Regla 2: Admin → selected gestor from list
+        const assignedGestora = selectedGestor;
+
+        // Build audit log entry (for traceability, Sección 4)
+        const assignmentLog = {
+            tipo: isAdmin ? 'ASIGNACION_MANUAL_ADMIN' : 'AUTOASIGNACION_GESTOR',
+            gestora_id: assignedGestora?.id || null,
+            gestora_nombre: assignedGestora?.name || null,
+            realizado_por: formData.creadoPor,
+            fecha: now,
+        };
+
         const supabaseTicket = {
             client_id: formData.clienteId || null,
             branch_id: formData.sedeId || null,
@@ -202,12 +259,16 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
             description: formData.descripcionProblema,
             client_ticket_number: formData.tieneNumeroCliente ? formData.numeroTicketCliente : null,
             created_by: formData.creadoPor,
+            // Apply assignment policy
+            gestora_id: assignedGestora?.id || null,
             metadata: {
                 evidencias: evidenciasBase64,
                 service_type_name: formData.tipoServicioNombre,
-                estadoId: "nuevo", // Sincronizar campo redundante
+                estadoId: "nuevo",
                 descripcionProblema: formData.descripcionProblema,
-                fechaCreacion: new Date().toISOString()
+                fechaCreacion: now,
+                gestora: assignedGestora || null,
+                asignacionLog: [assignmentLog], // Immutable audit log (Regla de Trazabilidad)
             }
         };
 
@@ -261,7 +322,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
                 <div className={styles.wizardHeader}>
                     <div className={styles.headerLeft}>
                         <h2>✨ Crear Ticket</h2>
-                        <span className={styles.stepIndicator}>Paso {currentStep}/5</span>
+                        <span className={styles.stepIndicator}>Paso {displayStep}/{TOTAL_STEPS}</span>
                     </div>
                     <button className={styles.closeBtn} onClick={onClose}>
                         <X size={20} />
@@ -270,13 +331,20 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
 
                 {/* PROGRESS BAR VIBRANTE - ICONOS INTERACTIVOS */}
                 <div className={styles.progressBar}>
-                    {[
+                    {(isAdmin ? [
+                        { id: 0, icon: UserCheck, label: "Asignar" },
                         { id: 1, icon: Users, label: "Cliente" },
                         { id: 2, icon: MapPin, label: "Sede" },
                         { id: 3, icon: Wrench, label: "Servicio" },
                         { id: 4, icon: Upload, label: "Multimedia" },
                         { id: 5, icon: CheckCircle, label: "Finalizar" }
-                    ].map(step => {
+                    ] : [
+                        { id: 1, icon: Users, label: "Cliente" },
+                        { id: 2, icon: MapPin, label: "Sede" },
+                        { id: 3, icon: Wrench, label: "Servicio" },
+                        { id: 4, icon: Upload, label: "Multimedia" },
+                        { id: 5, icon: CheckCircle, label: "Finalizar" }
+                    ]).map(step => {
                         const Icon = step.icon;
                         const isActive = step.id === currentStep;
                         const isCompleted = step.id < currentStep;
@@ -298,6 +366,74 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
 
                 {/* CONTENT */}
                 <div className={styles.wizardContent}>
+                    {/* ── PASO 0: SELECCIÓN DE GESTOR(A) — Solo Admin (Regla 2) ── */}
+                    {isAdmin && currentStep === 0 && (
+                        <div className={styles.step}>
+                            <h3 className={styles.stepTitle}>
+                                <ShieldCheck size={20} color="#6366f1" />
+                                Asignar Gestor(a) Responsable
+                            </h3>
+                            <p className={styles.stepDescription} style={{ color: '#6366f1', fontWeight: 600, fontSize: '13px', marginBottom: '12px' }}>
+                                📋 <strong>Regla 2 — Asignación Abierta:</strong> Como Administrador, selecciona el/la gestor(a) que gestionará este ticket.
+                            </p>
+
+                            <div className={styles.searchBox}>
+                                <Search size={18} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar gestor(a) por nombre o email..."
+                                    value={gestorSearch}
+                                    onChange={(e) => setGestorSearch(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
+
+                            {loadingGestores ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '1rem', color: '#6366f1' }}>
+                                    <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                                    <span>Cargando gestores activos...</span>
+                                </div>
+                            ) : (
+                                <div className={styles.clientesList}>
+                                    {filteredGestores.map((g: any) => (
+                                        <div
+                                            key={g.id}
+                                            className={`${styles.clienteCard} ${selectedGestor?.id === g.id ? styles.clienteCardSelected : ''}`}
+                                            onClick={() => setSelectedGestor(g)}
+                                            style={{ cursor: 'pointer' }}
+                                        >
+                                            <div className={styles.clienteLogo} style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7)', fontSize: '1rem', fontWeight: 900, color: 'white' }}>
+                                                {(g.name || 'G').substring(0, 1).toUpperCase()}
+                                            </div>
+                                            <div className={styles.clienteInfo}>
+                                                <h4>{g.name}</h4>
+                                                <p style={{ color: '#64748b', fontSize: '12px' }}>{g.email}</p>
+                                            </div>
+                                            {selectedGestor?.id === g.id && (
+                                                <CheckCircle size={20} className={styles.checkIcon} />
+                                            )}
+                                        </div>
+                                    ))}
+                                    {filteredGestores.length === 0 && !loadingGestores && (
+                                        <div className={styles.emptyMessage}>
+                                            <p>⚠️ No se encontraron gestores(as) activos(as).</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── PASO 0 (Gestor): Confirmación de Autoasignación (Regla 1) ── */}
+                    {!isAdmin && currentStep === 1 && creatorGestoraId && (
+                        <div style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', borderRadius: '10px', padding: '10px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <UserCheck size={16} color="#16a34a" />
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803d' }}>
+                                📋 Regla 1 — Autoasignación: Este ticket quedará asignado a <strong>{creatorGestoraNombre || 'tu cuenta'}</strong>.
+                            </span>
+                        </div>
+                    )}
+
                     {/* PASO 1: CLIENTES */}
                     {currentStep === 1 && (
                         <div className={styles.step}>
@@ -737,7 +873,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket }: CreateTi
 
                 {/* FOOTER COMPACTO */}
                 <div className={styles.wizardFooter}>
-                    <button className={styles.backBtn} onClick={handleBack} disabled={currentStep === 1}>
+                    <button className={styles.backBtn} onClick={handleBack} disabled={currentStep === startStep}>
                         <ChevronLeft size={18} />
                         Atrás
                     </button>

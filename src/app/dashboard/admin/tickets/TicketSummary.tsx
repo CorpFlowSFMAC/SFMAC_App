@@ -1455,7 +1455,7 @@ export function TicketSummary({ ticket, onProceed, onOpenMaterials, costos }: Ti
     );
 }
 
-export function GestoraAssignmentBar({ ticket, onAssign, isAdmin }: { ticket: any; onAssign?: () => void; isAdmin: boolean }) {
+export function GestoraAssignmentBar({ ticket, onAssign, canAssign }: { ticket: any; onAssign?: () => void; canAssign: boolean }) {
     const gestora = ticket.gestora || ticket.gestoraAsignado;
     const hasGestora = !!gestora;
 
@@ -1499,7 +1499,7 @@ export function GestoraAssignmentBar({ ticket, onAssign, isAdmin }: { ticket: an
                 )}
             </div>
 
-            {isAdmin && !ticket.estadoId.includes('cerrado') && (
+            {canAssign && !ticket.estadoId.includes('cerrado') && (
                 <button 
                     className={styles.reassignBtn}
                     onClick={onAssign}

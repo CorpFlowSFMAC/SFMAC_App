@@ -96,6 +96,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         return null;
     });
 
+    const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchMe = async () => {
+            const email = localStorage.getItem('userEmail');
+            if (!email) return;
+            const { data } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            if (data?.id) setMyGestoraId(data.id);
+        };
+        fetchMe();
+    }, []);
+
     const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
 
     const [ticketCosts, setTicketCosts] = useState<any[]>([]);
@@ -572,11 +584,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleGestoraAssignment = async (gestora: any) => {
         try {
+            const now = new Date().toISOString();
+            const isAdmin = userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
+            
+            // Build audit log entry (Traceability Rule)
+            const newLogEntry = {
+                tipo: 'REASIGNACION_MANUAL',
+                gestora_id: gestora.id,
+                gestora_nombre: gestora.name,
+                realizado_por: isAdmin ? 'Administrador' : 'Gestor(a)',
+                fecha: now,
+                cambio: {
+                    desde_id: ticketData.gestora_id || ticketData.metadata?.gestora?.id || null,
+                    desde_nombre: ticketData.gestora?.name || ticketData.metadata?.gestora?.name || 'Sin asignar'
+                }
+            };
+
+            const existingLogs = ticketData.metadata?.asignacionLog || [];
+            
             const dbUpdates = {
                 gestora_id: gestora.id,
                 metadata: {
                     ...ticketData.metadata,
-                    gestora: gestora
+                    gestora: gestora,
+                    asignacionLog: [...existingLogs, newLogEntry]
                 }
             };
             
@@ -589,7 +620,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             setTicketData((prev: any) => ({
                 ...prev,
                 gestora: gestora,
-                gestora_id: gestora.id
+                gestora_id: gestora.id,
+                metadata: {
+                    ...prev.metadata,
+                    gestora: gestora,
+                    asignacionLog: [...existingLogs, newLogEntry]
+                }
             }));
             
             showToast("Ticket Derivado", `El servicio ahora está a cargo de ${gestora.name}.`, "success");
@@ -1094,7 +1130,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                             <GestoraAssignmentBar 
                                 ticket={ticketData}
-                                isAdmin={userRole === 'admin' || userRole === 'superadmin'}
+                                canAssign={userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN' || (myGestoraId === ticketData.gestora_id)}
                                 onAssign={() => setShowGestoraDrawer(true)}
                             />
 

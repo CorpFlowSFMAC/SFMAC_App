@@ -490,6 +490,9 @@ export default function TicketsPage() {
                     <CreateTicketWizard
                         onClose={() => setShowWizard(false)}
                         onCreateTicket={handleCreateTicket}
+                        creatorRole={isAdminState ? 'ADMIN' : 'GESTORA'}
+                        creatorGestoraId={myGestoraId}
+                        creatorGestoraNombre={null}
                     />
                 )
             }

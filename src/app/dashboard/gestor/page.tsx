@@ -164,34 +164,31 @@ export default function GestorDashboard() {
 
     // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
+    const [myGestoraNombre, setMyGestoraNombre] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
     const fetchGestora = useCallback(async () => {
         try {
-            // 1. Obtener email de la sesión activa (más fiable que el localStorage solo)
             const { data: { user } } = await supabase.auth.getUser();
             const email = user?.email || localStorage.getItem('userEmail');
 
             if (!email) return;
-
-            // Asegurar persistencia básica
             if (user?.email) localStorage.setItem('userEmail', user.email);
 
-            // 2. Verificar rol de administrador (Admin ve TODO)
             const userRole = localStorage.getItem('userRole');
             if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
                 setIsAdmin(true);
             }
 
-            // 3. Buscar el ID de gestora fiable (Prioriza tabla gestoras por herencia)
-            const { data: g } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            const { data: g } = await supabase.from('gestoras').select('id, name').ilike('email', email).maybeSingle();
             if (g?.id) {
                 setMyGestoraId(g.id);
+                setMyGestoraNombre(g.name || null);
             } else {
-                // 4. Fallback a tabla perfiles si no está en gestoras (pero es una gestora registrada)
-                const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
+                const { data: p } = await supabase.from('perfiles').select('id, rol, nombre').ilike('email', email).maybeSingle();
                 if (p) {
                     if (p.id) setMyGestoraId(p.id);
+                    if (p.nombre) setMyGestoraNombre(p.nombre);
                     if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') setIsAdmin(true);
                 }
             }
@@ -1031,10 +1028,13 @@ export default function GestorDashboard() {
 
             {/* Modals */}
             {showWizard && (
-                <CreateTicketWizard
-                    onClose={() => setShowWizard(false)}
-                    onCreateTicket={handleCreateTicket}
-                />
+                    <CreateTicketWizard
+                        onClose={() => setShowWizard(false)}
+                        onCreateTicket={handleCreateTicket}
+                        creatorRole={isAdmin ? 'ADMIN' : 'GESTORA'}
+                        creatorGestoraId={myGestoraId}
+                        creatorGestoraNombre={myGestoraNombre}
+                    />
             )}
 
             {openTicketIds.map((ticketId, index) => {

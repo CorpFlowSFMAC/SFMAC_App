@@ -170,6 +170,13 @@ export async function POST(req: NextRequest) {
                     origen:                     'CORREO_A_TICKET',
                     gestora_auto_asignada:      !!gestoraId,
                     sede_mapeada:               !!branchId,
+                    asignacionLog: gestoraId ? [{
+                        tipo: 'ASIGNACION_AUTOMATICA_ROUTING',
+                        gestora_id: gestoraId,
+                        realizado_por: 'Modulo de Enrutamiento (Make)',
+                        fecha: new Date().toISOString(),
+                        detalle: branchId ? 'Asignación por cascada de sede/zona/cliente' : 'Asignación genérica'
+                    }] : []
                 }
             })
             .select('id')
