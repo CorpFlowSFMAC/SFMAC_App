@@ -436,8 +436,8 @@ export default function PaymentsPage() {
                         });
                     }
 
-                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE O EL TICKET ESTÁ EN LIQUIDACIÓN O TIENE SALDO)
-                    if (ticket.solicitudLiquidacion || ticket.estadoId === 'por_liquidar' || (saldoReal > 0.01 && ticket.estadoId !== 'ticket_cerrado')) {
+                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE O EL TICKET ESTÁ EN LIQUIDACIÓN)
+                    if (ticket.solicitudLiquidacion || ticket.estadoId === 'por_liquidar') {
                         const liqMonto = round2(ticket.solicitudLiquidacion?.monto || saldoReal);
                         if (liqMonto > 0.01) {
                             items.push({
@@ -510,13 +510,34 @@ export default function PaymentsPage() {
         }
 
         try {
+            // 0. DETERMINAR SI REVERTIMOS ESTADO
+            let newStatusId = null;
+            if (group.items.some(i => i.tipo === 'Movilidad / Visita' || i.id === `${group.ticketId}_visita`)) {
+                // Si denegamos pago de visita, el ticket regresa a técnico asignado
+                if (item.id === `${group.ticketId}_visita` || item.tipo === 'Movilidad / Visita') {
+                    newStatusId = 'tecnico_asignado';
+                }
+            } else if (item.tipo === 'Liquidación Final' || item.tipo === 'Saldo Pendiente (Auto)') {
+                // Si denegamos liquidación, regresa a documentación enviada
+                newStatusId = 'documentacion_enviada';
+            }
+
             // 1. SI ES COSTO DE TABLA (NUEVO)
             if (item.isTableCost && item.costId) {
                 await supabase
                     .from('ticket_costs')
                     .delete()
                     .eq('id', item.costId);
-                showToast('✅ Registro de costo eliminado');
+
+                // Si era una movilidad/viático vía tabla, también revisamos estado
+                if (item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('viático')) {
+                    const { data: t } = await supabase.from('tickets').select('status_id').eq('id', group.ticketId).single();
+                    if (t?.status_id === 'esperando_pago_visita') {
+                        await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.ticketId);
+                    }
+                }
+
+                showToast('✅ Registro de costo eliminado y solicitud denegada');
                 refresh();
                 return;
             }
@@ -524,13 +545,14 @@ export default function PaymentsPage() {
             // 2. FETCH FRESH METADATA (PARA LEGACY)
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
-                .select('metadata')
+                .select('metadata, status_id')
                 .eq('id', group.ticketId)
                 .single();
 
             if (fetchErr || !currentTicket?.metadata) return;
             
             const meta = { ...currentTicket.metadata };
+            const currentStatus = currentTicket.status_id;
 
             if (item.solicitudId) {
                 meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
@@ -538,18 +560,26 @@ export default function PaymentsPage() {
                 meta.solicitudAdelanto = null;
             } else if (item.tipo === 'Refuerzo') {
                 meta.solicitudAdelantoExtra = null;
-            } else if (item.tipo === 'Liquidación Final') {
+            } else if (item.tipo === 'Liquidación Final' || item.tipo === 'Saldo Pendiente (Auto)') {
                 meta.solicitudLiquidacion = null;
+                if (currentStatus === 'por_liquidar') newStatusId = 'documentacion_enviada';
             } else if (item.tipo === 'Movilidad / Visita') {
                 meta.solicitudPagoVisita = null;
+                if (currentStatus === 'esperando_pago_visita') newStatusId = 'tecnico_asignado';
+            }
+
+            const dbUpdates: any = { metadata: meta };
+            if (newStatusId) {
+                dbUpdates.status_id = newStatusId;
+                meta.estadoId = newStatusId; // Sincronizar metadata
             }
 
             await supabase
                 .from('tickets')
-                .update({ metadata: meta })
+                .update(dbUpdates)
                 .eq('id', group.ticketId);
 
-            showToast('✅ Solicitud legacy denegada');
+            showToast(`✅ Pago denegado. ${newStatusId ? 'Estado revertido.' : ''}`);
             refresh();
         } catch (err) {
             console.error('[Payments] Error denying payment:', err);
