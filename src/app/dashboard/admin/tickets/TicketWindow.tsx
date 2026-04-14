@@ -2271,8 +2271,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.checklistHeader}>
                                                     <ClipboardCheck size={32} color="#6366F1" />
                                                     <div style={{ textAlign: 'left' }}>
-                                                        <h3 className={styles.checklistTitle}>Checklist de Cierre y DocumentaciÃƒÂ³n</h3>
-                                                        <p className={styles.checklistSubtitle}>Valide los documentos obligatorios para proceder a la liquidaciÃƒÂ³n</p>
+                                                        <h3 className={styles.checklistTitle}>Checklist de Cierre y Documentación</h3>
+                                                        <p className={styles.checklistSubtitle}>Valide los documentos obligatorios para proceder a la liquidación</p>
                                                     </div>
                                                 </div>
 
