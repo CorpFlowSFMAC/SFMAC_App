@@ -361,11 +361,11 @@ export default function PaymentsPage() {
                 const items: PaymentItem[] = [];
                 const saldoReal = round2(totalPactadoInclVisita - totalPagadoArray);
 
-                // Solo procesamos solicitudes si hay saldo pendiente y el ticket no está cerrado
-                if (saldoReal > 0.01 && ticket.estadoId !== 'ticket_cerrado') {
+                // Relaxed condition: Process tickets that are not closed, even if formal saldo is 0
+                // (This allows material requests and early advances to show up before the quote is approved)
+                if (ticket.estadoId !== 'ticket_cerrado') {
                     const jobCostBase = round2(costoManoObra + costoMateriales);
 
-                    // 1. Adelanto (SOLO SI HAY SOLICITUD PENDIENTE Y NO ESTÁ PAGADO)
                     // 1. Adelanto (SOLO SI HAY SOLICITUD EXPLÍCITA)
                     if (ticket.solicitudAdelanto && !ticket.adelantoPagado) {
                         const adelantoMonto = round2(ticket.solicitudAdelanto.monto || 0);
@@ -380,7 +380,6 @@ export default function PaymentsPage() {
                         }
                     }
 
-                    // 2. Refuerzo (Extra)
                     // 2. Refuerzo (Extra)
                     if (ticket.solicitudAdelantoExtra && !ticket.solicitudAdelantoExtra.pagado) {
                         const refuerzoMonto = round2(ticket.solicitudAdelantoExtra.monto || 0);
@@ -401,7 +400,7 @@ export default function PaymentsPage() {
                             if (sol.estado === 'pendiente') {
                                 items.push({
                                     id: `${ticket.id}_solicitud_${sol.id}`,
-                                    tipo: 'Solicitud Gestora (M)',
+                                    tipo: sol.tipo || 'Solicitud Gestora (M)',
                                     monto: sol.monto,
                                     estado: 'pendiente',
                                     fecha: sol.fecha,

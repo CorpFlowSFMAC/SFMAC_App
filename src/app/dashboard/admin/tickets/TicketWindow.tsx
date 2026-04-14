@@ -288,6 +288,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [materialsForm, setMaterialsForm] = useState({
         concepto: "",
         monto: "",
+        categoria: "Materiales",
         specialist_id: "",
         specialistName: "",
         searchQuery: "",
@@ -944,7 +945,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             await ticketCostsAPI.create({
                 ticket_id: ticketData.id,
                 concepto: materialsForm.concepto.trim(),
-                categoria: "Materiales",
+                categoria: materialsForm.categoria || "Materiales",
                 specialist_id: materialsForm.specialist_id,
                 proveedor: materialsForm.specialistName,
                 monto: parseFloat(materialsForm.monto),
@@ -952,7 +953,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             });
             await loadCosts();
             setShowMaterialsModal(false);
-            setMaterialsForm({ concepto: "", monto: "", specialist_id: "", specialistName: "", searchQuery: "", showDropdown: false });
+            setMaterialsForm({ concepto: "", monto: "", categoria: "Materiales", specialist_id: "", specialistName: "", searchQuery: "", showDropdown: false });
             showToast(
                 "Solicitud Enviada a Tesorería",
                 `Compra de materiales para ${materialsForm.specialistName} registrada. Pendiente de abono.`,
@@ -2080,7 +2081,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             {documentosChecklist.declaracionJurada && <CheckCircle2 size={18} />}
                                                         </div>
                                                         <div className={styles.checkText}>
-                                                            <strong>3. DECLARACIÃƒâ€œN JURADA</strong>
+                                                            <strong>3. DECLARACIÓN JURADA</strong>
                                                             <span>Conformidad administrativa</span>
                                                         </div>
                                                     </div>
@@ -2098,7 +2099,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
 
-                                                    {/* Nuevo Item: NÃƒÂºmero de Ticket del Cliente */}
+                                                    {/* Nuevo Item: Número de Ticket del Cliente */}
                                                     <div
                                                         className={`${styles.checkItem} ${ticketData.numeroTicketCliente ? styles.checkItemActive : styles.checkItemAlert}`}
                                                         style={{ cursor: 'default' }}
@@ -2108,7 +2109,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                         <div className={styles.checkText}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <strong>5. NÃƒâ€œÃ…¡MERO DE TICKET DEL CLIENTE</strong>
+                                                                <strong>5. NÚMERO DE TICKET DEL CLIENTE</strong>
                                                                 {ticketData.numeroTicketCliente && (
                                                                     <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
                                                                 )}
@@ -2130,18 +2131,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             />
                                                             {!ticketData.numeroTicketCliente && (
                                                                 <span style={{ color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    Ã‚¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
+                                                                    ¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
                                                                 </span>
                                                             )}
                                                             {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
                                                                 <span style={{ color: '#F59E0B', fontSize: '0.65rem', fontWeight: 700, marginTop: '4px', lineHeight: '1.2' }}>
-                                                                    FORMATO REQUERIDO: MB + 6 DÃƒâ€œÃ‚ÂGITOS + PUNTO + AÃƒâ€œÃ¢â‚¬ËœO (26)<br />
+                                                                    FORMATO REQUERIDO: MB + 6 DÍGITOS + PUNTO + AÑO (26)<br />
                                                                     Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
                                                                 </span>
                                                             )}
                                                             {ticketData.numeroTicketCliente && (/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
                                                                 <span style={{ color: '#059669', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ FORMATO VÃƒâ€œÃ‚ÂLIDO
+                                                                    ✔ FORMATO VÁLIDO
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2159,16 +2160,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             documentosValidados: documentosChecklist
                                                         };
                                                         setTicketData(updated);
-                                                        showToast("DocumentaciÃƒÂ³n Validada", "El ticket ha pasado a liquidaciÃƒÂ³n final.", "success");
+                                                        showToast("Documentación Validada", "El ticket ha pasado a liquidación final.", "success");
                                                     }}
                                                 >
-                                                    <span>PASAR A LIQUIDACIÃƒâ€œN FINAL</span>
+                                                    <span>PASAR A LIQUIDACIÓN FINAL</span>
                                                     <ArrowRight size={20} />
                                                 </button>
 
                                                 {(!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente) && (
                                                     <p className={styles.checklistAlert}>
-                                                        * Todos los documentos y el nÃƒÂºmero de ticket del cliente son obligatorios para continuar.
+                                                        * Todos los documentos y el número de ticket del cliente son obligatorios para continuar.
                                                     </p>
                                                 )}
                                             </div>
@@ -2184,10 +2185,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
                                                     <div className={styles.liquidationTitles}>
                                                         <h3 style={ticketData.estadoId === "ticket_cerrado" ? { color: 'white' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "LiquidaciÃƒÂ³n Final de Servicio"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidación Final de Servicio"}
                                                         </h3>
                                                         <span style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la informaciÃƒÂ³n financiera ha sido auditada y cerrada." : "CÃƒ¡lculo automÃƒ¡tico del saldo pendiente para el tÃƒÂ©cnico"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la información financiera ha sido auditada y cerrada." : "Cálculo automático del saldo pendiente para el técnico"}
                                                         </span>
                                                     </div>
                                                     <div className={styles.liquidationTotalBadge}>
@@ -2204,7 +2205,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
 
                                                     <div className={styles.liquidationItem}>
-                                                        <span className={styles.liquidationLabel}>Total DepÃƒâ€œsitos Realizados</span>
+                                                        <span className={styles.liquidationLabel}>Total Depósitos Realizados</span>
                                                         <span className={styles.liquidationValue} style={{ color: '#059669' }}>
                                                             - S/ {(ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
@@ -2298,9 +2299,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 {ticketData.estadoId === "por_liquidar" && (
                                                     <div className={styles.waitingForManager} style={{ padding: '30px', background: '#F8FAFC', borderRadius: '20px', border: '1px solid #E2E8F0', marginTop: '20px' }}>
                                                         <Clock size={28} color="#3B82F6" />
-                                                        <span style={{ fontSize: '1.2rem', color: '#1E293B', fontWeight: 800 }}>LIQUIDACIÃƒâ€œN EN PROCESO</span>
+                                                        <span style={{ fontSize: '1.2rem', color: '#1E293B', fontWeight: 800 }}>LIQUIDACIÓN EN PROCESO</span>
                                                         <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 500, maxWidth: '400px', textAlign: 'center' }}>
-                                                            Registre el depÃƒÂ³sito final en el panel de <strong>TesorerÃƒÂ­a</strong> inferior para cerrar este ticket definitivamente.
+                                                            Registre el depósito final en el panel de <strong>Tesorería</strong> inferior para cerrar este ticket definitivamente.
                                                         </span>
                                                     </div>
                                                 )}
@@ -2327,7 +2328,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.statusBadge}>{ticketData.estadoId?.replace('_', ' ')}</div>
-                                            <p>Este mÃƒÂ³dulo operativo se encuentra en preparaciÃƒÂ³n.</p>
+                                            <p>Este módulo operativo se encuentra en preparación.</p>
                                         </div>
                                     )}
                                 </>
@@ -2335,7 +2336,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
 
                         {/* ========================================
-                            Ã°Å¸â€œÅ  GESTIÃƒâ€œN DE COSTOS Y EGRESOS
+                            📊 GESTIÓN DE COSTOS Y EGRESOS
                            ======================================== */}
                         <div className={styles.costsSection}>
                             <div className={styles.costsHeader}>
@@ -2350,6 +2351,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </p>
                                     </div>
                                 </div>
+                                <button 
+                                    className={styles.addCostActionBtn}
+                                    onClick={() => {
+                                        setMaterialsForm(prev => ({ ...prev, categoria: 'Materiales' }));
+                                        setShowMaterialsModal(true);
+                                    }}
+                                >
+                                    <Plus size={18} />
+                                    <span>Añadir Gasto / Pago</span>
+                                </button>
                             </div>
 
                             <div className={styles.costsStatsGrid}>
@@ -2624,7 +2635,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     <Package size={24} />
                                 </div>
                                 <div className={styles.negoTitleGroup}>
-                                    <h3>Solicitud Pago de Materiales</h3>
+                                    <h3>Solicitud de Pago / Gasto</h3>
                                     <span>Registro de egreso para técnico externo</span>
                                 </div>
                                 <button className={styles.closeNegoBtn} onClick={() => setShowMaterialsModal(false)}>
@@ -2634,6 +2645,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                             <div className={styles.negotiationModalContent}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {/* Categoría */}
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Categoría del Gasto</label>
+                                        <select 
+                                            value={materialsForm.categoria}
+                                            onChange={e => setMaterialsForm(prev => ({ ...prev, categoria: e.target.value }))}
+                                            className={styles.formSelect}
+                                            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', outline: 'none', background: 'white', color: '#1E293B', fontWeight: 600 }}
+                                        >
+                                            <option value="Materiales">Materiales</option>
+                                            <option value="Mano de Obra">Mano de Obra (Técnico Externo)</option>
+                                            <option value="Viáticos">Viáticos / Movilidad</option>
+                                            <option value="Logística">Logística / Envíos</option>
+                                            <option value="Otros">Otros Egresos</option>
+                                        </select>
+                                    </div>
+
                                     {/* Concepto */}
                                     <div className={styles.negoInputWrapper}>
                                         <label>Concepto / Referencia</label>
