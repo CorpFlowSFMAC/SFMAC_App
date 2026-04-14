@@ -3880,5 +3880,122 @@
     gap: 16px;
 }
 
+/* ========================================
+   💎 PREMIUM STYLES FOR EXECUTION
+   ======================================== */
 
+.operationalFlowCard {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 0;
+}
 
+.premiumApprovedNotice {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+    border-radius: 24px;
+    border: 1px solid #BBF7D0;
+    box-shadow: 0 10px 30px rgba(187, 247, 208, 0.25);
+    width: 100%;
+    animation: fadeScale 0.4s ease-out;
+}
+
+@keyframes fadeScale {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.approvedIconGlow {
+    width: 80px;
+    height: 80px;
+    background: white;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+}
+
+.noticeBody {
+    text-align: left;
+}
+
+.noticeTitle {
+    margin: 0;
+    color: #065F46;
+    font-size: 1.4rem;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+}
+
+.noticeText {
+    margin: 6px 0 0 0;
+    font-size: 1rem;
+    color: #10B981;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.dropZoneExecutionPremium {
+    height: 160px;
+    border: 3px dashed #6366F1;
+    background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #4F46E5;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 4px 0 rgba(99, 102, 241, 0.1);
+}
+
+.dropZoneExecutionPremium:hover {
+    transform: translateY(-4px);
+    background: white;
+    border-color: #4F46E5;
+    box-shadow: 0 15px 35px rgba(99, 102, 241, 0.2);
+    color: #4F46E5;
+}
+
+.dropZoneIconWrapper {
+    width: 60px;
+    height: 60px;
+    background: #6366F1;
+    color: white;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
+    transition: all 0.3s;
+}
+
+.dropZoneExecutionPremium:hover .dropZoneIconWrapper {
+    transform: rotate(10deg) scale(1.1);
+    background: #4F46E5;
+}
+
+.dropZonePrimary {
+    font-size: 110%;
+    font-weight: 800;
+    margin-bottom: 4px;
+    letter-spacing: -0.2px;
+}
+
+.dropZoneSecondary {
+    font-size: 85%;
+    color: #6366F1;
+    opacity: 0.7;
+    font-weight: 600;
+}

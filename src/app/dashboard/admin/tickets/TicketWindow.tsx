@@ -10,6 +10,7 @@ import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId } from "@/lib/ticketStates";
+import { supabase } from "@/lib/supabase";
 import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
@@ -1963,7 +1964,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         transition: 'all 0.2s ease'
                                                     }}
                                                 >
-                                                    RENEGOCIAR COTIZACIÃ“N
+                                                    RENEGOCIAR COTIZACIÓN
                                                 </button>
                                             </div>
                                         </div>
@@ -1973,12 +1974,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         <div className={styles.stepActions}>
                                             <div className={styles.operationalFlowCard}>
                                                 {ticketData.estadoId === "cotizacion_aprobada" && (
-                                                    <div className={styles.approvedStatusNotice}>
-                                                        <div className={styles.approvedIcon}>Ã¢Å“â€¦</div>
-                                                        <div style={{ textAlign: 'left' }}>
-                                                            <h3 style={{ margin: 0, color: '#065F46', fontSize: '1.2rem', fontWeight: 800 }}>Presupuesto Aprobado por Cliente</h3>
-                                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.9rem', color: '#059669', fontWeight: 500 }}>
-                                                                Proceda con la ejecuciÃƒÂ³n de los trabajos segÃƒÂºn lo cotizado.
+                                                    <div className={styles.premiumApprovedNotice}>
+                                                        <div className={styles.approvedIconGlow}>
+                                                            <CheckCircle2 size={48} color="#10B981" />
+                                                        </div>
+                                                        <div className={styles.noticeBody}>
+                                                            <h3 className={styles.noticeTitle}>Presupuesto Aprobado por Cliente</h3>
+                                                            <p className={styles.noticeText}>
+                                                                Proceda con la <strong>ejecución</strong> de los trabajos <strong>según</strong> lo cotizado.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -1988,7 +1991,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <div className={styles.evidenceSection}>
                                                         <div className={styles.sectionHeaderMini}>
                                                             <Camera size={18} />
-                                                            <h4>EVIDENCIAS DE EJECUCIÃƒâ€œN</h4>
+                                                            <h4>EVIDENCIAS DE EJECUCIÓN</h4>
                                                         </div>
                                                         <div className={styles.evidenceGridExecution}>
                                                             {evidenciasEjecucion.map((ev, idx) => (
@@ -2007,11 +2010,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </div>
                                                             ))}
                                                             <div
-                                                                className={styles.dropZoneExecution}
+                                                                className={styles.dropZoneExecutionPremium}
                                                                 onClick={() => fileInputRef.current?.click()}
                                                             >
-                                                                <Upload size={20} />
-                                                                <span>Adjuntar Foto</span>
+                                                                <div className={styles.dropZoneIconWrapper}>
+                                                                    <Upload size={28} />
+                                                                </div>
+                                                                <span className={styles.dropZonePrimary}>Adjuntar Evidencias</span>
+                                                                <span className={styles.dropZoneSecondary}>Haga clic aquí para subir fotos de la ejecución</span>
                                                                 <input
                                                                     type="file"
                                                                     ref={fileInputRef}
