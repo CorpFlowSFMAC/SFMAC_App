@@ -86,7 +86,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [montoSubtotal, setMontoSubtotal] = useState(ticketData.montoSubtotal || 0);
     const [montoIGV, setMontoIGV] = useState(ticketData.montoIGV || 0);
     const quotationEditorRef = useRef<any>(null);
-    const [partidasCotizacion, setPartidasCotizacion] = useState<any[]>(ticketData.partidas || []);
+    const [partidasCotización, setPartidasCotización] = useState<any[]>(ticketData.partidas || []);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
@@ -311,7 +311,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     });
     const [isSavingMaterials, setIsSavingMaterials] = useState(false);
 
-    const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizacionBCP || null);
+    const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizaciónBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -399,7 +399,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             is_sla_paused: isAdmin ? businessData.pausadoSLA : ticket.is_sla_paused,
             sla_pause_date: isAdmin ? businessData.fechaPausa : ticket.sla_pause_date,
             sla_reactivation_date: isAdmin ? businessData.fechaReactivacion : ticket.sla_reactivation_date,
-            quotation_date: businessData.fechaCotizacion,
+            quotation_date: businessData.fechaCotización,
             execution_date: sourceForPayments.fechaInicioEjecucion || ticket.execution_date,
             closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
             metadata: {
@@ -676,7 +676,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                 setTicketData((prev: any) => ({
                     ...prev,
-                    archivoCotizacionBCP: {
+                    archivoCotizaciónBCP: {
                         name: file.name,
                         url: b64,
                         type: file.type,
@@ -711,14 +711,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const updated = {
             ...ticketData,
             estadoId: "cotizacion_enviada",
-            fechaCotizacion: new Date().toISOString(),
-            partidas: partidasCotizacion,
+            fechaCotización: new Date().toISOString(),
+            partidas: partidasCotización,
             montoFinal: montoTotalCotizado,
             montoSubtotal: montoSubtotal,
             montoIGV: montoIGV,
             pausadoSLA: true,
             fechaPausa: new Date().toISOString(),
-            archivoCotizacionBCP: isBCP ? bcpQuotationFile : null
+            archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
         };
 
         setTicketData(updated);
@@ -1082,7 +1082,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
         if (!materialsForm.specialist_id) {
-            showTécnico requerido", "Seleccione el técnico externo para esta compra.", "error");
+            showToast("Técnico requerido", "Seleccione el técnico externo para esta compra.", "error");
             return;
         }
         setIsSavingMaterials(true);
@@ -1768,7 +1768,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <FileSpreadsheet size={24} color="#ffffff" />
                                                                     </div>
                                                                     <div>
-                                                                        <h4 style={{ margin: 0, color: '#0f172a', fontSize: '17px', fontWeight: 800 }}>CotizaciÃƒÂ³n Formato BCP</h4>
+                                                                        <h4 style={{ margin: 0, color: '#0f172a', fontSize: '17px', fontWeight: 800 }}>Cotización Formato BCP</h4>
                                                                         <p style={{ margin: 0, color: '#64748b', fontSize: '13px', fontWeight: 500 }}>
                                                                             Uso obligatorio de la plantilla oficial de Excel.
                                                                         </p>
@@ -1931,10 +1931,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 sedeInfo={ticketData.sede}
                                                                 servicioId={ticketData.servicioId}
                                                                 ticketId={ticketData.numeroTicketCliente || ticketData.id}
-                                                                initialItems={partidasCotizacion}
+                                                                initialItems={partidasCotización}
                                                                 suggestedTotal={round2((round2(ticketData.costoManoObra || 0) + round2(ticketData.costoMateriales || 0) + round2(ticketData.costoVisita || 0)) / 0.45)}
                                                                 onUpdate={(items: any[], total: number) => {
-                                                                    setPartidasCotizacion(items);
+                                                                    setPartidasCotización(items);
                                                                     setMontoTotalCotizado(total);
                                                                 }}
                                                             />
@@ -1958,10 +1958,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             ...ticketData,
                                                                             modificacionAutorizada: false,
                                                                             montoFinal: montoTotalCotizado,
-                                                                            partidas: partidasCotizacion,
+                                                                            partidas: partidasCotización,
                                                                             fechaUltimaModificacion: new Date().toISOString()
                                                                         });
-                                                                        showToast("CotizaciÃƒÂ³n Guardada", "Cambios guardados y cotizaciÃƒÂ³n bloqueada nuevamente.", "success");
+                                                                        showToast("Cotización Guardada", "Cambios guardados y cotizaciÃƒÂ³n bloqueada nuevamente.", "success");
                                                                     }}
                                                                 >
                                                                     <CheckCircle size={18} />
