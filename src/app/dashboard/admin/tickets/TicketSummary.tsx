@@ -154,6 +154,7 @@ export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: 
     const getVoucherSrc = (ref?: string | null) => {
         if (!ref) return "";
         if (ref.startsWith("data:image")) return ref;
+        if (typeof window === 'undefined') return "";
         return localStorage.getItem(ref) || "";
     };
 
@@ -1132,7 +1133,7 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
                                     <button
                                         onClick={() => {
                                             const src = p.voucher
-                                                || (p.voucherRef?.startsWith('data:image') ? p.voucherRef : localStorage.getItem(p.voucherRef) || p.voucherRef || '');
+                                                || (p.voucherRef?.startsWith('data:image') ? p.voucherRef : (typeof window !== 'undefined' ? (localStorage.getItem(p.voucherRef) || p.voucherRef || '') : ''));
                                             if (src) setViewingVoucher(src);
                                         }}
                                         style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#6366F1' }}
@@ -1264,6 +1265,7 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
         if (p.voucher && p.voucher.startsWith('data:image')) return p.voucher;
         if (p.voucherRef) {
             if (p.voucherRef.startsWith('data:image')) return p.voucherRef;
+            if (typeof window === 'undefined') return p.voucherRef || '';
             return localStorage.getItem(p.voucherRef) || p.voucherRef || '';
         }
         return '';
