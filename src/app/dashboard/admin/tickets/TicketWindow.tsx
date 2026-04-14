@@ -202,7 +202,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
                         'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
                         'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
-                        'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
+                        'en_ejecucion': 8, 'documentaciónviada': 9, 'por_liquidar': 10,
                         'ticket_cerrado': 12
                     };
                     const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
@@ -372,7 +372,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
             'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
             'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
-            'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
+            'en_ejecucion': 8, 'documentaciónviada': 9, 'por_liquidar': 10,
             'ticket_cerrado': 12
         };
         const localStateOrder = STATE_ORDER[businessData.estadoId] ?? 0;
@@ -872,7 +872,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         const updated = {
             ...ticketData,
-            solicitudLiquidacion: {
+            solicitudLiquidación: {
                 monto: amount,
                 fecha: new Date().toISOString()
             },
@@ -890,7 +890,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
         const updated = {
             ...ticketData,
-            estadoId: "documentacion_enviada",
+            estadoId: "documentaciónviada",
             fechaFinEjecucion: new Date().toISOString(),
             gastos: gastos,
             evidenciasEjecucion: evidenciasEjecucion,
@@ -1575,7 +1575,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
+                                    {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
                                         <div className={`${styles.quotationBox} ${isQuotationCollapsed && ticketData.estadoId !== "en_cotizacion" ? styles.collapsedQuotation : ''}`}>
                                             <div className={styles.quotationHeader} onClick={() => ticketData.estadoId !== "en_cotizacion" && setIsQuotationCollapsed(!isQuotationCollapsed)}>
                                                 <FileSpreadsheet size={28} color="#10B981" />
@@ -1591,7 +1591,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </p>
                                                 </div>
 
-                                                {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && (
+                                                {["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && (
                                                     <div className={styles.headerRightActions}>
                                                         {!ticketData.modificacionAutorizada && (
                                                             <div style={{ background: '#fef2f2', color: '#ef4444', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid #fee2e2' }}>
@@ -1707,7 +1707,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </p>
                                                             )}
 
-                                                            {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
+                                                            {["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
                                                                 <div className={styles.authorizationSection}>
                                                                     <div className={styles.authLockIcon}>
                                                                         <Lock size={40} />
@@ -1893,7 +1893,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             // --- VISTA ESTÃƒâ€œÃ‚ÂNDAR (EDITOR PDF) ---
                                                             <OnlineQuotationEditor
                                                                 ref={quotationEditorRef}
-                                                                isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
+                                                                isLocked={["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
                                                                 clientInfo={ticketData.cliente}
                                                                 sedeInfo={ticketData.sede}
                                                                 servicioId={ticketData.servicioId}
@@ -2158,7 +2158,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "documentacion_enviada" && (
+                                    {ticketData.estadoId === "documentaciónviada" && (
                                         <div className={styles.checklistContainer}>
                                             <div className={styles.checklistCard}>
                                                 <div className={styles.checklistHeader}>
@@ -2334,13 +2334,34 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </span>
                                                     </div>
 
+                                                    {(ticketData.historialPagosTécnico || []).length > 0 && (
+                                                        <div className={styles.liquidationHistory}>
+                                                            {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
+                                                                <div key={i} className={styles.historyItem}>
+                                                                    <div className={styles.historyLabel}>
+                                                                        <span>{p.tipo === 'ADELANTO' ? 'Adelanto' : p.tipo === 'MATERIALES' ? 'Materiales' : 'Depósito'}</span>
+                                                                        <span className={styles.historyDate}>({new Date(p.fecha).toLocaleDateString('es-PE')})</span>
+                                                                    </div>
+                                                                    <span className={styles.historyAmount}>- S/ {p.monto.toFixed(2)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)) < 0 && (
+                                                        <div className={styles.liquidationWarning}>
+                                                            <AlertTriangle size={20} />
+                                                            <span>ALERTA: Los depósitos realizados superan el monto pactado.</span>
+                                                        </div>
+                                                    )}
+
                                                     <div className={styles.liquidationSummary}>
                                                         <div className={styles.summaryRow}>
                                                             <span>{ticketData.estadoId === "ticket_cerrado" ? "TOTAL TRANSFERIDO:" : "SALDO A DEPOSITAR:"}</span>
                                                             <strong>
                                                                 S/ {ticketData.estadoId === "ticket_cerrado"
                                                                     ? (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                                    : ((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                    : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
                                                                 }
                                                             </strong>
                                                         </div>
@@ -2448,7 +2469,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
+                                    {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.statusBadge}>{ticketData.estadoId?.replace('_', ' ')}</div>
                                             <p>Este módulo operativo se encuentra en preparación.</p>

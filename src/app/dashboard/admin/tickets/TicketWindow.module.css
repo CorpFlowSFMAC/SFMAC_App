@@ -2579,6 +2579,53 @@
     align-items: center;
 }
 
+.liquidationHistory {
+    margin: 8px 0 16px 20px;
+    padding-left: 16px;
+    border-left: 2px solid #E2E8F0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.historyItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #64748B;
+}
+
+.historyLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.historyDate {
+    font-size: 0.75rem;
+    color: #94A3B8;
+}
+
+.historyAmount {
+    font-weight: 700;
+    color: #475569;
+}
+
+.liquidationWarning {
+    background: #FFF1F2;
+    border: 1px solid #FECDD3;
+    color: #E11D48;
+    padding: 16px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+}
+
 .liquidationLabel {
     font-size: 0.9rem;
     color: #64748B;
