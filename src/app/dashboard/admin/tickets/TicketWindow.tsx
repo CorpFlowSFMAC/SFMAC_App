@@ -1946,114 +1946,40 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "cotizacion_enviada" && (
-                                        <div style={{
-                                            textAlign: 'center',
-                                            padding: '60px 40px',
-                                            background: '#ffffff',
-                                            borderRadius: '32px',
-                                            boxShadow: '0 20px 50px rgba(0,0,0,0.05)',
-                                            border: '1px solid #f1f5f9',
-                                            maxWidth: '650px',
-                                            margin: '30px auto',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '24px'
-                                        }}>
-                                            <div style={{ position: 'relative' }}>
-                                                <div style={{
-                                                    background: 'linear-gradient(135deg, #dcfce7, #bbf7d0)',
-                                                    padding: '28px',
-                                                    borderRadius: '50%',
-                                                    display: 'inline-flex',
-                                                    boxShadow: '0 12px 24px rgba(34, 197, 94, 0.15)'
-                                                }}>
-                                                    <Sparkles size={48} color='#15803d' />
-                                                </div>
-                                                <div style={{
-                                                    position: 'absolute',
-                                                    bottom: -8,
-                                                    right: -8,
-                                                    background: '#22c55e',
-                                                    color: 'white',
-                                                    borderRadius: '50%',
-                                                    padding: '6px',
-                                                    border: '4px solid #ffffff',
-                                                    boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
-                                                }}>
-                                                    <CheckCircle size={20} />
-                                                </div>
+                                    {(ticketData.estadoId === "cotizacion_enviada") && (
+                                        <div className={styles.successWaitingCard}>
+                                            <div className={styles.successIconWrapper}>
+                                                <CheckCircle size={48} />
                                             </div>
 
                                             <div>
-                                                <h3 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.04em' }}>
-                                                    Cotización Enviada con Éxito
-                                                </h3>
-                                                <p style={{ margin: 0, fontSize: '16px', color: '#64748b', lineHeight: 1.7, fontWeight: 500 }}>
-                                                    El presupuesto formal ha sido enviado al correo del cliente.<br />
-                                                    El ticket permanecerá en pausa hasta esperar <strong>aprobación</strong> o solicitud de ajuste.
+                                                <h2 className={styles.successTitle}>Cotización Enviada con Éxito</h2>
+                                                <p className={styles.successDescription}>
+                                                    El presupuesto formal ha sido enviado al correo del cliente. <br />
+                                                    El ticket permanecerá en pausa hasta recibir su confirmación.
                                                 </p>
                                             </div>
 
-                                            <div style={{
-                                                background: 'linear-gradient(135deg, #fff7ed, #ffedd5)',
-                                                padding: '14px 28px',
-                                                borderRadius: '16px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '12px',
-                                                border: '1px solid #fed7aa',
-                                                boxShadow: '0 4px 12px rgba(251, 146, 60, 0.05)'
-                                            }}>
-                                                <Clock size={18} color='#c2410c' />
-                                                <span style={{ fontSize: '14px', fontWeight: 800, color: '#c2410c', letterSpacing: '0.03em' }}>
-                                                    ESPERANDO APROBACIÃ“N DEL CLIENTE
-                                                </span>
+                                            <div className={styles.waitingBadge}>
+                                                <Clock size={18} />
+                                                <span>Esperando Aprobación del Cliente</span>
                                             </div>
 
-                                            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: '14px', marginTop: '10px' }}>
+                                            <div className={styles.actionButtonGroup}>
                                                 <button
+                                                    className={styles.primaryActionBtn}
                                                     onClick={handleApproveQuote}
-                                                    style={{
-                                                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        padding: '20px 32px',
-                                                        borderRadius: '18px',
-                                                        fontSize: '16px',
-                                                        fontWeight: 800,
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '12px',
-                                                        boxShadow: '0 8px 20px rgba(34, 197, 94, 0.25)',
-                                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                                                    }}
                                                 >
                                                     <ThumbsUp size={22} />
                                                     <span>REGISTRAR APROBACIÓN DEL CLIENTE</span>
                                                 </button>
 
                                                 <button
+                                                    className={styles.secondaryActionBtn}
                                                     onClick={() => setTicketData({ ...ticketData, estadoId: 'en_cotizacion' })}
-                                                    style={{
-                                                        background: 'transparent',
-                                                        color: '#64748b',
-                                                        border: '2px solid #f1f5f9',
-                                                        padding: '14px 28px',
-                                                        borderRadius: '16px',
-                                                        fontSize: '15px',
-                                                        fontWeight: 600,
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: '10px',
-                                                        transition: 'all 0.2s ease'
-                                                    }}
                                                 >
-                                                    RENEGOCIAR COTIZACIÓN
+                                                    <Edit3 size={18} />
+                                                    <span>RENEGOCIAR O AJUSTAR COTIZACIÓN</span>
                                                 </button>
                                             </div>
                                         </div>
