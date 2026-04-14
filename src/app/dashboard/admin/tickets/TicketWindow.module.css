@@ -4222,3 +4222,64 @@
     from { opacity: 0; transform: translateY(-20px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* PREMIUM ACTION BUTTON (TICKET WINDOW) */
+.mainActionBtnPremium {
+    background: linear-gradient(135deg, #7C3AED 0%, #8B5CF6 50%, #A78BFA 100%);
+    color: white;
+    border: none;
+    padding: 16px 40px;
+    border-radius: 16px;
+    font-weight: 900;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 25px rgba(124, 58, 237, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 10px auto;
+}
+
+.mainActionBtnPremium:hover {
+    transform: translateY(-5px) scale(1.05);
+    box-shadow: 0 15px 35px rgba(124, 58, 237, 0.4);
+    background: linear-gradient(135deg, #6D28D9 0%, #7C3AED 50%, #8B5CF6 100%);
+}
+
+.mainActionBtnPremium:active {
+    transform: translateY(-2px) scale(0.98);
+}
+
+.btnArrow {
+    transition: transform 0.3s ease;
+}
+
+.mainActionBtnPremium:hover .btnArrow {
+    transform: translateX(6px);
+}
+
+.mainActionBtnPremium::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -100%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.2) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(30deg);
+    transition: all 0.6s ease;
+}
+
+.mainActionBtnPremium:hover::after {
+    left: 100%;
+}

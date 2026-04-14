@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -1388,11 +1388,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {ticketData.estadoId === "nuevo" && (
                                         <div className={styles.stepActions}>
                                             <p className={styles.stepHint}>
-                                                Revise la informaciÃƒÂ³n y proceda a la asignaciÃƒÂ³n del especialista.
+                                                Revise la información y proceda a la asignación del especialista.
                                             </p>
-                                            <button className={styles.mainActionBtn} onClick={handleProceedToAssignment}>
-                                                <span>Asignar TÃƒÂ©cnico</span>
-                                                <ArrowRight size={18} />
+                                            <button className={styles.mainActionBtnPremium} onClick={handleProceedToAssignment}>
+                                                <UserPlus size={20} />
+                                                <span>Asignar Técnico</span>
+                                                <ArrowRight size={18} className={styles.btnArrow} />
                                             </button>
                                         </div>
                                     )}
