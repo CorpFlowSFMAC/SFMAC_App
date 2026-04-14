@@ -1475,7 +1475,7 @@ export function GestoraAssignmentBar({ ticket, onAssign, isAdmin }: { ticket: an
                 <div className={styles.titleText}>
                     <h3 style={{ color: hasGestora ? '#3730A3' : '#9A3412' }}>Gestión Operativa</h3>
                     <span style={{ color: hasGestora ? '#4F46E5' : '#C2410C' }}>
-                        {hasGestora ? 'Responsable Asignada' : 'Pendiente de Derivación'}
+                        {hasGestora ? 'Responsable Asignado(a)' : 'Pendiente de Derivación'}
                     </span>
                 </div>
             </div>
@@ -1483,7 +1483,7 @@ export function GestoraAssignmentBar({ ticket, onAssign, isAdmin }: { ticket: an
             <div className={styles.verticalDivider} />
 
             <div className={styles.infoItem} style={{ flex: 1.5 }}>
-                <span className={styles.infoLabel}>Gestora</span>
+                <span className={styles.infoLabel}>Gestor(a)</span>
                 {hasGestora ? (
                     <div className={styles.clienteCompact}>
                         <div className={styles.clienteAvatar} style={{ background: '#6366F1' }}>

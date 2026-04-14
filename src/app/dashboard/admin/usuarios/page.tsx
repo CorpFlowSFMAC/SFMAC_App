@@ -23,7 +23,7 @@ const ROLE_CONFIG: Record<UserRole, { label: string; icon: React.ReactNode; avat
         color: "#8B5CF6"
     },
     GESTORA: {
-        label: "Gestora Operativa",
+        label: "Gestor(a) Operativo(a)",
         icon: <UserCheck size={14} />,
         avatarClass: styles.userAvatarGestora,
         selectClass: styles.roleSelectGestora,
@@ -201,7 +201,7 @@ export default function UsuariosPage() {
                     </div>
                     <div className={styles.statContent}>
                         <span className={styles.statValue}>{stats.gestoras}</span>
-                        <span className={styles.statLabel}>Gestoras</span>
+                        <span className={styles.statLabel}>Gestores(as)</span>
                     </div>
                 </div>
                 <div className={styles.statCard}>
@@ -243,7 +243,7 @@ export default function UsuariosPage() {
                 >
                     <option value="">Todos los roles</option>
                     <option value="ADMIN">🛡️ Administrador</option>
-                    <option value="GESTORA">✅ Gestora</option>
+                    <option value="GESTORA">✅ Gestor(a)</option>
                     <option value="ESPECTADOR">👁️ Espectador</option>
                     <option value="SIN_ACCESO">⏳ Sin acceso</option>
                 </select>
@@ -328,7 +328,7 @@ export default function UsuariosPage() {
                                                 disabled={isSaving}
                                             >
                                                 <option value="ADMIN">🛡️ Administrador</option>
-                                                <option value="GESTORA">✅ Gestora Operativa</option>
+                                                <option value="GESTORA">✅ Gestor(a) Operativo(a)</option>
                                                 <option value="ESPECTADOR">👁️ Espectador</option>
                                                 <option value="SIN_ACCESO">⏳ Sin acceso</option>
                                             </select>

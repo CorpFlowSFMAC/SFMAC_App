@@ -1086,7 +1086,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         <div className={styles.infoHistory}>
                             <InfoBarBase
                                 ticket={ticketData}
-                                title="RevisiÃƒÂ³n Inicial"
+                                title="Revisión Inicial"
                                 icon={FileText}
                                 color="#8B5CF6"
                                 gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"

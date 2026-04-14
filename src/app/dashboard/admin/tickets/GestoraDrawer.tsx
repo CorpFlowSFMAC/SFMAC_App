@@ -48,7 +48,7 @@ export default function GestoraDrawer({ isOpen, onClose, onAssign }: GestoraDraw
                 <div className={styles.header}>
                     <div className={styles.headerContent}>
                         <h2>Derivar Ticket</h2>
-                        <p>Seleccione la gestora responsable para este servicio</p>
+                        <p>Seleccione el/la gestor(a) responsable para este servicio</p>
                     </div>
                     <button className={styles.closeBtn} onClick={onClose}>
                         <X size={20} />
@@ -59,7 +59,7 @@ export default function GestoraDrawer({ isOpen, onClose, onAssign }: GestoraDraw
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Buscar gestora por nombre o correo..."
+                        placeholder="Buscar gestor(a) por nombre o correo..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -69,11 +69,11 @@ export default function GestoraDrawer({ isOpen, onClose, onAssign }: GestoraDraw
                     {loading ? (
                         <div className={styles.loadingContent}>
                             <RefreshCw className={styles.spin} />
-                            <p>Cargando gestoras...</p>
+                            <p>Cargando gestores(as)...</p>
                         </div>
                     ) : filtered.length === 0 ? (
                         <div className={styles.emptyState}>
-                            <p>No se encontraron gestoras activas</p>
+                            <p>No se encontraron gestores(as) activos(as)</p>
                         </div>
                     ) : (
                         filtered.map(g => (
@@ -101,7 +101,7 @@ export default function GestoraDrawer({ isOpen, onClose, onAssign }: GestoraDraw
                                     </div>
                                     <div className={styles.detailItem} style={{ marginTop: "4px" }}>
                                         <ShieldCheck size={12} color="#10b981" />
-                                        <span style={{ color: "#10b981", fontWeight: 700, fontSize: "10px" }}>ROL GESTORA</span>
+                                        <span style={{ color: "#10b981", fontWeight: 700, fontSize: "10px" }}>ROL GESTOR(A)</span>
                                     </div>
                                 </div>
                             </div>
@@ -117,7 +117,7 @@ export default function GestoraDrawer({ isOpen, onClose, onAssign }: GestoraDraw
                         style={{ background: "linear-gradient(135deg, #4f46e5, #7c3aed)" }}
                     >
                         <UserCheck size={18} />
-                        Derivar a esta Gestora
+                        Derivar Ticket a Responsable
                     </button>
                 </div>
             </div>

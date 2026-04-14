@@ -24,7 +24,7 @@ export interface TicketState {
     nombre: string;
     nombreCorto: string;
     descripcion: string;
-    actor: "Gestora" | "Técnico" | "Cliente" | "Gerente" | "Sistema";
+    actor: "Gestor(a)" | "Técnico" | "Cliente" | "Gerente" | "Sistema";
     tipo: "operativo" | "pausa" | "final" | "alerta";
     color: string;
     icon: any;
@@ -52,7 +52,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "Nuevo / Pendiente de Asignación",
         nombreCorto: "Nuevo",
         descripcion: "Ticket activo, pendiente de asignar técnico",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "operativo",
         color: "#8B5CF6",
         icon: FileText,
@@ -65,7 +65,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "Nuevo Ticket",
         nombreCorto: "Nuevo",
         descripcion: "Ticket nuevo activo, pendiente de asignar técnico",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "operativo",
         color: "#8B5CF6",
         icon: FileText,
@@ -77,7 +77,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "Técnico Asignado",
         nombreCorto: "Asignado",
         descripcion: "Asignación del técnico según zona, especialidad y tipo de servicio",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "operativo",
         color: "#3B82F6",
         icon: UserCheck,
@@ -91,7 +91,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "En Inspección / Visita Programada",
         nombreCorto: "Visita Programada",
         descripcion: "Se agenda la visita técnica",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "operativo",
         color: "#0EA5E9",
         icon: Calendar,
@@ -123,7 +123,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "En Cotización",
         nombreCorto: "Cotizando",
         descripcion: "Elaboración de cotización formal en Excel",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "operativo",
         color: "#10B981",
         icon: FileSpreadsheet,
@@ -139,7 +139,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "Cotización Enviada",
         nombreCorto: "Enviada",
         descripcion: "El presupuesto es enviado al cliente",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "operativo",
         color: "#F59E0B",
         icon: Send,
@@ -202,7 +202,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "Por Liquidar / Validación Final",
         nombreCorto: "Por Liquidar",
         descripcion: "Validación técnica y administrativa",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "operativo",
         color: "#A855F7",
         icon: Scale,
@@ -261,7 +261,7 @@ export const TICKET_STATES: TicketState[] = [
         nombre: "Ticket Cancelado",
         nombreCorto: "Cancelado",
         descripcion: "Cancelación por error, duplicado u otra causa administrativa",
-        actor: "Gestora",
+        actor: "Gestor(a)",
         tipo: "final",
         color: "#6B7280",
         icon: Ban,
