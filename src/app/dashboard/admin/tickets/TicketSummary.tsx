@@ -747,9 +747,20 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
     const subtotalLocal = round2(totalFinal / 1.18);
     const igvLocal = round2(totalFinal - subtotalLocal);
 
-    // Cálculo de rentabilidad
-    const totalCosts = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
-    const profit = round2(totalFinal - totalCosts);
+    // 4. Rentabilidad Real y Dinámica — Política de Desembolsos (Rule 4)
+    const historialPagos = ticket.historialPagosTecnico || [];
+    const totalPagadoEfectivo = historialPagos.reduce((sum: number, p: any) => {
+        // Solo sumamos pagos que han sido efectivamente ejecutados (estado 'pagado' o sin estado por ser previos)
+        if (p.estado === 'anulado') return sum;
+        return sum + round2(p.monto || 0);
+    }, 0);
+
+    // Los costos totales son lo mayor entre lo presupuestado (MO + Mat) y lo que realmente se ha pagado en Tesorería.
+    // Esto garantiza que si hay gastos extra (movilidad, materiales adicionales), la rentabilidad baje en tiempo real.
+    const baseBudgetedCost = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
+    const totalRealCosts = Math.max(baseBudgetedCost, round2(totalPagadoEfectivo));
+    
+    const profit = round2(totalFinal - totalRealCosts);
     const margin = totalFinal > 0 ? (profit / totalFinal) * 100 : 0;
 
     return (
@@ -794,21 +805,31 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
             </div>
 
             <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Rentabilidad</span>
+                <span className={styles.infoLabel}>Rentabilidad Real</span>
                 <div style={{
-                    padding: '2px 8px',
-                    background: margin >= 55 ? '#DCFCE7' : margin >= 45 ? '#FEF3C7' : '#FEE2E2',
+                    padding: '4px 10px',
+                    background: margin >= 55 ? 'linear-gradient(135deg, #DCFCE7, #BBF7D0)' : 
+                                margin >= 45 ? 'linear-gradient(135deg, #FEF3C7, #FDE68A)' : 
+                                'linear-gradient(135deg, #FEE2E2, #FECACA)',
                     color: margin >= 55 ? '#166534' : margin >= 45 ? '#92400E' : '#991B1B',
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    fontWeight: '800',
-                    border: '1px solid currentColor',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: '900',
+                    border: `1px solid ${margin >= 45 ? 'rgba(0,0,0,0.05)' : '#FCA5A5'}`,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px'
+                    gap: '6px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                    textShadow: '0 1px 0 rgba(255,255,255,0.4)'
                 }}>
-                    {margin < 0 && <span>ðŸš¨ PERDIDA</span>}
-                    {margin.toFixed(1)}%
+                    {margin < 0 ? (
+                        <AlertTriangle size={12} />
+                    ) : margin >= 55 ? (
+                        <Sparkles size={12} />
+                    ) : (
+                        <TrendingUp size={12} />
+                    )}
+                    <span>{margin < 0 ? 'PÉRDIDA' : `${margin.toFixed(1)}%`}</span>
                 </div>
             </div>
 

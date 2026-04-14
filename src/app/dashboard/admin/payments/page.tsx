@@ -568,10 +568,20 @@ export default function PaymentsPage() {
                 if (currentStatus === 'esperando_pago_visita') newStatusId = 'tecnico_asignado';
             }
 
-            const dbUpdates: any = { metadata: meta };
+            const dbUpdates: any = { 
+                metadata: {
+                    ...meta,
+                    pagoRechazado: {
+                        fecha: new Date().toISOString(),
+                        monto: item.monto,
+                        tipo: item.tipo,
+                        concepto: item.concepto || 'No especificado'
+                    }
+                } 
+            };
             if (newStatusId) {
                 dbUpdates.status_id = newStatusId;
-                meta.estadoId = newStatusId; // Sincronizar metadata
+                dbUpdates.metadata.estadoId = newStatusId; 
             }
 
             await supabase
@@ -579,7 +589,7 @@ export default function PaymentsPage() {
                 .update(dbUpdates)
                 .eq('id', group.ticketId);
 
-            showToast(`✅ Pago denegado. ${newStatusId ? 'Estado revertido.' : ''}`);
+            showToast(`✅ Pago denegado y registrado como Rechazado.`);
             refresh();
         } catch (err) {
             console.error('[Payments] Error denying payment:', err);

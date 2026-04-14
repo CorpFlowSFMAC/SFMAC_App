@@ -91,6 +91,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
     const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
+    const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
 
     const [userRole, setUserRole] = useState<string | null>(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('userRole');
@@ -228,6 +229,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         solicitudAdelanto: meta.solicitudAdelanto ?? null,
                         solicitudPagoVisita: visitConf2 ? null : (meta.solicitudPagoVisita ?? null),
                         historialPagosTecnico: mergedPagos2,
+                        pagoRechazado: meta.pagoRechazado ?? null
                     };
                 });
             } catch (err) {
@@ -420,7 +422,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                 solicitudAdelanto: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado) ? null : businessData.solicitudAdelanto,
                 solicitudPagoVisita: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed) ? null : businessData.solicitudPagoVisita,
-
+                pagoRechazado: businessData.pagoRechazado,
                 tecnico: tecnico
             }
         };
@@ -784,6 +786,112 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         } else {
             showToast("Monto Inválido", "Por favor ingrese un número válido para el costo.", "error");
         }
+    };
+
+    const handleConfirmAdvance = async () => {
+        // Usar el porcentaje solicitado si existe, de lo contrario usar el seleccionado localmente
+        const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
+
+        if (!pctReal) {
+            showToast("Selección Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
+            return;
+        }
+
+        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const amount = costoReferencia * pctReal;
+
+        const pagosPrevios = ticketData.historialPagosTecnico || [];
+        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
+
+        if (totalPagado + amount > costoReferencia + 0.01) {
+            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
+            return;
+        }
+
+        const nuevoPago = {
+            id: Math.random().toString(36).substr(2, 9),
+            fecha: new Date().toISOString(),
+            monto: amount,
+            porcentaje: pctReal,
+            referencia: "Adelanto Operativo"
+        };
+
+        const updated = {
+            ...ticketData,
+            estadoId: ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId,
+            adelantoPagado: true,
+            historialPagosTecnico: [...pagosPrevios, nuevoPago],
+            montoAdelanto: totalPagado + amount,
+            fechaPagoAdelanto: new Date().toISOString(),
+            // Limpiamos la solicitud ya que se atendió
+            solicitudAdelanto: null
+        };
+
+        setIsConfirmingPayment(true);
+        try {
+            await onUpdate?.(ticketData.id, {
+                status_id: updated.estadoId,
+                metadata: {
+                    ...ticketData.metadata,
+                    adelantoPagado: true,
+                    historialPagosTecnico: updated.historialPagosTecnico,
+                    montoAdelanto: updated.montoAdelanto,
+                    fechaPagoAdelanto: updated.fechaPagoAdelanto,
+                    solicitudAdelanto: null
+                }
+            });
+            setTicketData(updated);
+            showToast("Adelanto Confirmado", `Se ha confirmado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
+        } catch (err) {
+            console.error("Error confirming advance:", err);
+            showToast("Error de Conexión", "No se pudo registrar el adelanto. Verifique su internet e intente de nuevo.", "error");
+        } finally {
+            setIsConfirmingPayment(false);
+        }
+    };
+
+    const handleRequestAdvance = () => {
+        if (!porcentajeAdelanto) {
+            showToast("Selección Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
+            return;
+        }
+
+        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const amount = costoReferencia * porcentajeAdelanto;
+
+        const updated = {
+            ...ticketData,
+            solicitudAdelanto: {
+                porcentaje: porcentajeAdelanto,
+                monto: amount,
+                fecha: new Date().toISOString()
+            },
+            pagoRechazado: null // Limpiamos rechazo previo al re-solicitar
+        };
+        setTicketData(updated);
+        // Sync inmediato para que aparezca en pagos
+        syncToSupabase(updated);
+        showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "info");
+    };
+
+    const handleRequestFinalLiquidation = () => {
+        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const pagosPrevios = ticketData.historialPagosTecnico || [];
+        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
+        const amount = costoReferencia - totalPagado;
+
+        const updated = {
+            ...ticketData,
+            solicitudLiquidacion: {
+                monto: amount,
+                fecha: new Date().toISOString()
+            },
+            pagoRechazado: null // Limpiamos rechazo previo al re-solicitar
+        };
+        setTicketData(updated);
+        // Sync inmediato para que aparezca en pagos
+        syncToSupabase(updated);
+        showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleFinishExecution = () => {
@@ -1160,6 +1268,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
 
                         <div className={styles.operationalArea}>
+                            {/* BANNER DE RECHAZO DE PAGO (Regla 3) */}
+                            {ticketData.pagoRechazado && (
+                                <div className={styles.rejectionBanner}>
+                                    <div className={styles.rejectionIcon}><Ban size={24} /></div>
+                                    <div className={styles.rejectionContent}>
+                                        <h4>SOLICITUD DE PAGO DENEGADA</h4>
+                                        <p>La solicitud de <strong>{ticketData.pagoRechazado.tipo}</strong> por <strong>S/ {formatSoles(ticketData.pagoRechazado.monto)}</strong> fue denegada.</p>
+                                        <span>Acción Requerida: Revise las observaciones y genere una nueva solicitud desde cero.</span>
+                                    </div>
+                                    <button onClick={() => setTicketData({...ticketData, pagoRechazado: null})} className={styles.dismissRejection}>Entendido</button>
+                                </div>
+                            )}
+
                             {children || (
                                 <>
                                     {/* El MÃƒÂ³dulo de TesorerÃƒÂ­a General ha sido removido segÃƒÂºn solicitud para evitar redundancia visual */}
@@ -1944,7 +2065,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     }}
                                                 >
                                                     <ThumbsUp size={22} />
-                                                    <span>REGISTRAR APROBACIÃ“N DEL CLIENTE</span>
+                                                    <span>REGISTRAR APROBACIÓN DEL CLIENTE</span>
                                                 </button>
 
                                                 <button
@@ -1975,19 +2096,84 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                             <div className={styles.operationalFlowCard}>
                                                 {ticketData.estadoId === "cotizacion_aprobada" && (
                                                     <div className={styles.premiumApprovedNotice}>
-                                                        <div className={styles.approvedIconGlow}>
-                                                            <CheckCircle2 size={48} color="#10B981" />
+                                                        <div className={styles.noticeTopHeader}>
+                                                            <div className={styles.approvedIconGlow}>
+                                                                <CheckCircle2 size={48} color="#10B981" />
+                                                            </div>
+                                                            <div className={styles.noticeTextContent}>
+                                                                <h3 className={styles.noticeTitle}>Presupuesto Aprobado por Cliente</h3>
+                                                                <p className={styles.noticeText}>
+                                                                    Proceda con la <strong>ejecución</strong> de los trabajos <strong>según</strong> lo cotizado.
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <div className={styles.noticeBody}>
-                                                            <h3 className={styles.noticeTitle}>Presupuesto Aprobado por Cliente</h3>
-                                                            <p className={styles.noticeText}>
-                                                                Proceda con la <strong>ejecución</strong> de los trabajos <strong>según</strong> lo cotizado.
-                                                            </p>
-                                                        </div>
+
+                                                        {/* SECCIÓN DE ADELANTO RESTAURADA */}
+                                                        {!ticketData.adelantoPagado && (
+                                                            <div className={styles.advanceRequestPremium}>
+                                                                <div className={styles.advanceInfoGrid}>
+                                                                    <div className={styles.advanceMeta}>
+                                                                        <div className={styles.metaIcon}><CreditCard size={18} /></div>
+                                                                        <div>
+                                                                            <span className={styles.metaLabel}>Adelanto al Técnico</span>
+                                                                            <span className={styles.metaValue}>
+                                                                                {ticketData.solicitudAdelanto 
+                                                                                    ? `Solicitado: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}% (S/ ${formatSoles(ticketData.solicitudAdelanto.monto)})`
+                                                                                    : "Seleccione el porcentaje deseado"}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                {!ticketData.solicitudAdelanto && (
+                                                                    <div className={styles.percentageSelectorPremium}>
+                                                                        {[0.4, 0.5, 0.6].map(p => (
+                                                                            <button
+                                                                                key={p}
+                                                                                className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p ? styles.pctActivePremium : ''}`}
+                                                                                onClick={() => setPorcentajeAdelanto(p)}
+                                                                            >
+                                                                                {(p * 100).toFixed(0)}%
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {userRole === 'admin' ? (
+                                                                    <button
+                                                                        className={styles.confirmAdvanceBtnPremium}
+                                                                        onClick={handleConfirmAdvance}
+                                                                        disabled={isConfirmingPayment || (!ticketData.solicitudAdelanto && !porcentajeAdelanto)}
+                                                                    >
+                                                                        {isConfirmingPayment ? <Clock size={18} className={styles.spinner} /> : <CheckCircle size={18} />}
+                                                                        <span>{ticketData.solicitudAdelanto ? 'Confirmar Depósito' : 'Registrar Depósito Directo'}</span>
+                                                                    </button>
+                                                                ) : (
+                                                                    !ticketData.solicitudAdelanto && (
+                                                                        <button
+                                                                            className={styles.requestAdvanceBtnPremium}
+                                                                            onClick={handleRequestAdvance}
+                                                                            disabled={!porcentajeAdelanto}
+                                                                        >
+                                                                            <Send size={18} />
+                                                                            <span>Solicitar Adelanto a Gerencia</span>
+                                                                        </button>
+                                                                    )
+                                                                )}
+
+                                                                {ticketData.solicitudAdelanto && userRole !== 'admin' && (
+                                                                    <div className={styles.waitingNoticePremium}>
+                                                                        <Clock size={16} />
+                                                                        <span>Esperando confirmación de Tesorería...</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
 
-                                                <div className={styles.executionGrid}>
+                                                {ticketData.adelantoPagado && (
+                                                    <div className={styles.executionGrid}>
                                                     <div className={styles.evidenceSection}>
                                                         <div className={styles.sectionHeaderMini}>
                                                             <Camera size={18} />
@@ -2072,7 +2258,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             La gestión financiera de este ticket se realiza exclusivamente en el panel inferior.
                                                         </p>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}

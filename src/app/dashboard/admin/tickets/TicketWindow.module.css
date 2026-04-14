@@ -3894,8 +3894,9 @@
 
 .premiumApprovedNotice {
     display: flex;
-    align-items: center;
-    gap: 24px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
     padding: 28px 32px;
     background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
     border-radius: 24px;
@@ -3922,7 +3923,15 @@
     flex-shrink: 0;
 }
 
-.noticeBody {
+.noticeTopHeader {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+}
+
+.noticeTextContent {
+    flex: 1;
     text-align: left;
 }
 
@@ -3998,4 +4007,218 @@
     color: #6366F1;
     opacity: 0.7;
     font-weight: 600;
+}
+
+.advanceRequestPremium {
+    width: 100%;
+    background: white;
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid #BBF7D0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.advanceInfoGrid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.advanceMeta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.metaIcon {
+    width: 36px;
+    height: 36px;
+    background: #DCFCE7;
+    color: #059669;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.metaLabel {
+    display: block;
+    font-size: 0.75rem;
+    color: #059669;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.metaValue {
+    display: block;
+    font-size: 0.95rem;
+    color: #065F46;
+    font-weight: 800;
+}
+
+.percentageSelectorPremium {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.pctBtnPremium {
+    padding: 10px;
+    background: #F8FAFC;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    color: #64748B;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pctBtnPremium:hover {
+    background: #F1F5F9;
+    border-color: #CBD5E1;
+}
+
+.pctActivePremium {
+    background: #ECFDF5;
+    border-color: #10B981;
+    color: #059669;
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
+}
+
+.confirmAdvanceBtnPremium, .requestAdvanceBtnPremium {
+    width: 100%;
+    padding: 12px;
+    border-radius: 14px;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.confirmAdvanceBtnPremium {
+    background: #10B981;
+    color: white;
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+}
+
+.confirmAdvanceBtnPremium:hover {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+.requestAdvanceBtnPremium {
+    background: #3B82F6;
+    color: white;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+}
+
+.requestAdvanceBtnPremium:hover {
+    background: #2563EB;
+    transform: translateY(-2px);
+}
+
+.confirmAdvanceBtnPremium:disabled, .requestAdvanceBtnPremium:disabled {
+    filter: grayscale(1);
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.waitingNoticePremium {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background: #FFFBEB;
+    border-radius: 10px;
+    color: #D97706;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+
+/* BANNER DE RECHAZO DE PAGO (Regla 3) */
+.rejectionBanner {
+    margin: 20px auto;
+    max-width: 650px;
+    background: #FEF2F2;
+    border: 2px solid #FCA5A5;
+    border-radius: 20px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 25px rgba(220, 38, 38, 0.1);
+}
+
+.rejectionIcon {
+    background: #EF4444;
+    color: white;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.rejectionContent {
+    flex: 1;
+}
+
+.rejectionContent h4 {
+    margin: 0 0 4px 0;
+    color: #991B1B;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.rejectionContent p {
+    margin: 0 0 6px 0;
+    color: #B91C1C;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.rejectionContent span {
+    display: block;
+    font-size: 0.75rem;
+    color: #DC2626;
+    font-weight: 700;
+    font-style: italic;
+}
+
+.dismissRejection {
+    background: white;
+    border: 1px solid #FCA5A5;
+    color: #B91C1C;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dismissRejection:hover {
+    background: #FEE2E2;
+    transform: translateY(-2px);
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
