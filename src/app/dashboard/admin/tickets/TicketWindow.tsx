@@ -167,7 +167,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     visitPaymentConfirmed: visitConfirmed,
                     solicitudAdelanto: meta.solicitudAdelanto ?? null,
                     solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
-                    historialPagosTecnico: meta.historialPagosTecnico ?? [],
+                    historialPagosTécnico: meta.historialPagosTécnico ?? [],
                     gestora: fullTicket.gestora || meta.gestora || null
                 }));
             } catch (err) {
@@ -213,8 +213,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
                     const prevOrder = E2_ORDER[prev.estadoId] ?? 0;
                     const finalEstadoId = incomingOrder >= prevOrder ? corregidoId2 : prev.estadoId;
-                    const serverPagos2: any[] = meta.historialPagosTecnico || [];
-                    const localPagos2: any[] = prev.historialPagosTecnico || [];
+                    const serverPagos2: any[] = meta.historialPagosTécnico || [];
+                    const localPagos2: any[] = prev.historialPagosTécnico || [];
                     const mergedById2 = new Map<string, any>();
                     [...localPagos2, ...serverPagos2].forEach((p: any) => { if (p?.id) mergedById2.set(p.id, p); });
                     const mergedPagos2 = mergedById2.size > 0 ? Array.from(mergedById2.values()) : serverPagos2;
@@ -228,7 +228,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         visitPaymentConfirmed: visitConf2,
                         solicitudAdelanto: meta.solicitudAdelanto ?? null,
                         solicitudPagoVisita: visitConf2 ? null : (meta.solicitudPagoVisita ?? null),
-                        historialPagosTecnico: mergedPagos2,
+                        historialPagosTécnico: mergedPagos2,
                         pagoRechazado: meta.pagoRechazado ?? null
                     };
                 });
@@ -242,8 +242,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const serverAdelantoPagado = ticket?.adelantoPagado ?? ticket?.metadata?.adelantoPagado ?? false;
     const serverVisitPaymentConfirmed = ticket?.visitPaymentConfirmed ?? ticket?.metadata?.visitPaymentConfirmed ?? false;
     const serverHistorialLen = Math.max(
-        ticket?.historialPagosTecnico?.length ?? 0,
-        ticket?.metadata?.historialPagosTecnico?.length ?? 0
+        ticket?.historialPagosTécnico?.length ?? 0,
+        ticket?.metadata?.historialPagosTécnico?.length ?? 0
     );
     useEffect(() => {
         setTicketData((prev: any) => {
@@ -259,7 +259,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             }
             if (prev.solicitudAdelantoExtra && serverHistorialLen > 0) {
                 const reqDate = new Date(prev.solicitudAdelantoExtra.fecha).getTime();
-                const pagos = prev.historialPagosTecnico || [];
+                const pagos = prev.historialPagosTécnico || [];
                 const isPaid = pagos.some((p: any) => {
                     const isRefuerzo = p.tipo === 'Refuerzo' || p.referencia?.includes('Refuerzo');
                     return isRefuerzo && new Date(p.fecha).getTime() >= reqDate;
@@ -407,9 +407,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
                 fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
 
-                historialPagosTecnico: (() => {
-                    const localPagos = businessData.historialPagosTecnico || [];
-                    const serverPagos = ticket.historialPagosTecnico || ticket.metadata?.historialPagosTecnico || [];
+                historialPagosTécnico: (() => {
+                    const localPagos = businessData.historialPagosTécnico || [];
+                    const serverPagos = ticket.historialPagosTécnico || ticket.metadata?.historialPagosTécnico || [];
                     const allById = new Map();
                     [...serverPagos, ...localPagos].forEach(p => {
                         if (p?.id) allById.set(p.id, p);
@@ -461,7 +461,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     const {
                         adelantoPagado,
                         fechaPagoAdelanto,
-                        historialPagosTecnico,
+                        historialPagosTécnico,
                         estadoId,
                         status_id,
                         visitPaymentConfirmed,
@@ -603,14 +603,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 }
             };
 
-            const existingLogs = ticketData.metadata?.asignacionLog || [];
+            const existingLogs = ticketData.metadata?.asignaciónLog || [];
             
             const dbUpdates = {
                 gestora_id: gestora.id,
                 metadata: {
                     ...ticketData.metadata,
                     gestora: gestora,
-                    asignacionLog: [...existingLogs, newLogEntry]
+                    asignaciónLog: [...existingLogs, newLogEntry]
                 }
             };
             
@@ -627,7 +627,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 metadata: {
                     ...prev.metadata,
                     gestora: gestora,
-                    asignacionLog: [...existingLogs, newLogEntry]
+                    asignaciónLog: [...existingLogs, newLogEntry]
                 }
             }));
             
@@ -734,7 +734,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             fechaReactivacion: new Date().toISOString(),
             modificacionAutorizada: false,
             costoAjustadoPostAprobación: false,
-            omitirAjusteTecnico: false
+            omitirAjusteTécnico: false
         };
         setTicketData(approved);
         syncToSupabase(approved);
@@ -778,7 +778,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 costoManoObra: val,
                 costoMateriales: 0,
                 costoAjustadoPostAprobación: true,
-                costoAnteriorTecnico: currentMO + currentMAT
+                costoAnteriorTécnico: currentMO + currentMAT
             };
             setTicketData(updated);
             setShowNegotiationModal(false);
@@ -800,7 +800,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
         const amount = costoReferencia * pctReal;
 
-        const pagosPrevios = ticketData.historialPagosTecnico || [];
+        const pagosPrevios = ticketData.historialPagosTécnico || [];
         const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
 
         if (totalPagado + amount > costoReferencia + 0.01) {
@@ -820,7 +820,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             ...ticketData,
             estadoId: ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId,
             adelantoPagado: true,
-            historialPagosTecnico: [...pagosPrevios, nuevoPago],
+            historialPagosTécnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + amount,
             fechaPagoAdelanto: new Date().toISOString(),
             // Limpiamos la solicitud ya que se atendió
@@ -834,7 +834,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 metadata: {
                     ...ticketData.metadata,
                     adelantoPagado: true,
-                    historialPagosTecnico: updated.historialPagosTecnico,
+                    historialPagosTécnico: updated.historialPagosTécnico,
                     montoAdelanto: updated.montoAdelanto,
                     fechaPagoAdelanto: updated.fechaPagoAdelanto,
                     solicitudAdelanto: null
@@ -876,7 +876,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleRequestFinalLiquidation = () => {
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const pagosPrevios = ticketData.historialPagosTecnico || [];
+        const pagosPrevios = ticketData.historialPagosTécnico || [];
         const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
         const amount = costoReferencia - totalPagado;
 
@@ -1082,7 +1082,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
         if (!materialsForm.specialist_id) {
-            showToast("Técnico requerido", "Seleccione el técnico externo para esta compra.", "error");
+            showTécnico requerido", "Seleccione el técnico externo para esta compra.", "error");
             return;
         }
         setIsSavingMaterials(true);
@@ -1356,7 +1356,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     )}
                                                 </div>
 
-                                                {/* TIPO DE SERVICIO - Desde mÃƒÂ³dulo de TÃƒÂ©cnicos */}
+                                                {/* TIPO DE SERVICIO - Desde mÃƒÂ³dulo de Técnicos */}
                                                 <div className={styles.triageField}>
                                                     <label>Ã°Å¸â€Â§ Tipo de Servicio (segÃƒÂºn catÃƒ¡logo de tÃƒÂ©cnicos):</label>
                                                     <select
@@ -1699,17 +1699,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </div>
                                                                     <div className={styles.missingValue}>
                                                                         {(() => {
-                                                                            const totalCostoTecnico = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) || parseFloat(ticketData.costoVisita || 0);
-                                                                            const meta55 = totalCostoTecnico / 0.45;
+                                                                            const totalCostoTécnico = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) || parseFloat(ticketData.costoVisita || 0);
+                                                                            const meta55 = totalCostoTécnico / 0.45;
 
-                                                                            if (montoTotalCotizado < totalCostoTecnico) {
+                                                                            if (montoTotalCotizado < totalCostoTécnico) {
                                                                                 return (
                                                                                     <div className={styles.lossWarning}>
                                                                                         <div className={styles.lossTitle}>
                                                                                             <span>⚠️ PÉRDIDA DETECTADA</span>
                                                                                         </div>
                                                                                         <span className={styles.lossValue}>
-                                                                                            El presupuesto es menor al costo técnico (S/ {formatSoles(totalCostoTecnico)})
+                                                                                            El presupuesto es menor al costo técnico (S/ {formatSoles(totalCostoTécnico)})
                                                                                         </span>
                                                                                     </div>
                                                                                 );
@@ -2437,7 +2437,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <div className={styles.liquidationItem}>
                                                         <span className={styles.liquidationLabel}>Total Depósitos Realizados</span>
                                                         <span className={styles.liquidationValue} style={{ color: '#059669' }}>
-                                                            - S/ {(ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                            - S/ {(ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
 
@@ -2446,8 +2446,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <span>{ticketData.estadoId === "ticket_cerrado" ? "TOTAL TRANSFERIDO:" : "SALDO A DEPOSITAR:"}</span>
                                                             <strong>
                                                                 S/ {ticketData.estadoId === "ticket_cerrado"
-                                                                    ? (ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                                    : ((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                    ? (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                    : ((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
                                                                 }
                                                             </strong>
                                                         </div>
