@@ -2259,6 +2259,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             La gestión financiera de este ticket se realiza exclusivamente en el panel inferior.
                                                         </p>
                                                     </div>
+                                                </div>
                                                 )}
                                             </div>
                                         </div>
