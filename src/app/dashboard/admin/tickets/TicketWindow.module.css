@@ -4492,3 +4492,237 @@
     color: #475569;
     border-color: #CBD5E1;
 }
+
+/* --- LIQUIDATION REDESIGN (PREMIUM) --- */
+.liquidationContainerPremium {
+    width: 100%;
+    max-width: 900px;
+    margin: 30px auto;
+    padding: 0 20px;
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquidationCardPremium {
+    background: #FFFFFF;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04), 0 20px 60px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.liquidationHeaderPremium {
+    background: #F8FAFC;
+    padding: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.headerTitleWrapper {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.headerIconBox {
+    width: 60px;
+    height: 60px;
+    background: #FFFFFF;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4F46E5;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1);
+}
+
+.headerTextGroup h3 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 900;
+    color: #0F172A;
+    letter-spacing: -0.04em;
+}
+
+.headerTextGroup p {
+    margin: 4px 0 0 0;
+    font-size: 1rem;
+    color: #64748B;
+    font-weight: 500;
+}
+
+.totalBannerBadge {
+    padding: 12px 24px;
+    background: #0F172A;
+    color: #FFFFFF;
+    border-radius: 14px;
+    font-size: 1.5rem;
+    font-weight: 900;
+}
+
+.financialDetailsBody {
+    padding: 40px;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 40px;
+}
+
+.summarySection {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.mainFinancialRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.rowLabel {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.rowValue {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #1E293B;
+}
+
+.depositsListPremium {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px;
+    background: #F8FAFC;
+    border-radius: 16px;
+    border: 1px solid #F1F5F9;
+}
+
+.depositEntry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+}
+
+.depositLabel {
+    font-weight: 600;
+    color: #475569;
+}
+
+.depositMeta {
+    font-size: 0.75rem;
+    color: #94A3B8;
+    margin-left: 8px;
+}
+
+.depositAmount {
+    font-weight: 800;
+    color: #059669;
+}
+
+.bankDetailsPanel {
+    background: #FFFFFF;
+    border-radius: 20px;
+    border: 1px solid #F1F5F9;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.bankDetailsPanel h4 {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #94A3B8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.bankFieldClean {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.bankFieldClean strong {
+    font-size: 0.7rem;
+    color: #94A3B8;
+    text-transform: uppercase;
+}
+
+.bankFieldClean span {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1E293B;
+    letter-spacing: 0.02em;
+}
+
+.walletsRowPremium {
+    display: flex;
+    gap: 12px;
+    margin-top: 5px;
+}
+
+.walletBadgePremium {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 12px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 800;
+}
+
+.finalBalanceBanner {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #4F46E5, #3730A3);
+    padding: 30px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: white;
+}
+
+.finalBalanceLabel {
+    font-size: 1.125rem;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.finalBalanceValue {
+    font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: -0.05em;
+}
+
+.warningBannerPremium {
+    grid-column: span 2;
+    background: #FFF1F2;
+    border: 1px solid #FECDD3;
+    color: #E11D48;
+    padding: 16px 24px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}

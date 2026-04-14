@@ -2300,176 +2300,140 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     )}
 
                                     {["por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId) && (
-                                        <div className={styles.liquidationContainer}>
-                                            <div className={styles.liquidationCard}>
-                                                <div className={styles.liquidationHeader} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'linear-gradient(135deg, #065F46, #059669)', color: 'white' } : {}}>
-                                                    <div className={styles.liquidationIconBox} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)', color: 'white' } : {}}>
-                                                        <Calculator size={32} />
+                                        <div className={styles.liquidationContainerPremium}>
+                                            <div className={styles.liquidationCardPremium}>
+                                                <div className={styles.liquidationHeaderPremium} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'linear-gradient(135deg, #065F46, #059669)', color: 'white' } : {}}>
+                                                    <div className={styles.headerTitleWrapper}>
+                                                        <div className={styles.headerIconBox} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)', color: 'white' } : {}}>
+                                                            <Calculator size={28} />
+                                                        </div>
+                                                        <div className={styles.headerTextGroup}>
+                                                            <h3 style={ticketData.estadoId === "ticket_cerrado" ? { color: 'white' } : {}}>
+                                                                {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidación Final de Servicio"}
+                                                            </h3>
+                                                            <p style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
+                                                                {ticketData.estadoId === "ticket_cerrado" ? "Información financiera auditada y cerrada." : "Resumen detallado de costos y saldos pendientes."}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <div className={styles.liquidationTitles}>
-                                                        <h3 style={ticketData.estadoId === "ticket_cerrado" ? { color: 'white' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidación Final de Servicio"}
-                                                        </h3>
-                                                        <span style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Toda la información financiera ha sido auditada y cerrada." : "Cálculo automático del saldo pendiente para el técnico"}
-                                                        </span>
-                                                    </div>
-                                                    <div className={styles.liquidationTotalBadge}>
+                                                    <div className={styles.totalBannerBadge} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)' } : {}}>
                                                         S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                     </div>
                                                 </div>
 
-                                                <div className={styles.liquidationGrid}>
-                                                    <div className={styles.liquidationItem}>
-                                                        <span className={styles.liquidationLabel}>Costo Total Pactado (MO + MAT)</span>
-                                                        <span className={styles.liquidationValue}>
-                                                            S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                        </span>
-                                                    </div>
+                                                <div className={styles.financialDetailsBody}>
+                                                    <div className={styles.summarySection}>
+                                                        <div className={styles.mainFinancialRow}>
+                                                            <span className={styles.rowLabel}>Costo Total Pactado</span>
+                                                            <span className={styles.rowValue}>S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
 
-                                                    <div className={styles.liquidationItem}>
-                                                        <span className={styles.liquidationLabel}>Total Depósitos Realizados</span>
-                                                        <span className={styles.liquidationValue} style={{ color: '#059669' }}>
-                                                            - S/ {(ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                        </span>
-                                                    </div>
+                                                        <div className={styles.mainFinancialRow} style={{ border: 'none' }}>
+                                                            <span className={styles.rowLabel}>Depósitos Realizados</span>
+                                                            <span className={styles.rowValue} style={{ color: '#059669' }}>- S/ {(ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
 
-                                                    {(ticketData.historialPagosTécnico || []).length > 0 && (
-                                                        <div className={styles.liquidationHistory}>
-                                                            {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
-                                                                <div key={i} className={styles.historyItem}>
-                                                                    <div className={styles.historyLabel}>
-                                                                        <span>{p.tipo === 'ADELANTO' ? 'Adelanto' : p.tipo === 'MATERIALES' ? 'Materiales' : 'Depósito'}</span>
-                                                                        <span className={styles.historyDate}>({new Date(p.fecha).toLocaleDateString('es-PE')})</span>
+                                                        {(ticketData.historialPagosTécnico || []).length > 0 && (
+                                                            <div className={styles.depositsListPremium}>
+                                                                {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
+                                                                    <div key={i} className={styles.depositEntry}>
+                                                                        <div className={styles.depositLabel}>
+                                                                            {p.tipo === 'ADELANTO' ? 'Adelanto' : p.tipo === 'MATERIALES' ? 'Compra Materiales' : 'Depósito'}
+                                                                            <span className={styles.depositMeta}>{new Date(p.fecha).toLocaleDateString('es-PE')}</span>
+                                                                        </div>
+                                                                        <span className={styles.depositAmount}>- S/ {p.monto.toFixed(2)}</span>
                                                                     </div>
-                                                                    <span className={styles.historyAmount}>- S/ {p.monto.toFixed(2)}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-
-                                                    {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)) < 0 && (
-                                                        <div className={styles.liquidationWarning}>
-                                                            <AlertTriangle size={20} />
-                                                            <span>ALERTA: Los depósitos realizados superan el monto pactado.</span>
-                                                        </div>
-                                                    )}
-
-                                                    <div className={styles.liquidationSummary}>
-                                                        <div className={styles.summaryRow}>
-                                                            <span>{ticketData.estadoId === "ticket_cerrado" ? "TOTAL TRANSFERIDO:" : "SALDO A DEPOSITAR:"}</span>
-                                                            <strong>
-                                                                S/ {ticketData.estadoId === "ticket_cerrado"
-                                                                    ? (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                                    : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                                }
-                                                            </strong>
-                                                        </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
 
-                                                <div className={styles.techBankDetailsLiquidation}>
-                                                    <h4>Datos de Pago del Técnico: {ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</h4>
-                                                    <div className={styles.bankGrid}>
-                                                        <div className={styles.bankField}>
-                                                            <strong>BANCO:</strong>
-                                                            <span>{ticketData.tecnico?.banco || '---'}</span>
+                                                    <div className={styles.bankDetailsPanel}>
+                                                        <h4>Datos de Transferencia</h4>
+                                                        
+                                                        <div className={styles.bankFieldClean}>
+                                                            <strong>Técnico Beneficiario</strong>
+                                                            <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
                                                         </div>
-                                                        <div className={styles.bankField}>
-                                                            <strong>NRO. CUENTA:</strong>
+
+                                                        <div className={styles.bankFieldClean}>
+                                                            <strong>{ticketData.tecnico?.banco || 'BANCO'}</strong>
                                                             <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                         </div>
-                                                        <div className={styles.bankField}>
-                                                            <strong>CCI:</strong>
-                                                            <span>{ticketData.tecnico?.cci || '---'}</span>
-                                                        </div>
-                                                        <div className={styles.bankField} style={{ display: 'flex', flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
-                                                            {ticketData.tecnico?.yape && (
-                                                                <div className={styles.miniWalletBadge} style={{ background: '#7C3AED' }}>
-                                                                    <span>Y</span>
-                                                                    <strong>{ticketData.tecnico.yape}</strong>
-                                                                </div>
-                                                            )}
-                                                            {ticketData.tecnico?.plin && (
-                                                                <div className={styles.miniWalletBadge} style={{ background: '#00D1FF' }}>
-                                                                    <span>P</span>
-                                                                    <strong>{ticketData.tecnico.plin}</strong>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
 
-                                                <div className={styles.profitabilityLiquidationCard}>
-                                                    <div className={styles.profitHeader}>
-                                                        <Sparkles size={20} color="#F59E0B" />
-                                                        <h4>Resumen de Rentabilidad Final</h4>
+                                                        {ticketData.tecnico?.cci && (
+                                                            <div className={styles.bankFieldClean}>
+                                                                <strong>CCI</strong>
+                                                                <span>{ticketData.tecnico.cci}</span>
+                                                            </div>
+                                                        )}
+
+                                                        {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
+                                                            <div className={styles.walletsRowPremium}>
+                                                                {ticketData.tecnico?.yape && (
+                                                                    <div className={styles.walletBadgePremium} style={{ background: '#7C3AED' }}>
+                                                                        <span>Yape: {ticketData.tecnico.yape}</span>
+                                                                    </div>
+                                                                )}
+                                                                {ticketData.tecnico?.plin && (
+                                                                    <div className={styles.walletBadgePremium} style={{ background: '#00D1FF' }}>
+                                                                        <span>Plin: {ticketData.tecnico.plin}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
 
-                                                    <div className={styles.profitMainGrid}>
-                                                        <div className={styles.profitStat}>
-                                                            <span className={styles.statLabel}>INGRESO (CLIENTE)</span>
-                                                            <span className={styles.statValue}>S/ {(parseFloat(ticketData.montoFinal || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                    {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)) < 0 && (
+                                                        <div className={styles.warningBannerPremium}>
+                                                            <AlertTriangle size={20} />
+                                                            <span>ATENCIÓN: Se han detectado excedentes en los depósitos previos.</span>
                                                         </div>
+                                                    )}
 
-                                                        <div className={styles.profitStat}>
-                                                            <span className={styles.statLabel}>COSTO OPERATIVO</span>
-                                                            <span className={styles.statValue} style={{ color: '#EF4444' }}>
-                                                                - S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                            </span>
-                                                        </div>
-
-                                                        <div className={`${styles.profitStat} ${styles.highlightedStat}`}>
-                                                            <span className={styles.statLabel}>UTILIDAD BRUTA</span>
-                                                            <span className={styles.statValue} style={{ color: (parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) >= 0 ? '#10B981' : '#EF4444' }}>
-                                                                S/ {(parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                            </span>
-                                                        </div>
-
-                                                        <div className={styles.profitStat}>
-                                                            <span className={styles.statLabel}>MARGEN %</span>
-                                                            <span className={styles.percentBadge} style={{
-                                                                background: (parseFloat(ticketData.montoFinal || 0) > 0 && (((parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) / parseFloat(ticketData.montoFinal)) * 100) >= 55) ? '#DCFCE7' : '#FEE2E2',
-                                                                color: (parseFloat(ticketData.montoFinal || 0) > 0 && (((parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) / parseFloat(ticketData.montoFinal)) * 100) >= 55) ? '#166534' : '#991B1B'
-                                                            }}>
-                                                                {parseFloat(ticketData.montoFinal || 0) > 0
-                                                                    ? (((parseFloat(ticketData.montoFinal || 0) - (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + parseFloat(ticketData.costoVisita || 0))) / parseFloat(ticketData.montoFinal)) * 100).toFixed(1)
-                                                                    : '0.0'}%
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {ticketData.estadoId === "por_liquidar" && (
-                                                    <div className={styles.waitingForManager} style={{ padding: '30px', background: '#F8FAFC', borderRadius: '20px', border: '1px solid #E2E8F0', marginTop: '20px' }}>
-                                                        <Clock size={28} color="#3B82F6" />
-                                                        <span style={{ fontSize: '1.2rem', color: '#1E293B', fontWeight: 800 }}>LIQUIDACIÓN EN PROCESO</span>
-                                                        <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 500, maxWidth: '400px', textAlign: 'center' }}>
-                                                            Registre el depósito final en el panel de <strong>Tesorería</strong> inferior para cerrar este ticket definitivamente.
+                                                    <div className={styles.finalBalanceBanner} style={ticketData.estadoId === "ticket_cerrado" ? { background: '#065F46' } : {}}>
+                                                        <span className={styles.finalBalanceLabel}>
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Total Liquidado" : "Saldo Final a Depositar"}
+                                                        </span>
+                                                        <span className={styles.finalBalanceValue}>
+                                                            S/ {ticketData.estadoId === "ticket_cerrado"
+                                                                ? (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                            }
                                                         </span>
                                                     </div>
-                                                )}
-
-                                                {ticketData.estadoId === "ticket_cerrado" && (
-                                                    <div className={styles.closedFooterActions}>
-                                                        <div className={styles.closedStatusBanner}>
-                                                            <CheckCircle size={20} />
-                                                            TICKET CERRADO Y ARCHIVADO
-                                                        </div>
-                                                        <button
-                                                            onClick={onClose}
-                                                            className={styles.backToDashboardBtn}
-                                                        >
-                                                            <ArrowRight size={20} />
-                                                            VOLVER AL DASHBOARD
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                </div>
                                             </div>
+
+                                            {ticketData.estadoId === "por_liquidar" && (
+                                                <div className={styles.waitingForManager} style={{ padding: '30px', background: '#F8FAFC', borderRadius: '20px', border: '1px solid #E2E8F0', marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                                                    <Clock size={28} color="#3B82F6" />
+                                                    <span style={{ fontSize: '1.2rem', color: '#1E293B', fontWeight: 800 }}>LIQUIDACIÓN EN PROCESO</span>
+                                                    <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 500, maxWidth: '400px', textAlign: 'center' }}>
+                                                        Registre el depósito final en el panel de <strong>Tesorería</strong> inferior para cerrar este ticket definitivamente.
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {ticketData.estadoId === "ticket_cerrado" && (
+                                                <div className={styles.closedFooterActions} style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
+                                                    <div className={styles.closedStatusBanner} style={{ padding: '12px 24px', background: '#DCFCE7', color: '#166534', borderRadius: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <CheckCircle size={20} />
+                                                        TICKET CERRADO Y ARCHIVADO
+                                                    </div>
+                                                    <button
+                                                        onClick={onClose}
+                                                        style={{ background: '#F1F5F9', color: '#475569', border: 'none', padding: '12px 24px', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                                    >
+                                                        VOLVER AL DASHBOARD
+                                                        <ArrowRight size={18} />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
-                                    {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
+                                    {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.statusBadge}>{ticketData.estadoId?.replace('_', ' ')}</div>
                                             <p>Este módulo operativo se encuentra en preparación.</p>
