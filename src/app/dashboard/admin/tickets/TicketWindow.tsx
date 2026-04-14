@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -27,9 +27,6 @@ interface TicketWindowProps {
 }
 
 export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
-    // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
-    // Cargar estado persistido del ticket (MOVIDO ARRIBA para evitar ReferenceError)
-    // Cargar posiciÃƒÂ³n y estado de ventana desde localStorage (solo UI, NO datos de negocio)
     const [ticketData, setTicketData] = useState(() => ({
         ...ticket,
         estadoId: normalizeStateId(ticket.estadoId)
@@ -65,7 +62,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
     const [showGestoraDrawer, setShowGestoraDrawer] = useState(false);
 
-    // Solo persistimos la posiciÃƒÂ³n y el estado de la ventana en localStorage para preferencias de usuario
     useEffect(() => {
         if (typeof window !== 'undefined') {
             localStorage.setItem(`ticket_ui_${ticket.id}`, JSON.stringify({
@@ -76,7 +72,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     }, [isMaximized, isMinimized, position, ticket.id]);
 
-    // Estados para el reporte de campo (Paso 4)
     const [diagnostico, setDiagnostico] = useState("");
     const [costoManoObra, setCostoManoObra] = useState("");
     const [costoMateriales, setCostoMateriales] = useState("");
@@ -298,7 +293,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
     const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
 
-    // Modal: Solicitud de Pago de Materiales (etapa ejecución)
     const [showMaterialsModal, setShowMaterialsModal] = useState(false);
     const [materialsForm, setMaterialsForm] = useState({
         concepto: "",
@@ -590,7 +584,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const now = new Date().toISOString();
             const isAdmin = userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
             
-            // Build audit log entry (Traceability Rule)
             const newLogEntry = {
                 tipo: 'REASIGNACION_MANUAL',
                 gestora_id: gestora.id,
@@ -789,7 +782,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleConfirmAdvance = async () => {
-        // Usar el porcentaje solicitado si existe, de lo contrario usar el seleccionado localmente
         const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
 
         if (!pctReal) {
@@ -823,7 +815,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             historialPagosTécnico: [...pagosPrevios, nuevoPago],
             montoAdelanto: totalPagado + amount,
             fechaPagoAdelanto: new Date().toISOString(),
-            // Limpiamos la solicitud ya que se atendió
             solicitudAdelanto: null
         };
 
@@ -866,10 +857,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 monto: amount,
                 fecha: new Date().toISOString()
             },
-            pagoRechazado: null // Limpiamos rechazo previo al re-solicitar
+            pagoRechazado: null
         };
         setTicketData(updated);
-        // Sync inmediato para que aparezca en pagos
         syncToSupabase(updated);
         showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "info");
     };
@@ -886,17 +876,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 monto: amount,
                 fecha: new Date().toISOString()
             },
-            pagoRechazado: null // Limpiamos rechazo previo al re-solicitar
+            pagoRechazado: null
         };
         setTicketData(updated);
-        // Sync inmediato para que aparezca en pagos
         syncToSupabase(updated);
         showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
     };
 
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 2) {
-            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÃ‰S).", "error");
+            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÉS).", "error");
             return;
         }
         const updated = {
@@ -965,7 +954,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             await onUpdate?.(ticketData.id, dbUpdates);
             setTicketData((prev: any) => ({ ...prev, ...localUpdates }));
-            showToast("âœ… Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
+            showToast("✅ Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
         } catch (error: any) {
             console.error("Error en triage:", error);
             showToast("Error al Clasificar", `Detalle: ${error?.message || 'Error desconocido'}`, "error");
@@ -985,7 +974,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                 setEvidenciasEjecucion(prev => {
                     const updated = [...prev, newEvidence];
-                    // Actualizar tambiÃƒÂ©n en ticketData para persistencia
                     setTicketData((current: any) => ({ ...current, evidenciasEjecucion: updated }));
                     return updated;
                 });
@@ -993,7 +981,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             reader.readAsDataURL(file);
         });
 
-        // Resetear el input para permitir subir el mismo archivo si se desea
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
@@ -1005,7 +992,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        setZIndex(Date.now() % 10000000); // Traer al frente al hacer click
+        setZIndex(Date.now() % 10000000);
         if (isMaximized) return;
 
         const rect = windowRef.current?.getBoundingClientRect();
@@ -1066,16 +1053,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    
-
-    // Cargar técnicos para el Combobox
     useEffect(() => {
         techniciansAPI.getAll()
             .then((data: any[]) => setAllTechnicians(data || []))
             .catch((e: any) => console.error("Error loading technicians:", e));
     }, []);
 
-    // Handler: Solicitud de Pago de Materiales → pasa por Tesorería vía ticket_costs
     const handleSubmitMaterialsRequest = async () => {
         if (!materialsForm.concepto.trim() || !materialsForm.monto) {
             showToast("Campos incompletos", "El concepto y el monto son obligatorios.", "error");
@@ -1113,7 +1096,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
 
-    // CÃƒ¡lculos de Rentabilidad Rel Real-Time
     const totalCosts = ticketCosts.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const grossMargin = approvedAmount - totalCosts;
@@ -1158,7 +1140,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} />
                                     </div>
                                 ) : (
-                                    <div className={styles.ticketIcon}>ÃƒÂ°Ã…Â¸Ã…Â½Ã‚Â«</div>
+                                    <div className={styles.ticketIcon}>🎫</div>
                                 )}
                                 <div className={styles.titleInfo}>
                                     <h3>
@@ -1246,7 +1228,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                             <TechnicianSchedulingBar
                                 ticket={ticketData}
                                 onReassign={() => {
-                                    // Abrir el drawer sin resetear el estado del ticket
                                     setShowAssignmentDrawer(true);
                                 }}
                                 onEditSchedule={() => {
@@ -1268,7 +1249,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
 
                         <div className={styles.operationalArea}>
-                            {/* BANNER DE RECHAZO DE PAGO (Regla 3) */}
                             {ticketData.pagoRechazado && (
                                 <div className={styles.rejectionBanner}>
                                     <div className={styles.rejectionIcon}><Ban size={24} /></div>
@@ -1283,23 +1263,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                             {children || (
                                 <>
-                                    {/* El MÃƒÂ³dulo de TesorerÃƒÂ­a General ha sido removido segÃƒÂºn solicitud para evitar redundancia visual */}
-
-
                                     {ticketData.estadoId === "borrador" && (
                                         <div className={styles.triageBox}>
                                             <div className={styles.triageHeader}>
                                                 <Sparkles size={24} color="#8B5CF6" />
                                                 <div style={{ textAlign: 'left' }}>
                                                     <h3 className={styles.triageTitle}>Bandeja de Triage - Mibanco</h3>
-                                                    <p className={styles.triageSubtitle}>ClasificaciÃƒÂ³n y ValidaciÃƒÂ³n de Ticket AutomÃƒ¡tico</p>
+                                                    <p className={styles.triageSubtitle}>Clasificación y Validación de Ticket Automático</p>
                                                 </div>
                                             </div>
 
                                             <div className={styles.triageForm}>
-                                                {/* CAMPO EDITABLE: DescripciÃƒÂ³n del Problema */}
                                                 <div className={styles.triageField}>
-                                                    <label>Ã¢Å“ÂÃ¯Â¸Â DescripciÃƒÂ³n del Problema (Editable):</label>
+                                                    <label>✍️ Descripción del Problema (Editable):</label>
                                                     <textarea
                                                         value={triageDescription}
                                                         onChange={(e) => setTriageDescription(e.target.value)}
@@ -1310,9 +1286,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     />
                                                 </div>
 
-                                                {/* CAMPO SOLO LECTURA: Sede Reportada por Banco */}
                                                 <div className={styles.triageField}>
-                                                    <label>Ã°Å¸ÂÂ¦ Sede Reportada por Banco:</label>
+                                                    <label>🏢 Sede Reportada por Banco:</label>
                                                     <div className={styles.readonlyValue}>
                                                         {ticketData.sede_reportada_cliente || ticketData.metadata?.codigo_sede_extraido || "No especificada"}
                                                     </div>
@@ -1321,15 +1296,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 {!ticketData.branch_id && !triageSedeId && (
                                                     <div className={styles.triageAlert}>
                                                         <AlertTriangle size={16} />
-                                                        <span>Sede no mapeada automÃƒ¡ticamente. Seleccione manualmente para entrenar al sistema.</span>
+                                                        <span>Sede no mapeada automáticamente. Seleccione manualmente para entrenar al sistema.</span>
                                                     </div>
                                                 )}
 
-                                                {/* VINCULAR A SEDE REAL */}
                                                 <div className={styles.triageField}>
                                                     <label>📍 Vincular a Sede Real:</label>
                                                     {ticketData.branch_id ? (
-                                                        // ★ FIX: Sede ya consolidada — bloquear modificación
                                                         <div className={styles.readonlyValue} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                             <span>➔</span>
                                                             <span style={{ fontWeight: 700, color: '#1E293B' }}>
@@ -1337,7 +1310,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     || ticketData.sede?.nombre
                                                                     || ticketData.branch_id}
                                                             </span>
-                                                            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>(agencia ya consolidada Ã¢â‚¬â€ no modificable)</span>
+                                                            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>(agencia ya consolidada — no modificable)</span>
                                                         </div>
                                                     ) : (
                                                         <select
@@ -1356,9 +1329,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     )}
                                                 </div>
 
-                                                {/* TIPO DE SERVICIO - Desde mÃƒÂ³dulo de Técnicos */}
                                                 <div className={styles.triageField}>
-                                                    <label>Ã°Å¸â€Â§ Tipo de Servicio (segÃƒÂºn catÃƒ¡logo de tÃƒÂ©cnicos):</label>
+                                                    <label>⚙️ Tipo de Servicio (según catálogo de técnicos):</label>
                                                     <select
                                                         value={triageServiceType}
                                                         onChange={(e) => setTriageServiceType(e.target.value)}
@@ -1398,12 +1370,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {/* ★ ORDEN DE PAGO DE VISITA: Solo en el paso exacto donde corresponde.
-                                         La condición es ESTRICTA:
-                                         1. El estadoId debe ser 'esperando_pago_visita' Y
-                                         2. visitPaymentConfirmed debe ser falso Y
-                                         3. El ticket no debe haber avanzado más allá (ningún estado post-inspección)
-                                    */}
                                     {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && (
                                             <div className={styles.stepPlaceholder}>
                                                 <div className={styles.waitingForManager} style={{ padding: '40px', background: '#F8FAFC', borderRadius: '24px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
@@ -1543,7 +1509,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <span style={{ fontSize: '0.65rem', fontWeight: 700 }}>FOTOS</span>
                                                                 </div>
                                                             )}
-                                                            {/* Botón flotante para agregar más si ya hay fotos */}
                                                             {evidenciasCampo.length > 0 && (
                                                                 <div
                                                                     className={styles.uploadBoxMini}
@@ -1744,9 +1709,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                             {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
                                                                 <div className={styles.authorizationSection}>
-                                                                    <div className={styles.authLockIcon}>ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬â„¢</div>
+                                                                    <div className={styles.authLockIcon}>
+                                                                        <Lock size={40} />
+                                                                    </div>
                                                                     <p className={styles.authText}>
-                                                                        La cotizaciÃƒÂ³n ya fue aprobada por el cliente. Para realizar cambios, se requiere el visto bueno de Gerencia.
+                                                                        La cotización ya fue aprobada por el cliente. Para realizar cambios, se requiere el visto bueno de Gerencia.
                                                                     </p>
                                                                     <button
                                                                         className={styles.authorizeBtn}

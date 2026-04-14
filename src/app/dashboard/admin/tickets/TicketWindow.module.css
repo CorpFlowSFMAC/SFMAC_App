@@ -729,16 +729,12 @@
 
 .profitabilityGrid {
     display: flex;
-    flex-direction: row;
-    gap: 12px;
-    align-items: stretch;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .techCostCard, .suggestedTotal, .missingAmountCard {
-    flex: 1;
-    min-width: 0;
-    max-width: 32%;
+    width: 100%;
 }
 
 .techCostCard {
@@ -782,9 +778,9 @@
 
 .missingAmountCard {
     background: #FFF7ED;
-    border: 1px solid #FFEDD5;
-    border-radius: 12px;
-    padding: 12px;
+    border: 1px solid #FED7AA;
+    border-radius: 16px;
+    padding: 20px;
 }
 
 .missingHeader {
@@ -795,13 +791,14 @@
 }
 
 .missingHeader span {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: #9A3412;
+    text-transform: uppercase;
 }
 
 .missingHeader strong {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     color: #EA580C;
 }
 
@@ -811,13 +808,13 @@
 }
 
 .missingLabel {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     color: #9A3412;
     font-weight: 600;
 }
 
 .missingAmount {
-    font-size: 1.1rem;
+    font-size: 1.5rem;
     font-weight: 900;
     color: #C2410C;
 }
@@ -836,18 +833,19 @@
 }
 
 .suggestedTotal {
-    background: #F0FDFA;
-    border: 1px solid #5EEAD4;
-    padding: 16px;
-    border-radius: 12px;
+    background: linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%);
+    border: 1px solid #99F6E4;
+    padding: 20px;
+    border-radius: 16px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    box-shadow: 0 4px 15px rgba(20, 184, 166, 0.08);
 }
 
 .suggestedTotal span {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 800;
     color: #0D9488;
     text-transform: uppercase;
@@ -857,6 +855,7 @@
     font-size: 1.5rem;
     font-weight: 900;
     color: #0F766E;
+    letter-spacing: -0.02em;
 }
 
 .profitabilityHint {
