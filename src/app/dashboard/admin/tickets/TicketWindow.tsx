@@ -807,7 +807,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 proveedor: ticketData.specialist?.name,
                 monto: amount,
                 estado_pago: "pagado",
-                metadata: { automatico: true, type: 'adelanto', pct: pctReal }
             });
 
             const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
@@ -1110,7 +1109,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 proveedor: materialsForm.specialistName,
                 monto: montoGasto,
                 estado_pago: "pendiente",
-                metadata: { excedePresupuesto }
             });
 
             if (excedePresupuesto) {
