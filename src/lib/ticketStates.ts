@@ -228,6 +228,19 @@ export const TICKET_STATES: TicketState[] = [
         ]
     },
     {
+        id: "requiere_revision_admin",
+        order: 11,
+        nombre: "Requiere Revisión de Administrador",
+        nombreCorto: "Revisión Admin",
+        descripcion: "Solicitud de liquidación o gasto excede el tope pactado. Requiere auditoría de Gerencia.",
+        actor: "Gerente",
+        tipo: "alerta",
+        color: "#EF4444",
+        icon: AlertTriangle,
+        transiciones: ["por_liquidar", "ticket_cerrado"],
+        accionesRequeridas: ["Validar justificación de exceso de presupuesto"]
+    },
+    {
         id: "vencido",
         order: 13,
         nombre: "Vencido",

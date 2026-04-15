@@ -792,50 +792,52 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
         const amount = costoReferencia * pctReal;
 
-        const pagosPrevios = ticketData.historialPagosTécnico || [];
-        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
-
-        if (totalPagado + amount > costoReferencia + 0.01) {
+        if (paymentsSummary + amount > costoReferencia + 0.01) {
             showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
             return;
         }
 
-        const nuevoPago = {
-            id: Math.random().toString(36).substr(2, 9),
-            fecha: new Date().toISOString(),
-            monto: amount,
-            porcentaje: pctReal,
-            referencia: "Adelanto Operativo"
-        };
-
-        const updated = {
-            ...ticketData,
-            estadoId: ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId,
-            adelantoPagado: true,
-            historialPagosTécnico: [...pagosPrevios, nuevoPago],
-            montoAdelanto: totalPagado + amount,
-            fechaPagoAdelanto: new Date().toISOString(),
-            solicitudAdelanto: null
-        };
-
         setIsConfirmingPayment(true);
         try {
+            await ticketCostsAPI.create({
+                ticket_id: ticketData.id,
+                concepto: `Adelanto Operativo (${(pctReal * 100).toFixed(0)}%)`,
+                categoria: "Mano de Obra",
+                specialist_id: ticketData.specialist_id,
+                proveedor: ticketData.specialist?.name,
+                monto: amount,
+                estado_pago: "pagado",
+                metadata: { automatico: true, type: 'adelanto', pct: pctReal }
+            });
+
+            const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
+
             await onUpdate?.(ticketData.id, {
-                status_id: updated.estadoId,
+                status_id: newState,
                 metadata: {
                     ...ticketData.metadata,
                     adelantoPagado: true,
-                    historialPagosTécnico: updated.historialPagosTécnico,
-                    montoAdelanto: updated.montoAdelanto,
-                    fechaPagoAdelanto: updated.fechaPagoAdelanto,
+                    montoAdelanto: paymentsSummary + amount,
+                    fechaPagoAdelanto: new Date().toISOString(),
                     solicitudAdelanto: null
                 }
             });
+
+            const updated = {
+                ...ticketData,
+                estadoId: newState,
+                adelantoPagado: true,
+                montoAdelanto: paymentsSummary + amount,
+                fechaPagoAdelanto: new Date().toISOString(),
+                solicitudAdelanto: null
+            };
+
             setTicketData(updated);
-            showToast("Adelanto Confirmado", `Se ha confirmado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.).`, "success");
+            await loadCosts();
+            showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.) en el desglose de costos.`, "success");
         } catch (err) {
             console.error("Error confirming advance:", err);
-            showToast("Error de Conexión", "No se pudo registrar el adelanto. Verifique su internet e intente de nuevo.", "error");
+            showToast("Error de Conexión", "No se pudo registrar el adelanto correctamente.", "error");
         } finally {
             setIsConfirmingPayment(false);
         }
@@ -866,21 +868,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleRequestFinalLiquidation = () => {
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const pagosPrevios = ticketData.historialPagosTécnico || [];
-        const totalPagado = pagosPrevios.reduce((sum: number, p: any) => sum + p.monto, 0);
-        const amount = costoReferencia - totalPagado;
+        const amount = costoReferencia - paymentsSummary;
+
+        // Regla 4: Escalamiento por exceso
+        const isExceeding = (paymentsSummary + amount > costoReferencia + 0.01);
+        const newState = isExceeding ? "requiere_revision_admin" : ticketData.estadoId;
 
         const updated = {
             ...ticketData,
+            estadoId: newState,
             solicitudLiquidación: {
                 monto: amount,
-                fecha: new Date().toISOString()
+                fecha: new Date().toISOString(),
+                excedeTope: isExceeding
             },
             pagoRechazado: null
         };
         setTicketData(updated);
         syncToSupabase(updated);
-        showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
+        
+        if (isExceeding) {
+            showToast("Ticket Congelado", "La liquidación excede el presupuesto. Requiere aprobación de Administrador.", "info");
+        } else {
+            showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
+        }
     };
 
     const handleFinishExecution = () => {
@@ -899,6 +910,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(updated);
         showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
+    };
+
+    const handleApproveBudgetExceed = () => {
+        const updated = {
+            ...ticketData,
+            estadoId: "por_liquidar",
+            metadata: {
+                ...ticketData.metadata,
+                excepcionPresupuestoAprobada: true,
+                fechaAprobacionExcepcion: new Date().toISOString()
+            }
+        };
+        setTicketData(updated);
+        syncToSupabase(updated);
+        showToast("Excepción Aprobada", "El presupuesto ha sido validado y la liquidación ha sido liberada.", "success");
     };
 
 
@@ -1070,15 +1096,32 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
         setIsSavingMaterials(true);
         try {
+            const montoGasto = parseFloat(materialsForm.monto);
+            const costoPactado = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+            
+            // Si el nuevo gasto hace que el total de gastos supere el pactado, escalar
+            const excedePresupuesto = (totalCosts + montoGasto > costoPactado + 0.01);
+
             await ticketCostsAPI.create({
                 ticket_id: ticketData.id,
                 concepto: materialsForm.concepto.trim(),
                 categoria: materialsForm.categoria || "Materiales",
                 specialist_id: materialsForm.specialist_id,
                 proveedor: materialsForm.specialistName,
-                monto: parseFloat(materialsForm.monto),
+                monto: montoGasto,
                 estado_pago: "pendiente",
+                metadata: { excedePresupuesto }
             });
+
+            if (excedePresupuesto) {
+                const frozenTicket = {
+                   ...ticketData,
+                   estadoId: "requiere_revision_admin",
+                };
+                setTicketData(frozenTicket);
+                await onUpdate?.(ticketData.id, { status_id: "requiere_revision_admin" });
+            }
+
             await loadCosts();
             setShowMaterialsModal(false);
             setMaterialsForm({ concepto: "", monto: "", categoria: "Materiales", specialist_id: "", specialistName: "", searchQuery: "", showDropdown: false });
@@ -1097,6 +1140,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
 
     const totalCosts = ticketCosts.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+    const paymentsSummary = ticketCosts
+        .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado')
+        .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const grossMargin = approvedAmount - totalCosts;
     const capitalExposed = ticketCosts
@@ -2299,8 +2345,55 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {["por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId) && (
+                                    {["por_liquidar", "ticket_cerrado", "requiere_revision_admin"].includes(ticketData.estadoId) && (
                                         <div className={styles.liquidationContainerPremium}>
+                                            {ticketData.estadoId === "requiere_revision_admin" && (
+                                                <div className={styles.adminReviewAlert} style={{ 
+                                                    background: '#FEF2F2', 
+                                                    border: '1.5px solid #FCA5A5', 
+                                                    borderRadius: '16px', 
+                                                    padding: '24px', 
+                                                    marginBottom: '20px',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '16px',
+                                                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                        <div style={{ background: '#EF4444', color: 'white', padding: '10px', borderRadius: '12px' }}>
+                                                            <AlertTriangle size={24} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 style={{ color: '#991B1B', fontSize: '16px', fontWeight: 800, margin: 0 }}>TICKET CONGELADO: EXCESO DE PRESUPUESTO</h4>
+                                                            <p style={{ color: '#B91C1C', fontSize: '13px', margin: '4px 0 0 0', fontWeight: 500 }}>
+                                                                Esta liquidación excede el monto pactado originalmente. Requiere revisión y aprobación de un administrador para proceder.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                                        <button 
+                                                            onClick={handleApproveBudgetExceed}
+                                                            style={{ 
+                                                                background: '#EF4444', 
+                                                                color: 'white', 
+                                                                border: 'none', 
+                                                                padding: '10px 20px', 
+                                                                borderRadius: '10px', 
+                                                                fontSize: '13px', 
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '8px'
+                                                            }}
+                                                        >
+                                                            <ThumbsUp size={16} />
+                                                            APROBAR EXCEPCIÓN Y LIBERAR PAGO
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                             <div className={styles.liquidationCardPremium}>
                                                 <div className={styles.liquidationHeaderPremium} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'linear-gradient(135deg, #065F46, #059669)', color: 'white' } : {}}>
                                                     <div className={styles.headerTitleWrapper}>
@@ -2330,18 +2423,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                         <div className={styles.mainFinancialRow} style={{ border: 'none' }}>
                                                             <span className={styles.rowLabel}>Depósitos Realizados</span>
-                                                            <span className={styles.rowValue} style={{ color: '#059669' }}>- S/ {(ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            <span className={styles.rowValue} style={{ color: '#059669' }}>- S/ {paymentsSummary.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
-                                                        {(ticketData.historialPagosTécnico || []).length > 0 && (
+                                                        {ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado').length > 0 && (
                                                             <div className={styles.depositsListPremium}>
-                                                                {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
+                                                                {ticketCosts
+                                                                    .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado')
+                                                                    .map((p: any, i: number) => (
                                                                     <div key={i} className={styles.depositEntry}>
                                                                         <div className={styles.depositLabel}>
-                                                                            {p.tipo === 'ADELANTO' ? 'Adelanto' : p.tipo === 'MATERIALES' ? 'Compra Materiales' : 'Depósito'}
-                                                                            <span className={styles.depositMeta}>{new Date(p.fecha).toLocaleDateString('es-PE')}</span>
+                                                                            {p.categoria === 'Mano de Obra' ? 'Pago M.O.' : p.categoria === 'Materiales' ? 'Compra Materiales' : p.categoria}
+                                                                            <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}</span>
                                                                         </div>
-                                                                        <span className={styles.depositAmount}>- S/ {p.monto.toFixed(2)}</span>
+                                                                        <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toFixed(2)}</span>
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -2397,8 +2492,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </span>
                                                         <span className={styles.finalBalanceValue}>
                                                             S/ {ticketData.estadoId === "ticket_cerrado"
-                                                                ? (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                ? paymentsSummary.toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - paymentsSummary).toLocaleString('es-PE', { minimumFractionDigits: 2 })
                                                             }
                                                         </span>
                                                     </div>
