@@ -1151,9 +1151,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado')
         .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     
-    // Compatibilidad: Sumar también los pagos del historial antiguo en metadata
+    // Compatibilidad: Sumar historial antiguo, adelantos clasicos y costo de visita (movilidad)
     const oldPaymentsSum = (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
-    const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum;
+    const visitPayment = (ticketData.fechaPagoVisita && ticketData.costoVisita) ? parseFloat(ticketData.costoVisita) : 0;
+    const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto) ? parseFloat(ticketData.montoAdelanto) : 0;
+    
+    const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance;
 
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const grossMargin = approvedAmount - totalCosts;
@@ -2438,7 +2441,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <span className={styles.rowValue} style={{ color: '#059669' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
-                                                        {(ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado').length > 0 || (ticketData.historialPagosTécnico || []).length > 0) && (
+                                                        {(ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado').length > 0 || 
+                                                         (ticketData.historialPagosTécnico || []).length > 0 ||
+                                                         visitPayment > 0 ||
+                                                         classicAdvance > 0) && (
                                                             <div className={styles.depositsListPremium}>
                                                                 {/* Pagos de la nueva tabla */}
                                                                 {ticketCosts
@@ -2452,6 +2458,29 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toFixed(2)}</span>
                                                                     </div>
                                                                 ))}
+
+                                                                {/* Pago de Visita (Movilidad) */}
+                                                                {visitPayment > 0 && (
+                                                                    <div className={styles.depositEntry} style={{ borderLeft: '3px solid #F59E0B' }}>
+                                                                        <div className={styles.depositLabel}>
+                                                                            Pago Visita / Movilidad
+                                                                            <span className={styles.depositMeta}>{new Date(ticketData.fechaPagoVisita).toLocaleDateString('es-PE')}</span>
+                                                                        </div>
+                                                                        <span className={styles.depositAmount}>- S/ {visitPayment.toFixed(2)}</span>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Adelanto Clásico */}
+                                                                {classicAdvance > 0 && (
+                                                                    <div className={styles.depositEntry} style={{ borderLeft: '3px solid #3B82F6' }}>
+                                                                        <div className={styles.depositLabel}>
+                                                                            Adelanto (Migración)
+                                                                            <span className={styles.depositMeta}>{new Date(ticketData.fechaPagoAdelanto || ticketData.createdAt).toLocaleDateString('es-PE')}</span>
+                                                                        </div>
+                                                                        <span className={styles.depositAmount}>- S/ {classicAdvance.toFixed(2)}</span>
+                                                                    </div>
+                                                                )}
+
                                                                 {/* Pagos históricos del metadata */}
                                                                 {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
                                                                     <div key={`old-${i}`} className={styles.depositEntry} style={{ opacity: 0.8 }}>
