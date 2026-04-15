@@ -1,4 +1,5 @@
 "use client";
+// Forced redeploy: v1.1 fix applied
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
