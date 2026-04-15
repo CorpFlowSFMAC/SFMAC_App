@@ -1105,7 +1105,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setIsSavingMaterials(true);
         try {
             const montoGasto = parseFloat(materialsForm.monto);
-            const costoPactado = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+            const costoPactado = techPactedTotal;
             
             // Si el nuevo gasto hace que el total de gastos supere el pactado, escalar
             const excedePresupuesto = (totalCosts + montoGasto > costoPactado + 0.01);
@@ -1156,6 +1156,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const visitPayment = (ticketData.fechaPagoVisita && ticketData.costoVisita) ? parseFloat(ticketData.costoVisita) : 0;
     const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto) ? parseFloat(ticketData.montoAdelanto) : 0;
     
+    const techPactedTotal = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + visitPayment);
     const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance;
 
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
@@ -2425,7 +2426,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
                                                     <div className={styles.totalBannerBadge} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)' } : {}}>
-                                                        S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                        S/ {techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                     </div>
                                                 </div>
 
@@ -2433,7 +2434,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <div className={styles.summarySection}>
                                                         <div className={styles.mainFinancialRow}>
                                                             <span className={styles.rowLabel}>Monto Pactado</span>
-                                                            <span className={styles.rowValue}>S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            <span className={styles.rowValue}>S/ {techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
                                                         <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '8px' }}>
@@ -2543,7 +2544,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         )}
                                                     </div>
 
-                                                    {(unifiedPaymentsSum > (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) + 0.01) && (
+                                                    {(unifiedPaymentsSum > techPactedTotal + 0.01) && (
                                                         <div className={styles.warningBannerPremium}>
                                                             <AlertTriangle size={20} />
                                                             <span>ATENCIÓN: Se han detectado excedentes en los depósitos previos.</span>
@@ -2557,7 +2558,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <span className={styles.finalBalanceValue}>
                                                             S/ {(ticketData.estadoId === "ticket_cerrado" 
                                                                 ? unifiedPaymentsSum 
-                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - unifiedPaymentsSum)
+                                                                : Math.max(0, techPactedTotal - unifiedPaymentsSum)
                                                             ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
