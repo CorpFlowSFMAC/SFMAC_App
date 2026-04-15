@@ -793,7 +793,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
         const amount = costoReferencia * pctReal;
 
-        if (paymentsSummary + amount > costoReferencia + 0.01) {
+        if (unifiedPaymentsSum + amount > costoReferencia + 0.01) {
             showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
             return;
         }
@@ -817,7 +817,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 metadata: {
                     ...ticketData.metadata,
                     adelantoPagado: true,
-                    montoAdelanto: paymentsSummary + amount,
+                    montoAdelanto: unifiedPaymentsSum + amount,
                     fechaPagoAdelanto: new Date().toISOString(),
                     solicitudAdelanto: null
                 }
@@ -827,7 +827,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 ...ticketData,
                 estadoId: newState,
                 adelantoPagado: true,
-                montoAdelanto: paymentsSummary + amount,
+                montoAdelanto: unifiedPaymentsSum + amount,
                 fechaPagoAdelanto: new Date().toISOString(),
                 solicitudAdelanto: null
             };
@@ -868,10 +868,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const handleRequestFinalLiquidation = () => {
         const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costoReferencia - paymentsSummary;
+        const amount = costoReferencia - unifiedPaymentsSum;
 
         // Regla 4: Escalamiento por exceso
-        const isExceeding = (paymentsSummary + amount > costoReferencia + 0.01);
+        const isExceeding = (unifiedPaymentsSum + amount > costoReferencia + 0.01);
         const newState = isExceeding ? "requiere_revision_admin" : ticketData.estadoId;
 
         const updated = {
@@ -1142,6 +1142,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const paymentsSummary = ticketCosts
         .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado')
         .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+    
+    // Compatibilidad: Sumar también los pagos del historial antiguo en metadata
+    const oldPaymentsSum = (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
+    const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum;
+
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const grossMargin = approvedAmount - totalCosts;
     const capitalExposed = ticketCosts
@@ -2422,18 +2427,29 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                         <div className={styles.mainFinancialRow} style={{ border: 'none' }}>
                                                             <span className={styles.rowLabel}>Depósitos Realizados</span>
-                                                            <span className={styles.rowValue} style={{ color: '#059669' }}>- S/ {paymentsSummary.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            <span className={styles.rowValue} style={{ color: '#059669' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
-                                                        {ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado').length > 0 && (
+                                                        {(ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado').length > 0 || (ticketData.historialPagosTécnico || []).length > 0) && (
                                                             <div className={styles.depositsListPremium}>
+                                                                {/* Pagos de la nueva tabla */}
                                                                 {ticketCosts
                                                                     .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado')
                                                                     .map((p: any, i: number) => (
-                                                                    <div key={i} className={styles.depositEntry}>
+                                                                    <div key={`new-${i}`} className={styles.depositEntry}>
                                                                         <div className={styles.depositLabel}>
                                                                             {p.categoria === 'Mano de Obra' ? 'Pago M.O.' : p.categoria === 'Materiales' ? 'Compra Materiales' : p.categoria}
                                                                             <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}</span>
+                                                                        </div>
+                                                                        <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toFixed(2)}</span>
+                                                                    </div>
+                                                                ))}
+                                                                {/* Pagos históricos del metadata */}
+                                                                {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
+                                                                    <div key={`old-${i}`} className={styles.depositEntry} style={{ opacity: 0.8 }}>
+                                                                        <div className={styles.depositLabel}>
+                                                                            {p.tipo === 'ADELANTO' ? 'Adelanto Histórico' : 'Pago Registrado'}
+                                                                            <span className={styles.depositMeta}>{new Date(p.fecha).toLocaleDateString('es-PE')}</span>
                                                                         </div>
                                                                         <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toFixed(2)}</span>
                                                                     </div>
@@ -2478,7 +2494,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         )}
                                                     </div>
 
-                                                    {((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + p.monto, 0)) < 0 && (
+                                                    {(unifiedPaymentsSum > (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) + 0.01) && (
                                                         <div className={styles.warningBannerPremium}>
                                                             <AlertTriangle size={20} />
                                                             <span>ATENCIÓN: Se han detectado excedentes en los depósitos previos.</span>
@@ -2491,8 +2507,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </span>
                                                         <span className={styles.finalBalanceValue}>
                                                             S/ {ticketData.estadoId === "ticket_cerrado"
-                                                                ? paymentsSummary.toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - paymentsSummary).toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                ? unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })
+                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })
                                                             }
                                                         </span>
                                                     </div>
