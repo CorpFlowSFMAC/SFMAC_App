@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3 } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -2432,13 +2432,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.financialDetailsBody}>
                                                     <div className={styles.summarySection}>
                                                         <div className={styles.mainFinancialRow}>
-                                                            <span className={styles.rowLabel}>Costo Total Pactado</span>
+                                                            <span className={styles.rowLabel}>Monto Pactado</span>
                                                             <span className={styles.rowValue}>S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
-                                                        <div className={styles.mainFinancialRow} style={{ border: 'none' }}>
-                                                            <span className={styles.rowLabel}>Depósitos Realizados</span>
-                                                            <span className={styles.rowValue} style={{ color: '#059669' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '8px' }}>
+                                                            <span className={styles.rowLabel}>Depósitos Previos</span>
+                                                            <span className={styles.rowValue} style={{ color: '#10B981' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
                                                         {(ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado').length > 0 || 
@@ -2452,43 +2452,55 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     .map((p: any, i: number) => (
                                                                     <div key={`new-${i}`} className={styles.depositEntry}>
                                                                         <div className={styles.depositLabel}>
-                                                                            {p.categoria === 'Mano de Obra' ? 'Pago M.O.' : p.categoria === 'Materiales' ? 'Compra Materiales' : p.categoria}
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                <ArrowDownLeft size={14} style={{ color: '#10B981' }} />
+                                                                                {p.categoria === 'Mano de Obra' ? 'PAGO M.O.' : p.categoria === 'Materiales' ? 'COMPRA MAT.' : p.categoria.toUpperCase()}
+                                                                            </div>
                                                                             <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}</span>
                                                                         </div>
-                                                                        <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toFixed(2)}</span>
+                                                                        <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                     </div>
                                                                 ))}
 
                                                                 {/* Pago de Visita (Movilidad) */}
                                                                 {visitPayment > 0 && (
-                                                                    <div className={styles.depositEntry} style={{ borderLeft: '3px solid #F59E0B' }}>
+                                                                    <div className={styles.depositEntry}>
                                                                         <div className={styles.depositLabel}>
-                                                                            Pago Visita / Movilidad
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                <ArrowDownLeft size={14} style={{ color: '#F59E0B' }} />
+                                                                                MOVILIDAD / VISITA
+                                                                            </div>
                                                                             <span className={styles.depositMeta}>{new Date(ticketData.fechaPagoVisita).toLocaleDateString('es-PE')}</span>
                                                                         </div>
-                                                                        <span className={styles.depositAmount}>- S/ {visitPayment.toFixed(2)}</span>
+                                                                        <span className={styles.depositAmount} style={{ color: '#F59E0B' }}>- S/ {visitPayment.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                     </div>
                                                                 )}
 
                                                                 {/* Adelanto Clásico */}
                                                                 {classicAdvance > 0 && (
-                                                                    <div className={styles.depositEntry} style={{ borderLeft: '3px solid #3B82F6' }}>
+                                                                    <div className={styles.depositEntry}>
                                                                         <div className={styles.depositLabel}>
-                                                                            Adelanto (Migración)
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                <ArrowDownLeft size={14} style={{ color: '#3B82F6' }} />
+                                                                                ADELANTO INICIAL
+                                                                            </div>
                                                                             <span className={styles.depositMeta}>{new Date(ticketData.fechaPagoAdelanto || ticketData.createdAt).toLocaleDateString('es-PE')}</span>
                                                                         </div>
-                                                                        <span className={styles.depositAmount}>- S/ {classicAdvance.toFixed(2)}</span>
+                                                                        <span className={styles.depositAmount} style={{ color: '#3B82F6' }}>- S/ {classicAdvance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                     </div>
                                                                 )}
 
                                                                 {/* Pagos históricos del metadata */}
                                                                 {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
-                                                                    <div key={`old-${i}`} className={styles.depositEntry} style={{ opacity: 0.8 }}>
+                                                                    <div key={`old-${i}`} className={styles.depositEntry} style={{ opacity: 0.9 }}>
                                                                         <div className={styles.depositLabel}>
-                                                                            {p.tipo === 'ADELANTO' ? 'Adelanto Histórico' : 'Pago Registrado'}
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                <ArrowDownLeft size={14} style={{ color: '#94A3B8' }} />
+                                                                                {p.tipo === 'ADELANTO' ? 'ADELANTO HIST.' : 'PAGO HISTÓRICO'}
+                                                                            </div>
                                                                             <span className={styles.depositMeta}>{new Date(p.fecha).toLocaleDateString('es-PE')}</span>
                                                                         </div>
-                                                                        <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toFixed(2)}</span>
+                                                                        <span className={styles.depositAmount} style={{ color: '#64748B' }}>- S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -2496,22 +2508,22 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </div>
 
                                                     <div className={styles.bankDetailsPanel}>
-                                                        <h4>Datos de Transferencia</h4>
+                                                        <h4>Transferencia a Destino</h4>
                                                         
                                                         <div className={styles.bankFieldClean}>
-                                                            <strong>Técnico Beneficiario</strong>
+                                                            <strong>BENEFICIARIO</strong>
                                                             <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
                                                         </div>
 
                                                         <div className={styles.bankFieldClean}>
                                                             <strong>{ticketData.tecnico?.banco || 'BANCO'}</strong>
-                                                            <span>{ticketData.tecnico?.numeroCuenta || '---'}</span>
+                                                            <span style={{ fontFamily: 'Monospace', letterSpacing: '1px' }}>{ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                         </div>
 
                                                         {ticketData.tecnico?.cci && (
                                                             <div className={styles.bankFieldClean}>
-                                                                <strong>CCI</strong>
-                                                                <span>{ticketData.tecnico.cci}</span>
+                                                                <strong>CCI (INTERBANCARIO)</strong>
+                                                                <span style={{ fontFamily: 'Monospace', letterSpacing: '1px' }}>{ticketData.tecnico.cci}</span>
                                                             </div>
                                                         )}
 
@@ -2519,12 +2531,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <div className={styles.walletsRowPremium}>
                                                                 {ticketData.tecnico?.yape && (
                                                                     <div className={styles.walletBadgePremium} style={{ background: '#7C3AED' }}>
-                                                                        <span>Yape: {ticketData.tecnico.yape}</span>
+                                                                        <span>YAPE: {ticketData.tecnico.yape}</span>
                                                                     </div>
                                                                 )}
                                                                 {ticketData.tecnico?.plin && (
                                                                     <div className={styles.walletBadgePremium} style={{ background: '#00D1FF' }}>
-                                                                        <span>Plin: {ticketData.tecnico.plin}</span>
+                                                                        <span>PLIN: {ticketData.tecnico.plin}</span>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -2538,15 +2550,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     )}
 
-                                                    <div className={styles.finalBalanceBanner} style={ticketData.estadoId === "ticket_cerrado" ? { background: '#065F46' } : {}}>
+                                                    <div className={styles.finalBalanceBanner} style={ticketData.estadoId === "ticket_cerrado" ? { background: '#064E3B' } : {}}>
                                                         <span className={styles.finalBalanceLabel}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Total Liquidado" : "Saldo Final a Depositar"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "Monto Total Liquidado" : "Saldo Final a Pagar"}
                                                         </span>
                                                         <span className={styles.finalBalanceValue}>
-                                                            S/ {ticketData.estadoId === "ticket_cerrado"
-                                                                ? unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })
-                                                            }
+                                                            S/ {(ticketData.estadoId === "ticket_cerrado" 
+                                                                ? unifiedPaymentsSum 
+                                                                : Math.max(0, (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) - unifiedPaymentsSum)
+                                                            ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
                                                 </div>
