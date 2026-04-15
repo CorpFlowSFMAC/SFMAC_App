@@ -45,11 +45,12 @@ export default function AdminLayout({
         setUserAvatar(storedAvatar);
     }, []);
 
-    const avatarLetter = isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isMounted && userRole === 'admin' ? 'A' : 'G');
-    const fullDisplayName = isMounted && realUserName ? realUserName : (isMounted && userRole === 'admin' ? 'Administrador' : 'Gestora Operativa');
+    const isAdmin = isMounted && userRole?.toLowerCase() === 'admin';
+    const avatarLetter = isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isAdmin ? 'A' : 'G');
+    const fullDisplayName = isMounted && realUserName ? realUserName : (isAdmin ? 'Administrador' : 'Gestora Operativa');
     const displayName = fullDisplayName.split(' ')[0]; // Solo el primer nombre
     const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(fullDisplayName)}&background=f97316&color=fff&bold=true` : null);
-    const dashboardHref = isMounted && userRole === 'admin' ? "/dashboard/admin" : "/dashboard/gestor";
+    const dashboardHref = isAdmin ? "/dashboard/admin" : "/dashboard/gestor";
 
     const motivationalPhrases = [
         "¡Hoy es un gran día para lograr metas!",
@@ -109,7 +110,7 @@ export default function AdminLayout({
                                 Inicio / Métricas
                             </Link>
 
-                            {isMounted && userRole === 'admin' && (
+                            {isAdmin && (
                                 <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
                                     <Users size={20} />
                                     Gestión Clientes
@@ -126,7 +127,7 @@ export default function AdminLayout({
                                 Sistema Tickets
                             </Link>
 
-                            {isMounted && userRole === 'admin' && (
+                            {isAdmin && (
                                 <Link href="/dashboard/admin/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
                                     <DollarSign size={20} />
                                     Pagos y Tesorería
@@ -138,21 +139,21 @@ export default function AdminLayout({
                                 Reportes de Eficiencia
                             </Link>
 
-                            {isMounted && userRole === 'admin' && (
+                            {isAdmin && (
                                 <Link href="/dashboard/admin/routing" className={`${styles.navItem} ${pathname.includes('/routing') ? styles.navItemActive : ''}`}>
                                     <Route size={20} />
                                     Enrutamiento
                                 </Link>
                             )}
 
-                            {isMounted && userRole === 'admin' && (
+                            {isAdmin && (
                                 <Link href="/dashboard/admin/asistencia" className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
                                     <Clock size={20} />
                                     Asistencia y Planillas
                                 </Link>
                             )}
 
-                            {isMounted && userRole === 'admin' && (
+                            {isAdmin && (
                                 <Link href="/dashboard/admin/usuarios" className={`${styles.navItem} ${pathname.includes('/usuarios') ? styles.navItemActive : ''}`}>
                                     <Shield size={20} />
                                     Usuarios y Accesos

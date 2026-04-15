@@ -175,7 +175,7 @@ export default function GestorDashboard() {
             if (!email) return;
             if (user?.email) localStorage.setItem('userEmail', user.email);
 
-            const userRole = localStorage.getItem('userRole');
+            const userRole = localStorage.getItem('userRole')?.toUpperCase();
             if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
                 setIsAdmin(true);
             }
@@ -189,7 +189,8 @@ export default function GestorDashboard() {
                 if (p) {
                     if (p.id) setMyGestoraId(p.id);
                     if (p.nombre) setMyGestoraNombre(p.nombre);
-                    if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') setIsAdmin(true);
+                    const normalizedRole = p.rol?.toUpperCase();
+                    if (normalizedRole === 'SUPERADMIN' || normalizedRole === 'ADMIN') setIsAdmin(true);
                 }
             }
         } catch (error) {

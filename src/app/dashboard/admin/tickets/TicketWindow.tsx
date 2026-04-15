@@ -94,6 +94,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         return null;
     });
 
+    const isAdmin = userRole?.toLowerCase() === 'admin' || userRole?.toLowerCase() === 'superadmin';
+
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -365,15 +367,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             ...businessData
         } = dataToProcess;
 
-        const isAdmin = userRole === 'admin';
-        const sourceForPayments = isAdmin ? businessData : ticket;
-        const sourceMetadata = isAdmin ? businessData : (ticket.metadata || {});
+        // Determinamos si es un admin usando la constante superior
+        
+        // CORRECCIÓN CRITICAL: Usamos siempre businessData (el estado actual de la UI) como fuente de verdad.
+        // Anteriormente se forzaba 'ticket' (datos viejos del servidor) para gestoras, 
+        // lo que anulaba cualquier cambio realizado por ellas.
+        const sourceForPayments = businessData;
+        const sourceMetadata = businessData;
 
         const STATE_ORDER: Record<string, number> = {
             'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
             'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
             'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
-            'en_ejecucion': 8, 'documentaciónviada': 9, 'por_liquidar': 10,
+            'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
             'ticket_cerrado': 12
         };
         const localStateOrder = STATE_ORDER[businessData.estadoId] ?? 0;
@@ -391,14 +397,24 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             total_quoted_amount: parseFloat(sourceForPayments.montoFinal || 0),
             technician_id: tecnico?.id || businessData.technician_id || ticket.technician_id,
             gestora_id: businessData.gestora?.id || ticket.gestora?.id || ticket.gestora_id,
-            is_sla_paused: isAdmin ? businessData.pausadoSLA : ticket.is_sla_paused,
-            sla_pause_date: isAdmin ? businessData.fechaPausa : ticket.sla_pause_date,
-            sla_reactivation_date: isAdmin ? businessData.fechaReactivacion : ticket.sla_reactivation_date,
+            is_sla_paused: businessData.pausadoSLA ?? ticket.is_sla_paused,
+            sla_pause_date: businessData.fechaPausa || ticket.sla_pause_date,
+            sla_reactivation_date: businessData.fechaReactivacion || ticket.sla_reactivation_date,
             quotation_date: businessData.fechaCotización,
             execution_date: sourceForPayments.fechaInicioEjecucion || ticket.execution_date,
             closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
             metadata: {
-                ...businessData,
+                ...sourceMetadata,
+                // Aseguramos que estos campos críticos vivan en la raíz del JSONB
+                estadoId: resolvedStatusId,
+                descripcionProblema: businessData.descripcionProblema,
+                numeroTicketCliente: businessData.numeroTicketCliente,
+                diagnostico: businessData.diagnostico,
+                costoManoObra: parseFloat(sourceForPayments.costoManoObra || 0),
+                costoMateriales: parseFloat(sourceForPayments.costoMateriales || 0),
+                costoVisita: parseFloat(sourceForPayments.costoVisita || 0),
+                montoFinal: parseFloat(sourceForPayments.montoFinal || 0),
+                metadata: undefined, // Evitar anidación infinita
                 adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
                 fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
 
@@ -851,54 +867,90 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleRequestAdvance = () => {
+    const handleRequestAdvance = async () => {
         if (!porcentajeAdelanto) {
             showToast("Selección Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
             return;
         }
 
-        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costoReferencia * porcentajeAdelanto;
+        const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const amount = costRef * porcentajeAdelanto;
 
-        const updated = {
-            ...ticketData,
-            solicitudAdelanto: {
-                porcentaje: porcentajeAdelanto,
+        try {
+            // 1. Persistencia Inmutable en ticket_costs (Fuente de Verdad para Tesorería)
+            await ticketCostsAPI.create({
+                ticket_id: ticketData.id,
+                concepto: `Adelanto Operativo (${(porcentajeAdelanto * 100).toFixed(0)}%)`,
+                categoria: "Mano de Obra",
+                specialist_id: ticketData.tecnico?.id || ticketData.technician_id,
                 monto: amount,
-                fecha: new Date().toISOString()
-            },
-            pagoRechazado: null
-        };
-        setTicketData(updated);
-        syncToSupabase(updated);
-        showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "info");
+                estado_pago: "pendiente",
+                solicitado_por: ticketData.gestora?.name || "Gestora"
+            });
+
+            // 2. Actualización de Metadata (Para redundancia y compatibilidad UI)
+            const updated = {
+                ...ticketData,
+                solicitudAdelanto: {
+                    porcentaje: porcentajeAdelanto,
+                    monto: amount,
+                    fecha: new Date().toISOString()
+                },
+                pagoRechazado: null
+            };
+            setTicketData(updated);
+            syncToSupabase(updated);
+            
+            showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "success");
+        } catch (err) {
+            console.error("Error al solicitar adelanto:", err);
+            showToast("Error de Conexión", "No se pudo registrar la solicitud en el sistema.", "error");
+        }
     };
 
-    const handleRequestFinalLiquidation = () => {
-        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costoReferencia - unifiedPaymentsSum;
+    const handleRequestFinalLiquidation = async () => {
+        const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const amount = costRef - unifiedPaymentsSum;
 
         // Regla 4: Escalamiento por exceso
-        const isExceeding = (unifiedPaymentsSum + amount > costoReferencia + 0.01);
-        const newState = isExceeding ? "requiere_revision_admin" : ticketData.estadoId;
+        const isExceeding = (unifiedPaymentsSum + amount > costRef + 0.01);
+        const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
 
-        const updated = {
-            ...ticketData,
-            estadoId: newState,
-            solicitudLiquidación: {
+        try {
+            // 1. Registrar en ticket_costs
+            await ticketCostsAPI.create({
+                ticket_id: ticketData.id,
+                concepto: `Liquidación Final de Servicio`,
+                categoria: "Mano de Obra",
+                specialist_id: ticketData.tecnico?.id || ticketData.technician_id,
                 monto: amount,
-                fecha: new Date().toISOString(),
-                excedeTope: isExceeding
-            },
-            pagoRechazado: null
-        };
-        setTicketData(updated);
-        syncToSupabase(updated);
-        
-        if (isExceeding) {
-            showToast("Ticket Congelado", "La liquidación excede el presupuesto. Requiere aprobación de Administrador.", "info");
-        } else {
-            showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "info");
+                estado_pago: "pendiente",
+                solicitado_por: ticketData.gestora?.name || "Gestora"
+            });
+
+            // 2. Actualizar estado y metadata
+            const updated = {
+                ...ticketData,
+                estadoId: newState,
+                status_id: newState,
+                solicitudLiquidacion: {
+                    monto: amount,
+                    fecha: new Date().toISOString(),
+                    excedeTope: isExceeding
+                },
+                pagoRechazado: null
+            };
+            setTicketData(updated);
+            syncToSupabase(updated);
+
+            if (isExceeding) {
+                showToast("Ticket Congelado", "La liquidación excede el presupuesto. Requiere aprobación de Administrador.", "info");
+            } else {
+                showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "success");
+            }
+        } catch (err) {
+            console.error("Error al solicitar liquidación:", err);
+            showToast("Error de Conexión", "No se pudo procesar la liquidación.", "error");
         }
     };
 
@@ -909,7 +961,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
         const updated = {
             ...ticketData,
-            estadoId: "documentaciónviada",
+            estadoId: "documentacion_enviada",
             fechaFinEjecucion: new Date().toISOString(),
             gastos: gastos,
             evidenciasEjecucion: evidenciasEjecucion,
@@ -2095,7 +2147,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </div>
                                                                 )}
 
-                                                                {userRole === 'admin' ? (
+                                                                {isAdmin ? (
                                                                     <button
                                                                         className={styles.confirmAdvanceBtnPremium}
                                                                         onClick={handleConfirmAdvance}
@@ -2117,7 +2169,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     )
                                                                 )}
 
-                                                                {ticketData.solicitudAdelanto && userRole !== 'admin' && (
+                                                                {ticketData.solicitudAdelanto && !isAdmin && (
                                                                     <div className={styles.waitingNoticePremium}>
                                                                         <Clock size={16} />
                                                                         <span>Esperando confirmación de Tesorería...</span>
@@ -2306,10 +2358,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 value={ticketData.numeroTicketCliente || ""}
                                                                 autoFocus={!ticketData.numeroTicketCliente}
                                                                 // Si el ticket ya venÃƒÂ­a con nÃƒÂºmero asignado (desde props), bloquear ediciÃƒÂ³n
-                                                                disabled={!!ticket.numeroTicketCliente}
-                                                                style={ticket.numeroTicketCliente ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
+                                                                disabled={!!ticket.numeroTicketCliente && !ticket.numeroTicketCliente.startsWith('#') && !isAdmin}
+                                                                style={ticket.numeroTicketCliente && !ticket.numeroTicketCliente.startsWith('#') && !isAdmin ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
-                                                                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.]/g, '');
+                                                                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#]/g, '');
                                                                     setTicketData({ ...ticketData, numeroTicketCliente: val });
                                                                 }}
                                                                 onClick={(e) => e.stopPropagation()}
@@ -2319,7 +2371,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     ¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
                                                                 </span>
                                                             )}
-                                                            {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
+                                                            {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && !ticketData.numeroTicketCliente.startsWith('#') && (
                                                                 <span style={{ color: '#F59E0B', fontSize: '0.65rem', fontWeight: 700, marginTop: '4px', lineHeight: '1.2' }}>
                                                                     FORMATO REQUERIDO: MB + 6 DÍGITOS + PUNTO + AÑO (26)<br />
                                                                     Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
@@ -2336,17 +2388,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                 <button
                                                     className={styles.proceedToLiquidationBtn}
-                                                    disabled={!Object.values(documentosChecklist).every(v => v) || !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente || ""))}
-                                                    onClick={() => {
-                                                        const updated = {
-                                                            ...ticketData,
-                                                            estadoId: "por_liquidar",
-                                                            fechaValidacionDocumental: new Date().toISOString(),
-                                                            documentosValidados: documentosChecklist
-                                                        };
-                                                        setTicketData(updated);
-                                                        showToast("Documentación Validada", "El ticket ha pasado a liquidación final.", "success");
-                                                    }}
+                                                    disabled={!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente}
+                                                    onClick={handleRequestFinalLiquidation}
                                                 >
                                                     <span>PASAR A LIQUIDACIÓN FINAL</span>
                                                     <ArrowRight size={20} />

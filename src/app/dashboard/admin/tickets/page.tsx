@@ -76,12 +76,16 @@ export default function TicketsPage() {
             const email = user?.email || localStorage.getItem('userEmail');
             if (!email) return;
 
-            const userRole = localStorage.getItem('userRole');
+            const userRole = (localStorage.getItem('userRole') || '').toUpperCase();
             if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
                 setIsAdminState(true);
             }
 
-            const { data: g } = await supabase.from('gestoras').select('id, email').ilike('email', email).maybeSingle();
+            const email = (user?.email || localStorage.getItem('userEmail') || '').toLowerCase();
+            if (!email) return;
+
+            // REVISIÓN DE GESTORAS
+            const { data: g } = await supabase.from('gestoras').select('id, name, email').ilike('email', email).maybeSingle();
             if (g?.id) {
                 setMyGestoraId(g.id);
             }
@@ -89,7 +93,8 @@ export default function TicketsPage() {
             // REVISIÓN DE ROL EN PERFILES (Independiente de si es gestora o no)
             const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', email).maybeSingle();
             if (p) {
-                if (p.rol === 'SUPERADMIN' || p.rol === 'ADMIN') {
+                const normalizedRole = (p.rol || '').toUpperCase();
+                if (normalizedRole === 'SUPERADMIN' || normalizedRole === 'ADMIN') {
                     setIsAdminState(true);
                 }
                 if (!g?.id && p.id) {

@@ -298,6 +298,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             )
             .subscribe();
 
+        // ─ Canal: COSTOS (Para peticiones de pago)
+        const costsChannel = supabase
+            .channel("appdata:ticket_costs")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "ticket_costs" },
+                () => {
+                    queryClient.invalidateQueries({
+                        queryKey: queryKeys.tickets.all,
+                    });
+                }
+            )
+            .subscribe();
+
         // ─ Canal: BRANCH_OFFICES → actualiza clientes
         const branchesChannel = supabase
             .channel("appdata:branches")
@@ -344,6 +358,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             supabase.removeChannel(clientsChannel);
             supabase.removeChannel(techniciansChannel);
             supabase.removeChannel(ticketsChannel);
+            supabase.removeChannel(costsChannel);
             supabase.removeChannel(branchesChannel);
             supabase.removeChannel(gestorasChannel);
             supabase.removeChannel(targetsChannel);

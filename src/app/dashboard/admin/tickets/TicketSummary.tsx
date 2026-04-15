@@ -782,7 +782,7 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
                     <span style={{ color: '#166534' }}>
                         {ticket.estadoId === 'cotizacion_enviada' ? 'Esperando Aprobación' :
                             ticket.estadoId === 'cotizacion_aprobada' ?
-                                (ticket.adelantoPagado ? 'âœ… Aprobado y Pagado' : 'â³ Esperando Adelanto (50%)') :
+                                (ticket.adelantoPagado ? '✅ Aprobado y Pagado' : '⏳ Esperando Adelanto (50%)') :
                                 'Reloj Pausado'}
                     </span>
                 </div>
@@ -1116,82 +1116,66 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
                 </span>
             </div>
 
-            <div className={styles.infoItem} style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                <span className={styles.infoLabel}>Historial de Depósitos ({pctReal.toFixed(0)}%)</span>
+            <div className={styles.infoItem} style={{ flex: 1.5 }}>
+                <span className={styles.infoLabel} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <CreditCard size={10} /> PAGOS REALIZADOS ({pctReal.toFixed(0)}%)
+                </span>
                 {((ticket.historialPagosTecnico && ticket.historialPagosTecnico.length > 0) || totalPagadoModern > 0) ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        {/* Legacy Payments */}
-                        {ticket.historialPagosTecnico?.map((p: any, idx: number) => (
-                            <div key={p.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                    Lº S/ {formatSoles(p.monto)}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px' }}>
+                        {/* Legacy & Modern Combined View */}
+                        {[...(ticket.historialPagosTecnico || []), ...(costos || []).filter(c => c.estado_pago === 'pagado')].slice(0, 3).map((p: any, idx: number) => (
+                            <div key={p.id || idx} style={{ 
+                                display: 'flex', alignItems: 'center', gap: '6px', 
+                                background: 'white', padding: '2px 8px', borderRadius: '4px',
+                                border: '1px solid #FEF3C7', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                            }}>
+                                <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 800 }}>
+                                    S/ {formatSoles(p.monto)}
                                 </span>
-                                <span style={{ fontSize: '9px', color: '#B45309', opacity: 0.7, fontWeight: 600 }}>
-                                    ({p.fecha ? new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) : '---'})
+                                <span style={{ fontSize: '9px', color: '#D97706', opacity: 0.8, fontWeight: 600 }}>
+                                    {new Date(p.fecha || p.updated_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}
                                 </span>
-                                {(p.voucher || p.voucherRef) && (
-                                    <button
+                                {(p.voucher || p.voucherRef || p.url_comprobante) && (
+                                    <Eye 
+                                        size={10} 
+                                        color="#6366F1" 
+                                        style={{ cursor: 'pointer' }}
                                         onClick={() => {
-                                            const src = p.voucher
-                                                || (p.voucherRef?.startsWith('data:image') ? p.voucherRef : (typeof window !== 'undefined' ? (localStorage.getItem(p.voucherRef) || p.voucherRef || '') : ''));
+                                            const src = p.url_comprobante || p.voucher || p.voucherRef;
                                             if (src) setViewingVoucher(src);
                                         }}
-                                        style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#6366F1' }}
-                                        title="Ver Voucher"
-                                    >
-                                        <Eye size={12} />
-                                    </button>
+                                    />
                                 )}
-                                <CheckCircle2 size={10} color="#059669" />
                             </div>
                         ))}
-                        {/* Modern Paid Costs */}
-                        {(costos || []).filter(c => c.estado_pago === 'pagado').map((c: any) => (
-                            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                                    Pº S/ {formatSoles(c.monto)}
-                                </span>
-                                <span style={{ fontSize: '9px', color: '#B45309', opacity: 0.7, fontWeight: 600 }} title={c.concepto}>
-                                    ({c.updated_at ? new Date(c.updated_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' }) : '---'})
-                                </span>
-                                {c.url_comprobante && (
-                                    <button
-                                        onClick={() => setViewingVoucher(c.url_comprobante)}
-                                        style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#6366F1' }}
-                                        title="Ver Voucher"
-                                    >
-                                        <Eye size={12} />
-                                    </button>
-                                )}
-                                <CheckCircle2 size={10} color="#059669" />
-                            </div>
-                        ))}
+                        {([...(ticket.historialPagosTecnico || []), ...(costos || []).filter(c => c.estado_pago === 'pagado')].length > 3) && (
+                            <span style={{ fontSize: '9px', color: '#B45309', fontWeight: 700, paddingLeft: '8px' }}>
+                                + {([...(ticket.historialPagosTecnico || []), ...(costos || []).filter(c => c.estado_pago === 'pagado')].length - 3)} más
+                            </span>
+                        )}
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span className={styles.infoValue} style={{ color: ticket.adelantoPagado ? '#059669' : '#DC2626' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                        <span className={styles.infoValue} style={{ color: ticket.adelantoPagado ? '#059669' : '#DC2626', fontSize: '13px', fontWeight: 900 }}>
                             S/ {formatSoles(montoAdelanto)}
                         </span>
-                        {ticket.adelantoPagado ? (
-                            <CheckCircle2 size={12} color="#059669" />
-                        ) : (
-                            <Clock size={12} color="#F59E0B" />
-                        )}
+                        {ticket.adelantoPagado ? <CheckCircle2 size={12} color="#059669" /> : <Clock size={12} color="#F59E0B" />}
                     </div>
                 )}
             </div>
 
             <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>2. Saldo Técnico</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className={styles.infoValue} style={{ color: ticket.estadoId === 'ticket_cerrado' ? '#059669' : '#1E293B' }}>
+                <span className={styles.infoLabel} style={{ color: '#1E40AF' }}>SALDO PENDIENTE</span>
+                <div style={{ 
+                    display: 'flex', alignItems: 'center', gap: '8px', 
+                    background: montoSaldo > 0 ? '#EFF6FF' : '#F0FDF4', 
+                    padding: '6px 12px', borderRadius: '8px',
+                    border: `1px solid ${montoSaldo > 0 ? '#DBEAFE' : '#BBF7D0'}`
+                }}>
+                    <span style={{ fontSize: '15px', fontWeight: 900, color: montoSaldo > 0 ? '#1E40AF' : '#059669' }}>
                         S/ {formatSoles(montoSaldo)}
                     </span>
-                    {ticket.estadoId === 'ticket_cerrado' ? (
-                        <CheckCircle2 size={12} color="#059669" />
-                    ) : (
-                        <Wallet size={12} color="#94A3B8" />
-                    )}
+                    {montoSaldo === 0 ? <CheckCircle2 size={14} color="#059669" /> : <Wallet size={14} color="#3B82F6" />}
                 </div>
             </div>
 
@@ -1540,4 +1524,146 @@ export function GestoraAssignmentBar({ ticket, onAssign, canAssign }: { ticket: 
             )}
         </div>
     );
+}
+
+export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: { ticket: any; onOpenMaterials?: () => void; costos?: any[] }) {
+    const businessData = ticket.metadata || {};
+    const totalPactado = round2(businessData.costoManoObra + businessData.costoMateriales);
+    const totalPagado = round2((businessData.historialPagosTecnico || []).reduce((acc: number, p: any) => acc + (p.monto || 0), 0));
+    const saldoPendiente = round2(totalPactado - totalPagado);
+    const hasHistory = (businessData.historialPagosTecnico || []).length > 0;
+
+    return (
+        <div style={{
+            background: 'linear-gradient(135deg, #0F172A, #1E293B)',
+            borderRadius: '16px',
+            padding: '24px',
+            color: 'white',
+            marginTop: '1.25rem',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2)',
+            position: 'relative',
+            overflow: 'hidden'
+        }}>
+            {/* GLOW DECORATIVO */}
+            <div style={{ position: 'absolute', top: '-50px', right: '-50px', width: '150px', height: '150px', background: 'rgba(59, 130, 246, 0.15)', filter: 'blur(40px)', borderRadius: '50%' }}></div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ background: '#3B82F6', borderRadius: '10px', padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <DollarSign size={20} color="white" />
+                    </div>
+                    <div>
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Liquidación Final</h4>
+                        <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>Cálculo automático de saldos y rentabilidad</span>
+                    </div>
+                </div>
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981', padding: '4px 12px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 900, border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    FONDOS PROTEGIDOS
+                </div>
+            </div>
+
+            {/* HEADER: TOTALES */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '24px', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.6rem', fontWeight: 900, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Monto Pactado</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 950, color: '#F8FAFC', fontFamily: 'monospace' }}>S/ {formatSoles(totalPactado)}</div>
+                </div>
+                <div style={{ textAlign: 'center', borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ fontSize: '0.6rem', fontWeight: 900, color: '#10B981', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Pagado Anterior</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 950, color: '#34D399', fontFamily: 'monospace' }}>- S/ {formatSoles(totalPagado)}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.6rem', fontWeight: 900, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Saldo a Liquidar</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 950, color: '#60A5FA', textShadow: '0 0 15px rgba(96,165,250,0.4)', fontFamily: 'monospace' }}>S/ {formatSoles(saldoPendiente)}</div>
+                </div>
+            </div>
+
+            {/* HISTORIAL Y DETALLES */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '2rem' }}>
+                {/* Lista de Pagos Realizados */}
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <div style={{ width: 4, height: 16, background: '#3B82F6', borderRadius: '2px' }}></div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 900, color: '#F8FAFC', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Historial de Transferencias</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '140px', overflowY: 'auto', paddingRight: '10px' }}>
+                        {hasHistory ? (
+                            businessData.historialPagosTecnico.map((p: any, idx: number) => (
+                                <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.02)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(148, 163, 184, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 900, color: '#94A3B8' }}>{idx + 1}</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#F1F5F9' }}>{p.tipo || 'Adelanto'}</span>
+                                            <span style={{ fontSize: '0.62rem', color: '#64748B' }}>{new Date(p.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}</span>
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '0.88rem', fontWeight: 900, color: '#34D399', fontFamily: 'monospace' }}>S/ {formatSoles(p.monto)}</div>
+                                        {p.referencia && <div style={{ fontSize: '0.58rem', color: '#475569', fontStyle: 'italic' }}>{p.referencia}</div>}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div style={{ padding: '20px', textAlign: 'center', background: 'rgba(255,255,255,0.01)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.05)', color: '#475569', fontSize: '0.75rem' }}>
+                                <History size={24} style={{ opacity: 0.2, marginBottom: '8px' }} />
+                                <p>No se registran movimientos financieros previos.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Datos de Destino */}
+                <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))', borderRadius: '16px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)', height: 'fit-content' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                        <Wallet size={14} color="#60A5FA" />
+                        <span style={{ fontSize: '0.72rem', fontWeight: 900, color: '#60A5FA', textTransform: 'uppercase' }}>Canal de Pago</span>
+                    </div>
+                    {businessData.tecnico?.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 900, color: '#F8FAFC', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{businessData.tecnico.nombre}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem' }}>
+                                    <span style={{ color: '#94A3B8' }}>INSTITUCIÓN:</span>
+                                    <span style={{ color: '#F1F5F9', fontWeight: 800 }}>{businessData.tecnico.banco}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem' }}>
+                                    <span style={{ color: '#94A3B8' }}>NRO CUENTA:</span>
+                                    <span style={{ color: '#F1F5F9', fontWeight: 800, fontFamily: 'monospace' }}>{businessData.tecnico.numeroCuenta}</span>
+                                </div>
+                                {businessData.tecnico.cci && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem' }}>
+                                        <span style={{ color: '#94A3B8' }}>CÓDIGO CCI:</span>
+                                        <span style={{ color: '#F1F5F9', fontWeight: 800, fontFamily: 'monospace' }}>{businessData.tecnico.cci}</span>
+                                    </div>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                                {businessData.tecnico.yape && <div style={{ background: '#7C3AED', color: 'white', fontSize: '0.6rem', fontWeight: 900, padding: '3px 8px', borderRadius: '6px', boxShadow: '0 2px 4px rgba(124,58,237,0.3)' }}>PURPLE YAPE</div>}
+                                {businessData.tecnico.plin && <div style={{ background: '#0EA5E9', color: 'white', fontSize: '0.6rem', fontWeight: 900, padding: '3px 8px', borderRadius: '6px', boxShadow: '0 2px 4px rgba(14,165,233,0.3)' }}>BLUE PLIN</div>}
+                            </div>
+                        </div>
+                    ) : (
+                        <div style={{ color: '#FDA4AF', fontSize: '0.7rem', fontWeight: 800, textAlign: 'center', padding: '15px', background: 'rgba(244,63,94,0.1)', borderRadius: '12px', border: '1px solid rgba(244,63,94,0.2)' }}>
+                            ⚠️ REQUIERE ASIGNACIÓN DE TÉCNICO
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ALERTAS FINANCIERAS */}
+            {saldoPendiente < 0 && (
+                <div style={{ marginTop: '16px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', color: '#FCA5A5', fontSize: '0.75rem', fontWeight: 700 }}>
+                    <div style={{ background: '#EF4444', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <X size={12} color="white" />
+                    </div>
+                    <span>¡ALERTA DE SOBREPAGO!: Se ha detectado un excedente de S/ {formatSoles(Math.abs(saldoPendiente))} sobre el presupuesto pactado.</span>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export function PaymentHistoryBar({ ticket }: { ticket: any }) {
+    return null; // Consolidado ahora dentro de FinancialLiquidationBar
 }

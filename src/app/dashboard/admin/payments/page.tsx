@@ -182,9 +182,13 @@ export default function PaymentsPage() {
 
     useEffect(() => {
         const channel = supabase
-            .channel('payments:tickets_realtime')
+            .channel('payments:realtime_sync')
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'tickets' },
+                () => { fetchPaymentTickets(); }
+            )
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'ticket_costs' },
                 () => { fetchPaymentTickets(); }
             )
             .subscribe();
@@ -647,6 +651,21 @@ export default function PaymentsPage() {
 
         try {
             if (item.isTableCost && item.costId) {
+                const additionalUpdates: any = { metadataFields: {} };
+                const isAdvance = item.concepto?.toLowerCase().includes('adelanto');
+                const isFinal = item.concepto?.toLowerCase().includes('liquidación final');
+
+                if (isAdvance) {
+                    additionalUpdates.status_id = 'en_ejecucion';
+                    additionalUpdates.metadataFields.adelantoPagado = true;
+                    additionalUpdates.metadataFields.fechaPagoAdelanto = new Date().toISOString();
+                    additionalUpdates.metadataFields.solicitudAdelanto = null;
+                } else if (isFinal) {
+                    additionalUpdates.status_id = 'ticket_cerrado';
+                    additionalUpdates.metadataFields.fechaPagoFinal = new Date().toISOString();
+                    additionalUpdates.metadataFields.solicitudLiquidacion = null;
+                }
+
                 await supabase
                     .from('ticket_costs')
                     .update({ 
@@ -656,7 +675,7 @@ export default function PaymentsPage() {
                     })
                     .eq('id', item.costId);
                 
-                await ticketsAPI.updatePaymentSafe(group.ticketId, nuevoPago, { metadataFields: {} });
+                await ticketsAPI.updatePaymentSafe(group.ticketId, nuevoPago, additionalUpdates);
                 showToast('✅ Pago de costo registrado');
                 refresh();
                 return;
@@ -956,29 +975,43 @@ export default function PaymentsPage() {
                                                             <User size={13} color="#7C3AED" />
                                                             {group.tecnico.nombre}
                                                         </div>
-                                                        <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '7px 9px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                        <div style={{ background: '#FDFCFB', border: '1px solid #F1F5F9', borderRadius: '10px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '5px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>
-                                                                    <CreditCard size={11} />
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: 800, color: '#334155' }}>
+                                                                    <CreditCard size={11} color="#64748B" />
                                                                     {group.tecnico.banco}
                                                                 </div>
                                                                 <div style={{ display: 'flex', gap: '4px' }}>
-                                                                    {group.tecnico.yape && <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: '8px' }}>Yape {group.tecnico.yape}</span>}
-                                                                    {group.tecnico.plin && <span style={{ background: '#0EA5E9', color: 'white', fontSize: '0.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: '8px' }}>Plin {group.tecnico.plin}</span>}
+                                                                    {group.tecnico.yape && <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.62rem', fontWeight: 900, padding: '2px 6px', borderRadius: '6px' }}>💜 YAPE</span>}
+                                                                    {group.tecnico.plin && <span style={{ background: '#0EA5E9', color: 'white', fontSize: '0.62rem', fontWeight: 900, padding: '2px 6px', borderRadius: '6px' }}>🔵 PLIN</span>}
                                                                 </div>
                                                             </div>
-                                                            <div style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: '#64748B' }}>
-                                                                <div>CTA: {group.tecnico.numeroCuenta}</div>
-                                                                {group.tecnico.cci && group.tecnico.cci !== '---' && <div>CCI: {group.tecnico.cci}</div>}
+                                                            
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                                <div className={styles.bankDetailRow} onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }} title="Click para copiar" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 4px', borderRadius: '4px', background: '#F8FAFC' }}>
+                                                                    <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 700 }}>CTA:</span>
+                                                                    <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>{group.tecnico.numeroCuenta}</span>
+                                                                    <Copy size={10} style={{ opacity: 0.5 }} />
+                                                                </div>
+                                                                {group.tecnico.cci && group.tecnico.cci !== '---' && (
+                                                                    <div className={styles.bankDetailRow} onClick={() => { navigator.clipboard.writeText(group.tecnico.cci); showToast('CCI copiado'); }} title="Click para copiar" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 4px', borderRadius: '4px', background: '#F8FAFC' }}>
+                                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 700 }}>CCI:</span>
+                                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>{group.tecnico.cci}</span>
+                                                                        <Copy size={10} style={{ opacity: 0.5 }} />
+                                                                    </div>
+                                                                )}
                                                             </div>
+
                                                             {group.costoVisita && group.costoVisita > 0 && (
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.73rem', color: '#7C3AED', fontWeight: 700, borderTop: '1px dashed #E2E8F0', paddingTop: '4px' }}>
-                                                                    <ArrowUpRight size={11} />
-                                                                    Visita: S/ {formatSoles(group.costoVisita)}
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: '#7C3AED', fontWeight: 700, borderTop: '1px dashed #E2E8F0', paddingTop: '5px', marginTop: '2px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <ArrowUpRight size={11} />
+                                                                        Visita: S/ {formatSoles(group.costoVisita)}
+                                                                    </div>
                                                                     {group.voucherVisita && (
-                                                                        <button onClick={() => setShowVoucher(getVoucherSrc(group.voucherVisita))}
-                                                                            style={{ marginLeft: '4px', background: '#EDE9FE', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 5px', display: 'flex', alignItems: 'center', gap: '3px', color: '#7C3AED', fontSize: '0.65rem' }}>
-                                                                            <Eye size={10} /> Ver
+                                                                        <button onClick={() => setShowVoucher(group.voucherVisita)}
+                                                                            style={{ background: '#EDE9FE', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', color: '#7C3AED', fontSize: '0.62rem', fontWeight: 800 }}>
+                                                                            VOUCHER
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -986,16 +1019,22 @@ export default function PaymentsPage() {
                                                         </div>
                                                         {group.descripcion && (
                                                             <div style={{ 
-                                                                fontSize: '0.72rem', 
-                                                                color: '#475569', 
+                                                                fontSize: '0.68rem', 
+                                                                color: '#64748B', 
                                                                 fontStyle: 'italic', 
                                                                 lineHeight: 1.3, 
                                                                 padding: '6px 8px',
-                                                                background: '#F1F5F9',
+                                                                background: '#F8FAFC',
                                                                 borderRadius: '6px',
-                                                                borderLeft: '3px solid #CBD5E1',
-                                                                marginTop: '4px',
-                                                                whiteSpace: 'pre-wrap'
+                                                                borderLeft: '2px solid #E2E8F0',
+                                                                marginTop: '8px',
+                                                                whiteSpace: 'pre-wrap',
+                                                                maxHeight: '40px',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                display: '-webkit-box',
+                                                                WebkitLineClamp: 2,
+                                                                WebkitBoxOrient: 'vertical'
                                                             }}>
                                                                 {group.descripcion}
                                                             </div>
