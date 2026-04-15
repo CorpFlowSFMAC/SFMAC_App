@@ -638,6 +638,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
 
+        const mo = parseFloat(costoManoObra) || 0;
+        const mat = modalidad === 'todo_costo' ? 0 : (parseFloat(costoMateriales) || 0);
+        
+        if (mo + mat <= 0) {
+            showToast("Costo Requerido", "El monto total a cobrar (Mano de Obra + Materiales) debe ser mayor a cero para generar el reporte.", "error");
+            return;
+        }
+
         const reportData = {
             ...ticketData,
             diagnostico,
