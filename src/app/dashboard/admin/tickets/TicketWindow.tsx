@@ -84,7 +84,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const quotationEditorRef = useRef<any>(null);
     const [partidasCotización, setPartidasCotización] = useState<any[]>(ticketData.partidas || []);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
-    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
     const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
@@ -778,7 +777,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             modificacionAutorizada: true
         };
         setTicketData(authorized);
-        setIsQuotationCollapsed(false);
         showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
     };
 
@@ -1758,8 +1756,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     )}
 
                                     {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
-                                        <div className={`${styles.quotationBox} ${isQuotationCollapsed && ticketData.estadoId !== "en_cotizacion" ? styles.collapsedQuotation : ''}`}>
-                                            <div className={styles.quotationHeader} onClick={() => ticketData.estadoId !== "en_cotizacion" && setIsQuotationCollapsed(!isQuotationCollapsed)}>
+                                        <div className={styles.quotationBox}>
+                                            <div className={styles.quotationHeader}>
                                                 <FileSpreadsheet size={28} color="#10B981" />
                                                 <div style={{ textAlign: 'left', flex: 1 }}>
                                                     <h3 className={styles.quotationTitle} style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
@@ -1768,7 +1766,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <p className={styles.quotationSubtitle} style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
                                                         {ticketData.estadoId === "en_cotizacion"
                                                             ? "Prepare el presupuesto final usando la plantilla oficial"
-                                                            : isQuotationCollapsed ? "Pulse para ver detalles de la cotización" : "Documento oficial del servicio. Los cambios requieren Autorización."
+                                                            : "Documento oficial del servicio. Los cambios requieren Autorización."
                                                         }
                                                     </p>
                                                 </div>
@@ -1787,21 +1785,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 AUTORIZADA
                                                             </div>
                                                         )}
-                                                        <button
-                                                            className={styles.collapseToggleBtn}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setIsQuotationCollapsed(!isQuotationCollapsed);
-                                                            }}
-                                                        >
-                                                            {isQuotationCollapsed ? "Mostrar Detalles" : "Ocultar Detalles"}
-                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {(!isQuotationCollapsed || ticketData.estadoId === "en_cotizacion") && (
-                                                <div className={styles.quotationLayout}>
+                                            <div className={styles.quotationLayout}>
                                                     <div className={styles.quotationSidebar}>
                                                         <div className={styles.budgetSummaryCard}>
                                                             <h4 className={styles.summaryTitle}>Meta de Rentabilidad</h4>
@@ -2124,7 +2112,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
                                                 </div>
-                                            )}
                                         </div>
                                     )}
 
@@ -2736,237 +2723,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                             )}
                         </div>
 
-                        {/* ========================================
-                            📊 GESTIÓN DE COSTOS Y EGRESOS
-                           ======================================== */}
-                        <div className={styles.costsSection}>
-                            <div className={styles.costsHeader}>
-                                <div className={styles.costsTitleGroup}>
-                                    <div style={{ background: '#1E293B', padding: '10px', borderRadius: '12px', color: 'white', display: 'flex' }}>
-                                        <Receipt size={22} />
-                                    </div>
-                                    <div>
-                                        <h3>Desglose de Costos y Pagos</h3>
-                                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>
-                                            Control de egresos y rentabilidad real del servicio
-                                        </p>
-                                    </div>
-                                </div>
-                                <button 
-                                    className={styles.addCostActionBtn}
-                                    onClick={() => {
-                                        setMaterialsForm(prev => ({ ...prev, categoria: 'Materiales' }));
-                                        setShowMaterialsModal(true);
-                                    }}
-                                >
-                                    <Plus size={18} />
-                                    <span>Añadir Gasto / Pago</span>
-                                </button>
-                            </div>
-
-                            <div className={styles.costsStatsGrid}>
-                                <div className={styles.costStatCard}>
-                                    <span className={styles.statLabel}>Total Gastos Operativos</span>
-                                    <div className={styles.statValue}>S/ {totalCosts.toFixed(2)}</div>
-                                </div>
-                                <div className={styles.costStatCard}>
-                                    <span className={styles.statLabel}>Margen Bruto Real</span>
-                                    <div className={`${styles.statValue} ${grossMargin >= 0 ? styles.positive : styles.negative}`}>
-                                        S/ {grossMargin.toFixed(2)}
-                                    </div>
-                                </div>
-                                <div className={styles.costStatCard}>
-                                    <span className={styles.statLabel}>Capital Expuesto</span>
-                                    <div className={styles.statValue} style={{ color: '#F59E0B' }}>
-                                        S/ {capitalExposed.toFixed(2)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {approvedAmount > 0 && (
-                                <div className={styles.profitabilityIndicator}>
-                                    <div className={styles.indicatorHeader}>
-                                        <span>Consumo del Presupuesto Aprobado</span>
-                                        <span style={{ 
-                                            color: costPercentage > 70 ? '#EF4444' : '#1E293B',
-                                            fontWeight: 800,
-                                            fontSize: '1rem'
-                                        }}>
-                                            {costPercentage.toFixed(1)}%
-                                        </span>
-                                    </div>
-                                    <div className={styles.progressBarWrapper}>
-                                        <div 
-                                            className={styles.progressBar}
-                                            style={{ 
-                                                width: `${Math.min(100, costPercentage)}%`,
-                                                backgroundColor: costPercentage > 90 ? '#EF4444' : costPercentage > 70 ? '#F59E0B' : '#10B981'
-                                            }}
-                                        />
-                                    </div>
-                                    {costPercentage > 70 && (
-                                        <div className={styles.progressAlert + " " + styles.alertWarning}>
-                                            <AlertTriangle size={18} />
-                                            <span>¡RENTABILIDAD CRÍTICA! Los gastos han superado el presupuesto base.</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* -- ALERTA: M.O. excede presupuesto aprobado -- */}
-                            {(() => {
-                                const moAprobada = parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0);
-                                const moRegistrada = ticketCosts
-                                    .filter((c:any) => c.categoria === 'Mano de Obra')
-                                    .reduce((s: number, c: any) => s + parseFloat(c.monto || 0), 0);
-                                if (moAprobada > 0 && moRegistrada > moAprobada) {
-                                    return (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '12px', padding: '12px 16px', marginBottom: '12px' }}>
-                                            <AlertTriangle size={16} color="#DC2626" style={{ flexShrink: 0 }} />
-                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#991B1B' }}>
-                                                La suma de M.O. (S/ {moRegistrada.toFixed(2)}) supera el presupuesto aprobado (S/ {moAprobada.toFixed(2)}) por S/ {(moRegistrada - moAprobada).toFixed(2)}.
-                                            </span>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })()}
-
-                            {/* â€” TABLA DE EGRESOS DETALLADA â€” */}
-                            <div className={styles.costsTableContainer}>
-                                {ticketCosts.length > 0 ? (
-                                    <>
-                                    <table className={styles.costsTable}>
-                                        <thead>
-                                            <tr>
-                                                <th>Categoría</th>
-                                                <th>Concepto / Especialista</th>
-                                                <th>Monto</th>
-                                                <th>Estado</th>
-                                                <th>Voucher</th>
-                                                <th style={{ textAlign: 'center' }}>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {ticketCosts.map((c) => {
-                                                const techName = c.technicians
-                                                    ? (c.technicians.name ||
-                                                       `${c.technicians.first_name || ''} ${c.technicians.last_name || ''}`.trim())
-                                                    : (c.proveedor || null);
-                                                return (
-                                                    <tr key={c.id}>
-                                                        <td>
-                                                            <span className={`${styles.costCategoryBadge} ${styles['cat-' + (c.categoria || 'Otros').replace(' ', '')]}`}>
-                                                                {c.categoria}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <div style={{ fontWeight: 700, color: '#1E293B' }}>{c.concepto || c.concept}</div>
-                                                            {techName && (
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: c.technicians ? '#4F46E5' : '#64748B', fontWeight: 600, marginTop: '2px' }}>
-                                                                    {c.technicians ? <User size={10} /> : null}
-                                                                    {techName}
-                                                                </div>
-                                                            )}
-                                                            {!techName && <div style={{ fontSize: '0.72rem', color: '#CBD5E1' }}>Sin proveedor</div>}
-                                                        </td>
-                                                        <td style={{ fontWeight: 800, color: '#1E293B' }}>S/ {(parseFloat(c.monto) || 0).toFixed(2)}</td>
-                                                        <td>
-                                                            <span className={`${styles.costStatusBadge} ${styles['badge-' + (c.estado_pago || 'pendiente').toLowerCase()]}`}>
-                                                                {c.estado_pago}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            {c.url_comprobante ? (
-                                                                <button
-                                                                    className={styles.voucherViewBtn}
-                                                                    onClick={() => window.open(c.url_comprobante, '_blank')}
-                                                                >
-                                                                    <Camera size={16} />
-                                                                    <span>Ver</span>
-                                                                </button>
-                                                            ) : (
-                                                                <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Sin adjunto</span>
-                                                            )}
-                                                        </td>
-                                                        <td style={{ textAlign: 'center' }}>
-                                                            <button
-                                                                className={styles.deleteCostBtn}
-                                                                onClick={() => handleDeleteCost(c.id)}
-                                                                title="Eliminar gasto"
-                                                            >
-                                                                <Trash2 size={18} />
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-
-                                    {/* â€” RESUMEN AGRUPADO POR ESPECIALISTA (MO) â€” */}
-                                    {(() => {
-                                        const moItems = ticketCosts.filter(c => c.categoria === 'Mano de Obra' && c.technicians);
-                                        if (moItems.length === 0) return null;
-                                        const grouped: { [id: string]: { name: string; total: number; pagado: boolean } } = {};
-                                        moItems.forEach((c: any) => {
-                                            const id = c.specialist_id || 'ext';
-                                            const tname = c.technicians?.name || `${c.technicians?.first_name || ''} ${c.technicians?.last_name || ''}`.trim() || 'Ext';
-                                            if (!grouped[id]) grouped[id] = { name: tname, total: 0, pagado: true };
-                                            grouped[id].total += parseFloat(c.monto || 0);
-                                            if (c.estado_pago !== 'pagado') grouped[id].pagado = false;
-                                        });
-                                        const moAprobada = parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0);
-                                        const moTotal = Object.values(grouped).reduce((s, g) => s + g.total, 0);
-                                        return (
-                                            <div style={{ marginTop: '14px', background: 'linear-gradient(135deg, #EEF2FF, #F5F3FF)', border: '1px solid #C7D2FE', borderRadius: '14px', padding: '14px 18px' }}>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#4338CA', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <User size={13} /> Liquidación por Especialista
-                                                </div>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    {Object.entries(grouped).map(([id, g]) => (
-                                                        <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'white', borderRadius: '10px', border: '1px solid #E0E7FF' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#6366F1', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800 }}>
-                                                                    {g.name.charAt(0).toUpperCase()}
-                                                                </div>
-                                                                <span style={{ fontWeight: 700, color: '#1E293B', fontSize: '0.85rem' }}>{g.name}</span>
-                                                            </div>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#1E293B' }}>S/ {g.total.toFixed(2)}</span>
-                                                                <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: g.pagado ? '#D1FAE5' : '#FEF3C7', color: g.pagado ? '#065F46' : '#92400E' }}>
-                                                                    {g.pagado ? 'PAGADO' : 'PENDIENTE'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #C7D2FE', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.8rem', color: '#4338CA', fontWeight: 700 }}>Total M.O. registrada</span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ fontWeight: 900, color: '#1E293B' }}>S/ {moTotal.toFixed(2)}</span>
-                                                        {moAprobada > 0 && (
-                                                            <span style={{ fontSize: '0.72rem', color: '#64748B' }}>/ S/ {moAprobada.toFixed(2)} aprobado</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })()}
-                                    </>
-                                ) : (
-                                    <div className={styles.emptyCostsState}>
-                                        <div style={{ background: '#F1F5F9', padding: '24px', borderRadius: '50%', color: '#94A3B8' }}>
-                                            <Calculator size={48} />
-                                        </div>
-                                        <div>
-                                            <p style={{ margin: 0, fontWeight: 800, color: '#475569', fontSize: '1.1rem' }}>Sin gastos registrados</p>
-                                            <p style={{ margin: '4px 0 0 0', fontSize: '0.9rem', color: '#94A3B8' }}>Consulte a tesorería para ver los pagos pendientes.</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
                     </div>
                 )}
 
