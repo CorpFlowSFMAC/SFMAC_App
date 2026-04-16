@@ -613,16 +613,19 @@ export default function PaymentsPage() {
 
             // 1. SI ES COSTO DE TABLA (NUEVO)
             if (item.isTableCost && item.costId) {
-                await supabase
+                const { error: delErr } = await supabase
                     .from('ticket_costs')
                     .delete()
                     .eq('id', item.costId);
+
+                if (delErr) throw delErr;
 
                 // Si era una movilidad/viático vía tabla, también revisamos estado
                 if (item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('viático')) {
                     const { data: t } = await supabase.from('tickets').select('status_id').eq('id', group.realTicketId).single();
                     if (t?.status_id === 'esperando_pago_visita') {
-                        await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.realTicketId);
+                        const { error: updErr } = await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.realTicketId);
+                        if (updErr) throw updErr;
                     }
                 }
 
@@ -673,10 +676,12 @@ export default function PaymentsPage() {
                 dbUpdates.metadata.estadoId = newStatusId; 
             }
 
-            await supabase
+            const { error: finalUpdErr } = await supabase
                 .from('tickets')
                 .update(dbUpdates)
                 .eq('id', group.realTicketId);
+            
+            if (finalUpdErr) throw finalUpdErr;
 
             showToast(`✅ Pago denegado y registrado como Rechazado.`);
             refresh();
@@ -709,10 +714,12 @@ export default function PaymentsPage() {
             meta.historialPagosTecnico = nuevoHistorial;
             meta.montoAdelanto = nuevoTotal;
 
-            await supabase
+            const { error } = await supabase
                 .from('tickets')
                 .update({ metadata: meta })
                 .eq('id', group.realTicketId);
+
+            if (error) throw error;
 
             showToast('🗑️ Registro de pago eliminado');
             refresh();
@@ -751,7 +758,7 @@ export default function PaymentsPage() {
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
                 }
 
-                await supabase
+                const { error: costErr } = await supabase
                     .from('ticket_costs')
                     .update({ 
                         estado_pago: 'pagado', 
@@ -759,6 +766,8 @@ export default function PaymentsPage() {
                         fecha_pago: new Date().toISOString()
                     })
                     .eq('id', item.costId);
+                
+                if (costErr) throw costErr;
                 
                 await ticketsAPI.updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
                 showToast('✅ Pago de costo registrado');
