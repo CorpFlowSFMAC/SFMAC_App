@@ -111,13 +111,16 @@ function flattenTicketForPayments(t: any) {
     );
 
     // Inyectar pagos clásicos si no están en historial (Evita descuadres por pagos registrados en el flujo antiguo)
-    if ((meta.visitPaymentConfirmed || meta.fechaPagoVisita) && !hasPaidMobility) {
+    const hasVisitVoucher = !!(meta.voucherVisita || t.visit_voucher || history.some((p: any) => p.tipo === 'Movilidad / Visita'));
+    const isVisitConfirmed = !!(meta.visitPaymentConfirmed || meta.fechaPagoVisita || t.visit_payment_confirmed);
+
+    if ((isVisitConfirmed || hasVisitVoucher) && !hasPaidMobility) {
         const amount = parseFloat(meta.costoVisita || meta.costoPasaje || t.visit_cost || 0);
         if (amount > 0) {
             history.push({
                 tipo: 'Movilidad / Visita', monto: amount,
                 fecha: meta.fechaPagoVisita || new Date().toISOString(),
-                referencia: 'Pago registrado vía sistema clásico (Visita)', estado: 'pagado'
+                referencia: 'Pago registrado vía sistema (Visita/Pasajes)', estado: 'pagado'
             });
         }
     }
@@ -127,7 +130,7 @@ function flattenTicketForPayments(t: any) {
             history.push({
                 tipo: 'Adelanto', monto: amount,
                 fecha: meta.fechaAprobacion || meta.fechaAsignacion || new Date().toISOString(),
-                referencia: 'Pago registrado vía sistema clásico (Adelanto)', estado: 'pagado'
+                referencia: 'Pago registrado vía sistema (Adelanto)', estado: 'pagado'
             });
         }
     }

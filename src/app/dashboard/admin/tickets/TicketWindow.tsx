@@ -1246,9 +1246,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     
     // Compatibilidad: Sumar historial antiguo, adelantos clasicos y costo de visita (movilidad)
-    const oldPaymentsSum = (ticketData.historialPagosTécnico || []).reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
-    const visitPayment = (ticketData.fechaPagoVisita && ticketData.costoVisita) ? parseFloat(ticketData.costoVisita) : 0;
-    const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto) ? parseFloat(ticketData.montoAdelanto) : 0;
+    const historyArray = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).filter((p: any) => p && p.estado !== 'anulado');
+    const oldPaymentsSum = historyArray.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
+    
+    // Detección robusta de depósitos previos para evitar sobrepagos o inflaciones
+    const hasPaidMobility = historyArray.some((p: any) => p.tipo === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita"));
+    const hasRegisteredAdelanto = historyArray.some((p: any) => p.tipo === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto"));
+
+    const hasVisitVoucher = !!(ticketData.voucherVisita || ticketData.visit_voucher);
+    const isVisitConfirmed = !!(ticketData.visit_payment_confirmed || ticketData.visitPaymentConfirmed || ticketData.fechaPagoVisita);
+    
+    const visitPayment = ((isVisitConfirmed || hasVisitVoucher) && !hasPaidMobility) ? parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0) : 0;
+    const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto && !hasRegisteredAdelanto) ? parseFloat(ticketData.montoAdelanto) : 0;
     
     const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
     const techPactedTotal = jobCostBase > 0 ? jobCostBase : visitPayment;
