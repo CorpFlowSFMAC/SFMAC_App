@@ -1310,7 +1310,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 : `Ticket #${ticketData.id.slice(-6)}`)
                                         }
                                     </h3>
-                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.2.7_FIX</span></span>
+                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.2.8_FINAL_FIX</span></span>
                                 </div>
                             </>
                         ) : (
@@ -1397,7 +1397,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                             <DiagnosisInfoBar ticket={ticketData} />
                             <QuoteAssistantBar ticket={ticketData} />
-                            <QuotationInfoBar ticket={ticketData} />
+                            <QuotationInfoBar 
+                                ticket={ticketData} 
+                                onToggleDetails={() => setIsQuotationCollapsed(!isQuotationCollapsed)}
+                                isCollapsed={isQuotationCollapsed}
+                             />
                             <FinancialLiquidationBar 
                                 ticket={ticketData} 
                                 onOpenMaterials={() => setShowMaterialsModal(true)} 
@@ -2050,7 +2054,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 />
                                                             </div>
                                                         ) : (
-                                                            // --- VISTA ESTÃƒâ€œÃ‚ÂNDAR (EDITOR PDF) ---
+                                                            // --- VISTA ESTÃƒâ€œÃ‚Â NDAR (EDITOR PDF) ---
                                                             <OnlineQuotationEditor
                                                                 ref={quotationEditorRef}
                                                                 isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
@@ -2341,7 +2345,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     )}
 
                                     {ticketData.estadoId === "documentacion_enviada" && (
-                                        <div className={styles.checklistContainer}>
+                                        <div className={styles.checklistContainer} style={{ order: -1, marginBottom: '20px' }}>
                                             <div className={styles.checklistCard}>
                                                 <div className={styles.checklistHeader}>
                                                     <ClipboardCheck size={32} color="#6366F1" />

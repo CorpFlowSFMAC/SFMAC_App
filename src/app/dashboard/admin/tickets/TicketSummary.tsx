@@ -738,7 +738,7 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
     );
 }
 
-export function QuotationInfoBar({ ticket }: { ticket: any }) {
+export function QuotationInfoBar({ ticket, onToggleDetails, isCollapsed }: { ticket: any; onToggleDetails?: () => void; isCollapsed?: boolean }) {
     if (!ticket.partidas || ticket.partidas.length === 0 || ticket.estadoId === 'en_cotizacion') return null;
 
     const isEnviada = ticket.estadoId === 'cotizacion_enviada';
@@ -798,6 +798,29 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
                 </div>
             </div>
 
+            {onToggleDetails && (
+                <button 
+                    onClick={onToggleDetails}
+                    style={{
+                        background: isCollapsed ? '#DCFCE7' : '#16A34A',
+                        color: isCollapsed ? '#15803D' : 'white',
+                        border: '1px solid #BBF7D0',
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    {isCollapsed ? <Eye size={12} /> : <Eye size={12} />}
+                    <span>{isCollapsed ? 'VER COTIZACIÓN' : 'OCULTAR DETALLE'}</span>
+                </button>
+             )}
+
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Total General</span>
                 <span className={styles.infoValue} style={{ fontSize: '14px', fontWeight: '800', color: '#15803D' }}>
@@ -849,7 +872,7 @@ export function QuotationInfoBar({ ticket }: { ticket: any }) {
                         <span className={styles.infoLabel}>Comparativo</span>
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <span className={styles.infoValue} style={{ color: '#0369A1', fontSize: '10px', fontWeight: 'bold' }}>
-                                âš ï¸ AJUSTADA: S/ {formatSoles(ticket.montoFinal)}
+                                ⚠️ AJUSTADA: S/ {formatSoles(ticket.montoFinal)}
                             </span>
                             {ticket.montoOriginal && (
                                 <span style={{ fontSize: '9px', color: '#94A3B8', textDecoration: 'line-through' }}>
@@ -973,7 +996,7 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
     const hasDocs = ticket.documentosValidados;
     if (!hasDocs) return null;
 
-    const visibleStates = ["por_liquidar", "ticket_cerrado"];
+    const visibleStates = ["documentacion_enviada", "por_liquidar", "ticket_cerrado"];
     if (!visibleStates.includes(ticket.estadoId)) return null;
 
     const docs = ticket.documentosValidados;
