@@ -966,18 +966,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         try {
             const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
             
-            // 1. Registrar en ticket_costs
-            console.log("DEBUG: Iniciando liquidación final para ticket:", ticket.id);
-            await ticketCostsAPI.create({
-                ticket_id: ticket.id,
-                concepto: `Liquidación Final de Servicio`,
-                categoria: "Mano de Obra",
-                specialist_id: technicianId,
-                monto: amount,
-                estado_pago: "pendiente",
-                solicitado_por: myProfileId || undefined
-            });
-
             // 2. Actualizar estado y metadata
             const updated = {
                 ...ticketData,
