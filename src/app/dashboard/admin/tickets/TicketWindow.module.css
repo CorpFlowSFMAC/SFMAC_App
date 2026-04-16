@@ -1613,7 +1613,14 @@
    ðŸ—‚ï¸ COLAPSO Y ACCIONES DE EJECUCIÓN
    ======================================== */
 
+.collapsedQuotation {
+    padding: 12px 24px !important;
+}
 
+.collapsedQuotation .quotationHeader {
+    margin-bottom: 0;
+    cursor: pointer;
+}
 .headerRightActions {
     display: flex;
     align-items: center;

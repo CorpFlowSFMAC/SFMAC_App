@@ -84,6 +84,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const quotationEditorRef = useRef<any>(null);
     const [partidasCotización, setPartidasCotización] = useState<any[]>(ticketData.partidas || []);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
+    const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
     const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
@@ -777,6 +778,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             modificacionAutorizada: true
         };
         setTicketData(authorized);
+        setIsQuotationCollapsed(false);
         showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
     };
 
@@ -1756,8 +1758,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     )}
 
                                     {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
-                                        <div className={styles.quotationBox}>
-                                            <div className={styles.quotationHeader}>
+                                        <div className={`${styles.quotationBox} ${isQuotationCollapsed && ticketData.estadoId !== "en_cotizacion" ? styles.collapsedQuotation : ''}`}>
+                                            <div className={styles.quotationHeader} onClick={() => ticketData.estadoId !== "en_cotizacion" && setIsQuotationCollapsed(!isQuotationCollapsed)}>
                                                 <FileSpreadsheet size={28} color="#10B981" />
                                                 <div style={{ textAlign: 'left', flex: 1 }}>
                                                     <h3 className={styles.quotationTitle} style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
@@ -1766,7 +1768,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <p className={styles.quotationSubtitle} style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
                                                         {ticketData.estadoId === "en_cotizacion"
                                                             ? "Prepare el presupuesto final usando la plantilla oficial"
-                                                            : "Documento oficial del servicio. Los cambios requieren Autorización."
+                                                            : isQuotationCollapsed ? "Pulse para ver detalles de la cotización" : "Documento oficial del servicio. Los cambios requieren Autorización."
                                                         }
                                                     </p>
                                                 </div>
@@ -1785,11 +1787,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 AUTORIZADA
                                                             </div>
                                                         )}
+                                                        <button
+                                                            className={styles.collapseToggleBtn}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setIsQuotationCollapsed(!isQuotationCollapsed);
+                                                            }}
+                                                        >
+                                                            {isQuotationCollapsed ? "Mostrar Detalles" : "Ocultar Detalles"}
+                                                        </button>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            <div className={styles.quotationLayout}>
+                                            {(!isQuotationCollapsed || ticketData.estadoId === "en_cotizacion") && (
+                                                <div className={styles.quotationLayout}>
                                                     <div className={styles.quotationSidebar}>
                                                         <div className={styles.budgetSummaryCard}>
                                                             <h4 className={styles.summaryTitle}>Meta de Rentabilidad</h4>
@@ -2112,6 +2124,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
                                                 </div>
+                                            )}
                                         </div>
                                     )}
 
