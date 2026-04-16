@@ -213,7 +213,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
                         'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
                         'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
-                        'en_ejecucion': 8, 'documentaciónviada': 9, 'por_liquidar': 10,
+                        'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
                         'ticket_cerrado': 12
                     };
                     const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
@@ -1310,7 +1310,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 : `Ticket #${ticketData.id.slice(-6)}`)
                                         }
                                     </h3>
-                                    <span>{ticket.cliente?.nombre || 'Sin cliente'}</span>
+                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.2.7_FIX</span></span>
                                 </div>
                             </>
                         ) : (
@@ -1735,7 +1735,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
+                                    {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
                                         <div className={`${styles.quotationBox} ${isQuotationCollapsed && ticketData.estadoId !== "en_cotizacion" ? styles.collapsedQuotation : ''}`}>
                                             <div className={styles.quotationHeader} onClick={() => ticketData.estadoId !== "en_cotizacion" && setIsQuotationCollapsed(!isQuotationCollapsed)}>
                                                 <FileSpreadsheet size={28} color="#10B981" />
@@ -1751,7 +1751,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </p>
                                                 </div>
 
-                                                {["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && (
+                                                {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && (
                                                     <div className={styles.headerRightActions}>
                                                         {!ticketData.modificacionAutorizada && (
                                                             <div style={{ background: '#fef2f2', color: '#ef4444', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid #fee2e2' }}>
@@ -1867,7 +1867,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </p>
                                                             )}
 
-                                                            {["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
+                                                            {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
                                                                 <div className={styles.authorizationSection}>
                                                                     <div className={styles.authLockIcon}>
                                                                         <Lock size={40} />
@@ -2053,7 +2053,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             // --- VISTA ESTÃƒâ€œÃ‚ÂNDAR (EDITOR PDF) ---
                                                             <OnlineQuotationEditor
                                                                 ref={quotationEditorRef}
-                                                                isLocked={["cotizacion_aprobada", "en_ejecucion", "documentaciónviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
+                                                                isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
                                                                 clientInfo={ticketData.cliente}
                                                                 sedeInfo={ticketData.sede}
                                                                 servicioId={ticketData.servicioId}
@@ -2340,7 +2340,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "documentaciónviada" && (
+                                    {ticketData.estadoId === "documentacion_enviada" && (
                                         <div className={styles.checklistContainer}>
                                             <div className={styles.checklistCard}>
                                                 <div className={styles.checklistHeader}>
