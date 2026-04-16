@@ -821,45 +821,52 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleConfirmAdvance = async () => {
-        const pctReal = ticketData.solicitudAdelanto?.porcentaje || porcentajeAdelanto;
-
-        if (!pctReal) {
-            showToast("Selección Requerida", "Por favor seleccione un porcentaje de adelanto (40%, 50% o 60%) para continuar.", "error");
-            return;
-        }
-
         let amount = 0;
         let displayLabel = "";
 
-        if (montoAdelantoManual) {
-            amount = parseFloat(montoAdelantoManual);
+        const rawManual = parseFloat(montoAdelantoManual);
+        if (montoAdelantoManual && !isNaN(rawManual)) {
+            amount = rawManual;
             displayLabel = `Manual (S/ ${amount.toFixed(2)})`;
         } else {
             const pctReal = ticketData.solicitudAdelanto ? ticketData.solicitudAdelanto.porcentaje : porcentajeAdelanto;
-            if (!pctReal) return;
-            const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-            amount = costoReferencia * pctReal;
-            displayLabel = `${(pctReal * 100).toFixed(0)}% (S/ ${amount.toFixed(2)})`;
+            if (pctReal) {
+                const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+                amount = costoReferencia * pctReal;
+                displayLabel = `${(pctReal * 100).toFixed(0)}% (S/ ${amount.toFixed(2)})`;
+            } else if (ticketData.solicitudAdelanto?.monto) {
+                amount = ticketData.solicitudAdelanto.monto;
+                displayLabel = `Solicitado (S/ ${amount.toFixed(2)})`;
+            }
         }
 
-        if (amount <= 0) {
-            showToast("Monto Inválido", "El monto del adelanto debe ser mayor a cero.", "error");
+        if (isNaN(amount) || amount <= 0) {
+            showToast("Monto Inválido", "El monto del adelanto debe ser mayor a cero. Seleccione un % o ingrese un monto manual.", "error");
             return;
         }
 
-        if (unifiedPaymentsSum + amount > (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) + 0.01) {
+        const totalCost = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        if (unifiedPaymentsSum + amount > totalCost + 0.01) {
             showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
+            return;
+        }
+
+        const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id || ticketData.specialist_id;
+        const currentId = ticket.id || ticketData.id;
+
+        if (!technicianId) {
+            showToast("Técnico no Asignado", "No se encontró el ID del técnico para registrar el pago.", "error");
             return;
         }
 
         setIsConfirmingPayment(true);
         try {
+            // 1. Registro Financiero Inmutable
             await ticketCostsAPI.create({
-                ticket_id: ticket.id,
+                ticket_id: currentId,
                 concepto: `Adelanto Operativo - ${displayLabel}`,
                 categoria: "Mano de Obra",
-                specialist_id: ticketData.specialist_id,
-                proveedor: ticketData.specialist?.name,
+                specialist_id: technicianId,
                 monto: amount,
                 estado_pago: "pagado",
                 solicitado_por: myProfileId || undefined
@@ -903,8 +910,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         let amount = 0;
         let pctVal = 0;
 
-        if (montoAdelantoManual) {
-            amount = parseFloat(montoAdelantoManual);
+        const rawManual = parseFloat(montoAdelantoManual);
+        if (montoAdelantoManual && !isNaN(rawManual)) {
+            amount = rawManual;
             const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
             pctVal = costRef > 0 ? amount / costRef : 0;
         } else if (porcentajeAdelanto) {
@@ -913,23 +921,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             pctVal = porcentajeAdelanto;
         }
 
-        if (amount <= 0) {
-            showToast("Selección Requerida", "Debe seleccionar un porcentaje o ingresar un monto manual válido.", "error");
+        if (isNaN(amount) || amount <= 0) {
+            showToast("Monto Inválido", "Por favor ingrese un monto válido mayor a cero.", "error");
             return;
         }
 
-        const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
+        const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id || ticketData.specialist_id;
+        const currentId = ticket.id || ticketData.id;
+        
         if (!technicianId) {
             showToast("Técnico no Asignado", "Debe asignar un técnico antes de solicitar un adelanto.", "error");
             return;
         }
 
         try {
-            // 1. Persistencia Inmutable en ticket_costs
-            console.log("DEBUG: Iniciando registro de adelanto para ticket:", ticket.id);
             await ticketCostsAPI.create({
-                ticket_id: ticket.id,
-                concepto: montoAdelantoManual ? `Adelanto Operativo (Monto Manual: S/ ${amount.toFixed(2)})` : `Adelanto Operativo (${(pctVal * 100).toFixed(0)}%)`,
+                ticket_id: currentId,
+                concepto: montoAdelantoManual ? `Solicitud Adelanto (Manual: S/ ${amount.toFixed(2)})` : `Solicitud Adelanto (${(pctVal * 100).toFixed(0)}%)`,
                 categoria: "Mano de Obra",
                 specialist_id: technicianId,
                 monto: amount,
@@ -937,7 +945,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 solicitado_por: myProfileId || undefined
             });
 
-            // 2. Actualización de Metadata (Para redundancia y compatibilidad UI)
             const updated = {
                 ...ticketData,
                 solicitudAdelanto: {
@@ -948,13 +955,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 pagoRechazado: null
             };
             setTicketData(updated);
-            syncToSupabase(updated);
+            await syncToSupabase(updated);
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
-            showToast("Solicitud Enviada", `Se ha solicitado el adelanto de S/ ${amount.toFixed(2)} a Gerencia.`, "success");
+            showToast("Solicitud Enviada", `Se ha solicitado el adelanto de S/ ${amount.toFixed(2)}.`, "success");
         } catch (err) {
             console.error("Error al solicitar adelanto:", err);
-            showToast("Error de Conexión", "No se pudo registrar la solicitud en el sistema.", "error");
+            showToast("Error de Conexión", "No se pudo registrar la solicitud.", "error");
         }
     };
 
@@ -2218,6 +2225,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                                 onChange={(e) => {
                                                                                     setMontoAdelantoManual(e.target.value);
                                                                                     setPorcentajeAdelanto(null);
+                                                                                }}
+                                                                                onKeyDown={(e) => {
+                                                                                    if (e.key === 'Enter') {
+                                                                                        if (isAdmin) handleConfirmAdvance();
+                                                                                        else handleRequestAdvance();
+                                                                                    }
                                                                                 }}
                                                                             />
                                                                         </div>
