@@ -2434,10 +2434,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 className={styles.inlineTicketInput}
                                                                 placeholder={`EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`}
                                                                 value={ticketData.numeroTicketCliente || ""}
-                                                                autoFocus={!ticketData.numeroTicketCliente}
+                                                                
                                                                 // Si el ticket ya venÃƒÂ­a con nÃƒÂºmero asignado (desde props), bloquear ediciÃƒÂ³n
-                                                                disabled={!!ticket.numeroTicketCliente && !ticket.numeroTicketCliente.startsWith('#') && !isAdmin}
-                                                                style={ticket.numeroTicketCliente && !ticket.numeroTicketCliente.startsWith('#') && !isAdmin ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
+                                                                disabled={ticketData.estadoId !== "documentacion_enviada" && !isAdmin}
+                                                                style={ticketData.estadoId !== "documentacion_enviada" && !isAdmin ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#]/g, '');
                                                                     setTicketData({ ...ticketData, numeroTicketCliente: val });
