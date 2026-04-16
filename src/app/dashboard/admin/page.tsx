@@ -184,32 +184,36 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 2: Tesorería / Pendientes ───────
     const tesoreria = useMemo(() => {
-        const pendientes = tickets.filter((t: any) => {
-            const sid = normalizeStateId(t.estadoId);
-            return ["en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "por_liquidar"].includes(sid);
-        });
+        // Pipeline: Cotizaciones en curso (aún no aprobadas)
+        const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente"];
+        const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.estadoId)));
+        const totalPipeline = pipelineTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || 0), 0);
 
-        // Pipeline ahora representa el VALOR DE VENTA de lo que está en curso
-        const totalPipeline = pendientes.reduce((s: number, t: any) =>
-            s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
+        // Presupuestos Aprobados: Ya aceptados por el cliente, en ejecución o por liquidar
+        const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
+        const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.estadoId)));
+        const totalAprobados = approvedTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || 0), 0);
 
-        // El lucro cesante es la utilidad proyectada que aún no se cobra (aprox 45% del pipeline)
-        const lucro = totalPipeline * 0.45; 
+        // El lucro cesante es la utilidad proyectada que aún no se cobra (aprox 45% de los presupuestos aprobados que están detenidos)
+        const lucro = totalAprobados * 0.45;
 
-        // Aging
+        // Aging de todos los pendientes (Pipeline + Aprobados)
+        const todosPendientes = [...pipelineTickets, ...approvedTickets];
         const aging = {
-            "0-24h": pendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") < 24),
-            "24-48h": pendientes.filter((t: any) => { const h = hoursAgo(t.createdAt || t.created_at || ""); return h >= 24 && h < 48; }),
-            "+48h": pendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= 48),
-            "+72h": pendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= 72),
+            "0-24h": todosPendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") < 24),
+            "24-48h": todosPendientes.filter((t: any) => { const h = hoursAgo(t.createdAt || t.created_at || ""); return h >= 24 && h < 48; }),
+            "+48h": todosPendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= 48),
         };
 
         const calcAmount = (arr: any[]) => arr.reduce((s: number, t: any) => s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
 
         return {
-            tickets: pendientes,
-            total: pendientes.length,
+            tickets: todosPendientes,
+            pipelineTickets,
+            approvedTickets,
+            total: todosPendientes.length,
             totalPipeline,
+            totalAprobados,
             lucro,
             aging: [
                 { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmount(aging["0-24h"]), color: "#10B981" },
@@ -425,6 +429,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* ROI por servicio */}
+            {/* ROI por servicio */}
             {roi.byService.length > 0 && (
                 <div style={{
                     background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
@@ -458,32 +463,59 @@ export default function AdminDashboard() {
             <SectionHeader icon={<Layers size={16} />} title="Tesorería & Flujo de Caja" color="#F59E0B" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
 
-                {/* Pipeline total + Capital Expuesto */}
+                {/* Col 1: Gestión de Ingresos y Pipeline */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
                     
+                    {/* Presupuestos Aprobados — CLICKABLE */}
+                    <div 
+                        onClick={() => {
+                            setModalTitle("Presupuestos Aprobados (Trabajos en curso)");
+                            setModalTickets(tesoreria.approvedTickets);
+                            setShowListModal(true);
+                        }}
+                        style={{ padding: "0.5rem", margin: "-0.5rem -0.5rem 10px -0.5rem", borderRadius: "10px", cursor: "pointer", transition: "background 0.2s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(34,197,94,0.08)"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(34,197,94,0.7)", textTransform: "uppercase", marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                            ✅ Presupuestos Aprobados <ChevronRight size={12} />
+                        </div>
+                        <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#22C55E" }}>S/ {fmt(tesoreria.totalAprobados)}</div>
+                        <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.25rem" }}>{tesoreria.approvedTickets.length} ejecuciones activas</div>
+                    </div>
+
                     {/* Pipeline Pendiente — CLICKABLE */}
                     <div 
                         onClick={() => {
-                            setModalTitle("Pipeline Pendiente (Cotizaciones y Liquidaciones en curso)");
-                            setModalTickets(tesoreria.tickets);
+                            setModalTitle("Pipeline Pendiente (Cotizaciones en curso)");
+                            setModalTickets(tesoreria.pipelineTickets);
                             setShowListModal(true);
                         }}
-                        style={{ padding: "0.5rem", margin: "-0.5rem -0.5rem 0.5rem -0.5rem", borderRadius: "10px", cursor: "pointer", transition: "background 0.2s" }}
+                        style={{
+                            padding: "0.5rem", margin: "0 -0.5rem 15px -0.5rem", borderRadius: "10px", 
+                            cursor: "pointer", transition: "background 0.2s",
+                            border: "1px solid rgba(255,255,255,0.05)"
+                        }}
                         onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,11,0.06)"}
                         onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                     >
-                        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "6px" }}>
-                            Pipeline Pendiente <ChevronRight size={12} color="rgba(245,158,11,0.6)" />
+                        <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.25rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                            ⏱️ Pipeline en Cotización <ChevronRight size={12} />
                         </div>
-                        <div style={{ fontSize: "2rem", fontWeight: 900, color: "#F59E0B" }}>S/ {fmt(tesoreria.totalPipeline)}</div>
-                        <div style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.45)", marginTop: "0.25rem" }}>{tesoreria.total} servicios en curso</div>
+                        <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#F59E0B" }}>S/ {fmt(tesoreria.totalPipeline)}</div>
+                    </div>
+
+                    <div style={{ padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px", marginBottom: "0.85rem" }}>
+                        <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#EF4444", marginBottom: "2px" }}>⚡ Lucro Cesante Estimado</div>
+                        <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#EF4444" }}>S/ {fmt(tesoreria.lucro)}</div>
+                        <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>ganancia detenida por pendientes</div>
                     </div>
 
                     {/* Capital Expuesto — CLICKABLE */}
                     <div
                         onClick={() => setShowCapitalModal(true)}
                         style={{
-                            marginTop: "0.85rem", padding: "0.75rem 0.9rem",
+                            padding: "0.75rem 0.9rem",
                             background: capitalExpuesto.total > 0 ? "rgba(239,68,68,0.08)" : "rgba(16,185,129,0.08)",
                             border: capitalExpuesto.total > 0 ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(16,185,129,0.2)",
                             borderRadius: "10px", cursor: capitalExpuesto.total > 0 ? "pointer" : "default",
@@ -494,7 +526,7 @@ export default function AdminDashboard() {
                     >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                             <div style={{ fontSize: "0.7rem", fontWeight: 700, color: capitalExpuesto.total > 0 ? "#EF4444" : "#10B981" }}>
-                                💸 Capital Expuesto / Adelantado
+                                💸 Capital Expuesto
                             </div>
                             {capitalExpuesto.total > 0 && (
                                 <span style={{ fontSize: "0.6rem", fontWeight: 800, color: "#EF4444", display: "flex", alignItems: "center", gap: "3px" }}>
@@ -502,29 +534,16 @@ export default function AdminDashboard() {
                                 </span>
                             )}
                         </div>
-                        <div style={{ fontSize: "1.5rem", fontWeight: 900, color: capitalExpuesto.total > 0 ? "#EF4444" : "#10B981", lineHeight: 1 }}>
+                        <div style={{ fontSize: "1.2rem", fontWeight: 900, color: capitalExpuesto.total > 0 ? "#EF4444" : "#10B981", lineHeight: 1 }}>
                             S/ {fmt(capitalExpuesto.total)}
                         </div>
-                        <div style={{ fontSize: "0.68rem", marginTop: "3px", color: capitalExpuesto.total > 0 ? "rgba(239,68,68,0.7)" : "rgba(16,185,129,0.7)" }}>
-                            {capitalExpuesto.tickets.length > 0
-                                ? `${capitalExpuesto.tickets.length} tickets · ${capitalExpuesto.enRiesgo} en riesgo +48h`
-                                : "Sin adelantos registrados"}
+                        <div style={{ fontSize: "0.62rem", marginTop: "3px", color: capitalExpuesto.total > 0 ? "rgba(239,68,68,0.7)" : "rgba(16,185,129,0.7)" }}>
+                            {capitalExpuesto.tickets.length} adelantes en tickets activos
                         </div>
-                        {capitalExpuesto.enRiesgo > 0 && (
-                            <div style={{ marginTop: "6px", fontSize: "0.62rem", fontWeight: 800, color: "#F59E0B", padding: "2px 6px", background: "rgba(245,158,11,0.12)", borderRadius: "5px", display: "inline-block" }}>
-                                ⚠️ S/ {fmt(capitalExpuesto.totalEnRiesgo)} en zona crítica
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ marginTop: "0.85rem", padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px" }}>
-                        <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#EF4444", marginBottom: "2px" }}>⚡ Lucro Cesante Estimado</div>
-                        <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "#EF4444" }}>S/ {fmt(tesoreria.lucro)}</div>
-                        <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>ganancia detenida por pendientes</div>
                     </div>
                 </div>
 
-                {/* Aging */}
+                {/* Col 2: Aging */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
                     <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.75rem" }}>Aging de Bloqueo</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -532,7 +551,7 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Causa raíz simulada */}
+                {/* Col 3: Causa raíz simulada */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
                     <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.75rem" }}>Causa Raíz de Pausa</div>
                     {[
