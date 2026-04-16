@@ -2559,27 +2559,24 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    <div className={styles.totalBannerBadge} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)' } : {}}>
-                                                        S/ {techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                    <div className={styles.totalBannerBadge} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)' } : { background: '#2563EB', color: 'white' }}>
+                                                        S/ {(techPactedTotal - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                     </div>
                                                 </div>
 
                                                 <div className={styles.financialDetailsBody}>
                                                     <div className={styles.summarySection}>
                                                         <div className={styles.mainFinancialRow}>
-                                                            <span className={styles.rowLabel}>Monto Pactado</span>
+                                                            <span className={styles.rowLabel}>Monto Pactado Trabajo</span>
                                                             <span className={styles.rowValue}>S/ {techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
-                                                        <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '8px' }}>
-                                                            <span className={styles.rowLabel}>Depósitos Previos</span>
-                                                            <span className={styles.rowValue} style={{ color: '#10B981' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '12px' }}>
+                                                            <span className={styles.rowLabel} style={{ fontWeight: 800 }}>Total Depósitos Previos</span>
+                                                            <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
-                                                        {(ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado').length > 0 || 
-                                                         (ticketData.historialPagosTécnico || []).length > 0 ||
-                                                         visitPayment > 0 ||
-                                                         classicAdvance > 0) && (
+                                                        {(paymentsSummary > 0 || historyArray.length > 0 || visitPayment > 0 || classicAdvance > 0) && (
                                                             <div className={styles.depositsListPremium}>
                                                                 {/* Pagos de la nueva tabla */}
                                                                 {ticketCosts
@@ -2603,9 +2600,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <div className={styles.depositLabel}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                                 <ArrowDownLeft size={14} style={{ color: '#F59E0B' }} />
-                                                                                MOVILIDAD / VISITA
+                                                                                MOVILIDAD / VISITA (SISTEMA)
                                                                             </div>
-                                                                            <span className={styles.depositMeta}>{new Date(ticketData.fechaPagoVisita).toLocaleDateString('es-PE')}</span>
+                                                                            <span className={styles.depositMeta}>{ticketData.fechaPagoVisita ? new Date(ticketData.fechaPagoVisita).toLocaleDateString('es-PE') : 'Confirmado'}</span>
                                                                         </div>
                                                                         <span className={styles.depositAmount} style={{ color: '#F59E0B' }}>- S/ {visitPayment.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                     </div>
@@ -2617,7 +2614,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <div className={styles.depositLabel}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                                 <ArrowDownLeft size={14} style={{ color: '#3B82F6' }} />
-                                                                                ADELANTO INICIAL
+                                                                                ADELANTO INICIAL (SISTEMA)
                                                                             </div>
                                                                             <span className={styles.depositMeta}>{new Date(ticketData.fechaPagoAdelanto || ticketData.createdAt).toLocaleDateString('es-PE')}</span>
                                                                         </div>
@@ -2625,17 +2622,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </div>
                                                                 )}
 
-                                                                {/* Pagos históricos del metadata */}
-                                                                {(ticketData.historialPagosTécnico || []).map((p: any, i: number) => (
+                                                                {/* Pagos históricos (historyArray unificado arriba) */}
+                                                                {historyArray.map((p: any, i: number) => (
                                                                     <div key={`old-${i}`} className={styles.depositEntry} style={{ opacity: 0.9 }}>
                                                                         <div className={styles.depositLabel}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <ArrowDownLeft size={14} style={{ color: '#94A3B8' }} />
-                                                                                {p.tipo === 'ADELANTO' ? 'ADELANTO HIST.' : 'PAGO HISTÓRICO'}
+                                                                                <ArrowDownLeft size={14} style={{ color: '#6366F1' }} />
+                                                                                {p.tipo ? p.tipo.toUpperCase() : 'DEPOSITO REGISTRADO'}
                                                                             </div>
-                                                                            <span className={styles.depositMeta}>{new Date(p.fecha).toLocaleDateString('es-PE')}</span>
+                                                                            <span className={styles.depositMeta}>{p.fecha ? new Date(p.fecha).toLocaleDateString('es-PE') : '--'}</span>
                                                                         </div>
-                                                                        <span className={styles.depositAmount} style={{ color: '#64748B' }}>- S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                                        <span className={styles.depositAmount} style={{ color: '#4F46E5' }}>- S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                     </div>
                                                                 ))}
                                                             </div>
