@@ -97,13 +97,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const isAdmin = userRole?.toLowerCase() === 'admin' || userRole?.toLowerCase() === 'superadmin';
 
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
+    const [myProfileId, setMyProfileId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchMe = async () => {
             const email = localStorage.getItem('userEmail');
             if (!email) return;
-            const { data } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
-            if (data?.id) setMyGestoraId(data.id);
+
+            // Intentar obtener ID de gestora (para permisos operativas)
+            const { data: gestoraData } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            if (gestoraData?.id) setMyGestoraId(gestoraData.id);
+
+            // Intentar obtener ID de perfil (para registros de tesorería solicitado_por)
+            const { data: profileData } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
+            if (profileData?.id) setMyProfileId(profileData.id);
         };
         fetchMe();
     }, []);
@@ -838,6 +845,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 proveedor: ticketData.specialist?.name,
                 monto: amount,
                 estado_pago: "pagado",
+                solicitado_por: myProfileId || undefined
             });
 
             const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
@@ -882,16 +890,27 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
         const amount = costRef * porcentajeAdelanto;
 
+        if (amount <= 0) {
+            showToast("Monto Inválido", "No se puede solicitar adelanto de un coste S/ 0.00. Asegúrese de ingresar los costes en el reporte técnico.", "error");
+            return;
+        }
+
+        const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
+        if (!technicianId) {
+            showToast("Técnico no Asignado", "Debe asignar un técnico antes de solicitar un adelanto.", "error");
+            return;
+        }
+
         try {
             // 1. Persistencia Inmutable en ticket_costs (Fuente de Verdad para Tesorería)
             await ticketCostsAPI.create({
                 ticket_id: ticketData.id,
                 concepto: `Adelanto Operativo (${(porcentajeAdelanto * 100).toFixed(0)}%)`,
                 categoria: "Mano de Obra",
-                specialist_id: ticketData.tecnico?.id || ticketData.technician_id,
+                specialist_id: technicianId,
                 monto: amount,
                 estado_pago: "pendiente",
-                solicitado_por: ticketData.gestora?.name || "Gestora"
+                solicitado_por: myProfileId || undefined
             });
 
             // 2. Actualización de Metadata (Para redundancia y compatibilidad UI)
@@ -923,15 +942,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
 
         try {
+            const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
+            
             // 1. Registrar en ticket_costs
             await ticketCostsAPI.create({
                 ticket_id: ticketData.id,
                 concepto: `Liquidación Final de Servicio`,
                 categoria: "Mano de Obra",
-                specialist_id: ticketData.tecnico?.id || ticketData.technician_id,
+                specialist_id: technicianId,
                 monto: amount,
                 estado_pago: "pendiente",
-                solicitado_por: ticketData.gestora?.name || "Gestora"
+                solicitado_por: myProfileId || undefined
             });
 
             // 2. Actualizar estado y metadata
@@ -1176,6 +1197,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 proveedor: materialsForm.specialistName,
                 monto: montoGasto,
                 estado_pago: "pendiente",
+                solicitado_por: myProfileId || undefined
             });
 
             if (excedePresupuesto) {
