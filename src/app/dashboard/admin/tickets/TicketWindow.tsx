@@ -838,7 +838,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setIsConfirmingPayment(true);
         try {
             await ticketCostsAPI.create({
-                ticket_id: ticketData.id,
+                ticket_id: ticket.id,
                 concepto: `Adelanto Operativo (${(pctReal * 100).toFixed(0)}%)`,
                 categoria: "Mano de Obra",
                 specialist_id: ticketData.specialist_id,
@@ -902,9 +902,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
 
         try {
-            // 1. Persistencia Inmutable en ticket_costs (Fuente de Verdad para Tesorería)
+            // 1. Persistencia Inmutable en ticket_costs
+            console.log("DEBUG: Iniciando registro de adelanto para ticket:", ticket.id);
             await ticketCostsAPI.create({
-                ticket_id: ticketData.id,
+                ticket_id: ticket.id,
                 concepto: `Adelanto Operativo (${(porcentajeAdelanto * 100).toFixed(0)}%)`,
                 categoria: "Mano de Obra",
                 specialist_id: technicianId,
@@ -945,8 +946,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
             
             // 1. Registrar en ticket_costs
+            console.log("DEBUG: Iniciando liquidación final para ticket:", ticket.id);
             await ticketCostsAPI.create({
-                ticket_id: ticketData.id,
+                ticket_id: ticket.id,
                 concepto: `Liquidación Final de Servicio`,
                 categoria: "Mano de Obra",
                 specialist_id: technicianId,
@@ -1190,7 +1192,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const excedePresupuesto = (totalCosts + montoGasto > costoPactado + 0.01);
 
             await ticketCostsAPI.create({
-                ticket_id: ticketData.id,
+                ticket_id: ticket.id,
                 concepto: materialsForm.concepto.trim(),
                 categoria: materialsForm.categoria || "Materiales",
                 specialist_id: materialsForm.specialist_id,

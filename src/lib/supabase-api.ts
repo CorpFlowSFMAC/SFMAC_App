@@ -790,10 +790,13 @@ export const ticketCostsAPI = {
         const { data, error } = await supabase
             .from('ticket_costs')
             .insert(cost)
-            .select('*, technicians(*)')
+            .select('*')
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error("DEBUG: Error in ticketCostsAPI.create:", error);
+            throw error;
+        }
         return data;
     },
 
