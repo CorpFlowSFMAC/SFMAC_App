@@ -31,6 +31,7 @@ interface PaymentItem {
     specialistBanco?: string;
     specialistCCI?: string;
     specialistYape?: string;
+    specialistPlin?: string;
 }
 
 interface PaymentTicketGroup {
@@ -270,11 +271,12 @@ export default function PaymentsPage() {
         item: PaymentItem,
         wallet: 'yape' | 'plin' | 'banco'
     ) => {
+        // Priorizar datos del especialista vinculado al item (costo específico) sobre el técnico general
         const numero = wallet === 'yape'
-            ? group.tecnico.yape
+            ? (item.specialistYape || group.tecnico.yape)
             : wallet === 'plin'
-                ? group.tecnico.plin
-                : group.tecnico.numeroCuenta;
+                ? (item.specialistYape || group.tecnico.plin) // specialistYape se usa para billeteras en general si no hay Plin específico
+                : (item.specialistBanco || group.tecnico.numeroCuenta);
 
         if (!numero) return;
 
@@ -301,16 +303,13 @@ export default function PaymentsPage() {
         setWaitingVoucher({ group, item, wallet, numero });
 
         // PASO C: Deep Link — intentar abrir la app bancaria vía scheme URI
-        // Los OS modernos ignoran window.location si el scheme no está instalado;
-        // en ese caso el admin simplemente cambia de app manualmente.
-        await new Promise(r => setTimeout(r, 300)); // pequeño delay para que el toast sea visible
+        await new Promise(r => setTimeout(r, 300));
         const deepLinks: Record<string, string> = {
             yape: 'yape://',
             plin: 'plin://',
             banco: 'https://www.bcp.com.pe',
         };
         try {
-            // Un pequeño delay para que el portapapeles se asiente y luego lanzamos el link
             window.location.assign(deepLinks[wallet]);
         } catch { /* silencioso */ }
     }, [showToast]);
@@ -467,6 +466,7 @@ export default function PaymentsPage() {
                                 specialistBanco: tech?.bank_name,
                                 specialistCCI: tech?.cci,
                                 specialistYape: tech?.yape_number,
+                                specialistPlin: tech?.plin_number,
                             });
                         });
                     }
@@ -1161,9 +1161,14 @@ export default function PaymentsPage() {
                                                 <td>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
                                                         {group.items.filter(i => i.estado === 'pendiente').map((item) => {
-                                                            const hasYape = !!group.tecnico.yape;
-                                                            const hasPlin = !!group.tecnico.plin;
-                                                            const hasBanco = group.tecnico.numeroCuenta && group.tecnico.numeroCuenta !== '---';
+                                                            const hasYape = !!(item.specialistYape || group.tecnico.yape);
+                                                            const hasPlin = !!(item.specialistPlin || group.tecnico.plin);
+                                                            const hasBanco = (item.specialistBanco || group.tecnico.numeroCuenta) && (item.specialistBanco || group.tecnico.numeroCuenta) !== '---';
+                                                            
+                                                            const beneficiaryName = item.specialistName || group.tecnico.nombre;
+                                                            const yapeNum = item.specialistYape || group.tecnico.yape;
+                                                            const plinNum = item.specialistPlin || group.tecnico.plin;
+
                                                             return (
                                                                 <div key={`action-${item.id}`} className={styles.zeroFeeActions}>
                                                                     {/* Botón YAPE — Deep Link */}
@@ -1171,11 +1176,11 @@ export default function PaymentsPage() {
                                                                         <button
                                                                             className={styles.btnYape}
                                                                             onClick={() => handleDeepLinkPayment(group, item, 'yape')}
-                                                                            title={`Copiar ${group.tecnico.yape} y abrir Yape`}
+                                                                            title={`Copiar ${yapeNum} y abrir Yape (Beneficiario: ${beneficiaryName})`}
                                                                         >
                                                                             <span className={styles.walletEmoji}>💜</span>
                                                                             <span>Yape</span>
-                                                                            <span className={styles.walletNum}>{group.tecnico.yape}</span>
+                                                                            <span className={styles.walletNum}>{yapeNum}</span>
                                                                             <Copy size={10} style={{ opacity: 0.7 }} />
                                                                         </button>
                                                                     )}
@@ -1184,11 +1189,11 @@ export default function PaymentsPage() {
                                                                         <button
                                                                             className={styles.btnPlin}
                                                                             onClick={() => handleDeepLinkPayment(group, item, 'plin')}
-                                                                            title={`Copiar ${group.tecnico.plin} y abrir Plin`}
+                                                                            title={`Copiar ${plinNum} y abrir Plin (Beneficiario: ${beneficiaryName})`}
                                                                         >
                                                                             <span className={styles.walletEmoji}>🔵</span>
                                                                             <span>Plin</span>
-                                                                            <span className={styles.walletNum}>{group.tecnico.plin}</span>
+                                                                            <span className={styles.walletNum}>{plinNum}</span>
                                                                             <Copy size={10} style={{ opacity: 0.7 }} />
                                                                         </button>
                                                                     )}
