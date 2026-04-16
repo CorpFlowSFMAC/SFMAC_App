@@ -251,13 +251,17 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
             fecha: now,
         };
 
+        const cleanedTicketNumber = (formData.tieneNumeroCliente && formData.numeroTicketCliente?.trim()) 
+            ? formData.numeroTicketCliente.trim() 
+            : null;
+
         const supabaseTicket = {
             client_id: formData.clienteId || null,
             branch_id: formData.sedeId || null,
             status_id: "nuevo",
             service_type: formData.tipoServicio,
             description: formData.descripcionProblema,
-            client_ticket_number: formData.tieneNumeroCliente ? formData.numeroTicketCliente : null,
+            client_ticket_number: cleanedTicketNumber,
             created_by: formData.creadoPor,
             // Apply assignment policy
             gestora_id: assignedGestora?.id || null,
@@ -266,6 +270,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                 service_type_name: formData.tipoServicioNombre,
                 estadoId: "nuevo",
                 descripcionProblema: formData.descripcionProblema,
+                numeroTicketCliente: cleanedTicketNumber,
                 fechaCreacion: now,
                 gestora: assignedGestora || null,
                 asignacionLog: [assignmentLog], // Immutable audit log (Regla de Trazabilidad)
