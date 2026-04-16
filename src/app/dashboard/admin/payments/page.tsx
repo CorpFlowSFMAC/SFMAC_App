@@ -1009,7 +1009,7 @@ export default function PaymentsPage() {
                                                                         Visita: S/ {formatSoles(group.costoVisita)}
                                                                     </div>
                                                                     {group.voucherVisita && (
-                                                                        <button onClick={() => setShowVoucher(group.voucherVisita)}
+                                                                        <button onClick={() => setShowVoucher(group.voucherVisita || null)}
                                                                             style={{ background: '#EDE9FE', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', color: '#7C3AED', fontSize: '0.62rem', fontWeight: 800 }}>
                                                                             VOUCHER
                                                                         </button>
