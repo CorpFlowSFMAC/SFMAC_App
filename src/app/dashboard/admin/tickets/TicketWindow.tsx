@@ -935,16 +935,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
 
         try {
-            await ticketCostsAPI.create({
-                ticket_id: currentId,
-                concepto: montoAdelantoManual ? `Solicitud Adelanto (Manual: S/ ${amount.toFixed(2)})` : `Solicitud Adelanto (${(pctVal * 100).toFixed(0)}%)`,
-                categoria: "Mano de Obra",
-                specialist_id: technicianId,
-                monto: amount,
-                estado_pago: "pendiente",
-                solicitado_por: myProfileId || undefined
-            });
-
             const updated = {
                 ...ticketData,
                 solicitudAdelanto: {
