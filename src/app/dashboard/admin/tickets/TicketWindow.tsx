@@ -1250,6 +1250,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const techPactedTotal = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + visitPayment);
     const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance;
 
+    const isClientTicketFormatValid = useCallback((num?: string) => {
+        if (!num || num.trim() === "") return false;
+        if (num.startsWith('#')) return true; 
+        return /^MB\d{6}\.\d{2}$/.test(num);
+    }, []);
+
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
     const grossMargin = approvedAmount - totalCosts;
     const capitalExposed = ticketCosts
@@ -2419,7 +2425,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <div className={styles.checkText}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                 <strong>5. NÚMERO DE TICKET DEL CLIENTE</strong>
-                                                                {ticketData.numeroTicketCliente && (
+                                                                {isClientTicketFormatValid(ticketData.numeroTicketCliente) && (
                                                                     <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
                                                                 )}
                                                             </div>
@@ -2460,7 +2466,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                 <button
                                                     className={styles.proceedToLiquidationBtn}
-                                                    disabled={!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente}
+                                                    disabled={!Object.values(documentosChecklist).every(v => v) || !isClientTicketFormatValid(ticketData.numeroTicketCliente)}
                                                     onClick={handleRequestFinalLiquidation}
                                                 >
                                                     <span>PASAR A LIQUIDACIÓN FINAL</span>
