@@ -956,11 +956,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleRequestFinalLiquidation = async () => {
-        const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costRef - unifiedPaymentsSum;
+        // Base de cálculo unificada (MO + Mat)
+        const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        const costRef = jobCostBase > 0 ? jobCostBase : visitPayment;
+        
+        const amount = Math.max(0, costRef - unifiedPaymentsSum);
 
-        // Regla 4: Escalamiento por exceso
-        const isExceeding = (unifiedPaymentsSum + amount > costRef + 0.01);
+        // Regla 4: Escalamiento por exceso (Prevenir negligencia financiera)
+        const isExceeding = (unifiedPaymentsSum + amount > costRef + 1); // 1 sol de margen
         const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
 
         try {
@@ -1247,7 +1250,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const visitPayment = (ticketData.fechaPagoVisita && ticketData.costoVisita) ? parseFloat(ticketData.costoVisita) : 0;
     const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto) ? parseFloat(ticketData.montoAdelanto) : 0;
     
-    const techPactedTotal = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + visitPayment);
+    const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+    const techPactedTotal = jobCostBase > 0 ? jobCostBase : visitPayment;
     const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance;
 
     const isClientTicketFormatValid = useCallback((num?: string) => {

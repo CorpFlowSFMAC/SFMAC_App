@@ -94,7 +94,13 @@ function flattenTicketForPayments(t: any) {
         meta = { ...meta, ...meta.metadata };
         delete meta.metadata;
     }
-    const history = meta.historialPagosTecnico || [];
+    
+    // Unificar historial y asegurar que adelantos/visitas clásicos sean contados
+    const history = [
+        ...(meta.historialPagosTecnico || []),
+        ...(t.historialPagosTecnico || [])
+    ].filter(p => p && p.monto > 0 && p.estado !== 'anulado');
+
     const hasPaidMobility = history.some((p: any) =>
         p.tipo === 'Movilidad / Visita' ||
         (p.referencia && (p.referencia.toLowerCase().includes("visita") || p.referencia.toLowerCase().includes("movilidad")))
@@ -103,6 +109,28 @@ function flattenTicketForPayments(t: any) {
         p.tipo === 'Adelanto' ||
         (p.referencia && p.referencia.toLowerCase().includes("adelanto"))
     );
+
+    // Inyectar pagos clásicos si no están en historial (Evita descuadres por pagos registrados en el flujo antiguo)
+    if ((meta.visitPaymentConfirmed || meta.fechaPagoVisita) && !hasPaidMobility) {
+        const amount = parseFloat(meta.costoVisita || meta.costoPasaje || t.visit_cost || 0);
+        if (amount > 0) {
+            history.push({
+                tipo: 'Movilidad / Visita', monto: amount,
+                fecha: meta.fechaPagoVisita || new Date().toISOString(),
+                referencia: 'Pago registrado vía sistema clásico (Visita)', estado: 'pagado'
+            });
+        }
+    }
+    if (meta.adelantoPagado && !hasPaidAdelanto) {
+        const amount = parseFloat(meta.montoAdelanto || 0);
+        if (amount > 0) {
+            history.push({
+                tipo: 'Adelanto', monto: amount,
+                fecha: meta.fechaAprobacion || meta.fechaAsignacion || new Date().toISOString(),
+                referencia: 'Pago registrado vía sistema clásico (Adelanto)', estado: 'pagado'
+            });
+        }
+    }
 
     return {
         ...t,
@@ -121,8 +149,8 @@ function flattenTicketForPayments(t: any) {
         solicitudesDeposito: (meta.solicitudesDeposito || []).filter((s: any) => s.estado === 'pendiente'),
         historialPagosTecnico: history,
         montoAdelanto: parseFloat(meta.montoAdelanto || 0),
-        adelantoPagado: meta.adelantoPagado || hasPaidAdelanto || false,
-        visitPaymentConfirmed: meta.visitPaymentConfirmed || hasPaidMobility || false,
+        adelantoPagado: meta.adelantoPagado || history.some((p: any) => p.tipo === 'Adelanto'),
+        visitPaymentConfirmed: meta.visitPaymentConfirmed || history.some((p: any) => p.tipo === 'Movilidad / Visita'),
         porcentajeAdelanto: meta.porcentajeAdelanto ?? meta.solicitudAdelanto?.porcentaje ?? 0.5,
         fechaAprobacion: meta.fechaAprobacion ?? meta.fechaAprobacionCotizacion ?? null,
         fechaValidacionDocumental: meta.fechaValidacionDocumental ?? null,

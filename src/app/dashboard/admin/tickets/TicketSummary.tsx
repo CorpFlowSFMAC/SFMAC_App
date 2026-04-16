@@ -1084,19 +1084,27 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
     // El costo de referencia (Costo Operativo) es lo pactado. 
     // Si hay trabajo, usamos MO+Mat. Si solo es visita, usamos el costo de visita.
     const costoReferencia = jobCostBase > 0 ? jobCostBase : visitCost;
-    const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
 
     // Sumar todos los depósitos realizados al técnico (Legacy + Modern)
-    const totalPagadoLegacy = (ticket.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+    const history = ticket.historialPagosTecnico || [];
+    let totalPagadoLegacy = history.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+    
+    // Inyectar pagos clásicos si no están en historial (Sincronización de Resumen)
+    const hasPaidMobility = history.some((p: any) => p.tipo === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita"));
+    const hasPaidAdelanto = history.some((p: any) => p.tipo === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto"));
+    
+    if ((ticket.visitPaymentConfirmed || ticket.fechaPagoVisita) && !hasPaidMobility) {
+        totalPagadoLegacy += visitCost;
+    }
+    if (ticket.adelantoPagado && !hasPaidAdelanto) {
+        totalPagadoLegacy += parseFloat(ticket.montoAdelanto || 0);
+    }
+
     const totalPagadoModern = (costos || [])
         .filter(c => c.estado_pago === 'pagado')
         .reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
         
     const totalPagadoTecnico = round2(totalPagadoLegacy + totalPagadoModern);
-    const montoAdelanto = totalPagadoTecnico || round2(ticket.montoAdelanto || 0);
-    const pctReal = (montoAdelanto / (costoReferencia || 1)) * 100;
-
-    // RECTIFICACIÓN: El saldo pendiente es sobre lo que se le debe pagar al TÉCNICO
     const montoSaldo = Math.max(0, round2(costoReferencia - totalPagadoTecnico));
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
