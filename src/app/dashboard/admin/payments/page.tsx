@@ -29,6 +29,7 @@ interface PaymentItem {
     isLegacy?: boolean;   // Marca pagos que vienen de metadata
     specialistName?: string; // Nombre del técnico vinculado al costo
     specialistBanco?: string;
+    specialistCuenta?: string;
     specialistCCI?: string;
     specialistYape?: string;
     specialistPlin?: string;
@@ -271,12 +272,12 @@ export default function PaymentsPage() {
         item: PaymentItem,
         wallet: 'yape' | 'plin' | 'banco'
     ) => {
-        // Priorizar datos del especialista vinculado al item (costo específico) sobre el técnico general
+        // Al haber separado los grupos por beneficiario, group.tecnico ya contiene los datos correctos del destinatario
         const numero = wallet === 'yape'
-            ? (item.specialistYape || group.tecnico.yape)
+            ? group.tecnico.yape
             : wallet === 'plin'
-                ? (item.specialistYape || group.tecnico.plin) // specialistYape se usa para billeteras en general si no hay Plin específico
-                : (item.specialistBanco || group.tecnico.numeroCuenta);
+                ? group.tecnico.plin
+                : group.tecnico.numeroCuenta;
 
         if (!numero) return;
 
@@ -464,6 +465,7 @@ export default function PaymentsPage() {
                                 costId: c.id,
                                 specialistName,
                                 specialistBanco: tech?.bank_name,
+                                specialistCuenta: tech?.account_number,
                                 specialistCCI: tech?.cci,
                                 specialistYape: tech?.yape_number,
                                 specialistPlin: tech?.plin_number,
@@ -501,7 +503,18 @@ export default function PaymentsPage() {
                     }
                 }
 
-                if (items.length > 0 || pagos.length > 0) {
+                // Separar items por beneficiario para crear filas independientes
+                const techItems = items.filter(i => !i.specialistName);
+                const specialistGroups: { [name: string]: PaymentItem[] } = {};
+                items.forEach(i => {
+                    if (i.specialistName) {
+                        if (!specialistGroups[i.specialistName]) specialistGroups[i.specialistName] = [];
+                        specialistGroups[i.specialistName].push(i);
+                    }
+                });
+
+                // A: Añadir fila del Técnico Principal (si tiene items o historial)
+                if (techItems.length > 0 || (pagos.length > 0 && techItems.length === 0 && pagasParaEsteBeneficiario(pagos, 'técnico'))) {
                     allGroups.push({
                         ticketId: ticket.id,
                         ticketNum,
@@ -511,7 +524,7 @@ export default function PaymentsPage() {
                         montoPactado: totalPactadoInclVisita,
                         montoAdelantado: totalPagadoArray,
                         saldoPendiente: totalPactadoInclVisita - totalPagadoArray,
-                        items: items.filter(i => i.estado === 'pendiente'),
+                        items: techItems,
                         historialDepositos: pagos,
                         costoVisita: visitCost,
                         voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
@@ -520,10 +533,48 @@ export default function PaymentsPage() {
                         descripcion: ticket.descripcionServicio || '',
                     });
                 }
+
+                // B: Añadir filas para cada Especialista (Gestora/Tercero)
+                Object.keys(specialistGroups).forEach(name => {
+                    const sItems = specialistGroups[name];
+                    const first = sItems[0];
+                    const specData = {
+                        id: undefined,
+                        nombre: name,
+                        banco: first.specialistBanco || '---',
+                        numeroCuenta: first.specialistCuenta || '---',
+                        cci: first.specialistCCI || '---',
+                        yape: first.specialistYape,
+                        plin: first.specialistPlin
+                    };
+
+                    allGroups.push({
+                        ticketId: `${ticket.id}_${name}`, // ID único para el grupo de UI
+                        ticketNum,
+                        cliente: ticket.cliente?.nombre || 'Cliente',
+                        sede: ticket.sede?.nombre || 'Sede',
+                        tecnico: specData,
+                        montoPactado: 0, // Especialistas no tienen pactado total del ticket
+                        montoAdelantado: 0,
+                        saldoPendiente: 0,
+                        items: sItems,
+                        historialDepositos: [], // El historial principal es del técnico
+                        costoVisita: 0,
+                        montoFacturado: 0,
+                        utilidad: 0,
+                        descripcion: ticket.descripcionServicio || '',
+                    });
+                });
+
             } catch (e) {
                 console.error("Error processing ticket for payments:", e);
             }
         });
+
+        // Helper para filtrar historial (opcional, para limpieza futura)
+        function pagasParaEsteBeneficiario(historial: any[], tipo: string) {
+            return true; // Por ahora mostramos el historial en la fila del técnico
+        }
 
         allGroups.sort((a, b) => {
             const hasPendingA = a.items.some(i => i.estado === 'pendiente');
@@ -1161,13 +1212,12 @@ export default function PaymentsPage() {
                                                 <td>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
                                                         {group.items.filter(i => i.estado === 'pendiente').map((item) => {
-                                                            const hasYape = !!(item.specialistYape || group.tecnico.yape);
-                                                            const hasPlin = !!(item.specialistPlin || group.tecnico.plin);
-                                                            const hasBanco = (item.specialistBanco || group.tecnico.numeroCuenta) && (item.specialistBanco || group.tecnico.numeroCuenta) !== '---';
-                                                            
-                                                            const beneficiaryName = item.specialistName || group.tecnico.nombre;
-                                                            const yapeNum = item.specialistYape || group.tecnico.yape;
-                                                            const plinNum = item.specialistPlin || group.tecnico.plin;
+                                                            const hasYape = !!group.tecnico.yape;
+                                                            const hasPlin = !!group.tecnico.plin;
+                                                            const hasBanco = group.tecnico.numeroCuenta && group.tecnico.numeroCuenta !== '---';
+                                                            const beneficiaryName = group.tecnico.nombre;
+                                                            const yapeNum = group.tecnico.yape;
+                                                            const plinNum = group.tecnico.plin;
 
                                                             return (
                                                                 <div key={`action-${item.id}`} className={styles.zeroFeeActions}>
