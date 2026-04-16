@@ -1107,6 +1107,11 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
     const totalPagadoTecnico = round2(totalPagadoLegacy + totalPagadoModern);
     const montoSaldo = Math.max(0, round2(costoReferencia - totalPagadoTecnico));
 
+    // Variables para UI
+    const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
+    const pctReal = (totalPagadoTecnico / (costoReferencia || 1)) * 100;
+    const montoAdelanto = totalPagadoTecnico || round2(ticket.montoAdelanto || 0);
+
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
     const visibleStates = [
         "cotizacion_enviada",
