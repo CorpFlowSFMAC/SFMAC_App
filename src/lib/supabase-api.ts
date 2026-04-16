@@ -617,6 +617,53 @@ export const ticketsAPI = {
         return data;
     },
 
+    // ★★★ METADATA-SAFE GENERIC UPDATE ★★★
+    // Permite actualizar campos de la metadata sin borrar el resto del JSON.
+    // Especialmente útil para no borrar el historial de pagos al reasignar gestoras.
+    async patchMetadata(id: string, metadataUpdates: Record<string, any>, columnUpdates: Record<string, any> = {}) {
+        const { data: current, error: fetchErr } = await supabase
+            .from('tickets')
+            .select('metadata')
+            .eq('id', id)
+            .single();
+
+        if (fetchErr) return this.update(id, { ...columnUpdates, metadata: metadataUpdates });
+
+        const serverMeta = current?.metadata || {};
+        
+        // Merge especial para el historial de pagos para evitar duplicados o pérdidas
+        let mergedPagos = serverMeta.historialPagosTécnico || serverMeta.historialPagosTecnico || [];
+        if (metadataUpdates.historialPagosTécnico || metadataUpdates.historialPagosTecnico) {
+            const incoming = metadataUpdates.historialPagosTécnico || metadataUpdates.historialPagosTecnico || [];
+            const allById = new Map();
+            [...mergedPagos, ...incoming].forEach(p => {
+                if (p?.id) allById.set(p.id, p);
+            });
+            mergedPagos = Array.from(allById.values());
+        }
+
+        const newMetadata = {
+            ...serverMeta,
+            ...metadataUpdates,
+            historialPagosTécnico: mergedPagos
+        };
+
+        const updates = {
+            ...columnUpdates,
+            metadata: newMetadata
+        };
+
+        const { data, error } = await supabase
+            .from('tickets')
+            .update(updates)
+            .eq('id', id)
+            .select('*, clients(*), branch_offices(*), technicians(*)')
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
     async delete(id: string) {
         const { error } = await supabase
             .from('tickets')

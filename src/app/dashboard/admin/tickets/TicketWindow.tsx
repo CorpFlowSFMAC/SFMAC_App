@@ -629,20 +629,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             const existingLogs = ticketData.metadata?.asignaciónLog || [];
             
-            const dbUpdates = {
-                gestora_id: gestora.id,
-                metadata: {
-                    ...ticketData.metadata,
-                    gestora: gestora,
-                    asignaciónLog: [...existingLogs, newLogEntry]
-                }
+            const metadataUpdates = {
+                gestora: gestora,
+                asignaciónLog: [...existingLogs, newLogEntry]
             };
             
-            if (onUpdate) {
-                await onUpdate(ticketData.id, dbUpdates);
-            } else {
-                await ticketsAPI.update(ticketData.id, dbUpdates);
-            }
+            const columnUpdates = {
+                gestora_id: gestora.id
+            };
+            
+            // USAR parche seguro de metadata para no borrar pagos u otros campos
+            await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates, columnUpdates);
 
             setTicketData((prev: any) => ({
                 ...prev,
@@ -874,16 +871,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
 
-            await onUpdate?.(ticketData.id, {
-                status_id: newState,
-                metadata: {
-                    ...ticketData.metadata,
-                    adelantoPagado: true,
-                    montoAdelanto: unifiedPaymentsSum + amount,
-                    fechaPagoAdelanto: new Date().toISOString(),
-                    solicitudAdelanto: null
-                }
-            });
+            const metadataUpdates = {
+                adelantoPagado: true,
+                montoAdelanto: unifiedPaymentsSum + amount,
+                fechaPagoAdelanto: new Date().toISOString(),
+                solicitudAdelanto: null
+            };
+
+            const columnUpdates = {
+                status_id: newState
+            };
+
+            await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates, columnUpdates);
 
             const updated = {
                 ...ticketData,
