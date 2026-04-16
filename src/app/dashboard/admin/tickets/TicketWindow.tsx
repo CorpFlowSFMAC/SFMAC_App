@@ -899,7 +899,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             setIsConfirmingPayment(false);
         }
     };
-
+    const handleRequestAdvance = async () => {
         let amount = 0;
         let pctVal = 0;
 
