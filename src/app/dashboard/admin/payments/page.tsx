@@ -36,7 +36,8 @@ interface PaymentItem {
 }
 
 interface PaymentTicketGroup {
-    ticketId: string;
+    ticketId: string;     // ID único para la UI (puede incluir el especialista)
+    realTicketId: string; // ID real en la tabla de base de datos 'tickets'
     ticketNum: string;
     cliente: string;
     sede: string;
@@ -517,6 +518,7 @@ export default function PaymentsPage() {
                 if (techItems.length > 0 || (pagos.length > 0 && techItems.length === 0 && pagasParaEsteBeneficiario(pagos, 'técnico'))) {
                     allGroups.push({
                         ticketId: ticket.id,
+                        realTicketId: ticket.id,
                         ticketNum,
                         cliente: ticket.cliente?.nombre || 'Cliente',
                         sede: ticket.sede?.nombre || 'Sede',
@@ -550,6 +552,7 @@ export default function PaymentsPage() {
 
                     allGroups.push({
                         ticketId: `${ticket.id}_${name}`, // ID único para el grupo de UI
+                        realTicketId: ticket.id,         // ID real para actualizaciones de base de datos
                         ticketNum,
                         cliente: ticket.cliente?.nombre || 'Cliente',
                         sede: ticket.sede?.nombre || 'Sede',
@@ -598,9 +601,9 @@ export default function PaymentsPage() {
         try {
             // 0. DETERMINAR SI REVERTIMOS ESTADO
             let newStatusId = null;
-            if (group.items.some(i => i.tipo === 'Movilidad / Visita' || i.id === `${group.ticketId}_visita`)) {
+            if (group.items.some(i => i.tipo === 'Movilidad / Visita' || i.id === `${group.realTicketId}_visita`)) {
                 // Si denegamos pago de visita, el ticket regresa a técnico asignado
-                if (item.id === `${group.ticketId}_visita` || item.tipo === 'Movilidad / Visita') {
+                if (item.id === `${group.realTicketId}_visita` || item.tipo === 'Movilidad / Visita') {
                     newStatusId = 'tecnico_asignado';
                 }
             } else if (item.tipo === 'Liquidación Final' || item.tipo === 'Saldo Pendiente (Auto)') {
@@ -617,9 +620,9 @@ export default function PaymentsPage() {
 
                 // Si era una movilidad/viático vía tabla, también revisamos estado
                 if (item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('viático')) {
-                    const { data: t } = await supabase.from('tickets').select('status_id').eq('id', group.ticketId).single();
+                    const { data: t } = await supabase.from('tickets').select('status_id').eq('id', group.realTicketId).single();
                     if (t?.status_id === 'esperando_pago_visita') {
-                        await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.ticketId);
+                        await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.realTicketId);
                     }
                 }
 
@@ -632,7 +635,7 @@ export default function PaymentsPage() {
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
                 .select('metadata, status_id')
-                .eq('id', group.ticketId)
+                .eq('id', group.realTicketId)
                 .single();
 
             if (fetchErr || !currentTicket?.metadata) return;
@@ -673,7 +676,7 @@ export default function PaymentsPage() {
             await supabase
                 .from('tickets')
                 .update(dbUpdates)
-                .eq('id', group.ticketId);
+                .eq('id', group.realTicketId);
 
             showToast(`✅ Pago denegado y registrado como Rechazado.`);
             refresh();
@@ -692,7 +695,7 @@ export default function PaymentsPage() {
             const { data: currentTicket } = await supabase
                 .from('tickets')
                 .select('metadata')
-                .eq('id', group.ticketId)
+                .eq('id', group.realTicketId)
                 .single();
 
             if (!currentTicket?.metadata) return;
@@ -709,7 +712,7 @@ export default function PaymentsPage() {
             await supabase
                 .from('tickets')
                 .update({ metadata: meta })
-                .eq('id', group.ticketId);
+                .eq('id', group.realTicketId);
 
             showToast('🗑️ Registro de pago eliminado');
             refresh();
@@ -720,7 +723,7 @@ export default function PaymentsPage() {
     };
 
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
-        const pagoId = `pago_${group.ticketId}_${Date.now()}`;
+        const pagoId = `pago_${group.realTicketId}_${Date.now()}`;
         const nuevoPago = {
             id: pagoId,
             monto: item.monto,
@@ -757,7 +760,7 @@ export default function PaymentsPage() {
                     })
                     .eq('id', item.costId);
                 
-                await ticketsAPI.updatePaymentSafe(group.ticketId, nuevoPago, additionalUpdates);
+                await ticketsAPI.updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
                 showToast('✅ Pago de costo registrado');
                 refresh();
                 return;
@@ -766,27 +769,27 @@ export default function PaymentsPage() {
             const { data: currentTicket } = await supabase
                 .from('tickets')
                 .select('metadata, status_id')
-                .eq('id', group.ticketId)
+                .eq('id', group.realTicketId)
                 .single();
 
             if (!currentTicket) return;
             const meta = { ...currentTicket.metadata };
             const additionalUpdates: any = { metadataFields: {} };
 
-            if (item.id === `${group.ticketId}_adelanto`) {
+            if (item.id === `${group.realTicketId}_adelanto`) {
                 additionalUpdates.status_id = 'en_ejecucion';
                 additionalUpdates.execution_date = new Date().toISOString();
                 meta.adelantoPagado = true;
                 meta.fechaPagoAdelanto = additionalUpdates.execution_date;
                 meta.solicitudAdelanto = null;
-            } else if (item.id === `${group.ticketId}_refuerzo`) {
+            } else if (item.id === `${group.realTicketId}_refuerzo`) {
                 meta.solicitudAdelantoExtra = null;
-            } else if (item.id === `${group.ticketId}_final`) {
+            } else if (item.id === `${group.realTicketId}_final`) {
                 additionalUpdates.status_id = 'ticket_cerrado';
                 additionalUpdates.closure_date = new Date().toISOString();
                 meta.fechaPagoFinal = additionalUpdates.closure_date;
                 meta.solicitudLiquidacion = null;
-            } else if (item.id === `${group.ticketId}_visita`) {
+            } else if (item.id === `${group.realTicketId}_visita`) {
                 const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
                 if (preInspectionStates.includes(currentTicket.status_id)) {
                     additionalUpdates.status_id = 'en_inspeccion';
@@ -801,7 +804,7 @@ export default function PaymentsPage() {
             }
 
             additionalUpdates.metadataFields = meta;
-            await updatePaymentSafe(group.ticketId, nuevoPago, additionalUpdates);
+            await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
             showToast('✅ Pago confirmado exitosamente');
             refresh();
         } catch (err) {
