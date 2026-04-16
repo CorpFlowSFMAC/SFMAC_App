@@ -88,6 +88,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [isSavingCost, setIsSavingCost] = useState(false);
     const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
+    const [montoAdelantoManual, setMontoAdelantoManual] = useState<string>("");
 
     const [userRole, setUserRole] = useState<string | null>(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('userRole');
@@ -827,10 +828,26 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
 
-        const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costoReferencia * pctReal;
+        let amount = 0;
+        let displayLabel = "";
 
-        if (unifiedPaymentsSum + amount > costoReferencia + 0.01) {
+        if (montoAdelantoManual) {
+            amount = parseFloat(montoAdelantoManual);
+            displayLabel = `Manual (S/ ${amount.toFixed(2)})`;
+        } else {
+            const pctReal = ticketData.solicitudAdelanto ? ticketData.solicitudAdelanto.porcentaje : porcentajeAdelanto;
+            if (!pctReal) return;
+            const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+            amount = costoReferencia * pctReal;
+            displayLabel = `${(pctReal * 100).toFixed(0)}% (S/ ${amount.toFixed(2)})`;
+        }
+
+        if (amount <= 0) {
+            showToast("Monto Inválido", "El monto del adelanto debe ser mayor a cero.", "error");
+            return;
+        }
+
+        if (unifiedPaymentsSum + amount > (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) + 0.01) {
             showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
             return;
         }
@@ -839,7 +856,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         try {
             await ticketCostsAPI.create({
                 ticket_id: ticket.id,
-                concepto: `Adelanto Operativo (${(pctReal * 100).toFixed(0)}%)`,
+                concepto: `Adelanto Operativo - ${displayLabel}`,
                 categoria: "Mano de Obra",
                 specialist_id: ticketData.specialist_id,
                 proveedor: ticketData.specialist?.name,
@@ -872,7 +889,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             setTicketData(updated);
             await loadCosts();
-            showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)} (${(pctReal * 100).toFixed(0)}% del costo ref.) en el desglose de costos.`, "success");
+            setMontoAdelantoManual("");
+            setPorcentajeAdelanto(null);
+            showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)} en el desglose de costos.`, "success");
         } catch (err) {
             console.error("Error confirming advance:", err);
             showToast("Error de Conexión", "No se pudo registrar el adelanto correctamente.", "error");
@@ -881,17 +900,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleRequestAdvance = async () => {
-        if (!porcentajeAdelanto) {
-            showToast("Selección Requerida", "Debe seleccionar un porcentaje (40%, 50% o 60%) antes de solicitar.", "error");
-            return;
+        let amount = 0;
+        let pctVal = 0;
+
+        if (montoAdelantoManual) {
+            amount = parseFloat(montoAdelantoManual);
+            const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+            pctVal = costRef > 0 ? amount / costRef : 0;
+        } else if (porcentajeAdelanto) {
+            const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+            amount = costRef * porcentajeAdelanto;
+            pctVal = porcentajeAdelanto;
         }
 
-        const costRef = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
-        const amount = costRef * porcentajeAdelanto;
-
         if (amount <= 0) {
-            showToast("Monto Inválido", "No se puede solicitar adelanto de un coste S/ 0.00. Asegúrese de ingresar los costes en el reporte técnico.", "error");
+            showToast("Selección Requerida", "Debe seleccionar un porcentaje o ingresar un monto manual válido.", "error");
             return;
         }
 
@@ -906,7 +929,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             console.log("DEBUG: Iniciando registro de adelanto para ticket:", ticket.id);
             await ticketCostsAPI.create({
                 ticket_id: ticket.id,
-                concepto: `Adelanto Operativo (${(porcentajeAdelanto * 100).toFixed(0)}%)`,
+                concepto: montoAdelantoManual ? `Adelanto Operativo (Monto Manual: S/ ${amount.toFixed(2)})` : `Adelanto Operativo (${(pctVal * 100).toFixed(0)}%)`,
                 categoria: "Mano de Obra",
                 specialist_id: technicianId,
                 monto: amount,
@@ -918,7 +941,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const updated = {
                 ...ticketData,
                 solicitudAdelanto: {
-                    porcentaje: porcentajeAdelanto,
+                    porcentaje: pctVal,
                     monto: amount,
                     fecha: new Date().toISOString()
                 },
@@ -926,8 +949,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             };
             setTicketData(updated);
             syncToSupabase(updated);
-            
-            showToast("Solicitud Enviada", `Solicitud enviada a Gerencia: Adelanto del ${(porcentajeAdelanto * 100).toFixed(0)}% (S/ ${amount.toFixed(2)}).`, "success");
+            setMontoAdelantoManual("");
+            setPorcentajeAdelanto(null);
+            showToast("Solicitud Enviada", `Se ha solicitado el adelanto de S/ ${amount.toFixed(2)} a Gerencia.`, "success");
         } catch (err) {
             console.error("Error al solicitar adelanto:", err);
             showToast("Error de Conexión", "No se pudo registrar la solicitud en el sistema.", "error");
@@ -2175,12 +2199,28 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         {[0.4, 0.5, 0.6].map(p => (
                                                                             <button
                                                                                 key={p}
-                                                                                className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p ? styles.pctActivePremium : ''}`}
-                                                                                onClick={() => setPorcentajeAdelanto(p)}
+                                                                                className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p && !montoAdelantoManual ? styles.pctActivePremium : ''}`}
+                                                                                onClick={() => {
+                                                                                    setPorcentajeAdelanto(p);
+                                                                                    setMontoAdelantoManual("");
+                                                                                }}
                                                                             >
                                                                                 {(p * 100).toFixed(0)}%
                                                                             </button>
                                                                         ))}
+                                                                        <div className={styles.manualAmountContainer}>
+                                                                            <span className={styles.manualCurrency}>S/</span>
+                                                                            <input 
+                                                                                type="number"
+                                                                                className={styles.manualAmountInput}
+                                                                                placeholder="Monto"
+                                                                                value={montoAdelantoManual}
+                                                                                onChange={(e) => {
+                                                                                    setMontoAdelantoManual(e.target.value);
+                                                                                    setPorcentajeAdelanto(null);
+                                                                                }}
+                                                                            />
+                                                                        </div>
                                                                     </div>
                                                                 )}
 
@@ -2188,7 +2228,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <button
                                                                         className={styles.confirmAdvanceBtnPremium}
                                                                         onClick={handleConfirmAdvance}
-                                                                        disabled={isConfirmingPayment || (!ticketData.solicitudAdelanto && !porcentajeAdelanto)}
+                                                                        disabled={isConfirmingPayment || (!ticketData.solicitudAdelanto && !porcentajeAdelanto && !montoAdelantoManual)}
                                                                     >
                                                                         {isConfirmingPayment ? <Clock size={18} className={styles.spinner} /> : <CheckCircle size={18} />}
                                                                         <span>{ticketData.solicitudAdelanto ? 'Confirmar Depósito' : 'Registrar Depósito Directo'}</span>
@@ -2198,7 +2238,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         <button
                                                                             className={styles.requestAdvanceBtnPremium}
                                                                             onClick={handleRequestAdvance}
-                                                                            disabled={!porcentajeAdelanto}
+                                                                            disabled={!porcentajeAdelanto && !montoAdelantoManual}
                                                                         >
                                                                             <Send size={18} />
                                                                             <span>Solicitar Adelanto a Gerencia</span>

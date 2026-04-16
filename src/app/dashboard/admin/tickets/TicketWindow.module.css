@@ -4126,8 +4126,42 @@
 
 .percentageSelectorPremium {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, 1fr) 1.5fr;
     gap: 10px;
+    align-items: center;
+}
+
+.manualAmountContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.manualAmountInput {
+    width: 100%;
+    padding: 10px 10px 10px 30px;
+    background: #F8FAFC;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    color: #1E293B;
+    font-weight: 800;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.manualAmountInput:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    background: white;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+}
+
+.manualCurrency {
+    position: absolute;
+    left: 12px;
+    font-weight: 900;
+    color: #94A3B8;
+    font-size: 0.85rem;
 }
 
 .pctBtnPremium {
