@@ -1224,99 +1224,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     const costPercentage = approvedAmount > 0 ? (totalCosts / approvedAmount) * 100 : 0;
 
-    return (
-        <>
-            {isMaximized && !isMinimized && <div className={styles.overlay} style={{ zIndex: zIndex - 1 }} />}
-
-            <div
-                ref={windowRef}
-                className={`${styles.window} ${isMaximized ? styles.maximized : ''} ${isMinimized ? styles.minimized : ''}`}
-                onClick={() => setZIndex(Date.now() % 10000000)}
-                style={
-                    isMinimized
-                        ? { left: `${20 + (index * 270)}px`, bottom: '20px', zIndex: zIndex }
-                        : (!isMaximized
-                            ? { left: `${position.x}px`, top: `${position.y}px`, zIndex: zIndex }
-                            : { zIndex: zIndex }
-                        )
-                }
-            >
-                <div
-                    className={styles.titleBar}
-                    onMouseDown={handleMouseDown}
-                    onClick={() => {
-                        if (isMinimized) {
-                            setIsMinimized(false);
-                            if (!isMaximized) setIsMaximized(false);
-                        }
-                    }}
-                    style={{ cursor: (isMaximized && !isMinimized) ? 'default' : 'move' }}
-                >
-                    <div className={styles.titleLeft}>
-                        {!isMinimized ? (
-                            <>
-                                {ticket.cliente?.logo ? (
-                                    <div className={styles.clientLogoHeader}>
-                                        <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} />
-                                    </div>
-                                ) : (
-                                    <div className={styles.ticketIcon}>🎫</div>
-                                )}
-                                <div className={styles.titleInfo}>
-                                    <h3>
-                                        {ticketData.metadata?.titulo ||
-                                            (ticketData.numeroTicketCliente
-                                                ? ticketData.numeroTicketCliente
-                                                : `Ticket #${ticketData.id.slice(-6)}`)
-                                        }
-                                    </h3>
-                                    <span>{ticket.cliente?.nombre || 'Sin cliente'}</span>
-                                </div>
-                            </>
-                        ) : (
-                            <div className={styles.titleInfoMinimized}>
-                                <h3 className={styles.minimizedTicketNumber}>
-                                    {ticket.numeroTicketCliente
-                                        ? ticket.numeroTicketCliente
-                                        : `TKT-${ticket.id.slice(-6).toUpperCase()}`
-                                    }
-                                </h3>
-                            </div>
-                        )}
-                    </div>
-
-                    {!isMinimized && (
-                        <div className={`${styles.slaTimerHeader} ${ticketData.pausadoSLA ? styles.paused : ''}`}>
-                            <Clock size={14} />
-                            <span>{formatElapsedTime()}</span>
-                            {ticketData.pausadoSLA && <span className={styles.pausedLabel}>PAUSADO</span>}
-                        </div>
-                    )}
-
-                    <div className={styles.windowControls} onMouseDown={(e) => e.stopPropagation()}>
-                        {!isMinimized && (
-                            <>
-                                <button
-                                    className={styles.controlBtn}
-                                    onClick={(e) => { e.stopPropagation(); handleMinimize(); }}
-                                    title="Minimizar"
-                                >
-                                    <Minimize2 size={16} />
-                                </button>
-                                <button
-                                    className={styles.controlBtn}
-                                    onClick={(e) => { e.stopPropagation(); handleMaximize(); }}
-                                    title={isMaximized ? "Restaurar" : "Maximizar"}
-                                >
-                                    {isMaximized ? <Square size={14} /> : <Maximize2 size={16} />}
-                                </button>
-                            </>
-                        )}
     const handleCloseInternal = async () => {
         // Forzar un guardado inmediato si hay cambios pendientes
         await syncToSupabase();
         onClose();
     };
+
 
     return (
         <>
