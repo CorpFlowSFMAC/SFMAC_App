@@ -995,8 +995,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleFinishExecution = () => {
-        if (evidenciasEjecucion.length < 2) {
-            showToast("Evidencias Insuficientes", "Debe adjuntar al menos 2 fotos (DURANTE y DESPUÉS).", "error");
+        if (evidenciasEjecucion.length < 1) {
+            showToast("Evidencia Mandataria", "Debe adjuntar al menos 1 foto de la ejecución del trabajo.", "error");
             return;
         }
         const updated = {
@@ -2313,7 +2313,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </div>
                                                         </div>
                                                         <p className={styles.operationalHint}>
-                                                            * Se requieren al menos 2 evidencias para finalizar el trabajo.
+                                                            * Es obligatorio adjuntar al menos 1 evidencia para finalizar el trabajo.
                                                         </p>
                                                     </div>
 
@@ -2321,7 +2321,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <button
                                                             className={styles.finishWorkBtn}
                                                             onClick={handleFinishExecution}
-                                                            disabled={evidenciasEjecucion.length < 2}
+                                                            disabled={evidenciasEjecucion.length < 1}
                                                         >
                                                             <CheckCircle size={20} />
                                                             <span>FINALIZAR TRABAJOS Y ENVIAR DOCUMENTACIÓN</span>
