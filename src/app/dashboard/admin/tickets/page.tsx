@@ -599,13 +599,13 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                     <div
                         className={styles.serviceTag}
                         style={{
-                            background: `${service.color}15`,
-                            borderColor: service.color
+                            background: `${service?.color}15`,
+                            borderColor: service?.color
                         }}
                     >
-                        <ServiceIcon size={12} color={service.color} />
-                        <span style={{ color: service.color }}>
-                            {service.nombre}
+                        <ServiceIcon size={12} color={service?.color} />
+                        <span style={{ color: service?.color }}>
+                            {service?.nombre}
                         </span>
                     </div>
                 )}
