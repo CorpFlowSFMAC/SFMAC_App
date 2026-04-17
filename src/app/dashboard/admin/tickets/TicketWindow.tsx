@@ -769,14 +769,36 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         syncToSupabase(approved);
     };
 
-    const handleAuthorizeModification = () => {
+    const handleAuthorizeModification = async () => {
         const authorized = {
             ...ticketData,
-            modificacionAutorizada: true
+            modificacionAutorizada: true,
+            solicitudModificacion: false
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
-        showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+        try {
+            await syncToSupabase(authorized);
+            showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+        } catch (err) {
+            console.error("Error authorizing modification:", err);
+            showToast("Error", "No se pudo guardar la autorización.", "error");
+        }
+    };
+
+    const handleRequestModification = async () => {
+        const requested = {
+            ...ticketData,
+            solicitudModificacion: true
+        };
+        setTicketData(requested);
+        try {
+            await syncToSupabase(requested);
+            showToast("Solicitud Enviada", "Se ha solicitado autorización a Gerencia para modificar esta cotización.", "success");
+        } catch (err) {
+            console.error("Error requesting modification:", err);
+            showToast("Error", "No se pudo enviar la solicitud.", "error");
+        }
     };
 
     const handleProceedToExecution = () => {
@@ -1897,14 +1919,31 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <p className={styles.authText}>
                                                                         La cotización ya fue aprobada por el cliente. Para realizar cambios, se requiere el visto bueno de Gerencia.
                                                                     </p>
-                                                                    <button
-                                                                        className={styles.authorizeBtn}
-                                                                        onClick={handleAuthorizeModification}
-                                                                    >
-                                                                        Autorizar ModificaciÃƒÂ³n
-                                                                    </button>
+                                                                    {isAdmin ? (
+                                                                        <button
+                                                                            className={`${styles.authorizeBtn} ${ticketData.solicitudModificacion ? styles.pulseAlert : ''}`}
+                                                                            onClick={handleAuthorizeModification}
+                                                                        >
+                                                                            {ticketData.solicitudModificacion ? <Sparkles size={18} /> : null}
+                                                                            <span>{ticketData.solicitudModificacion ? 'APROBAR SOLICITUD DE CAMBIO' : 'AUTORIZAR MODIFICACIÓN'}</span>
+                                                                        </button>
+                                                                    ) : (
+                                                                        ticketData.solicitudModificacion ? (
+                                                                            <div className={styles.waitingBadge}>
+                                                                                <Clock size={18} className={styles.spinSlow} />
+                                                                                <span>PETICIÓN ENVIADA - ESPERANDO VISTO BUENO</span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <button
+                                                                                className={styles.requestAuthBtn}
+                                                                                onClick={handleRequestModification}
+                                                                            >
+                                                                                <Send size={18} />
+                                                                                <span>SOLICITAR AUTORIZACIÓN PARA EDITAR</span>
+                                                                            </button>
+                                                                        )
+                                                                    )}
                                                                 </div>
-
                                                             )}
                                                         </div>
                                                     </div>

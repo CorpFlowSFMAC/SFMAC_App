@@ -543,12 +543,20 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                 <span className={styles.ticketId}>
                     {ticket.numeroTicketCliente ? ticket.numeroTicketCliente : `#${ticket.id.slice(-6)}`}
                 </span>
-                {slaStatus === "expired" && (
-                    <div className={styles.expiredBadge}>SLA VENCIDO</div>
-                )}
-                {(!ticket.gestora_id && !ticket.gestora) && (
-                    <div className={styles.expiredBadge} style={{ background: '#F59E0B', marginLeft: '4px' }}>SIN GESTORA</div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {ticket.solicitudModificacion && (
+                        <div className={styles.modRequestBadge} title="La gestora solicita autorización para modificar presupuesto">
+                            <Sparkles size={10} />
+                            <span>SOLICITUD CAMBIO</span>
+                        </div>
+                    )}
+                    {slaStatus === "expired" && (
+                        <div className={styles.expiredBadge}>SLA VENCIDO</div>
+                    )}
+                    {(!ticket.gestora_id && !ticket.gestora) && (
+                        <div className={styles.expiredBadge} style={{ background: '#F59E0B' }}>SIN GESTORA</div>
+                    )}
+                </div>
             </div>
 
             {/* BODY OPTIMIZADO */}

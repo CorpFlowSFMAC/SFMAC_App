@@ -1545,9 +1545,81 @@
     background: #1E293B;
     color: white;
     border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-weight: 700;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.authorizeBtn:hover {
+    background: #334155;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.pulseAlert {
+    background: #DC2626 !important;
+    animation: pulseRed 2s infinite ease-in-out;
+}
+
+@keyframes pulseRed {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+    70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.waitingBadge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: #FEF3C7;
+    color: #92400E;
+    padding: 16px 32px;
+    border-radius: 16px;
+    font-weight: 800;
+    font-size: 0.85rem;
+    border: 2px solid #FDE68A;
+}
+
+.spinSlow {
+    animation: spin 3s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.requestAuthBtn {
+    background: linear-gradient(135deg, #3B82F6, #2563EB);
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.requestAuthBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+    filter: brightness(1.1);
+}
     font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;

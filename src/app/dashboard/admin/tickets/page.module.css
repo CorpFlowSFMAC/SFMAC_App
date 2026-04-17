@@ -478,6 +478,25 @@
     animation: pulseRed 1.5s infinite;
 }
 
+.modRequestBadge {
+    background: #7C3AED;
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 900;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    animation: flashPurple 2s infinite;
+}
+
+@keyframes flashPurple {
+    0%, 100% { background: #7C3AED; box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
+    50% { background: #9D67F1; box-shadow: 0 0 8px 2px rgba(124, 58, 237, 0.6); }
+}
+
 @keyframes pulseRed {
     0% {
         transform: scale(1);
