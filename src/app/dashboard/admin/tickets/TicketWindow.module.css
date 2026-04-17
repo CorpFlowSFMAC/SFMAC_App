@@ -1620,16 +1620,6 @@
     box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
     filter: brightness(1.1);
 }
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-    width: 100%;
-}
-
-.authorizeBtn:hover {
-    background: #0F172A;
-    transform: translateY(-2px);
-}
 
 .saveChangesBtn {
     background: linear-gradient(135deg, #22C55E, #16A34A);
