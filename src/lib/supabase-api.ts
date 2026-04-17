@@ -440,9 +440,7 @@ export const ticketsAPI = {
 
     async getSummaryAll() {
         const { data, error } = await supabase
-            .from('tickets')
-            .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, gestora_id, metadata, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
-            .order('created_at', { ascending: false });
+            .rpc('get_tickets_summary_v2');
 
         if (error) throw error;
         return data;

@@ -33,6 +33,7 @@ interface PaymentItem {
     specialistCCI?: string;
     specialistYape?: string;
     specialistPlin?: string;
+    hasVoucher?: boolean; // Flag para carga diferida de base64
 }
 
 interface PaymentTicketGroup {
@@ -178,7 +179,7 @@ function flattenTicketForPayments(t: any) {
         },
         cliente: { nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente' },
         sede: { nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede' },
-        montoFacturado: parseFloat(t.total_quoted_amount ?? t.montoFinal ?? meta.montoFinal ?? 0),
+        montoFacturado: parseFloat(t.total_quoted_amount || t.montoFinal || meta.montoFinal || 0),
     };
 }
 
@@ -239,6 +240,44 @@ export default function PaymentsPage() {
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Función para ver voucher con carga diferida (lazy loading)
+    const handleViewVoucher = async (ticketId: string, voucherRef?: string | null, hasVoucher?: boolean) => {
+        if (!hasVoucher && !voucherRef) return;
+
+        // Si ya tenemos el base64, lo mostramos
+        if (voucherRef?.startsWith('data:image')) {
+            setShowVoucher(voucherRef);
+            return;
+        }
+
+        // Si no lo tenemos pero sabemos que existe, lo bajamos de la DB (On-demand)
+        if (hasVoucher || voucherRef) {
+            try {
+                // Notificar al usuario que se está descargando
+                setLoading(true);
+                const fullTicket = await ticketsAPI.getById(ticketId);
+                const meta = fullTicket.metadata || {};
+                const history = meta.historialPagosTecnico || [];
+                
+                // Buscar el pago que tenga el voucher base64
+                // A veces el voucher está en meta.voucherVisita o en el historial
+                const found = history.find((p: any) => p.voucherRef && p.voucherRef.startsWith('data:image'));
+                
+                if (found?.voucherRef) {
+                    setShowVoucher(found.voucherRef);
+                } else if (meta.voucherVisita && meta.voucherVisita.startsWith('data:image')) {
+                    setShowVoucher(meta.voucherVisita);
+                } else {
+                    alert("No se pudo recuperar la imagen original. Verifique en los detalles del ticket.");
+                }
+            } catch (err) {
+                console.error("Error fetching voucher on demand:", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
     const [pendingConfirmation, setPendingConfirmation] = useState<{
         group: PaymentTicketGroup;
@@ -845,15 +884,17 @@ export default function PaymentsPage() {
         
         if (!matchesStatus) return false;
 
-        // Filtro por termo de búsqueda (Multibuscador)
+        // Filtro de búsqueda (Buscador Premium Multivariable)
         if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return (
-            (g.ticketNum || '').toLowerCase().includes(term) ||
-            (g.cliente || '').toLowerCase().includes(term) ||
-            (g.sede || '').toLowerCase().includes(term) ||
-            (g.tecnico?.nombre || '').toLowerCase().includes(term)
-        );
+        
+        const term = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const match = (val: string) => (val || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(term);
+
+        return match(g.ticketNum) ||
+               match(g.cliente) ||
+               match(g.sede) ||
+               match(g.tecnico?.nombre) ||
+               match(g.descripcion);
     });
 
     const TIPO_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
@@ -1407,13 +1448,8 @@ export default function PaymentsPage() {
                                                                         </div>
                                                                         <div className={styles.historyBody}>
                                                                             <strong style={{ fontSize: '1.05rem', color: '#1E293B', fontFamily: 'monospace' }}>S/ {formatSoles(dep.monto)}</strong>
-                                                                            {dep.voucherRef && (
-                                                                                <button onClick={() => {
-                                                                                    const src = dep.voucherRef?.startsWith('data:image')
-                                                                                        ? dep.voucherRef
-                                                                                        : localStorage.getItem(dep.voucherRef) || dep.voucherRef || '';
-                                                                                    if (src) setShowVoucher(src);
-                                                                                }}
+                                                                            {(dep.hasVoucher || dep.voucherRef) && (
+                                                                                <button onClick={() => handleViewVoucher(group.realTicketId, dep.voucherRef, dep.hasVoucher)}
                                                                                     className={styles.viewVoucherBtn}
                                                                                     style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
                                                                                     <Eye size={12} /> Ver Voucher
