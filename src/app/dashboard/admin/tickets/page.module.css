@@ -609,6 +609,22 @@
     align-self: flex-start;
 }
 
+.modificacionTag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 7px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: #fff1f2;
+    border: 1.5px solid #fecaca;
+    color: #e11d48;
+    animation: pulseRed 2s infinite ease-in-out;
+    cursor: help;
+}
+
 .descripcion {
     margin: 0;
     font-size: 0.75rem;

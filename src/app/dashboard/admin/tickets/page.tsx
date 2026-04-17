@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle } from "lucide-react";
+import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle, FileEdit } from "lucide-react";
 import CreateTicketWizard from "./CreateTicketWizard";
 import TicketWindow from "./TicketWindow";
 import styles from "./page.module.css";
@@ -594,21 +594,33 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                     </div>
                 )}
 
-                {/* Servicio */}
-                {ServiceIcon && (
-                    <div
-                        className={styles.serviceTag}
-                        style={{
-                            background: `${service?.color}15`,
-                            borderColor: service?.color
-                        }}
-                    >
-                        <ServiceIcon size={12} color={service?.color} />
-                        <span style={{ color: service?.color }}>
-                            {service?.nombre}
-                        </span>
-                    </div>
-                )}
+                {/* Servicio y Modificaciones */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    {ServiceIcon && (
+                        <div
+                            className={styles.serviceTag}
+                            style={{
+                                background: `${service?.color}15`,
+                                borderColor: service?.color
+                            }}
+                        >
+                            <ServiceIcon size={12} color={service?.color} />
+                            <span style={{ color: service?.color }}>
+                                {service?.nombre}
+                            </span>
+                        </div>
+                    )}
+
+                    {ticket.metadata?.solicitudModificacion?.pendiente && (
+                        <div 
+                            className={styles.modificacionTag}
+                            title={`Solicitado por: ${ticket.metadata.solicitudModificacion.solicitadoPor}`}
+                        >
+                            <FileEdit size={12} />
+                            <span>REQ. CAMBIO</span>
+                        </div>
+                    )}
+                </div>
 
                 {/* Descripción */}
                 <p className={styles.descripcion}>
