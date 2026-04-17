@@ -197,10 +197,10 @@ export default function PaymentsPage() {
                 .select('*, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)')
                 .eq('estado_pago', 'pendiente');
 
-            const processed = (data || []).map(t => {
+            const processed = (data || []).map((t: any) => {
                 const flat = flattenTicketForPayments(t);
                 // Inyectar costos asociados
-                flat.pendingCosts = (costs || []).filter(c => c.ticket_id === t.id);
+                flat.pendingCosts = (costs || []).filter((c: any) => c.ticket_id === t.id);
                 return flat;
             });
 
