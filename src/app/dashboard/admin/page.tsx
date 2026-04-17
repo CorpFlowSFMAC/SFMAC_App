@@ -777,6 +777,7 @@ export default function AdminDashboard() {
                                         <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Ticket #</th>
                                         <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Sede</th>
                                         <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Estado</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Presupuesto</th>
                                         <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Aging</th>
                                         <th style={{ padding: '12px 2px', textAlign: 'center' }}></th>
                                     </tr>
@@ -809,6 +810,11 @@ export default function AdminDashboard() {
                                                     }}>
                                                         {t.estadoId?.replace(/_/g, ' ').toUpperCase() || "NUEVO"}
                                                     </span>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: '#22C55E', fontWeight: 900, fontSize: '0.9rem' }}>
+                                                        S/ {fmt(t.montoFinal || 0)}
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: agingCol, fontWeight: 900, fontSize: '0.85rem' }}>{Math.floor(h)}h</div>
