@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
     Wallet, History, CheckCircle2, Clock, ArrowUpRight,
     DollarSign, CreditCard, ChevronDown, ChevronUp,
-    Building2, User, Upload, Eye, X,
+    Building2, User, Upload, Eye, X, Search, Filter,
     AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw,
     Smartphone, Copy, ExternalLink, Camera, CheckCheck
 } from "lucide-react";
@@ -238,6 +238,7 @@ export default function PaymentsPage() {
 
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
+    const [searchTerm, setSearchTerm] = useState('');
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
     const [pendingConfirmation, setPendingConfirmation] = useState<{
         group: PaymentTicketGroup;
@@ -837,10 +838,22 @@ export default function PaymentsPage() {
         acc + g.items.filter(i => i.estado === 'pendiente').reduce((s, i) => s + i.monto, 0), 0));
 
     const filteredGroups = paymentGroups.filter(g => {
-        if (filter === 'todos') return true;
-        if (filter === 'pendiente') return g.items.some(i => i.estado === 'pendiente');
-        if (filter === 'pagado') return g.items.some(i => i.estado === 'pagado') || g.historialDepositos.length > 0;
-        return false;
+        // Filtro por estado
+        const matchesStatus = filter === 'todos' ||
+                            (filter === 'pendiente' && g.items.some(i => i.estado === 'pendiente')) ||
+                            (filter === 'pagado' && (g.items.some(i => i.estado === 'pagado') || g.historialDepositos.length > 0));
+        
+        if (!matchesStatus) return false;
+
+        // Filtro por termo de búsqueda (Multibuscador)
+        if (!searchTerm) return true;
+        const term = searchTerm.toLowerCase();
+        return (
+            (g.ticketNum || '').toLowerCase().includes(term) ||
+            (g.cliente || '').toLowerCase().includes(term) ||
+            (g.sede || '').toLowerCase().includes(term) ||
+            (g.tecnico?.nombre || '').toLowerCase().includes(term)
+        );
     });
 
     const TIPO_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
@@ -996,19 +1009,59 @@ export default function PaymentsPage() {
                             {filteredGroups.length} {filteredGroups.length === 1 ? 'registro' : 'registros'}
                         </span>
                     </h2>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        {(['todos', 'pendiente', 'pagado'] as const).map(f => (
-                            <button key={f} onClick={() => setFilter(f)}
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        {/* 🔍 MULTIBUSCADOR */}
+                        <div style={{ 
+                            position: 'relative', 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            background: '#F1F5F9',
+                            borderRadius: '12px',
+                            padding: '4px 12px',
+                            border: '1px solid #E2E8F0',
+                            width: '300px'
+                        }}>
+                            <Search size={16} color="#64748B" style={{ marginRight: '8px' }} />
+                            <input 
+                                type="text"
+                                placeholder="Buscar ticket, técnico o cliente..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{
-                                    padding: '7px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-                                    fontWeight: 700, fontSize: '0.8rem', transition: 'all 0.2s',
-                                    background: filter === f ? '#3B82F6' : '#F1F5F9',
-                                    color: filter === f ? 'white' : '#64748B',
-                                    boxShadow: filter === f ? '0 4px 10px rgba(59,130,246,0.3)' : 'none'
-                                }}>
-                                {f.charAt(0).toUpperCase() + f.slice(1)}
-                            </button>
-                        ))}
+                                    border: 'none',
+                                    background: 'transparent',
+                                    fontSize: '0.85rem',
+                                    color: '#1E293B',
+                                    fontWeight: 500,
+                                    outline: 'none',
+                                    width: '100%',
+                                    padding: '6px 0'
+                                }}
+                            />
+                            {searchTerm && (
+                                <X 
+                                    size={14} 
+                                    color="#94A3B8" 
+                                    style={{ cursor: 'pointer', marginLeft: '6px' }} 
+                                    onClick={() => setSearchTerm('')} 
+                                />
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px', padding: '4px', background: '#F1F5F9', borderRadius: '14px' }}>
+                            {(['todos', 'pendiente', 'pagado'] as const).map(f => (
+                                <button key={f} onClick={() => setFilter(f)}
+                                    style={{
+                                        padding: '7px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                                        fontWeight: 800, fontSize: '0.75rem', transition: 'all 0.2s',
+                                        background: filter === f ? 'white' : 'transparent',
+                                        color: filter === f ? '#2563EB' : '#64748B',
+                                        boxShadow: filter === f ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                                    }}>
+                                    {f === 'todos' ? 'Todos' : f === 'pendiente' ? '⏳ Pendientes' : '✅ Pagados'}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 

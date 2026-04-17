@@ -71,8 +71,12 @@ export const normalizeTicket = (t: any) => {
         };
     }
 
+    // Combinar todo en un objeto final
+    // Importante: No dejar que el spread (...realMetadata) al final sobreescriba campos normalizados
     return {
         ...t,
+        ...realMetadata, // Spread inicial para capturar campos extras
+        id: t.id, // Asegurar ID del nivel superior
         estadoId: normalizeStateId(
             t.status_id || t.estadoId || realMetadata.estadoId || "nuevo"
         ),
@@ -91,22 +95,22 @@ export const normalizeTicket = (t: any) => {
         createdAt:
             t.created_at || t.createdAt || t.fechaCreacion || realMetadata.createdAt,
         costoManoObra: round2(
-            t.labor_cost || t.costoManoObra || realMetadata.costoManoObra || 0
+            Number(t.labor_cost || t.costoManoObra || realMetadata.costoManoObra || 0)
         ),
         costoMateriales: round2(
-            t.materials_cost ||
+            Number(t.materials_cost ||
             t.costoMateriales ||
             realMetadata.costoMateriales ||
-            0
+            0)
         ),
         costoVisita: round2(
-            t.visit_cost || t.costoVisita || realMetadata.costoVisita || 0
+            Number(t.visit_cost || t.costoVisita || realMetadata.costoVisita || 0)
         ),
         montoFinal: round2(
-            t.total_quoted_amount ||
+            Number(t.total_quoted_amount ||
             t.montoFinal ||
             realMetadata.montoFinal ||
-            0
+            0)
         ),
         cliente,
         sede,
@@ -116,8 +120,7 @@ export const normalizeTicket = (t: any) => {
         creadoPor: t.created_by || t.creadoPor || realMetadata.creadoPor,
         diagnostico:
             t.diagnosis || t.diagnostico || realMetadata.diagnostico,
-        metadata: realMetadata,
-        ...realMetadata,
+        metadata: realMetadata, // Objeto de metadata limpio (sin anidamiento excesivo)
     };
 };
 
