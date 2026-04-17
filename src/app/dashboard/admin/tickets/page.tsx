@@ -141,10 +141,13 @@ export default function TicketsPage() {
 
     const filterByView = useCallback((t: any, mode: string) => {
         const sid = normalizeStateId(t.estadoId);
+        const term = searchTerm.toLowerCase();
         const matchesSearch = !searchTerm ||
-            t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (t.cliente?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (t.numeroTicketCliente || '').toLowerCase().includes(searchTerm.toLowerCase());
+            t.id.toLowerCase().includes(term) ||
+            (t.numeroTicketCliente || '').toLowerCase().includes(term) ||
+            (t.cliente?.nombre || '').toLowerCase().includes(term) ||
+            (t.sede?.nombre || '').toLowerCase().includes(term) ||
+            (t.tecnico?.nombre || '').toLowerCase().includes(term);
 
         if (!matchesSearch) return false;
 
