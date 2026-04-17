@@ -450,9 +450,7 @@ export const ticketsAPI = {
 
     async getForPayments() {
         const { data, error } = await supabase
-            .from('tickets')
-            .select('id, status_id, service_type, description, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, client_id, branch_id, technician_id, gestora_id, metadata, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
-            .order('created_at', { ascending: false });
+            .rpc('get_payment_tickets_v2');
 
         if (error) throw error;
         return data;

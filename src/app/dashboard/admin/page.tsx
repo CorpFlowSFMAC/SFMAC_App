@@ -187,12 +187,12 @@ export default function AdminDashboard() {
         // Pipeline: Cotizaciones en curso (aún no aprobadas)
         const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente"];
         const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.estadoId)));
-        const totalPipeline = pipelineTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || 0), 0);
+        const totalPipeline = pipelineTickets.reduce((s, t) => s + (t.montoFinal || parseFloat(t.total_quoted_amount || 0)), 0);
 
         // Presupuestos Aprobados: Ya aceptados por el cliente, en ejecución o por liquidar
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.estadoId)));
-        const totalAprobados = approvedTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || 0), 0);
+        const totalAprobados = approvedTickets.reduce((s, t) => s + (t.montoFinal || parseFloat(t.total_quoted_amount || 0)), 0);
 
         // El lucro cesante es la utilidad proyectada que aún no se cobra (aprox 45% de los presupuestos aprobados que están detenidos)
         const lucro = totalAprobados * 0.45;
@@ -205,7 +205,7 @@ export default function AdminDashboard() {
             "+48h": todosPendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= 48),
         };
 
-        const calcAmount = (arr: any[]) => arr.reduce((s: number, t: any) => s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
+        const calcAmount = (arr: any[]) => arr.reduce((s: number, t: any) => s + (t.montoFinal || parseFloat(t.total_quoted_amount || 0)), 0);
 
         return {
             tickets: todosPendientes,
