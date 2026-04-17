@@ -894,7 +894,7 @@ export default function PaymentsPage() {
                match(g.cliente) ||
                match(g.sede) ||
                match(g.tecnico?.nombre) ||
-               match(g.descripcion);
+               match(g.descripcion || "");
     });
 
     const TIPO_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
