@@ -1346,33 +1346,48 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
 
-    const totalCosts = ticketCosts.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
-    const paymentsSummary = ticketCosts
-        .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado')
-        .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+    const totalCosts = ticketCosts.reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
     
-    // Compatibilidad: Sumar historial antiguo, adelantos clasicos y costo de visita (movilidad)
-    const historyArray = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).filter((p: any) => p && p.estado !== 'anulado');
-    const oldPaymentsSum = historyArray.reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
+    // MODERNO: Pagos registrados en ticket_costs (Source of Truth)
+    const paidModernArr = ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado');
+    const paymentsSummary = paidModernArr.reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
     
-    // Detección robusta de depósitos previos para evitar sobrepagos o inflaciones
-    const hasPaidMobility = historyArray.some((p: any) => p.tipo === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita"));
-    const hasRegisteredAdelanto = historyArray.some((p: any) => p.tipo === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto"));
+    // LEGACY: Historial antiguo con DEDUPLICACIÓN inteligente
+    const rawHistory = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).filter((p: any) => p && p.estado !== 'anulado');
+    
+    // Filtrar de legacy lo que ya está en moderno (por monto y categoría)
+    const legacyPaymentsFiltered = rawHistory.filter((h: any) => {
+        const hMonto = round2(h.monto || 0);
+        if (hMonto <= 0) return false;
+        const existsInModern = paidModernArr.some((m: any) => {
+            const mMonto = round2(m.monto || 0);
+            return Math.abs(hMonto - mMonto) < 0.01 && (h.tipo === m.categoria || h.tipo === `Gasto: ${m.categoria}`);
+        });
+        return !existsInModern;
+    });
+
+    const oldPaymentsSum = legacyPaymentsFiltered.reduce((sum: number, p: any) => sum + round2(parseFloat(p.monto) || 0), 0);
+    
+    // Detección para compatibilidad con flujos automáticos
+    const hasPaidMobility = rawHistory.some((p: any) => p.tipo === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita"));
+    const hasRegisteredAdelanto = rawHistory.some((p: any) => p.tipo === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto"));
 
     const hasVisitVoucher = !!(ticketData.voucherVisita || ticketData.visit_voucher);
     const isVisitConfirmed = !!(ticketData.visit_payment_confirmed || ticketData.visitPaymentConfirmed || ticketData.fechaPagoVisita);
     
-    const visitPayment = ((isVisitConfirmed || hasVisitVoucher) && !hasPaidMobility) ? parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0) : 0;
-    const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto && !hasRegisteredAdelanto) ? parseFloat(ticketData.montoAdelanto) : 0;
+    const visitPayment = ((isVisitConfirmed || hasVisitVoucher) && !hasPaidMobility) ? round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0)) : 0;
+    const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto && !hasRegisteredAdelanto) ? round2(parseFloat(ticketData.montoAdelanto)) : 0;
     
-    // REFUERZO: Todos los costos registrados en ticket_costs que NO sean adelantos/visitas se consideran costos adicionales pactados (Materiales, Logística, etc.)
+    // REFUERZO: Costos adicionales pactados
     const extraPactedCosts = ticketCosts
         .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita')
-        .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
 
-    const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + extraPactedCosts);
+    const jobCostBase = round2(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + extraPactedCosts);
     const techPactedTotal = jobCostBase > 0 ? jobCostBase : visitPayment;
-    const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance;
+
+    // SUMA UNIFICADA Y SIN DUPLICADOS
+    const unifiedPaymentsSum = round2(paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance);
 
     const isClientTicketFormatValid = useCallback((num?: string) => {
         if (!num || num.trim() === "") return false;
@@ -1572,7 +1587,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 onOpenMaterials={() => setShowMaterialsModal(true)} 
                                 costos={ticketCosts}
                             />
-                            <PaymentHistoryBar ticket={ticketData} />
+                            <PaymentHistoryBar ticket={ticketData} costos={ticketCosts} />
                             <UnifiedEvidenceBar ticket={ticketData} />
                             <DocumentationSummaryBar ticket={ticketData} />
                         </div>
@@ -2787,8 +2802,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </div>
                                                                 )}
 
-                                                                {/* Pagos históricos (historyArray unificado arriba) */}
-                                                                {historyArray.map((p: any, i: number) => (
+                                                                {/* Pagos históricos (Deduplicados arriba) */}
+                                                                {legacyPaymentsFiltered.map((p: any, i: number) => (
                                                                     <div key={`old-${i}`} className={styles.depositEntry} style={{ opacity: 0.9 }}>
                                                                         <div className={styles.depositLabel}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

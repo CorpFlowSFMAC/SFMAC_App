@@ -1287,13 +1287,33 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
 // PAYMENT HISTORY BAR — visible para Admin Y Gestora
 // Muestra todos los pagos confirmados por el admin con vouchers
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export function PaymentHistoryBar({ ticket }: { ticket: any }) {
+export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: any[] }) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
-    const pagos: any[] = ticket.historialPagosTecnico || [];
-    if (pagos.length === 0) return null;
+    // Fuente Moderna
+    const paidModernArr = (costos || []).filter(c => c.estado_pago === 'pagado');
+    
+    // Fuente Legacy con Deduplicación
+    const history = ticket.historialPagosTecnico || [];
+    const legacyPaymentsFiltered = history.filter((h: any) => {
+        const hMonto = round2(h.monto || 0);
+        if (hMonto <= 0) return false;
+        const isMirrorOfModern = paidModernArr.some((m: any) => {
+            const mMonto = round2(m.monto || 0);
+            return Math.abs(hMonto - mMonto) < 0.01 && (h.tipo === m.categoria || h.tipo === `Gasto: ${m.categoria}`);
+        });
+        return !isMirrorOfModern;
+    });
 
-    const totalPagado = pagos.reduce((sum: number, p: any) => sum + (p.monto || 0), 0);
+    const combinedPagos = [...legacyPaymentsFiltered, ...paidModernArr].sort((a, b) => {
+        const dateA = new Date(a.fecha || a.updated_at).getTime();
+        const dateB = new Date(b.fecha || b.updated_at).getTime();
+        return dateB - dateA; // Orden descendente por fecha
+    });
+
+    if (combinedPagos.length === 0) return null;
+
+    const totalPagado = combinedPagos.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
 
     const getTipoBadge = (tipo: string) => {
         const map: Record<string, { bg: string; color: string; label: string }> = {
@@ -1302,17 +1322,16 @@ export function PaymentHistoryBar({ ticket }: { ticket: any }) {
             'Liquidación Final': { bg: '#D1FAE5', color: '#065F46', label: 'Liquidación' },
             'Movilidad / Visita': { bg: '#EDE9FE', color: '#5B21B6', label: 'Movilidad' },
         };
-        return map[tipo] || { bg: '#F1F5F9', color: '#475569', label: tipo || 'Pago' };
+        const cleanTipo = tipo.replace('Gasto: ', '');
+        return map[cleanTipo] || { bg: '#F1F5F9', color: '#475569', label: cleanTipo || 'Pago' };
     };
 
     const resolveVoucher = (p: any): string => {
-        if (p.voucher && p.voucher.startsWith('data:image')) return p.voucher;
-        if (p.voucherRef) {
-            if (p.voucherRef.startsWith('data:image')) return p.voucherRef;
-            if (typeof window === 'undefined') return p.voucherRef || '';
-            return localStorage.getItem(p.voucherRef) || p.voucherRef || '';
-        }
-        return '';
+        const src = p.url_comprobante || p.voucher || p.voucherRef;
+        if (!src) return "";
+        if (src.startsWith('data:image')) return src;
+        if (typeof window === 'undefined') return src;
+        return localStorage.getItem(src) || src;
     };
 
     return (
