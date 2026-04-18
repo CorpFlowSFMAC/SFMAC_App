@@ -1160,8 +1160,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         link.click();
     };
 
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     const bringToFront = () => {
-        setZIndex(Date.now() % 10000000);
+        // Solo actualizar si no es ya el z-index más alto (estimado)
+        // para evitar re-renders innecesarios que causan parpadeo
+        const currentMax = parseInt(localStorage.getItem('max_z_index') || '1000000');
+        if (zIndex >= currentMax && zIndex > 1000000) return; 
+
+        const nextZ = currentMax + 1;
+        setZIndex(nextZ);
+        localStorage.setItem('max_z_index', nextZ.toString());
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -1358,7 +1370,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             <div
                 ref={windowRef}
-                className={`${styles.window} ${isMaximized ? styles.maximized : ''} ${isMinimized ? styles.minimized : ''}`}
+                className={`${styles.window} ${!isMounted ? styles.windowMounting : ''} ${isMaximized ? styles.maximized : ''} ${isMinimized ? styles.minimized : ''}`}
                 onMouseDown={bringToFront}
                 style={
                     isMinimized
