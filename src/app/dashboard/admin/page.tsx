@@ -17,6 +17,7 @@ const SLA_HOURS = 72;
 function hoursAgo(d: string) { return (Date.now() - new Date(d).getTime()) / 3_600_000; }
 function fmt(n: number) { return n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtInt(n: number) { return n.toLocaleString("es-PE"); }
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Estado de semáforo global
 type Light = "VERDE" | "AMBAR" | "ROJO";
@@ -161,10 +162,13 @@ export default function AdminDashboard() {
 
         // Utilidad estimada sobre lo cerrado (para el gráfico de margen)
         const costosCerrados = closed.reduce((s: number, t: any) => {
-            return s + (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0) + parseFloat(t.costoVisita || 0));
+            const mo = parseFloat(t.costoManoObra || t.labor_cost || 0);
+            const mat = parseFloat(t.costoMateriales || t.materials_cost || 0);
+            const vis = parseFloat(t.costoVisita || t.visit_cost || 0);
+            return s + (mo + mat + vis);
         }, 0);
 
-        const utilidad = ingresos - costosCerrados;
+        const utilidad = round2(ingresos - costosCerrados);
         const margen = ingresos > 0 ? (utilidad / ingresos) * 100 : 0;
         const ratio = inversion > 0 ? (ingresos - inversion) / inversion : 0;
 
@@ -172,14 +176,17 @@ export default function AdminDashboard() {
         const byService = SERVICE_TYPES.map(s => {
             const st = closed.filter((t: any) => t.tipoServicio === s.id);
             const ing = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
-            const cost = st.reduce((acc: number, t: any) => 
-                acc + (parseFloat(t.costoManoObra || 0) + parseFloat(t.costoMateriales || 0) + parseFloat(t.costoVisita || 0))
-            , 0);
+            const cost = st.reduce((acc: number, t: any) => {
+                const mo = parseFloat(t.costoManoObra || t.labor_cost || 0);
+                const mat = parseFloat(t.costoMateriales || t.materials_cost || 0);
+                const vis = parseFloat(t.costoVisita || t.visit_cost || 0);
+                return acc + (mo + mat + vis);
+            }, 0);
             const m = ing > 0 ? ((ing - cost) / ing) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ing, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
-        return { inversion, ingresos, utilidad, margen, ratio, closed: closed.length, total: tickets.length, byService };
+        return { inversion: round2(inversion), ingresos: round2(ingresos), utilidad, margen, ratio, closed: closed.length, total: tickets.length, byService };
     }, [tickets, dateRange]);
 
     // ── MÓDULO 2: Tesorería / Pendientes ───────
@@ -194,18 +201,26 @@ export default function AdminDashboard() {
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.estadoId)));
         const totalAprobados = approvedTickets.reduce((s, t) => s + (t.montoFinal || parseFloat(t.total_quoted_amount || 0)), 0);
 
-        // El lucro cesante es la utilidad proyectada que aún no se cobra (aprox 45% de los presupuestos aprobados que están detenidos)
-        const lucro = totalAprobados * 0.45;
+        // El lucro cesante es la utilidad proyectada que aún no se cobra
+        // Cálculo EXACTO: (Monto Total - Costos Operativos) de tickets aprobados
+        const lucro = approvedTickets.reduce((s, t) => {
+            const total = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
+            const costos = parseFloat(t.costoManoObra || t.labor_cost || 0) + 
+                           parseFloat(t.costoMateriales || t.materials_cost || 0) + 
+                           parseFloat(t.costoVisita || t.visit_cost || 0);
+            return s + (total - costos);
+        }, 0);
 
         // Aging de todos los pendientes (Pipeline + Aprobados)
+        // PRIORIDAD: updated_at (Tiempo desde el último cambio de estado — Bottleneck real)
         const todosPendientes = [...pipelineTickets, ...approvedTickets];
         const aging = {
-            "0-24h": todosPendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") < 24),
-            "24-48h": todosPendientes.filter((t: any) => { const h = hoursAgo(t.createdAt || t.created_at || ""); return h >= 24 && h < 48; }),
-            "+48h": todosPendientes.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= 48),
+            "0-24h": todosPendientes.filter((t: any) => hoursAgo(t.updated_at || t.createdAt || t.created_at || "") < 24),
+            "24-48h": todosPendientes.filter((t: any) => { const h = hoursAgo(t.updated_at || t.createdAt || t.created_at || ""); return h >= 24 && h < 48; }),
+            "+48h": todosPendientes.filter((t: any) => hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48),
         };
 
-        const calcAmount = (arr: any[]) => arr.reduce((s: number, t: any) => s + (t.montoFinal || parseFloat(t.total_quoted_amount || 0)), 0);
+        const calcAmount = (arr: any[]) => round2(arr.reduce((s: number, t: any) => s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0));
 
         return {
             tickets: todosPendientes,
@@ -221,6 +236,14 @@ export default function AdminDashboard() {
                 { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmount(aging["+48h"]), color: "#EF4444" },
             ],
             bloqueados48: aging["+48h"].length,
+            // Bottlenecks Dinámicos
+            bottlenecks: [
+                { label: "Esperando Cotización", count: pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.estadoId))).length, color: "#8B5CF6" },
+                { label: "Esperando Aprobación", count: pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.estadoId))).length, color: "#3B82F6" },
+                { label: "Esperando Adelanto", count: approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.estadoId)) && !(t.metadata?.historialPagosTecnico?.length)).length, color: "#F59E0B" },
+                { label: "En Ejecución", count: approvedTickets.filter(t => normalizeStateId(t.estadoId) === "en_ejecucion").length, color: "#10B981" },
+                { label: "Pendiente Liquidar", count: approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado"].includes(normalizeStateId(t.estadoId))).length, color: "#64748B" },
+            ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
     }, [tickets]);
 
@@ -273,9 +296,9 @@ export default function AdminDashboard() {
             })
             .sort((a: any, b: any) => b._totalAdelantado - a._totalAdelantado);
 
-        const totalCapital = ticketsConAdelantos.reduce((s: number, t: any) => s + t._totalAdelantado, 0);
+        const totalCapital = round2(ticketsConAdelantos.reduce((s: number, t: any) => s + t._totalAdelantado, 0));
         const enRiesgo = ticketsConAdelantos.filter((t: any) => t._isRiesgo);
-        const totalEnRiesgo = enRiesgo.reduce((s: number, t: any) => s + t._totalAdelantado, 0);
+        const totalEnRiesgo = round2(enRiesgo.reduce((s: number, t: any) => s + t._totalAdelantado, 0));
 
         return { tickets: ticketsConAdelantos, total: totalCapital, enRiesgo: enRiesgo.length, totalEnRiesgo };
     }, [tickets, gestoras]);
@@ -551,25 +574,27 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Col 3: Causa raíz simulada */}
+                {/* Col 3: Causa raíz DINÁMICA */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
-                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.75rem" }}>Causa Raíz de Pausa</div>
-                    {[
-                        { label: "Falta de sustento", pct: 38, color: "#EF4444" },
-                        { label: "Error de datos", pct: 24, color: "#F59E0B" },
-                        { label: "Aprobación presupuesto", pct: 21, color: "#8B5CF6" },
-                        { label: "Cliente sin respuesta", pct: 17, color: "#64748B" },
-                    ].map(c => (
-                        <div key={c.label} style={{ marginBottom: "0.6rem" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.73rem", marginBottom: "3px" }}>
-                                <span style={{ color: "rgba(255,255,255,0.6)" }}>{c.label}</span>
-                                <span style={{ fontWeight: 800, color: c.color }}>{c.pct}%</span>
-                            </div>
-                            <div style={{ height: "5px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
-                                <div style={{ height: "100%", width: `${c.pct}%`, background: c.color, borderRadius: "999px", transition: "width 0.8s ease" }} />
-                            </div>
-                        </div>
-                    ))}
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.75rem" }}>Cuellos de Botella (Tickets)</div>
+                    {tesoreria.bottlenecks.length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '0.8rem' }}>Sin cuellos de botella detectados</div>
+                    ) : (
+                        tesoreria.bottlenecks.map(c => {
+                            const pct = (c.count / (tesoreria.total || 1)) * 100;
+                            return (
+                                <div key={c.label} style={{ marginBottom: "0.6rem" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.73rem", marginBottom: "3px" }}>
+                                        <span style={{ color: "rgba(255,255,255,0.6)" }}>{c.label}</span>
+                                        <span style={{ fontWeight: 800, color: c.color }}>{c.count}</span>
+                                    </div>
+                                    <div style={{ height: "5px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
+                                        <div style={{ height: "100%", width: `${pct}%`, background: c.color, borderRadius: "999px", transition: "width 0.8s ease" }} />
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
             </div>
 
