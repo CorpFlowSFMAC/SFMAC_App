@@ -208,6 +208,8 @@ export default function PaymentsPage() {
             setTickets(processed);
         } catch (err) {
             console.error('[Payments] Error fetching tickets:', err);
+            // Mostrar error amigable al usuario (se puede usar un toast o estado de error)
+            alert("Error al conectar con el servidor. Por favor, reintente en unos momentos.");
         } finally {
             setLoading(false);
         }
@@ -1129,11 +1131,29 @@ export default function PaymentsPage() {
                                 {filteredGroups.length === 0 ? (
                                     <tr>
                                         <td colSpan={5}>
-                                            <div className={styles.emptyState} style={{ padding: '60px 20px' }}>
-                                                <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <CheckCircle2 size={32} color="#10B981" />
+                                            <div className={styles.emptyState} style={{ padding: '80px 20px', textAlign: 'center' }}>
+                                                <div style={{ 
+                                                    width: '80px', height: '80px', borderRadius: '50%', background: '#F1F5F9',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+                                                }}>
+                                                    <Search size={32} color="#94A3B8" />
                                                 </div>
-                                                <p style={{ color: '#64748B', fontWeight: 600 }}>No hay solicitudes en esta categoría.</p>
+                                                <h3 style={{ margin: '0 0 8px', color: '#1E293B', fontWeight: 700 }}>No hay solicitudes</h3>
+                                                <p style={{ color: '#64748B', maxWidth: '340px', margin: '0 auto', fontSize: '0.9rem' }}>
+                                                    {searchTerm 
+                                                        ? `No se encontraron resultados para "${searchTerm}". Intenta con otros términos.`
+                                                        : filter === 'todos' 
+                                                            ? 'Actualmente no hay solicitudes de pago registradas en el sistema.'
+                                                            : `No se encontraron solicitudes con el filtro "${filter}".`}
+                                                </p>
+                                                {(searchTerm || filter !== 'todos') && (
+                                                    <button 
+                                                        onClick={() => { setSearchTerm(''); setFilter('todos'); }}
+                                                        style={{ marginTop: '20px', color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}
+                                                    >
+                                                        Limpiar filtros
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
