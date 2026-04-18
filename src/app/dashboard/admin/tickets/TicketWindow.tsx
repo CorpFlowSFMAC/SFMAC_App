@@ -408,7 +408,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             labor_cost: parseFloat(sourceForPayments.costoManoObra || 0),
             materials_cost: parseFloat(sourceForPayments.costoMateriales || 0),
             visit_cost: parseFloat(sourceForPayments.costoVisita || 0),
-            total_quoted_amount: parseFloat(sourceForPayments.montoFinal || 0),
+            // REFUERZO: Usar siempre el estado local de cotización para evitar reseteos
+            total_quoted_amount: parseFloat(montoTotalCotizado || sourceForPayments.montoFinal || 0),
             technician_id: tecnico?.id || businessData.technician_id || ticket.technician_id,
             gestora_id: businessData.gestora?.id || ticket.gestora?.id || ticket.gestora_id,
             is_sla_paused: businessData.pausadoSLA ?? ticket.is_sla_paused,
@@ -427,7 +428,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 costoManoObra: parseFloat(sourceForPayments.costoManoObra || 0),
                 costoMateriales: parseFloat(sourceForPayments.costoMateriales || 0),
                 costoVisita: parseFloat(sourceForPayments.costoVisita || 0),
-                montoFinal: parseFloat(sourceForPayments.montoFinal || 0),
+                montoFinal: parseFloat(montoTotalCotizado || sourceForPayments.montoFinal || 0),
+                partidas: partidasCotización || sourceForPayments.partidas || [],
                 metadata: undefined, // Evitar anidación infinita
                 adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
                 fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
@@ -763,7 +765,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             fechaReactivacion: new Date().toISOString(),
             modificacionAutorizada: false,
             costoAjustadoPostAprobación: false,
-            omitirAjusteTécnico: false
+            omitirAjusteTécnico: false,
+            // BLINDAJE: Asegurar que el monto aprobado se preserve en esta transición
+            montoFinal: montoTotalCotizado,
+            partidas: partidasCotización
         };
         setTicketData(approved);
         syncToSupabase(approved);
@@ -805,7 +810,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const updated = {
             ...ticketData,
             estadoId: "en_ejecucion",
-            fechaInicioEjecucion: new Date().toISOString()
+            fechaInicioEjecucion: new Date().toISOString(),
+            // BLINDAJE: Preservar datos financieros durante la transición
+            montoFinal: montoTotalCotizado,
+            partidas: partidasCotización
         };
         setTicketData(updated);
     };
@@ -977,8 +985,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleRequestFinalLiquidation = async () => {
-        // Base de cálculo unificada (MO + Mat)
-        const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+        // REFUERZO: Incluir costos extras (materiales/logistica) en el calculo de la solicitud
+        const extraPactedCosts = ticketCosts
+            .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita')
+            .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+        
+        const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + extraPactedCosts);
         const costRef = jobCostBase > 0 ? jobCostBase : visitPayment;
         
         const amount = Math.max(0, costRef - unifiedPaymentsSum);
@@ -995,6 +1007,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 ...ticketData,
                 estadoId: newState,
                 status_id: newState,
+                // BLINDAJE: El presupuesto DEBE persistirse al solicitar liquidación
+                montoFinal: montoTotalCotizado,
+                partidas: partidasCotización,
                 solicitudLiquidacion: {
                     monto: amount,
                     fecha: new Date().toISOString(),
@@ -1028,7 +1043,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             gastos: gastos,
             evidenciasEjecucion: evidenciasEjecucion,
             evidenciasCampo: ticketData.evidenciasCampo || [],
-            evidencias: ticketData.evidencias || []
+            evidencias: ticketData.evidencias || [],
+            // BLINDAJE: Mantener el monto aprobado
+            montoFinal: montoTotalCotizado,
+            partidas: partidasCotización
         };
         setTicketData(updated);
         showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
@@ -1038,6 +1056,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const updated = {
             ...ticketData,
             estadoId: "por_liquidar",
+            // BLINDAJE: Mantener monto al aprobar excepción
+            montoFinal: montoTotalCotizado,
+            partidas: partidasCotización,
             metadata: {
                 ...ticketData.metadata,
                 excepcionPresupuestoAprobada: true,
@@ -1280,7 +1301,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const visitPayment = ((isVisitConfirmed || hasVisitVoucher) && !hasPaidMobility) ? parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0) : 0;
     const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto && !hasRegisteredAdelanto) ? parseFloat(ticketData.montoAdelanto) : 0;
     
-    const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
+    // REFUERZO: Todos los costos registrados en ticket_costs que NO sean adelantos/visitas se consideran costos adicionales pactados (Materiales, Logística, etc.)
+    const extraPactedCosts = ticketCosts
+        .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita')
+        .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+
+    const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + extraPactedCosts);
     const techPactedTotal = jobCostBase > 0 ? jobCostBase : visitPayment;
     const unifiedPaymentsSum = paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance;
 
@@ -2559,27 +2585,29 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
                                                     
-                                                    <div style={{ display: 'flex', gap: '12px' }}>
-                                                        <button 
-                                                            onClick={handleApproveBudgetExceed}
-                                                            style={{ 
-                                                                background: '#EF4444', 
-                                                                color: 'white', 
-                                                                border: 'none', 
-                                                                padding: '10px 20px', 
-                                                                borderRadius: '10px', 
-                                                                fontSize: '13px', 
-                                                                fontWeight: 700,
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: '8px'
-                                                            }}
-                                                        >
-                                                            <ThumbsUp size={16} />
-                                                            APROBAR EXCEPCIÓN Y LIBERAR PAGO
-                                                        </button>
-                                                    </div>
+                                            {isAdmin && (
+                                                <div style={{ display: 'flex', gap: '12px' }}>
+                                                    <button 
+                                                        onClick={handleApproveBudgetExceed}
+                                                        style={{ 
+                                                            background: '#EF4444', 
+                                                            color: 'white', 
+                                                            border: 'none', 
+                                                            padding: '10px 20px', 
+                                                            borderRadius: '10px', 
+                                                            fontSize: '13px', 
+                                                            fontWeight: 700,
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '8px'
+                                                        }}
+                                                    >
+                                                        <ThumbsUp size={16} />
+                                                        APROBAR EXCEPCIÓN Y LIBERAR PAGO
+                                                    </button>
+                                                </div>
+                                            )}
                                                 </div>
                                             )}
                                             <div className={styles.liquidationCardPremium}>
@@ -2741,6 +2769,25 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <span style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 500, maxWidth: '400px', textAlign: 'center' }}>
                                                         Registre el depósito final en el panel de <strong>Tesorería</strong> inferior para cerrar este ticket definitivamente.
                                                     </span>
+                                                    {isAdmin && (techPactedTotal - unifiedPaymentsSum) <= 0.01 && (
+                                                        <button 
+                                                            onClick={handleCloseInternal}
+                                                            className={styles.approveExceedBtn}
+                                                            style={{
+                                                                marginTop: '15px',
+                                                                background: '#10B981',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                padding: '12px 24px',
+                                                                borderRadius: '10px',
+                                                                fontWeight: 700,
+                                                                cursor: 'pointer',
+                                                                boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)'
+                                                            }}
+                                                        >
+                                                            CONFIRMAR CIERRE SIN SALDO PENDIENTE
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
 

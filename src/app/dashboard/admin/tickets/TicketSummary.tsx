@@ -1075,12 +1075,12 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
 
     const visitCost = round2(ticket.costoVisita || ticket.costoPasaje || 0);
     
-    // Sumar compras de materiales adicionales registradas en el desglose
-    const materialPurchases = (costos || [])
-        .filter(c => c.categoria === 'Materiales')
+    // Sumar todos los gastos adicionales registrados (Materiales, Logística, etc.) que no sean adelantos o visitas
+    const extraCosts = (costos || [])
+        .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita')
         .reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
         
-    const jobCostBase = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0) + materialPurchases);
+    const jobCostBase = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0) + extraCosts);
     // El costo de referencia (Costo Operativo) es lo pactado. 
     // Si hay trabajo, usamos MO+Mat. Si solo es visita, usamos el costo de visita.
     const costoReferencia = jobCostBase > 0 ? jobCostBase : visitCost;

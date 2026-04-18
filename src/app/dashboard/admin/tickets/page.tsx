@@ -65,7 +65,7 @@ export default function TicketsPage() {
     // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("active");
-    const [statFilter, setStatFilter] = useState<"all" | "nuevos" | "enProceso">("all");
+    const [statFilter, setStatFilter] = useState<"all" | "nuevos" | "enProceso" | "revision">("all");
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
     const [isAdminState, setIsAdminState] = useState<boolean>(false);
 
@@ -226,7 +226,7 @@ export default function TicketsPage() {
 
     // Estado inicial de cada ticket: "nuevo" o "asignado_a_tecnico" o estados de inicio de proceso
     const NUEVOS_STATES = ["nuevo", "pendiente", "asignado_a_tecnico"];
-    const EN_PROCESO_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado"];
+    const EN_PROCESO_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
 
     const stats = React.useMemo(() => {
         const activos = ticketsForMe.filter(t => filterByView(t, "active"));
@@ -236,6 +236,7 @@ export default function TicketsPage() {
             completados: ticketsForMe.filter(t => filterByView(t, "closed")).length,
             nuevos: activos.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId))).length,
             enProceso: activos.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId))).length,
+            revisiones: activos.filter(t => normalizeStateId(t.estadoId) === "requiere_revision_admin").length,
             activosTotal: activos.length,
             _nuevosList: activos.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId))),
             _enProcesoList: activos.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId))),
@@ -249,6 +250,9 @@ export default function TicketsPage() {
         }
         if (viewMode === "active" && statFilter === "enProceso") {
             return base.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId)));
+        }
+        if (viewMode === "active" && statFilter === "revision") {
+            return base.filter(t => normalizeStateId(t.estadoId) === "requiere_revision_admin");
         }
         return base;
     }, [ticketsForMe, filterByView, viewMode, statFilter]);
@@ -350,6 +354,30 @@ export default function TicketsPage() {
                         <span className={styles.statLabel}>En proceso</span>
                     </div>
                 </div>
+
+                {isAdminState && (
+                    <div 
+                        className={styles.statCard} 
+                        style={{ 
+                            '--card-color': '#EF4444',
+                            cursor: 'pointer',
+                            outline: viewMode === 'active' && statFilter === 'revision' ? '2px solid #EF4444' : 'none',
+                            transform: viewMode === 'active' && statFilter === 'revision' ? 'scale(1.03)' : 'scale(1)',
+                            transition: 'all 0.2s',
+                            boxShadow: stats.revisiones > 0 ? '0 0 15px rgba(239, 68, 68, 0.4)' : 'none'
+                        } as any}
+                        onClick={() => { setViewMode('active'); setStatFilter(statFilter === 'revision' ? 'all' : 'revision'); }}
+                        title="Ver tickets que requieren aprobación"
+                    >
+                        <div className={styles.statIcon} style={{ animation: stats.revisiones > 0 ? 'pulseRed 2s infinite ease-in-out' : 'none' }}>
+                            <AlertTriangle size={16} />
+                        </div>
+                        <div className={styles.statContent}>
+                            <span className={styles.statValue}>{stats.revisiones}</span>
+                            <span className={styles.statLabel}>Revisiones</span>
+                        </div>
+                    </div>
+                )}
 
                 <div 
                     className={styles.statCard} 
@@ -618,6 +646,17 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                         >
                             <FileEdit size={12} />
                             <span>REQ. CAMBIO</span>
+                        </div>
+                    )}
+
+                    {ticket.estadoId === 'requiere_revision_admin' && (
+                        <div 
+                            className={styles.modificacionTag}
+                            style={{ background: '#FEF2F2', border: '1.5px solid #FCA5A5', color: '#B91C1C' }}
+                            title="Exceso de presupuesto - Requiere aprobación de Administrador"
+                        >
+                            <AlertTriangle size={12} />
+                            <span>EXCESO PRESUP.</span>
                         </div>
                     )}
                 </div>
