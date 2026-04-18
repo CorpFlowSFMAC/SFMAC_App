@@ -104,6 +104,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
     const [myProfileId, setMyProfileId] = useState<string | null>(null);
+    const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
 
     useEffect(() => {
         const fetchMe = async () => {
@@ -169,30 +170,32 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     ? 'en_inspeccion'
                     : rawEstadoId;
 
-                setTicketData((prev: any) => ({
-                    ...prev, ...fullTicket, ...meta,
-                    metadata: meta,
-                    estadoId: corregidoEstadoId,
-                    status_id: corregidoEstadoId,
-                    adelantoPagado: meta.adelantoPagado ?? false,
-                    visitPaymentConfirmed: visitConfirmed,
-                    solicitudAdelanto: meta.solicitudAdelanto ?? null,
-                    solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
-                    historialPagosTécnico: meta.historialPagosTécnico ?? [],
-                    gestora: fullTicket.gestora || meta.gestora || null
-                }));
+                    setTicketData((prev: any) => ({
+                        ...prev, ...fullTicket, ...meta,
+                        metadata: meta,
+                        estadoId: corregidoEstadoId,
+                        status_id: corregidoEstadoId,
+                        adelantoPagado: meta.adelantoPagado ?? false,
+                        visitPaymentConfirmed: visitConfirmed,
+                        solicitudAdelanto: meta.solicitudAdelanto ?? null,
+                        solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
+                        historialPagosTécnico: meta.historialPagosTécnico ?? [],
+                        gestora: fullTicket.gestora || meta.gestora || null
+                    }));
 
-                // SYNC QUOTATION STATE
-                if (meta.partidas && meta.partidas.length > 0) {
-                    setPartidasCotización(meta.partidas);
+                    // SYNC QUOTATION STATE
+                    if (meta.partidas && meta.partidas.length > 0) {
+                        setPartidasCotización(meta.partidas);
+                    }
+                    if (meta.montoFinal) {
+                        setMontoTotalCotizado(parseFloat(meta.montoFinal));
+                    }
+                    setIsInitialLoadComplete(true);
+                } catch (err) {
+                    console.error('Error fetching full ticket data:', err);
+                    setIsInitialLoadComplete(true);
                 }
-                if (meta.montoFinal) {
-                    setMontoTotalCotizado(parseFloat(meta.montoFinal));
-                }
-            } catch (err) {
-                console.error('Error fetching full ticket data:', err);
-            }
-        };
+            };
         load();
     }, [ticket?.id]);
 
@@ -387,7 +390,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const syncToSupabase = useCallback(async (dataOverride?: any) => {
         const dataToProcess = dataOverride || ticketData;
-        if (!onUpdate || !dataToProcess) return;
+        if (!onUpdate || !dataToProcess || !isInitialLoadComplete) return;
 
         const {
             isMaximized, isMinimized, position, zIndex,
@@ -458,9 +461,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     return currentVal;
                 })(),
                 partidas: (() => {
-                    // PROTECCIÓN: No sobreescribir con vacío si estamos en ejecución
-                    if ((!partidasCotización || partidasCotización.length === 0) && (sourceForPayments.partidas && sourceForPayments.partidas.length > 0) && resolvedStatusId === 'en_ejecucion') {
-                        return sourceForPayments.partidas;
+                    const totalVal = parseFloat(montoTotalCotizado as any || 0);
+                    // PROTECCIÓN: No sobreescribir con vacío si hay presupuesto pero las partidas fallaron
+                    if ((!partidasCotización || partidasCotización.length === 0) && totalVal > 0) {
+                        return [
+                            {
+                                id: 'emergency_restore',
+                                item: '01',
+                                cantidad: 1,
+                                unidad: 'GLB',
+                                descripcion: 'Servicios de Mantenimiento (Auto-recuperado)',
+                                precioUnitario: totalVal,
+                                total: totalVal
+                            }
+                        ];
                     }
                     return partidasCotización || sourceForPayments.partidas || [];
                 })(),
