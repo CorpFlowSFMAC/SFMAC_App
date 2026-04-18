@@ -137,10 +137,27 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
     }));
 
     useEffect(() => {
-        if (onUpdate) {
+        if (onUpdate && !isLocked) {
             onUpdate(items, grandTotal);
         }
-    }, [items, grandTotal]);
+    }, [items, grandTotal, isLocked, onUpdate]);
+
+    useEffect(() => {
+        if (initialItems && initialItems.length > 0) {
+            const hasActualItems = items.some(i => i.precioUnitario > 0 || i.descripcion !== "Mano de obra especializada para el servicio");
+            if (!hasActualItems || isLocked) {
+                setItems(initialItems.map((it, idx) => ({
+                    id: it.id || Math.random().toString(36).substr(2, 9),
+                    item: it.item || (idx + 1).toString().padStart(2, '0'),
+                    descripcion: it.descripcion || "",
+                    unidad: it.unidad || "GLB",
+                    cantidad: it.cantidad || 1,
+                    precioUnitario: it.precioUnitario || 0,
+                    total: it.total || 0
+                })));
+            }
+        }
+    }, [initialItems, isLocked]);
 
     return (
         <div className={styles.editorWrapper}>

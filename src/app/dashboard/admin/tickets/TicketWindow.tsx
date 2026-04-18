@@ -78,11 +78,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [costoMateriales, setCostoMateriales] = useState("");
     const [modalidad, setModalidad] = useState("todo_costo");
     const [evidenciasCampo, setEvidenciasCampo] = useState<any[]>([]);
-    const [montoTotalCotizado, setMontoTotalCotizado] = useState(ticketData.montoFinal || 0);
-    const [montoSubtotal, setMontoSubtotal] = useState(ticketData.montoSubtotal || 0);
-    const [montoIGV, setMontoIGV] = useState(ticketData.montoIGV || 0);
+    const [montoTotalCotizado, setMontoTotalCotizado] = useState(() => {
+        const meta = ticket.metadata || {};
+        return parseFloat(ticket.montoFinal || meta.montoFinal || 0);
+    });
+    const [montoSubtotal, setMontoSubtotal] = useState(ticket.montoSubtotal || ticket.metadata?.montoSubtotal || 0);
+    const [montoIGV, setMontoIGV] = useState(ticket.montoIGV || ticket.metadata?.montoIGV || 0);
     const quotationEditorRef = useRef<any>(null);
-    const [partidasCotización, setPartidasCotización] = useState<any[]>(ticketData.partidas || []);
+    const [partidasCotización, setPartidasCotización] = useState<any[]>(() => {
+        return ticket.partidas || ticket.metadata?.partidas || [];
+    });
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
@@ -176,6 +181,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     historialPagosTécnico: meta.historialPagosTécnico ?? [],
                     gestora: fullTicket.gestora || meta.gestora || null
                 }));
+
+                // SYNC QUOTATION STATE
+                if (meta.partidas && meta.partidas.length > 0) {
+                    setPartidasCotización(meta.partidas);
+                }
+                if (meta.montoFinal) {
+                    setMontoTotalCotizado(parseFloat(meta.montoFinal));
+                }
             } catch (err) {
                 console.error('Error fetching full ticket data:', err);
             }
@@ -238,6 +251,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         pagoRechazado: meta.pagoRechazado ?? null
                     };
                 });
+
+                // SYNC QUOTATION STATE ON REFETCH
+                if (meta.partidas && meta.partidas.length > 0) {
+                    setPartidasCotización(meta.partidas);
+                }
+                if (meta.montoFinal) {
+                    setMontoTotalCotizado(parseFloat(meta.montoFinal));
+                }
             } catch (err) {
                 console.error('Error refetching ticket after Realtime status change:', err);
             }
@@ -428,8 +449,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 costoManoObra: parseFloat(sourceForPayments.costoManoObra || 0),
                 costoMateriales: parseFloat(sourceForPayments.costoMateriales || 0),
                 costoVisita: parseFloat(sourceForPayments.costoVisita || 0),
-                montoFinal: parseFloat(montoTotalCotizado || sourceForPayments.montoFinal || 0),
-                partidas: partidasCotización || sourceForPayments.partidas || [],
+                montoFinal: (() => {
+                    const currentVal = parseFloat(montoTotalCotizado as any || 0);
+                    // PROTECCIÓN: No bajar a 0 si ya teníamos un monto y estamos en ejecución
+                    if (currentVal <= 0 && sourceForPayments.montoFinal > 0 && resolvedStatusId === 'en_ejecucion') {
+                        return parseFloat(sourceForPayments.montoFinal as any);
+                    }
+                    return currentVal;
+                })(),
+                partidas: (() => {
+                    // PROTECCIÓN: No sobreescribir con vacío si estamos en ejecución
+                    if ((!partidasCotización || partidasCotización.length === 0) && (sourceForPayments.partidas && sourceForPayments.partidas.length > 0) && resolvedStatusId === 'en_ejecucion') {
+                        return sourceForPayments.partidas;
+                    }
+                    return partidasCotización || sourceForPayments.partidas || [];
+                })(),
                 metadata: undefined, // Evitar anidación infinita
                 adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
                 fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
