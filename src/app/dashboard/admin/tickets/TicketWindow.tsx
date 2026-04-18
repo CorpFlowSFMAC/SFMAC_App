@@ -1160,8 +1160,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         link.click();
     };
 
-    const handleMouseDown = (e: React.MouseEvent) => {
+    const bringToFront = () => {
         setZIndex(Date.now() % 10000000);
+    };
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        bringToFront();
         if (isMaximized) return;
 
         const rect = windowRef.current?.getBoundingClientRect();
@@ -1355,7 +1359,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             <div
                 ref={windowRef}
                 className={`${styles.window} ${isMaximized ? styles.maximized : ''} ${isMinimized ? styles.minimized : ''}`}
-                onClick={() => setZIndex(Date.now() % 10000000)}
+                onMouseDown={bringToFront}
                 style={
                     isMinimized
                         ? { left: `${20 + (index * 270)}px`, bottom: '20px', zIndex: zIndex }
@@ -1417,19 +1421,29 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
                     )}
 
-                    <div className={styles.windowControls} onMouseDown={(e) => e.stopPropagation()}>
+                    <div className={styles.windowControls} onMouseDown={(e) => { e.stopPropagation(); bringToFront(); }} onClick={(e) => e.stopPropagation()}>
                         {!isMinimized && (
                             <>
                                 <button
                                     className={styles.controlBtn}
-                                    onClick={(e) => { e.stopPropagation(); handleMinimize(); }}
+                                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        e.preventDefault();
+                                        handleMinimize(); 
+                                    }}
                                     title="Minimizar"
                                 >
                                     <Minimize2 size={16} />
                                 </button>
                                 <button
                                     className={styles.controlBtn}
-                                    onClick={(e) => { e.stopPropagation(); handleMaximize(); }}
+                                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        e.preventDefault();
+                                        handleMaximize(); 
+                                    }}
                                     title={isMaximized ? "Restaurar" : "Maximizar"}
                                 >
                                     {isMaximized ? <Square size={14} /> : <Maximize2 size={16} />}
@@ -1438,7 +1452,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         )}
                         <button
                             className={`${styles.controlBtn} ${styles.closeBtn} ${isMinimized ? styles.minimizedClose : ''}`}
-                            onClick={(e) => { e.stopPropagation(); handleCloseInternal(); }}
+                            onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                e.preventDefault();
+                                handleCloseInternal(); 
+                            }}
                             title="Cerrar"
                         >
                             <X size={16} />
