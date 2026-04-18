@@ -1085,26 +1085,48 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
     // Si hay trabajo, usamos MO+Mat. Si solo es visita, usamos el costo de visita.
     const costoReferencia = jobCostBase > 0 ? jobCostBase : visitCost;
 
-    // Sumar todos los depósitos realizados al técnico (Legacy + Modern)
+    // Deduplicación inteligente de pagos:
+    // El 'ticket_costs' es la fuente de verdad moderna. 
+    // El 'historialPagosTecnico' puede contener duplicados de 'ticket_costs' creados por el módulo de Tesorería.
+    const paidModernArr = (costos || []).filter(c => c.estado_pago === 'pagado');
+    const totalPagadoModern = paidModernArr.reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
+
     const history = ticket.historialPagosTecnico || [];
-    let totalPagadoLegacy = history.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
-    
-    // Inyectar pagos clásicos si no están en historial (Sincronización de Resumen)
-    const hasPaidMobility = history.some((p: any) => p.tipo === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita"));
-    const hasPaidAdelanto = history.some((p: any) => p.tipo === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto"));
-    
-    if ((ticket.visitPaymentConfirmed || ticket.fechaPagoVisita) && !hasPaidMobility) {
-        totalPagadoLegacy += visitCost;
+    const legacyPaymentsFiltered = history.filter((h: any) => {
+        // Evitamos contar registros de historial que ya existan en la tabla moderna de costos
+        // Sincronización basada en coincidencia de monto y categoría/tipo
+        const hMonto = round2(h.monto || 0);
+        if (hMonto <= 0) return false;
+
+        const isMirrorOfModern = paidModernArr.some((m: any) => {
+            const mMonto = round2(m.monto || 0);
+            const matchesAmount = Math.abs(hMonto - mMonto) < 0.01;
+            const matchesCategory = h.tipo === m.categoria || h.tipo === `Gasto: ${m.categoria}`;
+            return matchesAmount && matchesCategory;
+        });
+
+        return !isMirrorOfModern;
+    });
+
+    const totalPagadoLegacyDrift = legacyPaymentsFiltered.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+
+    // Inyectar pagos manuales marcados en el ticket pero no en el historial/costos
+    let additionalManualPayments = 0;
+    const hasPaidMobilityInCalculatedHistory = [...legacyPaymentsFiltered, ...paidModernArr].some((p: any) => 
+        (p.tipo || p.categoria) === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita")
+    );
+    const hasPaidAdelantoInCalculatedHistory = [...legacyPaymentsFiltered, ...paidModernArr].some((p: any) => 
+        (p.tipo || p.categoria) === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto")
+    );
+
+    if ((ticket.visitPaymentConfirmed || ticket.fechaPagoVisita) && !hasPaidMobilityInCalculatedHistory) {
+        additionalManualPayments += visitCost;
     }
-    if (ticket.adelantoPagado && !hasPaidAdelanto) {
-        totalPagadoLegacy += parseFloat(ticket.montoAdelanto || 0);
+    if (ticket.adelantoPagado && !hasPaidAdelantoInCalculatedHistory) {
+        additionalManualPayments += parseFloat(ticket.montoAdelanto || 0);
     }
 
-    const totalPagadoModern = (costos || [])
-        .filter(c => c.estado_pago === 'pagado')
-        .reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
-        
-    const totalPagadoTecnico = round2(totalPagadoLegacy + totalPagadoModern);
+    const totalPagadoTecnico = round2(totalPagadoLegacyDrift + totalPagadoModern + additionalManualPayments);
     const montoSaldo = Math.max(0, round2(costoReferencia - totalPagadoTecnico));
 
     // Variables para UI
@@ -1156,62 +1178,64 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
                 <span className={styles.infoLabel} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <CreditCard size={10} /> PAGOS REALIZADOS ({pctReal.toFixed(0)}%)
                 </span>
-                {((ticket.historialPagosTecnico && ticket.historialPagosTecnico.length > 0) || totalPagadoModern > 0) ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px' }}>
-                        {/* Legacy & Modern Combined View */}
-                        {[...(ticket.historialPagosTecnico || []), ...(costos || []).filter(c => c.estado_pago === 'pagado')].slice(0, 3).map((p: any, idx: number) => (
-                            <div key={p.id || idx} style={{ 
-                                display: 'flex', alignItems: 'center', gap: '6px', 
-                                background: 'white', padding: '2px 8px', borderRadius: '4px',
-                                border: '1px solid #FEF3C7', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-                            }}>
-                                <span style={{ fontSize: '10px', color: '#B45309', fontWeight: 800 }}>
-                                    S/ {formatSoles(p.monto)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px' }}>
+                    {/* Lista Unificada de Pagos - Deduplicada en UI para claridad */}
+                    {[...legacyPaymentsFiltered, ...paidModernArr].length > 0 ? (
+                        <>
+                            {[...legacyPaymentsFiltered, ...paidModernArr].slice(0, 3).map((p: any, idx: number) => (
+                                <div key={p.id || idx} style={{ 
+                                    display: 'flex', alignItems: 'center', gap: '6px', 
+                                    background: 'rgba(255, 255, 255, 0.6)', padding: '2px 8px', borderRadius: '6px',
+                                    border: '1px solid rgba(226, 232, 240, 0.8)', boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                    backdropFilter: 'blur(4px)'
+                                }}>
+                                    <span style={{ fontSize: '10px', color: '#1E293B', fontWeight: 800 }}>
+                                        S/ {formatSoles(p.monto)}
+                                    </span>
+                                    <span style={{ fontSize: '8px', color: '#64748B', textTransform: 'uppercase', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {p.tipo || p.categoria || 'Pago'}
+                                    </span>
+                                    {(p.url_comprobante || p.voucher || p.voucherRef) && (
+                                        <Eye 
+                                            size={10} 
+                                            style={{ cursor: 'pointer', color: '#6366F1' }}
+                                            onClick={() => {
+                                                const src = p.url_comprobante || p.voucher || p.voucherRef;
+                                                if (src) setViewingVoucher(src);
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                            {[...legacyPaymentsFiltered, ...paidModernArr].length > 3 && (
+                                <span style={{ fontSize: '9px', color: '#64748B', fontStyle: 'italic', paddingLeft: '8px' }}>
+                                    + {[...legacyPaymentsFiltered, ...paidModernArr].length - 3} depósitos adicionales
                                 </span>
-                                <span style={{ fontSize: '9px', color: '#D97706', opacity: 0.8, fontWeight: 600 }}>
-                                    {new Date(p.fecha || p.updated_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}
-                                </span>
-                                {(p.voucher || p.voucherRef || p.url_comprobante) && (
-                                    <Eye 
-                                        size={10} 
-                                        color="#6366F1" 
-                                        style={{ cursor: 'pointer' }}
-                                        onClick={() => {
-                                            const src = p.url_comprobante || p.voucher || p.voucherRef;
-                                            if (src) setViewingVoucher(src);
-                                        }}
-                                    />
-                                )}
-                            </div>
-                        ))}
-                        {([...(ticket.historialPagosTecnico || []), ...(costos || []).filter(c => c.estado_pago === 'pagado')].length > 3) && (
-                            <span style={{ fontSize: '9px', color: '#B45309', fontWeight: 700, paddingLeft: '8px' }}>
-                                + {([...(ticket.historialPagosTecnico || []), ...(costos || []).filter(c => c.estado_pago === 'pagado')].length - 3)} más
-                            </span>
-                        )}
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                        <span className={styles.infoValue} style={{ color: ticket.adelantoPagado ? '#059669' : '#DC2626', fontSize: '13px', fontWeight: 900 }}>
-                            S/ {formatSoles(montoAdelanto)}
-                        </span>
-                        {ticket.adelantoPagado ? <CheckCircle2 size={12} color="#059669" /> : <Clock size={12} color="#F59E0B" />}
-                    </div>
-                )}
+                            )}
+                        </>
+                    ) : (
+                        <span style={{ fontSize: '11px', color: '#94A3B8', fontStyle: 'italic' }}>Sin pagos registrados</span>
+                    )}
+                </div>
             </div>
 
-            <div className={styles.infoItem}>
-                <span className={styles.infoLabel} style={{ color: '#1E40AF' }}>SALDO PENDIENTE</span>
+            <div className={styles.infoItem} style={{ borderLeft: '1px solid rgba(226, 232, 240, 0.8)', paddingLeft: '12px' }}>
+                <span className={styles.infoLabel} style={{ color: '#0F172A', fontWeight: 700 }}>SALDO PENDIENTE</span>
                 <div style={{ 
                     display: 'flex', alignItems: 'center', gap: '8px', 
-                    background: montoSaldo > 0 ? '#EFF6FF' : '#F0FDF4', 
-                    padding: '6px 12px', borderRadius: '8px',
-                    border: `1px solid ${montoSaldo > 0 ? '#DBEAFE' : '#BBF7D0'}`
+                    background: montoSaldo > 0 ? 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)' : 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)', 
+                    padding: '8px 16px', borderRadius: '10px',
+                    border: `1px solid ${montoSaldo > 0 ? '#BFDBFE' : '#BBF7D0'}`,
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
                 }}>
-                    <span style={{ fontSize: '15px', fontWeight: 900, color: montoSaldo > 0 ? '#1E40AF' : '#059669' }}>
+                    <span style={{ fontSize: '18px', fontWeight: 950, color: montoSaldo > 0 ? '#1E40AF' : '#166534', letterSpacing: '-0.5px' }}>
                         S/ {formatSoles(montoSaldo)}
                     </span>
-                    {montoSaldo === 0 ? <CheckCircle2 size={14} color="#059669" /> : <Wallet size={14} color="#3B82F6" />}
+                    {montoSaldo === 0 ? (
+                        <CheckCircle2 size={16} color="#166534" />
+                    ) : (
+                        <Wallet size={16} color="#3B82F6" style={{ filter: 'drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3))' }} />
+                    )}
                 </div>
             </div>
 
