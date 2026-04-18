@@ -1329,6 +1329,24 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         onClose();
     };
 
+    const handleCompleteClosure = async () => {
+        try {
+            const updated = {
+                ...ticketData,
+                estadoId: "ticket_cerrado",
+                status_id: "ticket_cerrado",
+                fechaCierre: new Date().toISOString()
+            };
+            setTicketData(updated);
+            await syncToSupabase(updated);
+            showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
+            onClose();
+        } catch (err) {
+            console.error("Error al cerrar ticket:", err);
+            showToast("Error", "No se pudo cerrar el ticket.", "error");
+        }
+    };
+
 
     return (
         <>
@@ -2771,7 +2789,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     </span>
                                                     {isAdmin && (techPactedTotal - unifiedPaymentsSum) <= 0.01 && (
                                                         <button 
-                                                            onClick={handleCloseInternal}
+                                                            onClick={handleCompleteClosure}
                                                             className={styles.approveExceedBtn}
                                                             style={{
                                                                 marginTop: '15px',
@@ -2785,7 +2803,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)'
                                                             }}
                                                         >
-                                                            CONFIRMAR CIERRE SIN SALDO PENDIENTE
+                                                            CONFIRMAR CIERRE DEFINITIVO (SALDO 0)
                                                         </button>
                                                     )}
                                                 </div>

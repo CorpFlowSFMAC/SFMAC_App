@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle, FileEdit } from "lucide-react";
+import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle, FileEdit, AlertTriangle } from "lucide-react";
 import CreateTicketWizard from "./CreateTicketWizard";
 import TicketWindow from "./TicketWindow";
 import styles from "./page.module.css";
