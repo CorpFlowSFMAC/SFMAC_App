@@ -1339,9 +1339,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
     const costPercentage = approvedAmount > 0 ? (totalCosts / approvedAmount) * 100 : 0;
 
-    const handleCloseInternal = async () => {
-        // Forzar un guardado inmediato si hay cambios pendientes
-        await syncToSupabase();
+    const handleCloseInternal = () => {
+        // Optimismo visual: Cerramos la interfaz inmediatamente
+        // y dejamos que la sincronización ocurra en segundo plano
+        // si no hay transiciones de estado críticas pendientes.
+        syncToSupabase().catch(err => console.error("Sync error on close:", err));
         onClose();
     };
 
