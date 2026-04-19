@@ -1349,7 +1349,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const totalCosts = ticketCosts.reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
     
     // MODERNO: Pagos registrados en ticket_costs (Source of Truth)
-    const paidModernArr = ticketCosts.filter(c => (c.estado_pago || '').toLowerCase() === 'pagado');
+    const paidModernArr = ticketCosts.filter(c => 
+        (c.estado_pago || '').toLowerCase() === 'pagado' || 
+        (c.estado_pago || '').toLowerCase() === 'adelanto'
+    );
     const paymentsSummary = paidModernArr.reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
     
     // LEGACY: Historial antiguo con DEDUPLICACIÓN inteligente
@@ -1428,6 +1431,65 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
+    const [showRescueModal, setShowRescueModal] = useState(false);
+    const [isSavingRescue, setIsSavingRescue] = useState(false);
+    const [rescueForm, setRescueForm] = useState({ monto: '', motivo: '' });
+
+    const handleOpenRescue = () => {
+        setRescueForm({ monto: '', motivo: '' });
+        setShowRescueModal(true);
+    };
+
+    const handleSubmitRescueRequest = async () => {
+        const montoNum = parseFloat(rescueForm.monto);
+        if (isNaN(montoNum) || montoNum <= 0) {
+            showToast("Monto Inválido", "Por favor ingrese un monto válido mayor a cero.", "error");
+            return;
+        }
+
+        if (montoNum > availableRescue) {
+            showToast("Tope Excedido", `El monto solicitado (S/ ${montoNum}) supera el saldo disponible (S/ ${availableRescue}).`, "error");
+            return;
+        }
+
+        setIsSavingRescue(true);
+        try {
+            await ticketCostsAPI.create({
+                ticket_id: ticketData.id,
+                monto: montoNum,
+                categoria: 'Mano de Obra',
+                concepto: `Rescate Financiero: ${rescueForm.motivo || 'Sin motivo especificado'} (Prioridad Alta)`,
+                estado_pago: 'pendiente',
+                solicitado_por: myProfileId,
+                specialist_id: ticketData.technician_id,
+                proveedor: 'Rescate Financiero'
+            });
+
+            showToast("Solicitud Enviada", "El rescate financiero ha sido registrado y enviado a Tesorería.", "success");
+            setShowRescueModal(false);
+            loadCosts();
+        } catch (err) {
+            console.error("Error creating rescue request:", err);
+            showToast("Error", "No se pudo registrar la solicitud de rescate.", "error");
+        } finally {
+            setIsSavingRescue(false);
+        }
+    };
+
+    // --- CALCULOS PARA RESCATE FINANCIERO ---
+    const pactadoLabor = round2(parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0));
+    const laborPaymentsModern = ticketCosts.filter(c => 
+        (c.estado_pago === 'pagado' || c.estado_pago === 'adelanto') && 
+        (c.categoria === 'Mano de Obra')
+    );
+    const laborPaymentsLegacy = legacyPaymentsFiltered.filter(p => 
+        ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra'].includes(p.tipo)
+    );
+    const totalLaborPaid = round2(
+        laborPaymentsModern.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0) + 
+        laborPaymentsLegacy.reduce((acc, p) => acc + (parseFloat(p.monto) || 0), 0)
+    );
+    const availableRescue = Math.max(0, round2(pactadoLabor - totalLaborPaid));
 
     return (
         <>
@@ -2747,7 +2809,24 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.financialDetailsBody}>
                                                     <div className={styles.summarySection}>
                                                         <div className={styles.mainFinancialRow}>
-                                                            <span className={styles.rowLabel}>Monto Pactado Trabajo</span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <span className={styles.rowLabel}>Monto Pactado Trabajo</span>
+                                                                {availableRescue > 0 && ticketData.estadoId !== "ticket_cerrado" && (
+                                                                    <button 
+                                                                        onClick={handleOpenRescue}
+                                                                        className={styles.rescueBtnMini}
+                                                                        title="Solicitar Rescate Financiero (Adelanto de Mano de Obra)"
+                                                                    >
+                                                                        <Coins size={12} />
+                                                                        <span>Rescate Financiero</span>
+                                                                    </button>
+                                                                )}
+                                                                {availableRescue <= 0 && ticketData.estadoId !== "ticket_cerrado" && (
+                                                                    <span style={{ fontSize: '9px', fontWeight: 800, color: '#94A3B8', padding: '2px 8px', background: '#F1F5F9', borderRadius: '6px', cursor: 'help' }} title="Se ha solicitado o pagado el 100% de la mano de obra pactada.">
+                                                                        TOPE ALCANZADO
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <span className={styles.rowValue}>S/ {techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
@@ -3145,6 +3224,96 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 >
                                     {isSavingMaterials ? <Clock size={18} className={styles.spinner} /> : <Send size={18} />}
                                     <span>Enviar a Tesorería</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Rescate Financiero */}
+                {showRescueModal && (
+                    <div className={styles.modalOverlay}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '450px' }}>
+                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
+                                <div className={styles.negoIconWrapper} style={{ backgroundColor: 'white', color: '#F59E0B' }}>
+                                    <Coins size={24} />
+                                </div>
+                                <div className={styles.negoTitleGroup}>
+                                    <h3 style={{ color: 'white' }}>Rescate Financiero</h3>
+                                    <span style={{ color: 'rgba(255,255,255,0.9)' }}>Adelanto adicional de mano de obra</span>
+                                </div>
+                                <button className={styles.closeNegoBtn} onClick={() => setShowRescueModal(false)} style={{ color: 'white' }}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    
+                                    {/* Indicador de Saldo */}
+                                    <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#92400E' }}>
+                                            <span>Mano de Obra Pactada:</span>
+                                            <span style={{ fontWeight: 700 }}>S/ {pactadoLabor.toFixed(2)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#92400E' }}>
+                                            <span>Ya Adelantado/Pagado:</span>
+                                            <span style={{ fontWeight: 700 }}>- S/ {totalLaborPaid.toFixed(2)}</span>
+                                        </div>
+                                        <div style={{ height: '1px', background: '#FEF3C7', margin: '4px 0' }} />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#F59E0B', fontWeight: 900 }}>
+                                            <span>SALDO DISPONIBLE:</span>
+                                            <span>S/ {availableRescue.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Monto a Solicitar</label>
+                                        <div className={styles.negoInputGroup}>
+                                            <div className={styles.negoInputPrefix}>S/</div>
+                                            <input
+                                                type="number"
+                                                placeholder="0.00"
+                                                max={availableRescue}
+                                                value={rescueForm.monto}
+                                                onChange={e => setRescueForm(prev => ({ ...prev, monto: e.target.value }))}
+                                                style={{ border: 'none', background: 'transparent' }}
+                                            />
+                                        </div>
+                                        {parseFloat(rescueForm.monto) > availableRescue && (
+                                            <p style={{ fontSize: '0.75rem', color: '#EF4444', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <AlertTriangle size={12} /> El monto supera el saldo disponible pactado.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Motivo del Rescate (Opcional)</label>
+                                        <textarea
+                                            placeholder="Indique por qué se solicita este adelanto extra..."
+                                            value={rescueForm.motivo}
+                                            onChange={e => setRescueForm(prev => ({ ...prev, motivo: e.target.value }))}
+                                            style={{ 
+                                                width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', 
+                                                outline: 'none', background: 'white', color: '#1E293B', fontWeight: 500, minHeight: '80px', resize: 'vertical'
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowRescueModal(false)}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={handleSubmitRescueRequest}
+                                    disabled={isSavingRescue || !rescueForm.monto || parseFloat(rescueForm.monto) <= 0 || parseFloat(rescueForm.monto) > availableRescue}
+                                    style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}
+                                >
+                                    {isSavingRescue ? <Clock size={18} className={styles.spinner} /> : <Coins size={18} />}
+                                    <span>Solicitar Adelanto Extra</span>
                                 </button>
                             </div>
                         </div>
