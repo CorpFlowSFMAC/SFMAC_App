@@ -1306,8 +1306,8 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
     });
 
     const combinedPagos = [...legacyPaymentsFiltered, ...paidModernArr].sort((a, b) => {
-        const dateA = new Date(a.fecha || a.updated_at).getTime();
-        const dateB = new Date(b.fecha || b.updated_at).getTime();
+        const dateA = new Date(a.fecha || a.created_at || a.updated_at || 0).getTime();
+        const dateB = new Date(b.fecha || b.created_at || b.updated_at || 0).getTime();
         return dateB - dateA; // Orden descendente por fecha
     });
 
@@ -1315,20 +1315,23 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
 
     const totalPagado = combinedPagos.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
 
-    const getTipoBadge = (tipo: string) => {
+    const getTipoBadge = (p: any) => {
+        const tipoStr = p.tipo || p.categoria || "";
         const map: Record<string, { bg: string; color: string; label: string }> = {
             'Adelanto': { bg: '#DBEAFE', color: '#1D4ED8', label: 'Adelanto' },
             'Refuerzo': { bg: '#FEF3C7', color: '#92400E', label: 'Refuerzo' },
             'Liquidación Final': { bg: '#D1FAE5', color: '#065F46', label: 'Liquidación' },
             'Movilidad / Visita': { bg: '#EDE9FE', color: '#5B21B6', label: 'Movilidad' },
+            'Materiales': { bg: '#FCE7F3', color: '#BE185D', label: 'Materiales' },
+            'Logística': { bg: '#F1F5F9', color: '#475569', label: 'Logística' }
         };
-        const cleanTipo = tipo.replace('Gasto: ', '');
+        const cleanTipo = tipoStr.replace('Gasto: ', '');
         return map[cleanTipo] || { bg: '#F1F5F9', color: '#475569', label: cleanTipo || 'Pago' };
     };
 
     const resolveVoucher = (p: any): string => {
         const src = p.url_comprobante || p.voucher || p.voucherRef;
-        if (!src) return "";
+        if (!src || typeof src !== 'string') return "";
         if (src.startsWith('data:image')) return src;
         if (typeof window === 'undefined') return src;
         return localStorage.getItem(src) || src;
@@ -1360,7 +1363,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
             {/* Lista de pagos */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {combinedPagos.map((p: any, idx: number) => {
-                    const badge = getTipoBadge(p.tipo);
+                    const badge = getTipoBadge(p);
                     const voucherSrc = resolveVoucher(p);
                     return (
                         <div
