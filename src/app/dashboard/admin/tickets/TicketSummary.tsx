@@ -1249,6 +1249,8 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                     <Package size={14} />
                     <span>Compras</span>
                 </button>
+            )}
+
             {onOpenRescue && ticket.estadoId !== "ticket_cerrado" && (
                 <button 
                     className={styles.pillsBtn} 
