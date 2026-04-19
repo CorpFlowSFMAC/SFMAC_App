@@ -147,7 +147,9 @@ export default function TicketsPage() {
             (t.numeroTicketCliente || '').toLowerCase().includes(term) ||
             (t.cliente?.nombre || '').toLowerCase().includes(term) ||
             (t.sede?.nombre || '').toLowerCase().includes(term) ||
-            (t.tecnico?.nombre || '').toLowerCase().includes(term);
+            (t.tecnico?.nombre || '').toLowerCase().includes(term) ||
+            (t.gestora?.name || t.gestora?.nombre || '').toLowerCase().includes(term) ||
+            (t.description || t.descripcionProblema || '').toLowerCase().includes(term);
 
         if (!matchesSearch) return false;
 
@@ -442,7 +444,7 @@ export default function TicketsPage() {
                     <Search size={16} />
                     <input
                         type="text"
-                        placeholder="Buscar tickets..."
+                        placeholder="Buscar por ID, Cliente, Sede, Técnico o Gestor..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
