@@ -410,108 +410,90 @@
     gap: 0.8rem;
 }
 
-/* 🎴 TARJETA ULTRA COMPACTA */
+/* 🎴 TARJETA ULTRA PREMIUM - FUTURISTA */
 .ticketCard {
-    background: white;
-    border: 2px solid #E0E7FF;
-    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 18px;
     padding: 0;
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
     cursor: pointer;
-    box-shadow: 0 3px 9px rgba(0, 0, 0, 0.05);
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.05),
+        0 10px 15px -3px rgba(0, 0, 0, 0.03);
     overflow: hidden;
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
-.ticketCard::before {
+.ticketCard::after {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #8B5CF6, #6366F1, #3B82F6);
-    opacity: 0;
-    transition: opacity 0.3s;
+    inset: 0;
+    border-radius: 18px;
+    padding: 2px; /* Espaciado para el borde de gradiente */
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), transparent, rgba(99, 102, 241, 0.2));
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.3;
 }
 
 .ticketCard:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(139, 92, 246, 0.15);
-    border-color: #8B5CF6;
+    transform: translateY(-8px) scale(1.01);
+    box-shadow: 
+        0 20px 40px -10px rgba(139, 92, 246, 0.2),
+        0 0 20px rgba(139, 92, 246, 0.1);
+    background: #FFFFFF;
+    border-color: rgba(139, 92, 246, 0.3);
 }
 
-.ticketCard:hover::before {
-    opacity: 1;
+.ticketCard:hover::after {
+    opacity: 0.8;
 }
 
-/* HEADER: Solo número */
 .ticketHeader {
-    background: linear-gradient(135deg, #F9FAFB, #F3F4F6);
-    padding: 0.6rem 0.8rem;
+    padding: 0.8rem 1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 2px solid #E5E7EB;
+    background: rgba(248, 250, 252, 0.5);
 }
 
 .ticketId {
-    font-size: 0.72rem;
-    font-weight: 900;
-    color: #4B5563;
-    font-family: 'Courier New', monospace;
-    letter-spacing: 0.5px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #64748B;
     background: white;
-    padding: 0.2rem 0.5rem;
-    border-radius: 5px;
-    border: 1px solid #E5E7EB;
-}
-
-.expiredBadge {
-    background: #EF4444;
-    color: white;
-    font-size: 0.6rem;
-    font-weight: 900;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    letter-spacing: 0.5px;
-    animation: pulseRed 1.5s infinite;
-}
-
-.modRequestBadge {
-    background: #7C3AED;
-    color: white;
-    font-size: 0.6rem;
-    font-weight: 900;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    animation: flashPurple 2s infinite;
-}
-
-@keyframes flashPurple {
-    0%, 100% { background: #7C3AED; box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.4); }
-    50% { background: #9D67F1; box-shadow: 0 0 8px 2px rgba(124, 58, 237, 0.6); }
+    padding: 0.25rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    letter-spacing: 0.05em;
+    font-family: inherit;
 }
 
 @keyframes pulseRed {
-    0% {
-        transform: scale(1);
-        opacity: 1;
-    }
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
 
-    50% {
-        transform: scale(1.05);
-        opacity: 0.8;
-    }
-
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
+.expiredBadge {
+    background: linear-gradient(135deg, #EF4444, #B91C1C);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
+    animation: pulseRed 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* BODY OPTIMIZADO */
@@ -577,75 +559,84 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.clienteText {
-    flex: 1;
-    min-width: 0;
-}
-
-.clienteInfo h4 {
+.clienteText h4 {
     margin: 0;
-    font-size: 0.85rem;
-    font-weight: 800;
-    color: #1F2937;
-    line-height: 1.2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: #1E293B;
+    letter-spacing: -0.02em;
 }
 
-.clienteInfo p {
-    margin: 0.15rem 0 0 0;
-    font-size: 0.7rem;
-    color: #6B7280;
+.clienteText p {
+    margin: 1px 0 0 0;
+    font-size: 0.75rem;
+    color: #64748B;
     font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .direccionInfo {
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    padding: 0.6rem 0.75rem;
-    background: linear-gradient(135deg, #F0F9FF, #E0F2FE);
-    border-radius: 10px;
-    border: 1px solid #BAE6FD;
-    transition: all 0.2s;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, #F8FAFC, #F1F5F9);
+    border-radius: 14px;
+    border: 1px solid #E2E8F0;
+    margin: 0.2rem 0;
+    position: relative;
+    overflow: hidden;
 }
 
-.ticketCard:hover .direccionInfo {
-    background: linear-gradient(135deg, #E0F2FE, #DBEAFE);
-    border-color: #7DD3FC;
+.direccionInfo::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #3B82F6;
+    border-radius: 3px;
 }
 
 .addressIcon {
-    color: #0284C7;
-    margin-top: 2px;
+    color: #3B82F6;
+    margin-top: 3px;
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
 }
 
 .addressText {
     font-size: 0.75rem;
-    color: #0369A1;
+    color: #334155;
     font-weight: 700;
-    line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    line-height: 1.5;
 }
 
 .serviceTag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.6rem;
-    border-radius: 7px;
-    border: 1.5px solid;
-    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
+    border-radius: 10px;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid transparent;
+    font-size: 0.72rem;
     font-weight: 800;
-    align-self: flex-start;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.serviceTag:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+.descripcion {
+    font-size: 0.8rem;
+    color: #475569;
+    line-height: 1.6;
+    font-weight: 500;
+    margin-top: 0.4rem;
 }
 
 .modificacionTag {
@@ -672,22 +663,44 @@
     font-weight: 600;
 }
 
-/* FOOTER: SLA */
+/* FOOTER: SLA REDESIGN */
 .ticketFooter {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.6rem 0.75rem;
-    background: linear-gradient(135deg, #FAFAFA, #F8FAFC);
-    border-top: 3px solid;
-    transition: all 0.3s;
+    padding: 0.8rem 1rem;
+    background: rgba(255, 255, 255, 0.4);
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    margin-top: auto;
 }
 
 .slaInfo {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    flex: 1;
+    gap: 0.7rem;
+}
+
+.slaIndicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--indicator-color);
+    position: relative;
+}
+
+.slaIndicator::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: var(--indicator-color);
+    opacity: 0.4;
+    animation: indicatorGlow 2s ease-out infinite;
+}
+
+@keyframes indicatorGlow {
+    0% { transform: scale(1); opacity: 0.4; }
+    100% { transform: scale(2.5); opacity: 0; }
 }
 
 .slaTextContainer {
@@ -698,16 +711,15 @@
 .slaLabel {
     font-size: 0.6rem;
     color: #94A3B8;
-    font-weight: 700;
+    font-weight: 800;
     text-transform: uppercase;
-    line-height: 1;
-    margin-bottom: 0.1rem;
+    letter-spacing: 0.05em;
 }
 
 .slaValue {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 900;
-    line-height: 1;
+    color: #1E293B;
 }
 
 .pulseAnimation {

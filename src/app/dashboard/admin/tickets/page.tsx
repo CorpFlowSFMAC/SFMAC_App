@@ -589,13 +589,11 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
 
             {/* BODY OPTIMIZADO */}
             <div className={styles.ticketBody}>
-                {/* Cliente */}
                 <div className={styles.clienteInfo}>
                     <div
                         className={styles.clienteLogo}
                         style={{
-                            background: ticket.cliente?.color || '#8B5CF6',
-                            padding: ticket.cliente?.logo ? '0' : 'inherit'
+                            background: !ticket.cliente?.logo ? (ticket.cliente?.color || '#8B5CF6') : 'white'
                         }}
                     >
                         {ticket.cliente?.logo ? (
@@ -608,20 +606,32 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                                 />
                             </div>
                         ) : (
-                            <div className={styles.clienteLogoFallback} style={{ background: ticket.cliente?.color || '#8B5CF6' }}>
+                            <div className={styles.clienteLogoFallback}>
                                 {ticket.cliente?.nombre?.substring(0, 2).toUpperCase() || 'TK'}
                             </div>
                         )}
                     </div>
                     <div className={styles.clienteText}>
-                        <h4>{ticket.cliente?.nombre || 'Sin cliente'}</h4>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <h4>{ticket.cliente?.nombre || 'Sin cliente'}</h4>
+                            <div 
+                                className={styles.statusDot} 
+                                style={{ 
+                                    width: 8, 
+                                    height: 8, 
+                                    borderRadius: '50%', 
+                                    background: TICKET_STATES[normalizeStateId(ticket.estadoId || 'nuevo')]?.color || '#8B5CF6',
+                                    boxShadow: `0 0 10px ${TICKET_STATES[normalizeStateId(ticket.estadoId || 'nuevo')]?.color || '#8B5CF6'}`
+                                }}
+                            />
+                        </div>
                         <p>{ticket.sede?.nombre || 'Sin sede'}</p>
                     </div>
                 </div>
 
-                {/* Dirección */}
+                {/* Dirección Premium */}
                 <div className={styles.direccionInfo}>
-                    <MapPin size={12} className={styles.addressIcon} />
+                    <MapPin size={14} className={styles.addressIcon} />
                     <span className={styles.addressText}>
                         {ticket.sede?.direccion && ticket.sede.direccion !== 'Sin dirección' 
                             ? ticket.sede.direccion 
@@ -630,16 +640,15 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                 </div>
 
                 {/* Servicio y Modificaciones */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
                     {ServiceIcon && (
                         <div
                             className={styles.serviceTag}
                             style={{
-                                background: `${service?.color}15`,
-                                borderColor: service?.color
+                                borderColor: `${service?.color}30`,
                             }}
                         >
-                            <ServiceIcon size={12} color={service?.color} />
+                            <ServiceIcon size={14} color={service?.color} />
                             <span style={{ color: service?.color }}>
                                 {service?.nombre}
                             </span>
@@ -648,7 +657,7 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
 
                     {ticket.metadata?.solicitudModificacion?.pendiente && (
                         <div 
-                            className={styles.modificacionTag}
+                            className={styles.modRequestBadge}
                             title={`Solicitado por: ${ticket.metadata.solicitudModificacion.solicitadoPor}`}
                         >
                             <FileEdit size={12} />
@@ -670,24 +679,23 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
 
                 {/* Descripción */}
                 <p className={styles.descripcion}>
-                    {ticket.descripcionProblema?.substring(0, 70)}
-                    {ticket.descripcionProblema?.length > 70 && '...'}
+                    {ticket.descripcionProblema?.substring(0, 80)}
+                    {ticket.descripcionProblema?.length > 80 && '...'}
                 </p>
             </div>
 
-            {/* FOOTER: SLA Countdown 72h */}
+            {/* FOOTER: SLA REDESIGN */}
             <div
                 className={styles.ticketFooter}
-                style={{
-                    borderTopColor: slaColors[slaStatus],
-                    background: slaStatus === "expired" ? "#fef2f2" : "transparent"
-                }}
             >
                 <div className={styles.slaInfo}>
-                    <Clock size={12} style={{ color: slaColors[slaStatus] }} />
+                    <div 
+                        className={styles.slaIndicator} 
+                        style={{ '--indicator-color': slaColors[slaStatus] } as any}
+                    />
                     <div className={styles.slaTextContainer}>
-                        <span className={styles.slaLabel}>Tiempo Restante:</span>
-                        <span className={styles.slaValue} style={{ color: slaColors[slaStatus] }}>
+                        <span className={styles.slaLabel}>Tiempo Restante</span>
+                        <span className={styles.slaValue}>
                             {timeRemaining}
                         </span>
                     </div>
