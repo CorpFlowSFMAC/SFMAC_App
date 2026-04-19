@@ -6,7 +6,7 @@ import CreateTicketWizard from "./CreateTicketWizard";
 import TicketWindow from "./TicketWindow";
 import styles from "./page.module.css";
 import { getServiceById } from "@/lib/serviceTypes";
-import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
+import { TICKET_STATES, normalizeStateId, getStateColor } from "@/lib/ticketStates";
 import { useAppData } from "@/lib/AppDataContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -620,8 +620,8 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                                     width: 8, 
                                     height: 8, 
                                     borderRadius: '50%', 
-                                    background: TICKET_STATES[normalizeStateId(ticket.estadoId || 'nuevo')]?.color || '#8B5CF6',
-                                    boxShadow: `0 0 10px ${TICKET_STATES[normalizeStateId(ticket.estadoId || 'nuevo')]?.color || '#8B5CF6'}`
+                                    background: getStateColor(ticket.estadoId || 'nuevo'),
+                                    boxShadow: `0 0 10px ${getStateColor(ticket.estadoId || 'nuevo')}`
                                 }}
                             />
                         </div>
