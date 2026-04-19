@@ -1460,7 +1460,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 categoria: 'Mano de Obra',
                 concepto: `Rescate Financiero: ${rescueForm.motivo || 'Sin motivo especificado'} (Prioridad Alta)`,
                 estado_pago: 'pendiente',
-                solicitado_por: myProfileId,
+                solicitado_por: myProfileId || undefined,
                 specialist_id: ticketData.technician_id,
                 proveedor: 'Rescate Financiero'
             });
