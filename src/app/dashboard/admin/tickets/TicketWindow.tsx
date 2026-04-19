@@ -1486,8 +1486,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra'].includes(p.tipo)
     );
     const totalLaborPaid = round2(
-        laborPaymentsModern.reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0) + 
-        laborPaymentsLegacy.reduce((acc, p) => acc + (parseFloat(p.monto) || 0), 0)
+        laborPaymentsModern.reduce((acc: number, c: any) => acc + (parseFloat(c.monto) || 0), 0) + 
+        laborPaymentsLegacy.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0)
     );
     const availableRescue = Math.max(0, round2(pactadoLabor - totalLaborPaid));
 
