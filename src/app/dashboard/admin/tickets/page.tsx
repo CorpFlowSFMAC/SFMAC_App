@@ -554,159 +554,116 @@ export default function TicketsPage() {
 }
 
 // Componente de tarjeta separado para mejor rendimiento
-function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
-    const slaColors = {
-        ok: "#10B981",
+function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
+    const { timeRemaining, slaStatus } = useTicketAge(ticket.creado_el || ticket.created_at);
+    const service = getServiceById(ticket.servicioId);
+    const ServiceIcon = service?.icon;
+
+    const slaColors: any = {
+        ok: "#22C55E",
         warning: "#F59E0B",
         critical: "#EF4444",
         expired: "#b91c1c"
     };
 
-    const { timeRemaining, slaStatus } = useTicketAge(ticket.createdAt || new Date().toISOString());
+    const statusAccent = getStateColor(ticket.estadoId || 'nuevo');
+    const stateName = TICKET_STATES.find(s => normalizeStateId(s.id) === normalizeStateId(ticket.estadoId || 'nuevo'))?.nombreCorto || 'NUEVO';
+
+    const handleCardClick = (e: React.MouseEvent) => {
+        if (onTicketClick) onTicketClick(ticket);
+    };
 
     return (
-        <div className={styles.ticketCard} onClick={onTicketClick} style={{ cursor: 'pointer' }}>
-            {/* HEADER: Prioriza el número del cliente si existe */}
+        <div
+            className={styles.ticketCard}
+            onClick={handleCardClick}
+            ref={provided?.innerRef}
+            {...(isDraggable ? provided?.draggableProps : {})}
+            {...(isDraggable ? provided?.dragHandleProps : {})}
+            style={{ 
+                ...provided?.draggableProps.style,
+                '--status-accent': statusAccent
+            } as any}
+        >
+            {/* Indicador de Estado Lateral */}
+            <div className={styles.statusIndicator} />
+
+            {/* Cabecera GEOMÉTRICA (El número es el Centro) */}
             <div className={styles.ticketHeader}>
-                <span className={styles.ticketId}>
-                    {ticket.numeroTicketCliente ? ticket.numeroTicketCliente : `#${ticket.id.slice(-6)}`}
+                <span className={styles.ticketStatusLabel}>
+                    {stateName}
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {ticket.solicitudModificacion && (
-                        <div className={styles.modRequestBadge} title="La gestora solicita autorización para modificar presupuesto">
-                            <Sparkles size={10} />
-                            <span>SOLICITUD CAMBIO</span>
-                        </div>
-                    )}
-                    {slaStatus === "expired" && (
-                        <div className={styles.expiredBadge}>SLA VENCIDO</div>
-                    )}
-                    {(!ticket.gestora_id && !ticket.gestora) && (
-                        <div className={styles.expiredBadge} style={{ background: '#F59E0B' }}>SIN GESTORA</div>
-                    )}
-                </div>
+                <h2 className={styles.ticketIdLarge}>
+                    {ticket.numeroTicketCliente || `TK-${ticket.id.slice(-6).toUpperCase()}`}
+                </h2>
             </div>
 
-            {/* BODY OPTIMIZADO */}
-            <div className={styles.ticketBody}>
-                <div className={styles.clienteInfo}>
-                    <div
-                        className={styles.clienteLogo}
-                        style={{
-                            background: !ticket.cliente?.logo ? (ticket.cliente?.color || '#8B5CF6') : 'white'
-                        }}
-                    >
+            <div className={styles.ticketBody} style={{ padding: '1.2rem 1.5rem' }}>
+                {/* Cliente / Sede Minimal */}
+                <div className={styles.clienteInfo} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
+                    <div className={styles.clienteLogo} style={{ width: '32px', height: '32px' }}>
                         {ticket.cliente?.logo ? (
-                            <div className={styles.logoWrapper}>
-                                <img
-                                    src={ticket.cliente.logo}
-                                    alt={ticket.cliente.nombre}
-                                    className={styles.clienteImg}
-                                    loading="lazy"
-                                />
-                            </div>
+                            <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} className={styles.clienteImg} />
                         ) : (
-                            <div className={styles.clienteLogoFallback}>
+                            <div className={styles.clienteLogoFallback} style={{ background: '#F1F5F9', color: '#64748B', fontSize: '0.6rem' }}>
                                 {ticket.cliente?.nombre?.substring(0, 2).toUpperCase() || 'TK'}
                             </div>
                         )}
                     </div>
                     <div className={styles.clienteText}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <h4>{ticket.cliente?.nombre || 'Sin cliente'}</h4>
-                            <div 
-                                className={styles.statusDot} 
-                                style={{ 
-                                    width: 8, 
-                                    height: 8, 
-                                    borderRadius: '50%', 
-                                    background: getStateColor(ticket.estadoId || 'nuevo'),
-                                    boxShadow: `0 0 10px ${getStateColor(ticket.estadoId || 'nuevo')}`
-                                }}
-                            />
-                        </div>
-                        <p>{ticket.sede?.nombre || 'Sin sede'}</p>
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0F172A' }}>{ticket.cliente?.nombre || 'Sin cliente'}</h4>
+                        <p style={{ fontSize: '0.7rem', color: '#64748B' }}>{ticket.sede?.nombre || 'Sin sede'}</p>
                     </div>
                 </div>
 
-                {/* Dirección Premium */}
-                <div className={styles.direccionInfo}>
-                    <MapPin size={14} className={styles.addressIcon} />
-                    <span className={styles.addressText}>
-                        {ticket.sede?.direccion && ticket.sede.direccion !== 'Sin dirección' 
-                            ? ticket.sede.direccion 
-                            : 'Dirección no especificada'}
-                    </span>
-                </div>
+                {/* Info de Servicio Cruda y Limpia */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                         <MapPin size={12} color="#94A3B8" />
+                         <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 500 }}>
+                            {ticket.sede?.direccion || 'Dirección no especificada'}
+                         </span>
+                    </div>
 
-                {/* Servicio y Modificaciones */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                    {ServiceIcon && (
-                        <div
-                            className={styles.serviceTag}
-                            style={{
-                                borderColor: `${service?.color}30`,
-                            }}
-                        >
-                            <ServiceIcon size={14} color={service?.color} />
-                            <span style={{ color: service?.color }}>
-                                {service?.nombre}
-                            </span>
-                        </div>
-                    )}
-
-                    {ticket.metadata?.solicitudModificacion?.pendiente && (
-                        <div 
-                            className={styles.modRequestBadge}
-                            title={`Solicitado por: ${ticket.metadata.solicitudModificacion.solicitadoPor}`}
-                        >
-                            <FileEdit size={12} />
-                            <span>REQ. CAMBIO</span>
-                        </div>
-                    )}
-
-                    {ticket.estadoId === 'requiere_revision_admin' && (
-                        <div 
-                            className={styles.modificacionTag}
-                            style={{ background: '#FEF2F2', border: '1.5px solid #FCA5A5', color: '#B91C1C' }}
-                            title="Exceso de presupuesto - Requiere aprobación de Administrador"
-                        >
-                            <AlertTriangle size={12} />
-                            <span>EXCESO PRESUP.</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* Descripción */}
-                <p className={styles.descripcion}>
-                    {ticket.descripcionProblema?.substring(0, 80)}
-                    {ticket.descripcionProblema?.length > 80 && '...'}
-                </p>
-            </div>
-
-            {/* FOOTER: SLA REDESIGN */}
-            <div
-                className={styles.ticketFooter}
-            >
-                <div className={styles.slaInfo}>
-                    <div 
-                        className={styles.slaIndicator} 
-                        style={{ '--indicator-color': slaColors[slaStatus] } as any}
-                    />
-                    <div className={styles.slaTextContainer}>
-                        <span className={styles.slaLabel}>Tiempo Restante</span>
-                        <span className={styles.slaValue}>
-                            {timeRemaining}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {ServiceIcon && <ServiceIcon size={12} color={service?.color} />}
+                        <span style={{ fontSize: '0.75rem', color: service?.color, fontWeight: 700 }}>
+                            {service?.nombre?.toUpperCase()}
                         </span>
                     </div>
                 </div>
-                {slaStatus !== "ok" && (
-                    <AlertCircle size={14} style={{ color: slaColors[slaStatus] }} className={styles.pulseAnimation} />
-                )}
+                
+                <p className={styles.descripcion} style={{ marginTop: '1rem', borderLeft: '2px solid #F1F5F9', paddingLeft: '10px', fontStyle: 'italic', color: '#64748B' }}>
+                    {ticket.descripcionProblema?.substring(0, 85)}
+                    {ticket.descripcionProblema?.length > 85 && '...'}
+                </p>
+            </div>
+
+            {/* Footer Minimalista */}
+            <div className={styles.ticketFooter}>
+                <div className={styles.slaMinimal}>
+                    <div 
+                        className={styles.slaIndicatorCircle} 
+                        style={{ '--indicator-color': slaColors[slaStatus] } as any}
+                    />
+                    <span className={styles.slaValueMinimal}>
+                        SLA: {timeRemaining}
+                    </span>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    {ticket.metadata?.solicitudModificacion?.pendiente && (
+                        <FileEdit size={14} color="#8B5CF6" />
+                    )}
+                    {ticket.estadoId === 'requiere_revision_admin' && (
+                        <AlertTriangle size={14} color="#EF4444" />
+                    )}
+                </div>
             </div>
         </div>
     );
 }
+
 // Componente de fila para el historial de tickets cerrados
 function TicketRow({ ticket, onTicketClick }: any) {
     const service = getServiceById(ticket.tipoServicio);

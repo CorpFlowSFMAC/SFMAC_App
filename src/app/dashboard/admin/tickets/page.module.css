@@ -350,6 +350,30 @@
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
 }
 
+.createBtn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #22D3EE, #0891B2);
+    color: white;
+    padding: 0.8rem 1.8rem;
+    border-radius: 14px;
+    font-weight: 900;
+    font-size: 0.95rem;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 10px 20px -5px rgba(34, 211, 238, 0.4);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.createBtn:hover {
+    transform: scale(1.05) translateY(-2px);
+    box-shadow: 0 15px 30px -5px rgba(34, 211, 238, 0.6);
+    filter: brightness(1.1);
+}
+
 .searchBox:focus-within {
     border-color: #8B5CF6;
     box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.08);
@@ -410,72 +434,73 @@
     gap: 0.8rem;
 }
 
-/* 🎴 TARJETA ULTRA PREMIUM - FUTURISTA */
+/* 🏛️ PROPUESTA: MINIMALISMO GEOMÉTRICO - ORDEN Y ELEGANCIA */
 .ticketCard {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 18px;
+    background: #FFFFFF;
+    border-radius: 12px;
     padding: 0;
-    transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     box-shadow: 
-        0 4px 6px -1px rgba(0, 0, 0, 0.05),
-        0 10px 15px -3px rgba(0, 0, 0, 0.03);
+        0 1px 3px rgba(0, 0, 0, 0.05),
+        0 1px 2px rgba(0, 0, 0, 0.03);
     overflow: hidden;
     position: relative;
     display: flex;
     flex-direction: column;
-}
-
-.ticketCard::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 18px;
-    padding: 2px; /* Espaciado para el borde de gradiente */
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), transparent, rgba(99, 102, 241, 0.2));
-    -webkit-mask: 
-        linear-gradient(#fff 0 0) content-box, 
-        linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-    opacity: 0.3;
+    border: 1px solid #E2E8F0;
 }
 
 .ticketCard:hover {
-    transform: translateY(-8px) scale(1.01);
+    transform: translateY(-4px);
     box-shadow: 
-        0 20px 40px -10px rgba(139, 92, 246, 0.2),
-        0 0 20px rgba(139, 92, 246, 0.1);
-    background: #FFFFFF;
-    border-color: rgba(139, 92, 246, 0.3);
+        0 20px 25px -5px rgba(0, 0, 0, 0.1),
+        0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border-color: #94A3B8;
 }
 
-.ticketCard:hover::after {
-    opacity: 0.8;
+/* Diferenciador lateral sutil pero firme */
+.statusIndicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--status-accent);
 }
 
 .ticketHeader {
-    padding: 0.8rem 1rem;
+    padding: 1.5rem 1.5rem 1.2rem 1.5rem;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
-    background: rgba(248, 250, 252, 0.5);
+    background: #F8FAFC;
+    border-bottom: 1px solid #E2E8F0;
+    text-align: center;
 }
 
-.ticketId {
-    font-size: 0.68rem;
-    font-weight: 800;
-    color: #64748B;
+.ticketIdLarge {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #0F172A;
+    letter-spacing: -1.5px;
+    margin: 0;
+    line-height: 1;
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+.ticketStatusLabel {
+    display: inline-block;
+    padding: 3px 10px;
     background: white;
-    padding: 0.25rem 0.6rem;
-    border-radius: 8px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-    letter-spacing: 0.05em;
-    font-family: inherit;
+    border-radius: 20px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: var(--status-accent);
+    border: 1px solid var(--status-accent);
+    margin-bottom: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
 }
 
 @keyframes pulseRed {
@@ -663,62 +688,33 @@
     font-weight: 600;
 }
 
-/* FOOTER: SLA REDESIGN */
+/* FOOTER: MINIMALISMO TOTAL */
 .ticketFooter {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.8rem 1rem;
-    background: rgba(255, 255, 255, 0.4);
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
-    margin-top: auto;
+    padding: 0.8rem 1.5rem;
+    background: #FFFFFF;
+    border-top: 1px dashed #E2E8F0;
 }
 
-.slaInfo {
+.slaMinimal {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 8px;
+    color: #64748B;
 }
 
-.slaIndicator {
-    width: 8px;
-    height: 8px;
+.slaIndicatorCircle {
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--indicator-color);
-    position: relative;
 }
 
-.slaIndicator::after {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    border-radius: 50%;
-    background: var(--indicator-color);
-    opacity: 0.4;
-    animation: indicatorGlow 2s ease-out infinite;
-}
-
-@keyframes indicatorGlow {
-    0% { transform: scale(1); opacity: 0.4; }
-    100% { transform: scale(2.5); opacity: 0; }
-}
-
-.slaTextContainer {
-    display: flex;
-    flex-direction: column;
-}
-
-.slaLabel {
-    font-size: 0.6rem;
-    color: #94A3B8;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.slaValue {
-    font-size: 0.85rem;
-    font-weight: 900;
+.slaValueMinimal {
+    font-size: 0.8rem;
+    font-weight: 700;
     color: #1E293B;
 }
 
