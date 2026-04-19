@@ -28,6 +28,7 @@ export const normalizeTicket = (t: any) => {
             ...clienteRaw,
             nombre: clienteRaw.name || clienteRaw.nombre || "Sin Nombre",
             color: clienteRaw.color_aura || clienteRaw.color || "#8B5CF6",
+            logo: clienteRaw.logo || realMetadata.logo || null,
         }
         : null;
 
@@ -36,7 +37,7 @@ export const normalizeTicket = (t: any) => {
         ? {
             ...sedeRaw,
             nombre: sedeRaw.name || sedeRaw.nombre || "Sin Sede",
-            direccion: sedeRaw.address || sedeRaw.direccion || "Sin dirección",
+            direccion: sedeRaw.address || sedeRaw.direccion || realMetadata.address || "Sin dirección",
             zona: sedeRaw.zone || sedeRaw.zona || "PAN PERÚ",
             departamento: sedeRaw.departamento || realMetadata.departamento,
             provincia: sedeRaw.provincia || realMetadata.provincia,

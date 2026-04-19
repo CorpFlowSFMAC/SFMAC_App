@@ -599,13 +599,18 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                         }}
                     >
                         {ticket.cliente?.logo ? (
-                            <img
-                                src={ticket.cliente.logo}
-                                alt={ticket.cliente.nombre}
-                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                            />
+                            <div className={styles.logoWrapper}>
+                                <img
+                                    src={ticket.cliente.logo}
+                                    alt={ticket.cliente.nombre}
+                                    className={styles.clienteImg}
+                                    loading="lazy"
+                                />
+                            </div>
                         ) : (
-                            ticket.cliente?.nombre?.substring(0, 2) || 'TK'
+                            <div className={styles.clienteLogoFallback} style={{ background: ticket.cliente?.color || '#8B5CF6' }}>
+                                {ticket.cliente?.nombre?.substring(0, 2).toUpperCase() || 'TK'}
+                            </div>
                         )}
                     </div>
                     <div className={styles.clienteText}>
@@ -615,12 +620,14 @@ function TicketCard({ ticket, service, ServiceIcon, onTicketClick }: any) {
                 </div>
 
                 {/* Dirección */}
-                {ticket.sede?.direccion && (
-                    <div className={styles.direccionInfo}>
-                        <MapPin size={12} />
-                        <span>{ticket.sede.direccion}</span>
-                    </div>
-                )}
+                <div className={styles.direccionInfo}>
+                    <MapPin size={12} className={styles.addressIcon} />
+                    <span className={styles.addressText}>
+                        {ticket.sede?.direccion && ticket.sede.direccion !== 'Sin dirección' 
+                            ? ticket.sede.direccion 
+                            : 'Dirección no especificada'}
+                    </span>
+                </div>
 
                 {/* Servicio y Modificaciones */}
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
