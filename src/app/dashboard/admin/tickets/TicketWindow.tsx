@@ -2756,7 +2756,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
-                                                        {(paymentsSummary > 0 || historyArray.length > 0 || visitPayment > 0 || classicAdvance > 0) && (
+                                                        {(paymentsSummary > 0 || legacyPaymentsFiltered.length > 0 || visitPayment > 0 || classicAdvance > 0) && (
                                                             <div className={styles.depositsListPremium}>
                                                                 {/* Pagos de la nueva tabla */}
                                                                 {ticketCosts
