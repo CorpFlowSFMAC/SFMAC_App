@@ -1482,7 +1482,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         (c.estado_pago === 'pagado' || c.estado_pago === 'adelanto') && 
         (c.categoria === 'Mano de Obra')
     );
-    const laborPaymentsLegacy = legacyPaymentsFiltered.filter(p => 
+    const laborPaymentsLegacy = legacyPaymentsFiltered.filter((p: any) => 
         ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra'].includes(p.tipo)
     );
     const totalLaborPaid = round2(
