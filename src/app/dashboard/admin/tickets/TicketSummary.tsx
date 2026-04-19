@@ -1350,7 +1350,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                 <div className={styles.titleText}>
                     <h3 style={{ color: '#065F46' }}>Pagos al Técnico</h3>
                     <span style={{ color: '#059669' }}>
-                        {pagos.length} depósito{pagos.length !== 1 ? 's' : ''} confirmado{pagos.length !== 1 ? 's' : ''}
+                        {combinedPagos.length} depósito{combinedPagos.length !== 1 ? 's' : ''} confirmado{combinedPagos.length !== 1 ? 's' : ''}
                     </span>
                 </div>
             </div>
@@ -1359,7 +1359,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
 
             {/* Lista de pagos */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {pagos.map((p: any, idx: number) => {
+                {combinedPagos.map((p: any, idx: number) => {
                     const badge = getTipoBadge(p.tipo);
                     const voucherSrc = resolveVoucher(p);
                     return (
