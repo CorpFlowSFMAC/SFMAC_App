@@ -1647,7 +1647,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                             <FinancialLiquidationBar 
                                 ticket={ticketData} 
                                 onOpenMaterials={() => setShowMaterialsModal(true)} 
+                                onOpenRescue={handleOpenRescue}
                                 costos={ticketCosts}
+                                availableRescue={availableRescue}
                             />
                             <PaymentHistoryBar ticket={ticketData} costos={ticketCosts} />
                             <UnifiedEvidenceBar ticket={ticketData} />

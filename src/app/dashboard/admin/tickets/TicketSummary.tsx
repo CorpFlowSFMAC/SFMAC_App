@@ -890,7 +890,9 @@ export function QuotationInfoBar({ ticket, onToggleDetails, isCollapsed }: { tic
 interface FinancialLiquidationBarProps {
     ticket: any;
     onOpenMaterials?: () => void;
+    onOpenRescue?: () => void;
     costos?: any[];
+    availableRescue?: number;
 }
 
 export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
@@ -1067,7 +1069,7 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
 }
 
 
-export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: FinancialLiquidationBarProps) {
+export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue, costos, availableRescue = 0 }: FinancialLiquidationBarProps) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
@@ -1246,6 +1248,22 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, costos }: Fin
                 >
                     <Package size={14} />
                     <span>Compras</span>
+                </button>
+            {onOpenRescue && ticket.estadoId !== "ticket_cerrado" && (
+                <button 
+                    className={styles.pillsBtn} 
+                    onClick={onOpenRescue}
+                    style={{ 
+                        background: availableRescue > 0 ? '#FFF7ED' : '#F1F5F9', 
+                        color: availableRescue > 0 ? '#C2410C' : '#94A3B8',
+                        border: availableRescue > 0 ? '1px solid #FFEDD5' : '1px solid #E2E8F0',
+                        marginRight: '8px'
+                    }}
+                    disabled={availableRescue <= 0}
+                    title={availableRescue > 0 ? "Solicitar Rescate Financiero (Adelanto)" : "Tope de mano de obra pactada alcanzado"}
+                >
+                    <Coins size={16} color={availableRescue > 0 ? "#F59E0B" : "#94A3B8"} />
+                    <span>{availableRescue > 0 ? "Rescate" : "Tope"}</span>
                 </button>
             )}
 
