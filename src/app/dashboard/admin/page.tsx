@@ -189,7 +189,8 @@ export default function AdminDashboard() {
         });
 
         const ingresos = closed.reduce((s: number, t: any) => {
-            return s + (parseFloat(t.montoFinal || t.total_quoted_amount || 0));
+            const total = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
+            return s + (total / 1.18); // Monto Neto (Sin IGV) para cálculo de utilidad neta
         }, 0);
 
         // Utilidad REAL sobre lo cerrado (Ingresos - Gastos Reales Transferidos)
@@ -213,10 +214,12 @@ export default function AdminDashboard() {
         const margen = ingresos > 0 ? (utilidad / ingresos) * 100 : 0;
         const ratio = inversion > 0 ? (ingresos - inversion) / inversion : 0;
 
-        // Por servicio
+        // Por servicio (Basado en Neto sin IGV)
         const byService = SERVICE_TYPES.map(s => {
             const st = closed.filter((t: any) => t.tipoServicio === s.id);
-            const ing = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
+            const ingBruto = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
+            const ingNeto = ingBruto / 1.18;
+            
             const cost = st.reduce((acc: number, t: any) => {
                 const pagos = t.metadata?.historialPagosTecnico || [];
                 const totalPagado = pagos.reduce((pacc: number, p: any) => pacc + (parseFloat(p.monto) || 0), 0);
@@ -225,8 +228,8 @@ export default function AdminDashboard() {
                 }
                 return acc + totalPagado;
             }, 0);
-            const m = ing > 0 ? ((ing - cost) / ing) * 100 : 0;
-            return { ...s, tickets: st.length, ingresos: ing, margen: m };
+            const m = ingNeto > 0 ? ((ingNeto - cost) / ingNeto) * 100 : 0;
+            return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
         return { 
@@ -257,12 +260,20 @@ export default function AdminDashboard() {
 
         // El lucro cesante es la utilidad proyectada que aún no se cobra
         // Cálculo EXACTO: (Monto Total - Costos Operativos) de tickets aprobados
-        const lucro = approvedTickets.reduce((s, t) => {
-            const total = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-            const costos = parseFloat(t.costoManoObra || t.labor_cost || 0) + 
-                           parseFloat(t.costoMateriales || t.materials_cost || 0) + 
-                           parseFloat(t.costoVisita || t.visit_cost || 0);
-            return s + (total - costos);
+            const totalBruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
+            const totalNeto = totalBruto / 1.18;
+            
+            // Calculamos el costo REAL (pagos realizados) vs el ESTIMADO (mano de obra pactada)
+            const pagos = t.metadata?.historialPagosTecnico || [];
+            const totalPagado = pagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
+            
+            // Para tickets en curso, el costo es el máximo entre lo que ya se pagó y lo que se pactó pagar
+            const costoEstimado = parseFloat(t.costoManoObra || t.labor_cost || 0) + 
+                                  parseFloat(t.costoMateriales || t.materials_cost || 0) + 
+                                  parseFloat(t.costoVisita || t.visit_cost || 0);
+            
+            const costoRealRef = Math.max(totalPagado, costoEstimado);
+            return s + (totalNeto - costoRealRef);
         }, 0);
 
         // Aging de todos los pendientes (Pipeline + Aprobados)

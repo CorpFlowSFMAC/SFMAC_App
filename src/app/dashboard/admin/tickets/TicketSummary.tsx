@@ -761,8 +761,8 @@ export function QuotationInfoBar({ ticket, onToggleDetails, isCollapsed }: { tic
     const baseBudgetedCost = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
     const totalRealCosts = Math.max(baseBudgetedCost, round2(totalPagadoEfectivo));
     
-    const profit = round2(totalFinal - totalRealCosts);
-    const margin = totalFinal > 0 ? (profit / totalFinal) * 100 : 0;
+    const profit = round2(subtotalLocal - totalRealCosts);
+    const margin = subtotalLocal > 0 ? (profit / subtotalLocal) * 100 : 0;
 
     return (
         <div
