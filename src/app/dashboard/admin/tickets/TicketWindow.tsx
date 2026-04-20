@@ -3104,11 +3104,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                             className={styles.formSelect}
                                             style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', outline: 'none', background: 'white', color: '#1E293B', fontWeight: 600 }}
                                         >
-                                            <option value="Materiales">Materiales</option>
-                                            <option value="Mano de Obra">Mano de Obra (Técnico Externo)</option>
-                                            <option value="Viáticos">Viáticos / Movilidad</option>
-                                            <option value="Logística">Logística / Envíos</option>
-                                            <option value="Otros">Otros Egresos</option>
+                                            <option value="Materiales">📦 Materiales / Insumos</option>
+                                            <option value="Mano de Obra">🔧 Mano de Obra (Técnico Externo)</option>
+                                            <option value="Viáticos / Movilidad">🚗 Viáticos / Movilidad</option>
+                                            <option value="Logística">📬 Logística / Envíos</option>
+                                            <option value="Adelanto">💰 Adelanto Operativo</option>
+                                            <option value="Otros">📌 Otros Egresos</option>
                                         </select>
                                     </div>
 
