@@ -260,6 +260,7 @@ export default function AdminDashboard() {
 
         // El lucro cesante es la utilidad proyectada que aún no se cobra
         // Cálculo EXACTO: (Monto Total - Costos Operativos) de tickets aprobados
+        const lucro = approvedTickets.reduce((s, t) => {
             const totalBruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
             const totalNeto = totalBruto / 1.18;
             
