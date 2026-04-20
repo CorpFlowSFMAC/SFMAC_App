@@ -1297,8 +1297,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             showToast("Campos incompletos", "El concepto y el monto son obligatorios.", "error");
             return;
         }
-        if (!materialsForm.specialist_id) {
-            showToast("Técnico requerido", "Seleccione el técnico externo para esta compra.", "error");
+        if (!materialsForm.specialist_id || materialsForm.specialist_id.trim() === '') {
+            showToast("Técnico requerido", "Seleccione el técnico de la lista desplegable para esta solicitud.", "error");
             return;
         }
         setIsSavingMaterials(true);
@@ -1337,9 +1337,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 `Compra de materiales para ${materialsForm.specialistName} registrada. Pendiente de abono.`,
                 "success"
             );
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error saving materials request:", err);
-            showToast("Error", "No se pudo registrar la solicitud.", "error");
+            const detail = err?.message || err?.details || "Error desconocido";
+            showToast("Error al Registrar", `No se pudo guardar: ${detail}`, "error");
         } finally {
             setIsSavingMaterials(false);
         }
@@ -1468,9 +1469,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             showToast("Solicitud Enviada", "El rescate financiero ha sido registrado y enviado a Tesorería.", "success");
             setShowRescueModal(false);
             loadCosts();
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error creating rescue request:", err);
-            showToast("Error", "No se pudo registrar la solicitud de rescate.", "error");
+            const detail = err?.message || err?.details || "Error desconocido";
+            showToast("Error", `No se pudo registrar el rescate: ${detail}`, "error");
         } finally {
             setIsSavingRescue(false);
         }

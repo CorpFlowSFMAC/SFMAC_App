@@ -830,14 +830,27 @@ export const ticketCostsAPI = {
         url_comprobante?: string;
         solicitado_por?: string;
     }) {
+        // Strip undefined / empty-string optional UUID fields to avoid FK violations
+        const safePayload: Record<string, any> = {
+            ticket_id: cost.ticket_id,
+            concepto: cost.concepto,
+            categoria: cost.categoria,
+            monto: cost.monto,
+            estado_pago: cost.estado_pago,
+        };
+        if (cost.proveedor)         safePayload.proveedor = cost.proveedor;
+        if (cost.specialist_id)     safePayload.specialist_id = cost.specialist_id;
+        if (cost.url_comprobante)   safePayload.url_comprobante = cost.url_comprobante;
+        if (cost.solicitado_por)    safePayload.solicitado_por = cost.solicitado_por;
+
         const { data, error } = await supabase
             .from('ticket_costs')
-            .insert(cost)
+            .insert(safePayload)
             .select('*')
             .single();
 
         if (error) {
-            console.error("DEBUG: Error in ticketCostsAPI.create:", error);
+            console.error("DEBUG: Error in ticketCostsAPI.create:", error.code, error.message, error.details, "Payload:", safePayload);
             throw error;
         }
         return data;
