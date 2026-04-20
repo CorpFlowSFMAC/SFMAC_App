@@ -28,25 +28,49 @@ function semaforo(conditions: { test: boolean; level: Light }[]): Light {
 }
 
 // ── MÓDULO 1: KPI ROI Card ──────────────────
-function RoiCard({ label, value, sub, color, icon: Icon, light }: any) {
+function RoiCard({ label, value, sub, color, icon: Icon, light, onClick }: any) {
     const lightColor = light === "ROJO" ? "#EF4444" : light === "AMBAR" ? "#F59E0B" : "#10B981";
     return (
-        <div style={{
-            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
-            border: `1px solid ${lightColor}30`,
-            borderRadius: "16px", padding: "1.4rem 1.5rem",
-            display: "flex", flexDirection: "column", gap: "0.5rem",
-            boxShadow: `0 4px 20px ${lightColor}10`,
-            position: "relative", overflow: "hidden"
-        }}>
+        <div 
+            onClick={onClick}
+            style={{
+                background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                border: `1px solid ${lightColor}30`,
+                borderRadius: "16px", padding: "1.4rem 1.5rem",
+                display: "flex", flexDirection: "column", gap: "0.5rem",
+                boxShadow: `0 4px 20px ${lightColor}10`,
+                position: "relative", overflow: "hidden",
+                cursor: onClick ? "pointer" : "default",
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+            onMouseEnter={e => {
+                if (onClick) {
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.08) 0%,rgba(255,255,255,0.02) 100%)";
+                    e.currentTarget.style.borderColor = `${lightColor}60`;
+                    e.currentTarget.style.boxShadow = `0 8px 30px ${lightColor}20`;
+                }
+            }}
+            onMouseLeave={e => {
+                if (onClick) {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)";
+                    e.currentTarget.style.borderColor = `${lightColor}30`;
+                    e.currentTarget.style.boxShadow = `0 4px 20px ${lightColor}10`;
+                }
+            }}
+        >
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "3px", background: lightColor }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Icon size={18} color={color} />
                 </div>
-                <span style={{ fontSize: "0.65rem", fontWeight: 800, padding: "2px 8px", borderRadius: "999px", background: `${lightColor}18`, color: lightColor, border: `1px solid ${lightColor}30` }}>
-                    {light}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <span style={{ fontSize: "0.65rem", fontWeight: 800, padding: "2px 8px", borderRadius: "999px", background: `${lightColor}18`, color: lightColor, border: `1px solid ${lightColor}30` }}>
+                        {light}
+                    </span>
+                    {onClick && <span style={{ fontSize: '0.55rem', fontWeight: 800, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.05em' }}>VER MÁS</span>}
+                </div>
             </div>
             <div style={{ fontSize: "1.75rem", fontWeight: 900, color: "white", letterSpacing: "-0.5px", lineHeight: 1 }}>{value}</div>
             <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div>
@@ -134,13 +158,22 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 1: Rentabilidad / ROI ───────────
     const roi = useMemo(() => {
-        // Para INVERSIÓN (Caja/Outflow), buscamos pagos realizados DENTRO del periodo, 
-        // independientemente de cuándo se creó el ticket.
+        const inversionItems: any[] = [];
+        
+        // Para INVERSIÓN (Caja/Outflow), buscamos pagos realizados DENTRO del periodo
         const inversion = tickets.reduce((s: number, t: any) => {
             const pagos = t.metadata?.historialPagosTecnico || [];
             const pagosEnPeriodo = pagos.reduce((ps: number, p: any) => {
-                // p.fecha es la fecha del depósito
-                if (isInRange(p.fecha || t.created_at)) {
+                const pFecha = p.fecha || t.created_at;
+                if (isInRange(pFecha)) {
+                    // Guardamos el item de inversión con referencia al ticket
+                    inversionItems.push({
+                        ...t,
+                        _paymentMonto: parseFloat(p.monto) || 0,
+                        _paymentFecha: pFecha,
+                        _paymentType: p.tipo || 'Pago / Adelanto',
+                        _paymentTecnico: p.tecnico || t.tecnico?.nombre || 'Técnico'
+                    });
                     return ps + (parseFloat(p.monto) || 0);
                 }
                 return ps;
@@ -151,7 +184,6 @@ export default function AdminDashboard() {
         // Para INGRESOS (Ventas/Inflow), buscamos tickets CERRADOS dentro del periodo.
         const closed = tickets.filter((t: any) => {
             const isCerrado = normalizeStateId(t.estadoId) === "ticket_cerrado";
-            // Usamos closure_date si existe, si no, updated_at como fallback
             const fechaCierre = t.closure_date || t.updated_at || t.created_at || "";
             return isCerrado && isInRange(fechaCierre);
         });
@@ -160,7 +192,7 @@ export default function AdminDashboard() {
             return s + (parseFloat(t.montoFinal || t.total_quoted_amount || 0));
         }, 0);
 
-        // Utilidad estimada sobre lo cerrado (para el gráfico de margen)
+        // Utilidad estimada sobre lo cerrado
         const costosCerrados = closed.reduce((s: number, t: any) => {
             const mo = parseFloat(t.costoManoObra || t.labor_cost || 0);
             const mat = parseFloat(t.costoMateriales || t.materials_cost || 0);
@@ -172,7 +204,7 @@ export default function AdminDashboard() {
         const margen = ingresos > 0 ? (utilidad / ingresos) * 100 : 0;
         const ratio = inversion > 0 ? (ingresos - inversion) / inversion : 0;
 
-        // Por servicio (calculado sobre tickets cerrados del periodo)
+        // Por servicio
         const byService = SERVICE_TYPES.map(s => {
             const st = closed.filter((t: any) => t.tipoServicio === s.id);
             const ing = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
@@ -186,7 +218,18 @@ export default function AdminDashboard() {
             return { ...s, tickets: st.length, ingresos: ing, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
-        return { inversion: round2(inversion), ingresos: round2(ingresos), utilidad, margen, ratio, closed: closed.length, total: tickets.length, byService };
+        return { 
+            inversion: round2(inversion), 
+            ingresos: round2(ingresos), 
+            utilidad, 
+            margen, 
+            ratio, 
+            closed: closed.length, 
+            total: tickets.length, 
+            byService,
+            inversionItems: inversionItems.sort((a,b) => new Date(b._paymentFecha).getTime() - new Date(a._paymentFecha).getTime()),
+            ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
+        };
     }, [tickets, dateRange]);
 
     // ── MÓDULO 2: Tesorería / Pendientes ───────
@@ -434,21 +477,45 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub={`${roi.closed} tickets cerrados`} color="#3B82F6"
+                    sub={`${roi.inversionItems.length} movimientos de caja`} color="#3B82F6"
                     icon={BanknoteIcon}
-                    light={roi.inversion > 0 ? "VERDE" : "AMBAR"} />
+                    light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
+                    onClick={() => {
+                        setModalTitle("Detalle de Inversión Ejecutada (Outflow)");
+                        setModalTickets(roi.inversionItems);
+                        setShowListModal(true);
+                    }}
+                />
                 <RoiCard label="Ingresos Generados" value={`S/ ${fmt(roi.ingresos)}`}
-                    sub="Facturación período" color="#10B981"
+                    sub={`${roi.closed} tickets cerrados`} color="#10B981"
                     icon={DollarSign}
-                    light={roi.ingresos > roi.inversion ? "VERDE" : "ROJO"} />
+                    light={roi.ingresos > roi.inversion ? "VERDE" : "ROJO"}
+                    onClick={() => {
+                        setModalTitle("Detalle de Ingresos Generados (Inflow)");
+                        setModalTickets(roi.ingresosItems);
+                        setShowListModal(true);
+                    }}
+                />
                 <RoiCard label="Utilidad Neta" value={`S/ ${fmt(roi.utilidad)}`}
-                    sub={`Margen: ${Math.round(roi.margen)}%`} color="#8B5CF6"
+                    sub={`Margen Promedio: ${Math.round(roi.margen)}%`} color="#8B5CF6"
                     icon={TrendingUp}
-                    light={roi.margen >= 40 ? "VERDE" : roi.margen >= 25 ? "AMBAR" : "ROJO"} />
+                    light={roi.margen >= 40 ? "VERDE" : roi.margen >= 25 ? "AMBAR" : "ROJO"}
+                    onClick={() => {
+                        setModalTitle("Análisis de Utilidad Neta (Profitability)");
+                        setModalTickets(roi.ingresosItems);
+                        setShowListModal(true);
+                    }}
+                />
                 <RoiCard label="Ratio de Eficiencia" value={`${roi.ratio.toFixed(2)}x`}
                     sub="Ganancia por S/ invertido" color="#F59E0B"
                     icon={Target}
-                    light={roi.ratio >= 1.5 ? "VERDE" : roi.ratio >= 1 ? "AMBAR" : "ROJO"} />
+                    light={roi.ratio >= 1.5 ? "VERDE" : roi.ratio >= 1 ? "AMBAR" : "ROJO"}
+                    onClick={() => {
+                        setModalTitle("Eficiencia Operativa / ROI");
+                        setModalTickets(roi.ingresosItems);
+                        setShowListModal(true);
+                    }}
+                />
             </div>
 
             {/* ROI por servicio */}
@@ -808,38 +875,52 @@ export default function AdminDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {modalTickets.map((t: any) => {
+                                    {modalTickets.map((t: any, idx: number) => {
                                         const h = hoursAgo(t.createdAt || t.created_at || "");
                                         const agingCol = h >= 72 ? "#EF4444" : h >= 48 ? "#F59E0B" : "#10B981";
+                                        
+                                        // Detectar si es un item de INVERSIÓN (pago individual)
+                                        const isPayment = !!t._paymentMonto;
+                                        const displayMonto = isPayment ? t._paymentMonto : (t.montoFinal || 0);
+
                                         return (
-                                            <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}>
+                                            <tr key={t.id + idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}>
 
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
                                                         {t.numeroTicketCliente || t.id.substring(0,8).toUpperCase()}
                                                     </div>
-                                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)' }}>{new Date(t.createdAt || t.created_at).toLocaleDateString()}</div>
+                                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)' }}>
+                                                        {isPayment ? `Depósito: ${new Date(t._paymentFecha).toLocaleDateString()}` : `Creado: ${new Date(t.createdAt || t.created_at).toLocaleDateString()}`}
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.82rem' }}>
                                                         {t.cliente?.nombre || t.client?.name || "Cliente SINFIMAC"}
                                                     </div>
                                                     <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
-                                                        {t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir"}
+                                                        {isPayment ? `Destinatario: ${t._paymentTecnico}` : (t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir")}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <span style={{ 
                                                         padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
-                                                        background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)'
+                                                        background: isPayment ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)', 
+                                                        color: isPayment ? '#3B82F6' : 'rgba(255,255,255,0.7)', 
+                                                        border: `1px solid ${isPayment ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.1)'}`
                                                     }}>
-                                                        {t.estadoId?.replace(/_/g, ' ').toUpperCase() || "NUEVO"}
+                                                        {isPayment ? (t._paymentType || 'PAGO').toUpperCase() : (t.estadoId?.replace(/_/g, ' ').toUpperCase() || "NUEVO")}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: '#22C55E', fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(t.montoFinal || 0)}
+                                                    <div style={{ color: isPayment ? '#F59E0B' : '#22C55E', fontWeight: 900, fontSize: '0.9rem' }}>
+                                                        S/ {fmt(displayMonto)}
                                                     </div>
+                                                    {!isPayment && t.montoFinal > 0 && (
+                                                        <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)', fontWeight: 700 }}>
+                                                            {Math.round(((t.montoFinal - ((parseFloat(t.costoManoObra||t.labor_cost||0)) + (parseFloat(t.costoMateriales||t.materials_cost||0)) + (parseFloat(t.costoVisita||t.visit_cost||0)))) / (t.montoFinal || 1)) * 100)}% MARGEN
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: agingCol, fontWeight: 900, fontSize: '0.85rem' }}>{Math.floor(h)}h</div>
