@@ -14,6 +14,7 @@ import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
 import { useAppData } from "@/lib/AppDataContext";
 import { getServiceById, SERVICE_TYPES } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
+import { formatSoles } from "@/lib/formatters";
 import styles from "./gestor.module.css";
 
 // ── SLA Constants ─────────────────────────────
@@ -147,7 +148,7 @@ function RelativeBar({ value, benchmark, label, color }: { value: number; benchm
 // MAIN DASHBOARD
 // ════════════════════════════════════════════════
 export default function GestorDashboard() {
-    const { tickets, loadingTickets: loading, createTicket, updateTicket } = useAppData();
+    const { tickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets } = useAppData();
     const [showWizard, setShowWizard] = useState(false);
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
     const [activeView, setActiveView] = useState<"dashboard" | "tickets">("dashboard");
@@ -829,7 +830,138 @@ export default function GestorDashboard() {
                         </div>
                     </div>
 
+
+                    {/* ── GOAL TRACKER ──────────────────────── */}
+                    {myGestoraId && (() => {
+                        const now2 = new Date();
+                        const month = now2.getMonth();
+                        const year = now2.getFullYear();
+                        const monthKey2 = `${year}-${String(month + 1).padStart(2, '0')}`;
+                        const startOfMonth = new Date(year, month, 1);
+                        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+                        const daysLeft = endOfMonth.getDate() - now2.getDate();
+                        const gestoraObj = gestoras.find(g => g.id === myGestoraId);
+                        const targetObj = gestorasTargets.find(tg => tg.gestora_id === myGestoraId && tg.month_key === monthKey2);
+                        const metaBono = parseFloat(targetObj?.meta_bono || gestoraObj?.meta_mensual_bono || "1500");
+                        const targetUtility = parseFloat(targetObj?.target_amount || gestoraObj?.meta_mensual_utilidad || "35000");
+                        const multiplier = parseFloat(targetObj?.bonus_multiplier || "0.1");
+                        const baseLaboral = parseFloat(gestoraObj?.costo_laboral_mensual || "0");
+
+                        const TRANSIT_S = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar"];
+                        const myNetUtil = (t: any) => {
+                            const bruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
+                            const sub = bruto / 1.18;
+                            const pagos = (t.metadata?.historialPagosTecnico || []).reduce((s: number, p: any) => s + parseFloat(p.monto || 0), 0);
+                            return Math.max(0, sub - pagos);
+                        };
+
+                        const achievedTickets = tickets.filter(t => {
+                            if (t.gestora_id !== myGestoraId) return false;
+                            if (!t.closure_date) return false;
+                            const d = new Date(t.closure_date);
+                            return d >= startOfMonth && d <= endOfMonth;
+                        });
+
+                        const utilityTotal = achievedTickets.reduce((a, t) => a + myNetUtil(t), 0);
+                        const percentAchieved = targetUtility > 0 ? Math.min((utilityTotal / targetUtility) * 100, 100) : 0;
+                        const bonusEarned = percentAchieved >= 80 ? (utilityTotal / targetUtility) * (baseLaboral * multiplier) : 0;
+                        const faltante = Math.max(0, metaBono - bonusEarned);
+
+                        const impulsoTickets = tickets
+                            .filter(t => t.gestora_id === myGestoraId && TRANSIT_S.includes(normalizeStateId(t.estadoId)) && !t.closure_date)
+                            .map(t => ({ ...t, _utility: myNetUtil(t) }))
+                            .sort((a: any, b: any) => b._utility - a._utility)
+                            .slice(0, 5);
+
+                        const barColor = percentAchieved >= 100 ? '#10B981' : percentAchieved >= 80 ? '#22C55E' : percentAchieved >= 50 ? '#F59E0B' : '#EF4444';
+
+                        return (
+                            <div style={{ marginBottom: '1.25rem', background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                                <div style={{ padding: '1rem 1.5rem', background: 'linear-gradient(135deg,#1E1B4B,#312E81)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <Target size={18} color="#A78BFA" />
+                                        <span style={{ color: 'white', fontWeight: 800, fontSize: '0.9rem' }}>🎯 Meta del Mes — {monthKey2}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        {daysLeft <= 5 && (
+                                            <span style={{ background: '#EF4444', color: 'white', fontSize: '0.72rem', fontWeight: 900, padding: '3px 10px', borderRadius: '99px', animation: 'pulse 2s infinite' }}>
+                                                ⏰ {daysLeft}d restantes!
+                                            </span>
+                                        )}
+                                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{Math.round(percentAchieved)}% logrado</span>
+                                    </div>
+                                </div>
+
+                                <div style={{ padding: '1rem 1.5rem' }}>
+                                    {/* Main progress bar */}
+                                    <div style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                                        <span style={{ color: '#64748B', fontWeight: 600 }}>Progreso hacia bono de S/ {formatSoles(metaBono)}</span>
+                                        <span style={{ color: barColor, fontWeight: 900 }}>S/ {formatSoles(bonusEarned)} ganado</span>
+                                    </div>
+                                    <div style={{ height: '10px', background: '#F1F5F9', borderRadius: '5px', overflow: 'hidden', marginBottom: '0.5rem', position: 'relative' }}>
+                                        <div style={{ width: `${percentAchieved}%`, height: '100%', background: `linear-gradient(90deg,${barColor},${barColor}99)`, borderRadius: '5px', transition: 'width 1s ease' }} />
+                                        <div style={{ position: 'absolute', top: 0, left: '80%', width: '2px', height: '100%', background: '#94A3B8', opacity: 0.7 }} title="Mínimo 80% para bono" />
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94A3B8', marginBottom: '0.75rem' }}>
+                                        <span>Utilidad neta lograda: S/ {formatSoles(utilityTotal)}</span>
+                                        <span>↑ 80% min. para activar bono</span>
+                                        <span>Meta: S/ {formatSoles(targetUtility)}</span>
+                                    </div>
+
+                                    {/* KPI row */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '0.75rem', marginBottom: faltante > 0 && impulsoTickets.length > 0 ? '0.75rem' : '0' }}>
+                                        {[
+                                            { label: 'Tickets Cerrados', val: achievedTickets.length, color: '#10B981' },
+                                            { label: 'Bono Ganado', val: `S/ ${formatSoles(bonusEarned)}`, color: '#8B5CF6' },
+                                            { label: faltante > 0 ? 'Faltante para meta' : '🎉 Meta Superada', val: faltante > 0 ? `S/ ${formatSoles(faltante)}` : `S/ ${formatSoles(metaBono)}`, color: faltante > 0 ? '#F59E0B' : '#10B981' }
+                                        ].map((s, i) => (
+                                            <div key={i} style={{ background: '#F8FAFC', borderRadius: '10px', padding: '0.6rem 0.9rem', border: '1px solid #F1F5F9' }}>
+                                                <div style={{ fontSize: '1rem', fontWeight: 900, color: s.color }}>{s.val}</div>
+                                                <div style={{ fontSize: '0.68rem', color: '#94A3B8', fontWeight: 600, marginTop: '2px' }}>{s.label}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* IMPULSO FINAL */}
+                                    {faltante > 0 && impulsoTickets.length > 0 && (
+                                        <div style={{ background: 'linear-gradient(135deg,#F5F3FF,#EDE9FE)', border: '1px solid #C4B5FD', borderRadius: '12px', padding: '0.9rem 1rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                                                <Zap size={14} color="#7C3AED" />
+                                                <span style={{ color: '#7C3AED', fontWeight: 900, fontSize: '0.82rem' }}>
+                                                    IMPULSO FINAL — Cierra estos tickets para asegurar tu bono de S/ {formatSoles(metaBono)}
+                                                </span>
+                                            </div>
+                                            {impulsoTickets.map((t: any, j: number) => (
+                                                <div
+                                                    key={j}
+                                                    onClick={() => { if (!openTicketIds.includes(t.id)) setOpenTicketIds([...openTicketIds, t.id]); }}
+                                                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'white', borderRadius: '8px', marginBottom: '4px', cursor: 'pointer', border: '1px solid #DDD6FE' }}
+                                                >
+                                                    <div>
+                                                        <span style={{ color: '#1E293B', fontWeight: 700, fontSize: '0.8rem' }}>{t.numeroTicketCliente || t.id?.slice(0,8)}</span>
+                                                        <span style={{ color: '#94A3B8', fontSize: '0.72rem', marginLeft: '8px' }}>{normalizeStateId(t.estadoId).replace(/_/g,' ')}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ color: '#059669', fontWeight: 900, fontSize: '0.82rem' }}>+S/ {formatSoles(t._utility)}</span>
+                                                        <ChevronRight size={13} color="#94A3B8" />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {faltante <= 0 && percentAchieved > 0 && (
+                                        <div style={{ background: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)', border: '1px solid #6EE7B7', borderRadius: '12px', padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                            <span style={{ color: '#059669', fontWeight: 800, fontSize: '0.85rem' }}>🎉 ¡Felicidades! Tu bono de S/ {formatSoles(bonusEarned)} ha sido confirmado.</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* ── TOP 5 URGENT + PIPELINE ──────────── */}
+
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
 
                         {/* Top 5 urgentes */}

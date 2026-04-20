@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3, Route, Shield, Clock } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3, Route, Shield, Clock, Calculator } from 'lucide-react';
 import styles from "./admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
@@ -150,6 +150,13 @@ export default function AdminLayout({
                                 <Link href="/dashboard/admin/asistencia" className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
                                     <Clock size={20} />
                                     Asistencia y Planillas
+                                </Link>
+                            )}
+
+                            {isAdmin && (
+                                <Link href="/dashboard/admin/closing" className={`${styles.navItem} ${pathname.includes('/closing') ? styles.navItemActive : ''}`}>
+                                    <Calculator size={20} />
+                                    Cierre de Mes
                                 </Link>
                             )}
 
