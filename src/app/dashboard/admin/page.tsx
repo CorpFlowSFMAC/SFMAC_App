@@ -492,7 +492,7 @@ export default function AdminDashboard() {
                     light={roi.ingresos > roi.inversion ? "VERDE" : "ROJO"}
                     onClick={() => {
                         setModalTitle("Detalle de Ingresos Generados (Inflow)");
-                        setModalTickets(roi.ingresosItems);
+                        setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ingresos' })));
                         setShowListModal(true);
                     }}
                 />
@@ -502,7 +502,13 @@ export default function AdminDashboard() {
                     light={roi.margen >= 40 ? "VERDE" : roi.margen >= 25 ? "AMBAR" : "ROJO"}
                     onClick={() => {
                         setModalTitle("Análisis de Utilidad Neta (Profitability)");
-                        setModalTickets(roi.ingresosItems);
+                        setModalTickets(roi.ingresosItems.map(t => {
+                            const total = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
+                            const costs = (parseFloat(t.costoManoObra || t.labor_cost || 0)) +
+                                         (parseFloat(t.costoMateriales || t.materials_cost || 0)) +
+                                         (parseFloat(t.costoVisita || t.visit_cost || 0));
+                            return { ...t, _viewMode: 'utilidad', _utilityAmount: total - costs };
+                        }));
                         setShowListModal(true);
                     }}
                 />
@@ -512,7 +518,7 @@ export default function AdminDashboard() {
                     light={roi.ratio >= 1.5 ? "VERDE" : roi.ratio >= 1 ? "AMBAR" : "ROJO"}
                     onClick={() => {
                         setModalTitle("Eficiencia Operativa / ROI");
-                        setModalTickets(roi.ingresosItems);
+                        setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ratio' })));
                         setShowListModal(true);
                     }}
                 />
@@ -855,7 +861,12 @@ export default function AdminDashboard() {
                                 <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <Activity size={20} color="#8B5CF6" /> {modalTitle}
                                 </h3>
-                                <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Total: {modalTickets.length} registros para seguimiento</p>
+                                <div style={{ display: 'flex', gap: '1.5rem', marginTop: '6px' }}>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Total: {modalTickets.length} registros</p>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#10B981', fontWeight: 900 }}>
+                                        SUMA TOTAL: S/ {fmt(modalTickets.reduce((acc, t) => acc + (t._paymentMonto || t._utilityAmount || t.montoFinal || 0), 0))}
+                                    </p>
+                                </div>
                             </div>
                             <button onClick={() => setShowListModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <ArrowRight size={18} style={{ transform: 'rotate(45deg)' }} />
@@ -879,9 +890,14 @@ export default function AdminDashboard() {
                                         const h = hoursAgo(t.createdAt || t.created_at || "");
                                         const agingCol = h >= 72 ? "#EF4444" : h >= 48 ? "#F59E0B" : "#10B981";
                                         
-                                        // Detectar si es un item de INVERSIÓN (pago individual)
+                                        // Configuración de visualización según modo
                                         const isPayment = !!t._paymentMonto;
-                                        const displayMonto = isPayment ? t._paymentMonto : (t.montoFinal || 0);
+                                        const isUtility = t._viewMode === 'utilidad';
+                                        
+                                        // Amount primario
+                                        const primaryAmount = t._viewMode === 'utilidad' ? (t._utilityAmount || 0) : (t._paymentMonto || t.montoFinal || 0);
+                                        const amountLabel = isUtility ? 'UTILIDAD NETO' : isPayment ? 'MONTO PAGADO' : 'TOTAL FACTURADO';
+                                        const amountColor = isUtility ? '#8B5CF6' : isPayment ? '#F59E0B' : '#22C55E';
 
                                         return (
                                             <tr key={t.id + idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}>
@@ -905,20 +921,23 @@ export default function AdminDashboard() {
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <span style={{ 
                                                         padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
-                                                        background: isPayment ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)', 
-                                                        color: isPayment ? '#3B82F6' : 'rgba(255,255,255,0.7)', 
-                                                        border: `1px solid ${isPayment ? 'rgba(59,130,246,0.3)' : 'rgba(255,255,255,0.1)'}`
+                                                        background: `${amountColor}15`, 
+                                                        color: amountColor, 
+                                                        border: `1px solid ${amountColor}30`
                                                     }}>
                                                         {isPayment ? (t._paymentType || 'PAGO').toUpperCase() : (t.estadoId?.replace(/_/g, ' ').toUpperCase() || "NUEVO")}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: isPayment ? '#F59E0B' : '#22C55E', fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(displayMonto)}
+                                                    <div style={{ color: amountColor, fontWeight: 900, fontSize: '0.9rem' }}>
+                                                        S/ {fmt(primaryAmount)}
                                                     </div>
-                                                    {!isPayment && t.montoFinal > 0 && (
-                                                        <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)', fontWeight: 700 }}>
-                                                            {Math.round(((t.montoFinal - ((parseFloat(t.costoManoObra||t.labor_cost||0)) + (parseFloat(t.costoMateriales||t.materials_cost||0)) + (parseFloat(t.costoVisita||t.visit_cost||0)))) / (t.montoFinal || 1)) * 100)}% MARGEN
+                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', fontWeight: 700, textTransform: 'uppercase' }}>
+                                                        {amountLabel}
+                                                    </div>
+                                                    {isUtility && (
+                                                        <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>
+                                                            Facturado: S/ {fmt(t.montoFinal || 0)}
                                                         </div>
                                                     )}
                                                 </td>
