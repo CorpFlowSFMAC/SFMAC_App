@@ -192,12 +192,21 @@ export default function AdminDashboard() {
             return s + (parseFloat(t.montoFinal || t.total_quoted_amount || 0));
         }, 0);
 
-        // Utilidad estimada sobre lo cerrado
+        // Utilidad REAL sobre lo cerrado (Ingresos - Gastos Reales Transferidos)
         const costosCerrados = closed.reduce((s: number, t: any) => {
-            const mo = parseFloat(t.costoManoObra || t.labor_cost || 0);
-            const mat = parseFloat(t.costoMateriales || t.materials_cost || 0);
-            const vis = parseFloat(t.costoVisita || t.visit_cost || 0);
-            return s + (mo + mat + vis);
+            // Recolectamos TODOS los pagos realizados en este ticket (Mano de obra, materiales, envíos, etc.)
+            const pagos = t.metadata?.historialPagosTecnico || [];
+            const totalPagado = pagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
+            
+            // Si no hay pagos registrados aún, usamos los costos previstos como fallback (opcional)
+            if (totalPagado === 0) {
+                const mo = parseFloat(t.costoManoObra || t.labor_cost || 0);
+                const mat = parseFloat(t.costoMateriales || t.materials_cost || 0);
+                const vis = parseFloat(t.costoVisita || t.visit_cost || 0);
+                return s + (mo + mat + vis);
+            }
+            
+            return s + totalPagado;
         }, 0);
 
         const utilidad = round2(ingresos - costosCerrados);
@@ -209,10 +218,12 @@ export default function AdminDashboard() {
             const st = closed.filter((t: any) => t.tipoServicio === s.id);
             const ing = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
             const cost = st.reduce((acc: number, t: any) => {
-                const mo = parseFloat(t.costoManoObra || t.labor_cost || 0);
-                const mat = parseFloat(t.costoMateriales || t.materials_cost || 0);
-                const vis = parseFloat(t.costoVisita || t.visit_cost || 0);
-                return acc + (mo + mat + vis);
+                const pagos = t.metadata?.historialPagosTecnico || [];
+                const totalPagado = pagos.reduce((pacc: number, p: any) => pacc + (parseFloat(p.monto) || 0), 0);
+                if (totalPagado === 0) {
+                    return acc + ((parseFloat(t.costoManoObra || t.labor_cost || 0)) + (parseFloat(t.costoMateriales || t.materials_cost || 0)) + (parseFloat(t.costoVisita || t.visit_cost || 0)));
+                }
+                return acc + totalPagado;
             }, 0);
             const m = ing > 0 ? ((ing - cost) / ing) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ing, margen: m };
@@ -497,16 +508,14 @@ export default function AdminDashboard() {
                     }}
                 />
                 <RoiCard label="Utilidad Neta" value={`S/ ${fmt(roi.utilidad)}`}
-                    sub={`Margen Promedio: ${Math.round(roi.margen)}%`} color="#8B5CF6"
+                    sub={`Margen Real: ${Math.round(roi.margen)}%`} color="#8B5CF6"
                     icon={TrendingUp}
-                    light={roi.margen >= 40 ? "VERDE" : roi.margen >= 25 ? "AMBAR" : "ROJO"}
+                    light={roi.margen >= 35 ? "VERDE" : roi.margen >= 20 ? "AMBAR" : "ROJO"}
                     onClick={() => {
                         setModalTitle("Análisis de Utilidad Neta (Profitability)");
                         setModalTickets(roi.ingresosItems.map(t => {
                             const total = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-                            const costs = (parseFloat(t.costoManoObra || t.labor_cost || 0)) +
-                                         (parseFloat(t.costoMateriales || t.materials_cost || 0)) +
-                                         (parseFloat(t.costoVisita || t.visit_cost || 0));
+                            const costs = (t.metadata?.historialPagosTecnico || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
                             return { ...t, _viewMode: 'utilidad', _utilityAmount: total - costs };
                         }));
                         setShowListModal(true);
@@ -937,7 +946,7 @@ export default function AdminDashboard() {
                                                     </div>
                                                     {isUtility && (
                                                         <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>
-                                                            Facturado: S/ {fmt(t.montoFinal || 0)}
+                                                            Gastos (Pagos): S/ {fmt((t.metadata?.historialPagosTecnico || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0))}
                                                         </div>
                                                     )}
                                                 </td>
