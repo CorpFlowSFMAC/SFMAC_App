@@ -927,7 +927,7 @@ export default function AdminDashboard() {
                                                     <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
                                                         {t.numeroTicketCliente || t.id.substring(0,8).toUpperCase()}
                                                     </div>
-                                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)' }}>
+                                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
                                                         {isPayment ? `Depósito: ${new Date(t._paymentFecha).toLocaleDateString()}` : `Creado: ${new Date(t.createdAt || t.created_at).toLocaleDateString()}`}
                                                     </div>
                                                 </td>
@@ -935,7 +935,7 @@ export default function AdminDashboard() {
                                                     <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.82rem' }}>
                                                         {t.cliente?.nombre || t.client?.name || "Cliente SINFIMAC"}
                                                     </div>
-                                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+                                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
                                                         {isPayment ? `Destinatario: ${t._paymentTecnico}` : (t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir")}
                                                     </div>
                                                 </td>
@@ -953,11 +953,11 @@ export default function AdminDashboard() {
                                                     <div style={{ color: amountColor, fontWeight: 900, fontSize: '0.9rem' }}>
                                                         S/ {fmt(primaryAmount)}
                                                     </div>
-                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', fontWeight: 700, textTransform: 'uppercase' }}>
+                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.65)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
                                                         {amountLabel}
                                                     </div>
                                                     {isUtility && (
-                                                        <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>
+                                                        <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
                                                             Gastos (Pagos): S/ {fmt((t.metadata?.historialPagosTecnico || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0))}
                                                         </div>
                                                     )}
