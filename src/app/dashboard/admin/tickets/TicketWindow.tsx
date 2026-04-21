@@ -113,7 +113,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             if (costs && costs.length > 0) {
                 setShowDeleteModal(false);
                 setShowTransferModal(true);
-                showToast("Bloqueo de Seguridad", "Este ticket tiene gastos registrados. Trasládelos antes de borrar.", "warning");
+                showToast("Bloqueo de Seguridad", "Este ticket tiene gastos registrados. Trasládelos antes de borrar.", "info");
                 return;
             }
 
