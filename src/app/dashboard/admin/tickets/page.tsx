@@ -139,30 +139,6 @@ export default function TicketsPage() {
         return false;
     }, [myGestoraId, isAdminState]);
 
-    const filterByView = useCallback((t: any, mode: string) => {
-        const sid = normalizeStateId(t.estadoId);
-        const term = searchTerm.toLowerCase();
-        const matchesSearch = !searchTerm ||
-            t.id.toLowerCase().includes(term) ||
-            (t.numeroTicketCliente || '').toLowerCase().includes(term) ||
-            (t.cliente?.nombre || '').toLowerCase().includes(term) ||
-            (t.sede?.nombre || '').toLowerCase().includes(term) ||
-            (t.tecnico?.nombre || '').toLowerCase().includes(term) ||
-            (t.gestora?.name || t.gestora?.nombre || '').toLowerCase().includes(term) ||
-            (t.description || t.descripcionProblema || '').toLowerCase().includes(term);
-
-        if (!matchesSearch) return false;
-
-        const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
-        const isBorrador = sid === "borrador";
-
-        if (mode === "triage") return isBorrador;
-        if (mode === "active") return !isBorrador && !isClosed;
-        if (mode === "closed") return isClosed;
-
-        return true;
-    }, [searchTerm]);
-
 
     const handleCreateTicket = async (newTicket: any) => {
         await createTicket(newTicket);
@@ -230,6 +206,33 @@ export default function TicketsPage() {
     const NUEVOS_STATES = ["nuevo", "pendiente", "asignado_a_tecnico"];
     const EN_PROCESO_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
 
+    // ── BÚSQUEDA GLOBAL: helpers de filtrado ─────────────────────────────────
+    const matchesSearch = useCallback((t: any, term: string) => {
+        if (!term) return true;
+        const q = term.toLowerCase();
+        return (
+            (t.id || '').toLowerCase().includes(q) ||
+            (t.numeroTicketCliente || '').toLowerCase().includes(q) ||
+            (t.cliente?.nombre || '').toLowerCase().includes(q) ||
+            (t.sede?.nombre || '').toLowerCase().includes(q) ||
+            (t.sede?.direccion || '').toLowerCase().includes(q) ||
+            (t.tecnico?.nombre || t.tecnico?.name || '').toLowerCase().includes(q) ||
+            (t.gestora?.name || t.gestora?.nombre || '').toLowerCase().includes(q) ||
+            (t.description || t.descripcionProblema || '').toLowerCase().includes(q) ||
+            (t.estadoId || '').toLowerCase().includes(q)
+        );
+    }, []);
+
+    const filterByView = useCallback((t: any, mode: string) => {
+        const sid = normalizeStateId(t.estadoId);
+        const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+        const isBorrador = sid === "borrador";
+        if (mode === "triage") return isBorrador;
+        if (mode === "active") return !isBorrador && !isClosed;
+        if (mode === "closed") return isClosed;
+        return true;
+    }, []);
+
     const stats = React.useMemo(() => {
         const activos = ticketsForMe.filter(t => filterByView(t, "active"));
         return {
@@ -245,7 +248,25 @@ export default function TicketsPage() {
         };
     }, [ticketsForMe, filterByView]);
 
-    const filteredTickets = React.useMemo(() => {
+    // ── BÚSQUEDA GLOBAL (all states) vs vista filtrada ────────────────────────
+    const isSearching = searchTerm.trim().length > 0;
+
+    const globalSearchResults = useMemo(() => {
+        if (!isSearching) return null;
+        const matched = ticketsForMe.filter(t => matchesSearch(t, searchTerm.trim()));
+        return {
+            all: matched,
+            triage: matched.filter(t => filterByView(t, 'triage')),
+            active: matched.filter(t => filterByView(t, 'active')),
+            closed: matched.filter(t => filterByView(t, 'closed')),
+        };
+    }, [isSearching, searchTerm, ticketsForMe, filterByView]);
+
+    const filteredTickets = useMemo(() => {
+        // BÚSQUEDA GLOBAL: Cuando hay texto, se ignora el viewMode y se muestran TODOS
+        if (isSearching && globalSearchResults) {
+            return globalSearchResults.all;
+        }
         const base = ticketsForMe.filter(t => filterByView(t, viewMode));
         if (viewMode === "active" && statFilter === "nuevos") {
             return base.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId)));
@@ -257,7 +278,7 @@ export default function TicketsPage() {
             return base.filter(t => normalizeStateId(t.estadoId) === "requiere_revision_admin");
         }
         return base;
-    }, [ticketsForMe, filterByView, viewMode, statFilter]);
+    }, [ticketsForMe, filterByView, viewMode, statFilter, isSearching, globalSearchResults]);
 
     return (
         <div className={styles.page}>
@@ -438,16 +459,29 @@ export default function TicketsPage() {
                 })}
             </div>
 
-            {/* 🔍 TOOLBAR MINI */}
+            {/* 🔍 TOOLBAR CON BÚSQUEDA GLOBAL */}
             <div className={styles.toolbar}>
-                <div className={styles.searchBox}>
-                    <Search size={16} />
+                <div className={styles.searchBox} style={{
+                    border: isSearching ? '2px solid #6366F1' : undefined,
+                    boxShadow: isSearching ? '0 0 0 3px rgba(99,102,241,0.12)' : undefined,
+                    transition: 'all 0.2s'
+                }}>
+                    <Search size={16} color={isSearching ? '#6366F1' : undefined} />
                     <input
                         type="text"
-                        placeholder="Buscar por ID, Cliente, Sede, Técnico o Gestor..."
+                        placeholder="🔍 Buscar en TODOS los estados: ID, Cliente, Sede, Técnico, Gestor..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => { setSearchTerm(e.target.value); }}
                     />
+                    {isSearching && (
+                        <button
+                            onClick={() => setSearchTerm('')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '0 4px', fontSize: '1.1rem', lineHeight: 1 }}
+                            title="Limpiar búsqueda"
+                        >
+                            ✕
+                        </button>
+                    )}
                 </div>
                 <button className={styles.filterBtn}>
                     <Filter size={16} />
@@ -455,16 +489,63 @@ export default function TicketsPage() {
                 </button>
             </div>
 
-            {/* 🎫 LISTA DE TICKETS OPTIMIZADA */}
+            {/* 📢 BANNER DE BÚSQUEDA GLOBAL */}
+            {isSearching && globalSearchResults && (
+                <div style={{
+                    margin: '0 0 1rem 0',
+                    background: 'linear-gradient(135deg, #EEF2FF, #F5F3FF)',
+                    border: '1px solid #C7D2FE',
+                    borderRadius: '12px',
+                    padding: '12px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    flexWrap: 'wrap'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Search size={14} color="#6366F1" />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#4338CA' }}>
+                            Búsqueda global: &ldquo;{searchTerm}&rdquo;
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {[  
+                            { label: 'Triage', count: globalSearchResults.triage.length, color: '#8B5CF6' },
+                            { label: 'Activos', count: globalSearchResults.active.length, color: '#F59E0B' },
+                            { label: 'Cerrados', count: globalSearchResults.closed.length, color: '#10B981' },
+                        ].map(g => (
+                            <span key={g.label} style={{
+                                fontSize: '0.75rem', fontWeight: 700,
+                                background: `${g.color}18`, color: g.color,
+                                border: `1px solid ${g.color}40`,
+                                borderRadius: '99px', padding: '3px 10px'
+                            }}>
+                                {g.count} {g.label}
+                            </span>
+                        ))}
+                        <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#6366F1' }}>
+                            = {globalSearchResults.all.length} resultado{globalSearchResults.all.length !== 1 ? 's' : ''} totales
+                        </span>
+                    </div>
+                    <button
+                        onClick={() => setSearchTerm('')}
+                        style={{ marginLeft: 'auto', fontSize: '0.75rem', color: '#6366F1', background: 'none', border: '1px solid #C7D2FE', borderRadius: '8px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700 }}
+                    >
+                        Limpiar ✕
+                    </button>
+                </div>
+            )}
+
+            {/* 🎫 LISTA CON SEPARADORES POR SECCIÓN EN MODO BÚSQUEDA GLOBAL */}
             <div className={styles.ticketsList}>
                 {filteredTickets.length === 0 ? (
                     <div className={styles.emptyState}>
                         <div className={styles.emptyIcon}>
-                            <Sparkles size={40} />
+                            <Search size={40} />
                         </div>
-                        <h3>{viewMode === 'active' ? '¡Comienza tu día productivo!' : 'No hay historial acumulado'}</h3>
-                        <p>{viewMode === 'active' ? 'Crea tu primer ticket y gestiona tus servicios' : 'Los tickets aparecerán aquí una vez que sean liquidados y cerrados.'}</p>
-                        {viewMode === 'active' && (
+                        <h3>{isSearching ? `Sin resultados para "${searchTerm}"` : (viewMode === 'active' ? '¡Comienza tu día productivo!' : 'No hay historial acumulado')}</h3>
+                        <p>{isSearching ? 'Intenta con otro término: número de ticket, cliente, sede, técnico o gestor.' : (viewMode === 'active' ? 'Crea tu primer ticket y gestiona tus servicios' : 'Los tickets aparecerán aquí una vez que sean liquidados y cerrados.')}</p>
+                        {!isSearching && viewMode === 'active' && (
                             <button
                                 className={styles.createBtnEmpty}
                                 onClick={() => setShowWizard(true)}
@@ -473,6 +554,40 @@ export default function TicketsPage() {
                                 Crear Primer Ticket
                             </button>
                         )}
+                    </div>
+                ) : isSearching ? (
+                    // ── MODO BÚSQUEDA GLOBAL: Mostrar todos agrupados por sección ───
+                    <div>
+                        {(['triage', 'active', 'closed'] as const).map((section) => {
+                            const sectionLabel = section === 'triage' ? '📋 Triage' : section === 'active' ? '⚡ En Proceso' : '✅ Cerrados';
+                            const sectionColor = section === 'triage' ? '#8B5CF6' : section === 'active' ? '#F59E0B' : '#10B981';
+                            const sectionTickets = globalSearchResults![section];
+                            if (sectionTickets.length === 0) return null;
+                            return (
+                                <div key={section} style={{ marginBottom: '1.5rem' }}>
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: '10px',
+                                        marginBottom: '0.75rem', padding: '6px 12px',
+                                        background: `${sectionColor}12`, borderRadius: '8px',
+                                        borderLeft: `3px solid ${sectionColor}`
+                                    }}>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: sectionColor }}>{sectionLabel}</span>
+                                        <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 600 }}>— {sectionTickets.length} ticket{sectionTickets.length !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div className={styles.ticketsGrid}>
+                                        {sectionTickets.map((ticket: any) => (
+                                            <TicketCard
+                                                key={ticket.id}
+                                                ticket={ticket}
+                                                service={getServiceById(ticket.tipoServicio)}
+                                                ServiceIcon={getServiceById(ticket.tipoServicio)?.icon}
+                                                onTicketClick={() => handleOpenTicket(ticket)}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 ) : (
                     <>
