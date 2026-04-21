@@ -353,9 +353,48 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
         setErrorMsg(null);
         setDraft(null);
         setApproved(false);
+
+        // ── RECOPILAR IMÁGENES (base64 Y URLs de Supabase Storage) ──
         const images: string[] = [];
-        const allEvidencias = [...(ticket.evidencias || []), ...(ticket.evidenciasCampo || [])];
-        allEvidencias.forEach((e: any) => { if (e?.url?.startsWith("data:image")) images.push(e.url); });
+        const imageUrls: string[] = [];
+        const allEvidencias = [
+            ...(ticket.evidencias || []),
+            ...(ticket.evidenciasCampo || []),
+            ...(ticket.metadata?.evidenciasCampo || []),
+            ...(ticket.metadata?.fotos || []),
+        ];
+        allEvidencias.forEach((e: any) => {
+            const url = e?.url || e?.uri || (typeof e === 'string' ? e : null);
+            if (!url) return;
+            if (url.startsWith("data:image")) images.push(url);
+            else if (url.startsWith("http")) imageUrls.push(url); // URLs de Supabase
+        });
+
+        // ── CIUDAD / UBICACIÓN REAL ──
+        const ciudadRaw = (
+            ticket.sede?.provincia ||
+            ticket.sede?.departamento ||
+            ticket.sede?.ciudad ||
+            ticket.sede?.distrito ||
+            ticket.sede_reportada_cliente ||
+            ticket.sede?.zona ||
+            ticket.sede?.address ||
+            ticket.sede?.direccion ||
+            ''
+        );
+
+        // ── DIAGNÓSTICO TÉCNICO COMPLETO DEL CAMPO ──
+        const diagnosticoCompletoStr = [
+            ticket.diagnostico || ticket.diagnosis || '',
+            ticket.metadata?.reporteTecnico || '',
+            ticket.metadata?.hallazgosCampo || '',
+            ticket.metadata?.observaciones || '',
+        ].filter(Boolean).join(' | ');
+
+        // ── INFORMACIÓN DEL TÉCNICO ──
+        const tecnicoNombre = ticket.tecnico?.nombre || ticket.tecnico?.name || 'Técnico Asignado';
+        const tecnicoCosto = costoMO; // labor_cost = costo del técnico
+
         try {
             const response = await fetch('/api/ai/gemini', {
                 method: 'POST',
@@ -365,12 +404,20 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
                     costoMateriales: costoMat,
                     tipoServicio: ticket.tipoServicio || ticket.tipoServicioNombre || '',
                     descripcion: ticket.descripcionProblema || '',
-                    diagnostico: ticket.diagnostico || '',
+                    diagnostico: diagnosticoCompletoStr,
                     cliente: ticket.cliente?.nombre || 'Cliente Corporativo',
-                    zona: ticket.sede?.zone || ticket.sede?.address || '',
-                    departamento: ticket.sede?.department || '',
-                    address: ticket.sede?.address || ticket.sede?.nombre || '',
+                    tecnicoNombre,
+                    tecnicoCosto,
+                    // Ubicación enriquecida
+                    ciudad: ciudadRaw,
+                    zona: ticket.sede?.zona || ticket.sede?.zone || ciudadRaw,
+                    departamento: ticket.sede?.departamento || ticket.sede?.department || '',
+                    provincia: ticket.sede?.provincia || '',
+                    distrito: ticket.sede?.distrito || '',
+                    address: ticket.sede?.address || ticket.sede?.nombre || ticket.sede_reportada_cliente || '',
+                    // Imágenes
                     images,
+                    imageUrls,
                 })
             });
             const data = await response.json();
@@ -384,7 +431,8 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
                 throw new Error(data?.error || "Respuesta inválida del servidor");
             }
         } catch (err: any) {
-            setErrorMsg("Error al conectar con el motor de cotización. Verifique su conexión.");
+            const detail = err?.message || '';
+            setErrorMsg(`Error al conectar con el motor de cotización. ${detail ? `(${detail})` : 'Verifique su conexión.'}`);
         } finally {
             setIsGenerating(false);
         }
@@ -501,6 +549,11 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
                             <span style={{ color: 'white', fontWeight: 800, fontSize: '13px' }}>
                                 {isFromAlgorithm ? '⚡ Motor Algorítmico SINFIMAC' : '✨ Gemini AI Multimodal'}
                             </span>
+                            {draft?.resumen?.comentario_ia?.toLowerCase().includes('historial') && (
+                                <span style={{ fontSize: '9px', background: 'rgba(5,150,105,0.3)', color: '#6EE7B7', padding: '2px 7px', borderRadius: '8px', fontWeight: 700, border: '1px solid rgba(5,150,105,0.4)' }}>
+                                    🧠 CON APRENDIZAJE
+                                </span>
+                            )}
                             <span style={{ fontSize: '9px', background: isFromAlgorithm ? 'rgba(251,191,36,0.2)' : 'rgba(139,92,246,0.3)', color: isFromAlgorithm ? '#FCD34D' : '#C4B5FD', padding: '2px 7px', borderRadius: '8px', fontWeight: 700, border: `1px solid ${isFromAlgorithm ? 'rgba(251,191,36,0.3)' : 'rgba(139,92,246,0.4)'}` }}>
                                 {isFromAlgorithm ? 'ALGORITMO' : 'GEMINI AI'}
                             </span>
