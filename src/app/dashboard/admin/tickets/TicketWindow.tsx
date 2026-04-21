@@ -176,6 +176,86 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
+    // --- REPORT UPDATE LOGIC ---
+    const [showReportUpdateModal, setShowReportUpdateModal] = useState(false);
+    const [isSavingReport, setIsSavingReport] = useState(false);
+    const [reportForm, setReportForm] = useState({
+        diagnostico: "",
+        costoManoObra: "",
+        costoMateriales: ""
+    });
+
+    const handleOpenReportUpdate = () => {
+        setReportForm({
+            diagnostico: ticketData.diagnostico || "",
+            costoManoObra: ticketData.costoManoObra || "0",
+            costoMateriales: ticketData.costoMateriales || "0"
+        });
+        setShowReportUpdateModal(true);
+    };
+
+    const handleSaveReportUpdate = async () => {
+        if (isSavingReport) return;
+        setIsSavingReport(true);
+        try {
+            const oldMO = parseFloat(ticketData.costoManoObra || 0);
+            const oldMAT = parseFloat(ticketData.costoMateriales || 0);
+            const newMO = parseFloat(reportForm.costoManoObra || 0);
+            const newMAT = parseFloat(reportForm.costoMateriales || 0);
+
+            // 1. Actualizar en Base de Datos
+            const { error } = await supabase
+                .from('tickets')
+                .update({
+                    diagnosis: reportForm.diagnostico,
+                    labor_cost: newMO,
+                    materials_cost: newMAT,
+                })
+                .eq('id', ticketData.id);
+
+            if (error) throw error;
+
+            // 2. Auditoría Silenciosa
+            await supabase.from('debug_logs').insert({
+                log_data: {
+                    action: 'UPDATE_TECHNICAL_REPORT',
+                    ticket_id: ticketData.id,
+                    ticket_number: ticketData.numeroTicketCliente,
+                    user_email: localStorage.getItem('userEmail'),
+                    changes: {
+                        diagnostico: { old: ticketData.diagnostico, new: reportForm.diagnostico },
+                        mo: { old: oldMO, new: newMO },
+                        mat: { old: oldMAT, new: newMAT }
+                    },
+                    timestamp: new Date().toISOString()
+                }
+            });
+
+            // 3. Recálculo Reactivo (State Sync)
+            setTicketData((prev: any) => ({
+                ...prev,
+                diagnostico: reportForm.diagnostico,
+                costoManoObra: newMO,
+                costoMateriales: newMAT,
+                // Provocar refresco en dependencias
+                metadata: {
+                    ...prev.metadata,
+                    diagnostico: reportForm.diagnostico,
+                    costoManoObra: newMO,
+                    costoMateriales: newMAT
+                }
+            }));
+
+            showToast("Reporte Actualizado", "Los cambios han sido guardados y los cálculos financieros sincronizados.", "success");
+            setShowReportUpdateModal(false);
+        } catch (err: any) {
+            console.error("Error updating report:", err);
+            showToast("Error", "No se pudo actualizar el reporte.", "error");
+        } finally {
+            setIsSavingReport(false);
+        }
+    };
+
     const [userRole, setUserRole] = useState<string | null>(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('userRole');
         return null;
@@ -1733,7 +1813,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 }}
                             />
 
-                            <DiagnosisInfoBar ticket={ticketData} />
+                            <DiagnosisInfoBar 
+                                ticket={ticketData} 
+                                onEdit={isAdmin || (myGestoraId === ticketData.gestora_id) ? handleOpenReportUpdate : undefined}
+                            />
                             <QuoteAssistantBar ticket={ticketData} />
                             <QuotationInfoBar 
                                 ticket={ticketData} 
@@ -3419,7 +3502,84 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     </div>
                 )}
 
-                {/* --- MODAL: CONFIRMACIÓN DE ELIMINACIÓN --- */}
+                {/* --- MODAL: ACTUALIZACIÓN DE REPORTE TÉCNICO --- */}
+                {showReportUpdateModal && (
+                    <div className={styles.negotiationModal}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '500px' }}>
+                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #0D9488, #0F766E)' }}>
+                                <div className={styles.negoHeaderTitle}>
+                                    <Stethoscope size={24} color="#FFF" />
+                                    <div>
+                                        <h3 style={{ color: '#FFF' }}>Actualizar Reporte Técnico</h3>
+                                        <p style={{ color: 'rgba(255,255,255,0.7)' }}>Ajuste de diagnósticos y pre-presupuesto</p>
+                                    </div>
+                                </div>
+                                <button className={styles.negoCloseBtn} onClick={() => setShowReportUpdateModal(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <div className={styles.transferSearchContainer}>
+                                        <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>DIAGNÓSTICO EN CAMPO / HALLAZGOS:</label>
+                                        <textarea 
+                                            className={styles.transferInput}
+                                            style={{ minHeight: '120px', resize: 'vertical' }}
+                                            value={reportForm.diagnostico}
+                                            onChange={(e) => setReportForm({ ...reportForm, diagnostico: e.target.value })}
+                                            placeholder="Detalle técnico de lo encontrado en sede..."
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                                        <div className={styles.transferSearchContainer}>
+                                            <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>🛠️ MANO DE OBRA (S/):</label>
+                                            <input 
+                                                type="number"
+                                                className={styles.transferInput}
+                                                value={reportForm.costoManoObra}
+                                                onChange={(e) => setReportForm({ ...reportForm, costoManoObra: e.target.value })}
+                                            />
+                                        </div>
+                                        <div className={styles.transferSearchContainer}>
+                                            <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>📦 MATERIALES (S/):</label>
+                                            <input 
+                                                type="number"
+                                                className={styles.transferInput}
+                                                value={reportForm.costoMateriales}
+                                                onChange={(e) => setReportForm({ ...reportForm, costoMateriales: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className={styles.blockerNotice} style={{ background: '#F0FDFA', borderColor: '#CCFBF1' }}>
+                                        <Sparkles className={styles.blockerIcon} size={20} color="#0D9488" />
+                                        <div className={styles.blockerText}>
+                                            <h4 style={{ color: '#0F766E' }}>Efecto Sincronizado</h4>
+                                            <p style={{ color: '#115E59' }}>Guardar estos cambios recalculará automáticamente la rentabilidad real y el saldo pendiente del ticket.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowReportUpdateModal(false)}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={handleSaveReportUpdate}
+                                    disabled={isSavingReport}
+                                    style={{ background: 'linear-gradient(135deg, #0D9488, #0D9488)' }}
+                                >
+                                    {isSavingReport ? <Clock size={18} className={styles.spinner} /> : <CheckCircle2 size={18} />}
+                                    <span>Guardar y Recalcular</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {showDeleteModal && (
                     <div className={styles.negotiationModal}>
                         <div className={styles.negotiationModalCard} style={{ maxWidth: '450px' }}>

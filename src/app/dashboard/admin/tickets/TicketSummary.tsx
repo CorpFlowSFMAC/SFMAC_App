@@ -278,7 +278,7 @@ export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: 
     );
 }
 
-export function DiagnosisInfoBar({ ticket }: { ticket: any }) {
+export function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () => void }) {
     if (!ticket.diagnostico && !ticket.costoManoObra) return null;
 
     return (
@@ -318,11 +318,32 @@ export function DiagnosisInfoBar({ ticket }: { ticket: any }) {
             </div>
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Pre-Presupuesto</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>🛠️ MO: S/ {formatSoles(ticket.costoManoObra)}</span>
-                    <span className={styles.infoValue} style={{ fontSize: '10px' }}>📦 MAT: S/ {formatSoles(ticket.costoMateriales)}</span>
+                <div className={styles.budgetGridCompact}>
+                    <div className={styles.budgetItemMini}>
+                        <span className={styles.budgetLabelMini}>🛠️ MO</span>
+                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.costoManoObra)}</span>
+                    </div>
+                    <div className={styles.budgetItemMini}>
+                        <span className={styles.budgetLabelMini}>📦 MAT</span>
+                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.costoMateriales)}</span>
+                    </div>
                 </div>
             </div>
+
+            {onEdit && (
+                <>
+                    <div className={styles.verticalDivider} />
+                    <button 
+                        className={styles.reassignBtn} 
+                        onClick={onEdit}
+                        style={{ color: '#0D9488', '--btn-color': '#0D9488' } as any}
+                        title="Actualizar Reporte Técnico"
+                    >
+                        <Edit2 size={12} />
+                        <span>Actualizar</span>
+                    </button>
+                </>
+            )}
         </div>
     );
 }
