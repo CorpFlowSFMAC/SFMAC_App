@@ -198,8 +198,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         if (isSavingReport) return;
         setIsSavingReport(true);
         try {
-            const oldMO = parseFloat(ticketData.costoManoObra || 0);
-            const oldMAT = parseFloat(ticketData.costoMateriales || 0);
+            const oldMO = parseFloat(String(ticketData.costoManoObra || "0"));
+            const oldMAT = parseFloat(String(ticketData.costoMateriales || "0"));
             const newMO = parseFloat(reportForm.costoManoObra || "0");
             const newMAT = parseFloat(reportForm.costoMateriales || "0");
 
