@@ -95,6 +95,87 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
     const [montoAdelantoManual, setMontoAdelantoManual] = useState<string>("");
 
+    // --- HARD DELETE & TRANSFER LOGIC ---
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [showTransferModal, setShowTransferModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isTransferring, setIsTransferring] = useState(false);
+    const [targetTicketSearch, setTargetTicketSearch] = useState("");
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [selectedTargetTicket, setSelectedTargetTicket] = useState<any>(null);
+
+    const checkAndHardDelete = async () => {
+        if (!ticketData?.id) return;
+        setIsDeleting(true);
+        try {
+            // 1. Verificar si hay gastos
+            const costs = await ticketCostsAPI.getByTicket(ticketData.id);
+            if (costs && costs.length > 0) {
+                setShowDeleteModal(false);
+                setShowTransferModal(true);
+                showToast("Bloqueo de Seguridad", "Este ticket tiene gastos registrados. Trasládelos antes de borrar.", "warning");
+                return;
+            }
+
+            // 2. Ejecutar Hard Delete
+            if (!confirm(`¿FINALMENTE SEGURO? Esta acción es irreversible y eliminará el ticket ${ticketData.numeroTicketCliente || ticketData.id} de TODO el sistema (incluyendo fotos y chat).`)) {
+                return;
+            }
+
+            await ticketsAPI.delete(ticketData.id);
+            showToast("Ticket Eliminado", "El registro ha sido borrado definitivamente.", "success");
+            onClose();
+        } catch (err: any) {
+            console.error("Error in hard delete:", err);
+            showToast("Error", "No se pudo eliminar el ticket.", "error");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleSearchTargetTicket = async (query: string) => {
+        setTargetTicketSearch(query);
+        if (query.length < 3) {
+            setSearchResults([]);
+            return;
+        }
+        try {
+            const { data, error } = await supabase
+                .from('tickets')
+                .select('id, ticket_number, client_ticket_number, description, status_id, clients(name)')
+                .or(`client_ticket_number.ilike.%${query}%, description.ilike.%${query}%`)
+                .neq('id', ticketData.id)
+                .limit(5);
+
+            if (error) throw error;
+            setSearchResults(data || []);
+        } catch (err) {
+            console.error("Search error:", err);
+        }
+    };
+
+    const executeTransferAndClear = async () => {
+        if (!selectedTargetTicket) {
+            showToast("Error", "Debe seleccionar un ticket de destino.", "error");
+            return;
+        }
+        setIsTransferring(true);
+        try {
+            await ticketCostsAPI.transferAllToTicket(ticketData.id, selectedTargetTicket.id);
+            showToast("Gastos Trasladados", `Los gastos se movieron al ticket ${selectedTargetTicket.client_ticket_number || selectedTargetTicket.id}.`, "success");
+            
+            // Ahora que está limpio, intentar el borrado automático? 
+            // Mejor dejar que el admin lo confirme de nuevo para evitar sorpresas.
+            setShowTransferModal(false);
+            setShowDeleteModal(true);
+        } catch (err) {
+            console.error("Transfer error:", err);
+            showToast("Error", "No se pudo trasladar los gastos.", "error");
+        } finally {
+            setIsTransferring(false);
+        }
+    };
+
     const [userRole, setUserRole] = useState<string | null>(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('userRole');
         return null;
@@ -1565,6 +1646,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     <div className={styles.windowControls} onMouseDown={(e) => { e.stopPropagation(); bringToFront(); }} onClick={(e) => e.stopPropagation()}>
                         {!isMinimized && (
                             <>
+                                {isAdmin && (
+                                    <button
+                                        className={`${styles.controlBtn} ${styles.deleteTicketHeaderBtn}`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setShowDeleteModal(true);
+                                        }}
+                                        title="ELIMINACIÓN DEFINITIVA"
+                                        style={{ color: '#ef4444', marginRight: '10px' }}
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
                                 <button
                                     className={styles.controlBtn}
                                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
@@ -3325,7 +3419,129 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     </div>
                 )}
 
-                {/* Toast Notification Render */}
+                {/* --- MODAL: CONFIRMACIÓN DE ELIMINACIÓN --- */}
+                {showDeleteModal && (
+                    <div className={styles.negotiationModal}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '450px' }}>
+                            <div className={styles.negotiationModalHeader}>
+                                <div className={styles.negoHeaderTitle}>
+                                    <Trash2 size={24} color="#ef4444" />
+                                    <div>
+                                        <h3>Eliminación Definitiva</h3>
+                                        <p>Acción crítica de administrador</p>
+                                    </div>
+                                </div>
+                                <button className={styles.negoCloseBtn} onClick={() => setShowDeleteModal(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
+                                    Usted está por eliminar el ticket <strong>{ticketData.numeroTicketCliente || ticketData.id}</strong>. 
+                                    Esta acción es <strong>IRREVERSIBLE</strong> y borrará:
+                                </p>
+                                <ul style={{ fontSize: '13px', color: '#64748b', marginTop: '10px', paddingLeft: '20px' }}>
+                                    <li>Evidencias fotográficas y documentos.</li>
+                                    <li>Historial de chat y registros de auditoría.</li>
+                                    <li>Datos generales del servicio.</li>
+                                </ul>
+                                <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', padding: '12px', borderRadius: '12px', marginTop: '15px' }}>
+                                    <p style={{ color: '#dc2626', fontSize: '12px', fontWeight: 700, margin: 0 }}>
+                                        ⚠️ EL SISTEMA SOLO PERMITIRÁ ELIMINAR SI EL TICKET NO TIENE GASTOS REGISTRADOS.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowDeleteModal(false)}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={checkAndHardDelete}
+                                    disabled={isDeleting}
+                                    style={{ background: 'linear-gradient(135deg, #ef4444, #b91c1c)' }}
+                                >
+                                    {isDeleting ? <Clock size={18} className={styles.spinner} /> : <Trash2 size={18} />}
+                                    <span>Proceder con Eliminación</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- MODAL: TRASLADO DE GASTOS (Fallo de Deletión por Gastos) --- */}
+                {showTransferModal && (
+                    <div className={styles.negotiationModal}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '550px' }}>
+                            <div className={styles.negotiationModalHeader}>
+                                <div className={styles.negoHeaderTitle}>
+                                    <Split size={24} color="#f59e0b" />
+                                    <div>
+                                        <h3>Transferencia de Gastos</h3>
+                                        <p>Blindaje Financiero Activo</p>
+                                    </div>
+                                </div>
+                                <button className={styles.negoCloseBtn} onClick={() => setShowTransferModal(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div className={styles.blockerNotice}>
+                                    <AlertTriangle className={styles.blockerIcon} size={24} />
+                                    <div className={styles.blockerText}>
+                                        <h4>Ticket con Carga Financiera</h4>
+                                        <p>No se puede eliminar un ticket que tiene gastos o adelantos pagados. Debe trasladar estos registros a un ticket activo para no perder la trazabilidad de Tesorería.</p>
+                                    </div>
+                                </div>
+
+                                <div className={styles.transferSearchContainer}>
+                                    <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>BUSCAR TICKET DE DESTINO:</label>
+                                    <input 
+                                        type="text"
+                                        className={styles.transferInput}
+                                        placeholder="Ej: MB004016.26 o descripción..."
+                                        value={targetTicketSearch}
+                                        onChange={(e) => handleSearchTargetTicket(e.target.value)}
+                                    />
+
+                                    <div className={styles.transferResultsList}>
+                                        {searchResults.map(res => (
+                                            <div 
+                                                key={res.id}
+                                                className={`${styles.transferResultItem} ${selectedTargetTicket?.id === res.id ? styles.transferResultSelected : ''}`}
+                                                onClick={() => setSelectedTargetTicket(res)}
+                                            >
+                                                <span className={styles.transferResultMain}>{res.client_ticket_number || res.id}</span>
+                                                <span className={styles.transferResultSub}>{res.clients?.name} - {res.description?.substring(0, 50)}...</span>
+                                            </div>
+                                        ))}
+                                        {targetTicketSearch.length >= 3 && searchResults.length === 0 && (
+                                            <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center', marginTop: '10px' }}>No se encontraron tickets activos que coincidan.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowTransferModal(false)}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={executeTransferAndClear}
+                                    disabled={isTransferring || !selectedTargetTicket}
+                                    style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}
+                                >
+                                    {isTransferring ? <Clock size={18} className={styles.spinner} /> : <ArrowRight size={18} />}
+                                    <span>Trasladar y Reintentar Borrado</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {toast.visible && (
                     <div className={styles.toastOverlay}>
                         <div className={`${styles.toastCard} ${toast.type === 'success' ? styles.toastSuccess : toast.type === 'error' ? styles.toastError : styles.toastInfo}`}>

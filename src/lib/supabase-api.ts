@@ -883,6 +883,18 @@ export const ticketCostsAPI = {
             .eq('id', id);
 
         if (error) throw error;
+    },
+
+    // Trasladar todos los costos de un ticket a otro (Blindaje Financiero)
+    async transferAllToTicket(sourceTicketId: string, targetTicketId: string) {
+        const { data, error } = await supabase
+            .from('ticket_costs')
+            .update({ ticket_id: targetTicketId })
+            .eq('ticket_id', sourceTicketId)
+            .select();
+
+        if (error) throw error;
+        return data;
     }
 };
 
