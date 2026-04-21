@@ -683,12 +683,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     }, [ticketData, ticket.id, onUpdate]);
 
     useEffect(() => {
-        const syncTimeout = setTimeout(() => {
+        // Sync de fondo mucho menos agresivo (cada 30s) para evitar 'Sync of Death'
+        const syncInterval = setInterval(() => {
             syncToSupabase();
-        }, 1500);
+        }, 30000);
 
-        return () => clearTimeout(syncTimeout);
-    }, [ticketData, syncToSupabase]);
+        return () => {
+            clearInterval(syncInterval);
+            // Sync final al cerrar la ventana (unmount)
+            syncToSupabase();
+        };
+    }, [syncToSupabase]);
 
     useEffect(() => {
         const handleStorageUpdate = (e: any) => {

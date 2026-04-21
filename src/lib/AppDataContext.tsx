@@ -225,72 +225,40 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 { event: "*", schema: "public", table: "tickets" },
                 async (payload) => {
                     if (payload.eventType === "INSERT") {
-                        // Para INSERTs → invalidar para traer las relaciones
                         queryClient.invalidateQueries({
                             queryKey: queryKeys.tickets.all,
                         });
                     } else if (payload.eventType === "UPDATE") {
-                        // ⚠️ CRÍTICO: postgres_changes NO incluye JSONB grandes
-                        // → Hacer getById() y actualizar en caché TanStack
                         const ticketId = (payload.new as any).id;
                         if (!ticketId) return;
-                        try {
-                            const freshTicket =
-                                await ticketsAPI.getById(ticketId);
-                            if (freshTicket) {
-                                const normalized =
-                                    normalizeTicket(freshTicket);
-                                queryClient.setQueryData(
-                                    queryKeys.tickets.summary(),
-                                    (old: any[] | undefined) =>
-                                        old
-                                            ? old.map((t) =>
-                                                t.id === ticketId
-                                                    ? normalized
-                                                    : t
-                                            )
-                                            : old
-                                );
-                                // También actualizar el detalle si está cacheado
-                                queryClient.setQueryData(
-                                    queryKeys.tickets.detail(ticketId),
-                                    normalized
-                                );
-                            }
-                        } catch {
-                            // Fallback: aplicar merge superficial con status_id disponible
-                            const pNew = payload.new as any;
-                            const statusId = pNew.status_id;
-                            if (statusId) {
-                                queryClient.setQueryData(
-                                    queryKeys.tickets.summary(),
-                                    (old: any[] | undefined) =>
-                                        old
-                                            ? old.map((t) => {
-                                                if (t.id !== ticketId)
-                                                    return t;
-                                                return normalizeTicket({
-                                                    ...t,
-                                                    status_id: statusId,
-                                                    estadoId:
-                                                        normalizeStateId(
-                                                            statusId
-                                                        ),
-                                                });
-                                            })
-                                            : old
-                                );
-                            }
-                        }
+
+                        const pNew = payload.new as any;
+                        queryClient.setQueryData(
+                            queryKeys.tickets.summary(),
+                            (old: any[] | undefined) =>
+                                old
+                                    ? old.map((t) => {
+                                        if (t.id !== ticketId) return t;
+                                        const statusId = pNew.status_id || t.status_id;
+                                        return {
+                                            ...t,
+                                            ...pNew,
+                                            status_id: statusId,
+                                            estadoId: normalizeStateId(statusId),
+                                        };
+                                    })
+                                    : old
+                        );
+                        queryClient.invalidateQueries({ 
+                            queryKey: queryKeys.tickets.detail(ticketId),
+                            refetchType: 'none'
+                        });
                     } else if (payload.eventType === "DELETE") {
                         queryClient.setQueryData(
                             queryKeys.tickets.summary(),
                             (old: any[] | undefined) =>
                                 old
-                                    ? old.filter(
-                                        (t) =>
-                                            t.id !== (payload.old as any).id
-                                    )
+                                    ? old.filter((t) => t.id !== (payload.old as any).id)
                                     : old
                         );
                     }
