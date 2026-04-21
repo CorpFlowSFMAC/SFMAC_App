@@ -333,9 +333,11 @@ export const normalizeStateId = (stateId: any): string => {
         "8": "en_ejecucion",
         "9": "documentacion_enviada",
         "10": "por_liquidar",
-        "11": "en_ejecucion", // Alias común
+        "11": "requiere_revision_admin",
         "12": "ticket_cerrado",
         "13": "vencido",
+        "14": "ticket_rechazado",
+        "15": "ticket_cancelado",
         "borrador": "borrador",
         "pendiente": "pendiente",
         "nuevo": "nuevo",

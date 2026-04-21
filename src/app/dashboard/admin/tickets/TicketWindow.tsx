@@ -472,11 +472,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     }, []);
 
     const [gastos, setGastos] = useState<any[]>(ticketData.gastos || []);
-    const [documentosChecklist, setDocumentosChecklist] = useState({
-        actaConformidad: false,
-        ats: false,
-        declaracionJurada: false,
-        excelSeguridad: false
+    const [documentosChecklist, setDocumentosChecklist] = useState(() => {
+        const meta = ticket.metadata || {};
+        const saved = meta.documentosChecklist || {};
+        return {
+            actaConformidad: !!saved.actaConformidad,
+            ats: !!saved.ats,
+            declaracionJurada: !!saved.declaracionJurada,
+            excelSeguridad: !!saved.excelSeguridad
+        };
     });
     const [evidenciasEjecucion, setEvidenciasEjecucion] = useState<any[]>(ticketData.evidenciasEjecucion || []);
     const [allTechnicians, setAllTechnicians] = useState<any[]>([]);
@@ -572,8 +576,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
             'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
             'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
-            'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
-            'ticket_cerrado': 12
+            'en_ejecucion': 8, 'documentacion_enviada': 9, 
+            'requiere_revision_admin': 10, 'por_liquidar': 10,
+            'ticket_cerrado': 12, 'vencido': 13, 'ticket_rechazado': 14, 'ticket_cancelado': 15
         };
         const localStateOrder = STATE_ORDER[businessData.estadoId] ?? 0;
         const serverStateOrder = STATE_ORDER[ticket.status_id] ?? 0;
@@ -605,6 +610,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
             metadata: {
                 ...sourceMetadata,
+                evidenciasEjecucion: evidenciasEjecucion,
+                documentosChecklist: documentosChecklist,
                 // Aseguramos que estos campos críticos vivan en la raíz del JSONB
                 estadoId: resolvedStatusId,
                 descripcionProblema: businessData.descripcionProblema,
@@ -2798,7 +2805,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 <div className={styles.checklistGrid}>
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.actaConformidad ? styles.checkItemActive : ''}`}
-                                                        onClick={() => setDocumentosChecklist(prev => ({ ...prev, actaConformidad: !prev.actaConformidad }))}
+                                                        onClick={() => {
+                                                            const updated = { ...documentosChecklist, actaConformidad: !documentosChecklist.actaConformidad };
+                                                            setDocumentosChecklist(updated);
+                                                            setTicketData({ ...ticketData, documentosChecklist: updated });
+                                                        }}
                                                     >
                                                         <div className={styles.checkSquare}>
                                                             {documentosChecklist.actaConformidad && <CheckCircle2 size={18} />}
@@ -2811,7 +2822,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.ats ? styles.checkItemActive : ''}`}
-                                                        onClick={() => setDocumentosChecklist(prev => ({ ...prev, ats: !prev.ats }))}
+                                                        onClick={() => {
+                                                            const updated = { ...documentosChecklist, ats: !documentosChecklist.ats };
+                                                            setDocumentosChecklist(updated);
+                                                            setTicketData({ ...ticketData, documentosChecklist: updated });
+                                                        }}
                                                     >
                                                         <div className={styles.checkSquare}>
                                                             {documentosChecklist.ats && <CheckCircle2 size={18} />}
@@ -2824,7 +2839,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.declaracionJurada ? styles.checkItemActive : ''}`}
-                                                        onClick={() => setDocumentosChecklist(prev => ({ ...prev, declaracionJurada: !prev.declaracionJurada }))}
+                                                        onClick={() => {
+                                                            const updated = { ...documentosChecklist, declaracionJurada: !documentosChecklist.declaracionJurada };
+                                                            setDocumentosChecklist(updated);
+                                                            setTicketData({ ...ticketData, documentosChecklist: updated });
+                                                        }}
                                                     >
                                                         <div className={styles.checkSquare}>
                                                             {documentosChecklist.declaracionJurada && <CheckCircle2 size={18} />}
@@ -2837,7 +2856,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.excelSeguridad ? styles.checkItemActive : ''}`}
-                                                        onClick={() => setDocumentosChecklist(prev => ({ ...prev, excelSeguridad: !prev.excelSeguridad }))}
+                                                        onClick={() => {
+                                                            const updated = { ...documentosChecklist, excelSeguridad: !documentosChecklist.excelSeguridad };
+                                                            setDocumentosChecklist(updated);
+                                                            setTicketData({ ...ticketData, documentosChecklist: updated });
+                                                        }}
                                                     >
                                                         <div className={styles.checkSquare}>
                                                             {documentosChecklist.excelSeguridad && <CheckCircle2 size={18} />}
