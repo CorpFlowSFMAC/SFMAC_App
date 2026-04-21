@@ -785,8 +785,26 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
 function TicketRow({ ticket, onTicketClick }: any) {
     const service = getServiceById(ticket.tipoServicio);
     const ServiceIcon = service?.icon;
-    const fechaCierre = ticket.fechaPagoFinal ? new Date(ticket.fechaPagoFinal).toLocaleDateString() : '---';
-    const montoTotal = (parseFloat(ticket.costoManoObra || 0) + parseFloat(ticket.costoMateriales || 0));
+
+    // FECHA DE CIERRE: usar closure_date primero, luego fechaPagoFinal
+    const rawFecha = ticket.closure_date || ticket.fechaPagoFinal || ticket.created_at;
+    const fechaCierre = rawFecha ? new Date(rawFecha).toLocaleDateString('es-PE') : '---';
+
+    // REVENUE: Lo que fue facturado al cliente (montoFinal o total_quoted_amount)
+    const ingresoFacturado = parseFloat(ticket.montoFinal || ticket.total_quoted_amount || 0);
+
+    // COSTO REAL: Total pagado desde historialPagosTecnico (la fuente de verdad)
+    const pagos = ticket.metadata?.historialPagosTecnico || [];
+    const totalCostos = pagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0)
+        + (ticket._ticketCostsSum || 0); // suma de ticket_costs si está disponible
+
+    // Si no hay historial de pagos, usar labor_cost como respaldo
+    const costoDisplay = totalCostos > 0
+        ? totalCostos
+        : parseFloat(ticket.costoManoObra || ticket.labor_cost || 0) + parseFloat(ticket.costoMateriales || ticket.materials_cost || 0);
+
+    const isAtLoss = costoDisplay > 0 && costoDisplay > ingresoFacturado;
+    const utilidadNeta = ingresoFacturado / 1.18 - costoDisplay;
 
     return (
         <tr className={styles.historyRow} onClick={onTicketClick}>
@@ -799,7 +817,7 @@ function TicketRow({ ticket, onTicketClick }: any) {
             <td>
                 <div className={styles.rowClientCol}>
                     <strong className={styles.rowClientName}>{ticket.cliente?.nombre}</strong>
-                    <span className={styles.rowSedeName}>{ticket.sede?.nombre}</span>
+                    <span className={styles.rowSedeName}>{ticket.sede?.nombre || ticket.sede_reportada_cliente || '---'}</span>
                 </div>
             </td>
             <td>
@@ -810,7 +828,26 @@ function TicketRow({ ticket, onTicketClick }: any) {
             </td>
             <td>
                 <div className={styles.rowLiquidationCol}>
-                    <span className={styles.rowAmount}>S/ {montoTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                    {/* FACTURADO AL CLIENTE */}
+                    <span className={styles.rowAmount}>
+                        S/ {ingresoFacturado.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                    </span>
+                    {/* COSTO REAL PAGADO — con alerta si hay pérdida */}
+                    {costoDisplay > 0 && (
+                        <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            color: isAtLoss ? '#EF4444' : '#10B981',
+                            display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px'
+                        }}>
+                            {isAtLoss ? '⚠️' : '✓'}
+                            Costo: S/{costoDisplay.toLocaleString('es-PE', { minimumFractionDigits: 0 })}
+                            {' | '}
+                            <span style={{ color: isAtLoss ? '#EF4444' : '#10B981' }}>
+                                Util: {utilidadNeta >= 0 ? '+' : ''}S/{Math.round(utilidadNeta).toLocaleString('es-PE')}
+                            </span>
+                        </span>
+                    )}
                     <span className={styles.rowStatusLabel}>Liquidado</span>
                 </div>
             </td>
@@ -829,3 +866,4 @@ function TicketRow({ ticket, onTicketClick }: any) {
         </tr>
     );
 }
+
