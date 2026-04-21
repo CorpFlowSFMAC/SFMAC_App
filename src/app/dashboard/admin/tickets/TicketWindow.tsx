@@ -200,8 +200,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         try {
             const oldMO = parseFloat(ticketData.costoManoObra || 0);
             const oldMAT = parseFloat(ticketData.costoMateriales || 0);
-            const newMO = parseFloat(reportForm.costoManoObra || 0);
-            const newMAT = parseFloat(reportForm.costoMateriales || 0);
+            const newMO = parseFloat(reportForm.costoManoObra || "0");
+            const newMAT = parseFloat(reportForm.costoMateriales || "0");
 
             // 1. Actualizar en Base de Datos
             const { error } = await supabase
