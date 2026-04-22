@@ -102,7 +102,7 @@ const EfficiencySLAChart = ({ data }: { data: any[] }) => (
                 <Tooltip 
                     cursor={{ strokeDasharray: '3 3' }}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                    formatter={(value: any, name: string) => [
+                    formatter={(value: any, name: any) => [
                         name === 'SLA' ? `${Math.round(value)}%` : name === 'Tiempo Promedio' ? `${Math.round(value)}h` : value,
                         name
                     ]}
