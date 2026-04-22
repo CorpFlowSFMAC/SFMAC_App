@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -98,6 +98,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // --- HARD DELETE & TRANSFER LOGIC ---
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
+    const [showLiquidationConfirm, setShowLiquidationConfirm] = useState(false);
+    const [showExceedApprovalConfirm, setShowExceedApprovalConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
     const [targetTicketSearch, setTargetTicketSearch] = useState("");
@@ -331,9 +333,26 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     ? 'en_inspeccion'
                     : rawEstadoId;
 
+                    // --- RESTAURACIÓN SELECTIVA DEL CACHE LOCAL ---
+                    const savedState = localStorage.getItem(`ticket_state_${ticket.id}`);
+                    let cachedMetadata = {};
+                    if (savedState) {
+                        try {
+                            const parsed = JSON.parse(savedState);
+                            // Filtramos campos críticos que NUNCA deben sobreescribir al servidor si el ticket ya está activo
+                            const { estadoId: _, status_id: __, ...safe } = parsed;
+                            const isTriage = !fullTicket.status_id || ['nuevo', 'borrador', 'pendiente'].includes(fullTicket.status_id);
+                            if (isTriage) {
+                                cachedMetadata = parsed;
+                            } else {
+                                cachedMetadata = safe;
+                            }
+                        } catch(e) {}
+                    }
+
                     setTicketData((prev: any) => ({
-                        ...prev, ...fullTicket, ...meta,
-                        metadata: meta,
+                        ...prev, ...fullTicket, ...meta, ...cachedMetadata,
+                        metadata: { ...meta, ...cachedMetadata },
                         estadoId: corregidoEstadoId,
                         status_id: corregidoEstadoId,
                         adelantoPagado: meta.adelantoPagado ?? false,
@@ -1205,50 +1224,50 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    const handleRequestFinalLiquidation = async () => {
-        // REFUERZO: Incluir costos extras (materiales/logistica) en el calculo de la solicitud
-        const extraPactedCosts = ticketCosts
-            .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita')
-            .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
-        
-        const jobCostBase = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + extraPactedCosts);
-        const costRef = jobCostBase > 0 ? jobCostBase : visitPayment;
-        
-        const amount = Math.max(0, costRef - unifiedPaymentsSum);
+    const handleRequestFinalLiquidation = () => {
+        setShowLiquidationConfirm(true);
+    };
 
-        // Regla 4: Escalamiento por exceso (Prevenir negligencia financiera)
-        const isExceeding = (unifiedPaymentsSum + amount > costRef + 1); // 1 sol de margen
-        const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
-
+    const handleActualLiquidation = async () => {
+        setIsSavingNegotiation(true);
+        setShowLiquidationConfirm(false);
         try {
-            const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
+            const costsRes = await supabase.from('ticket_costs').select('monto').eq('ticket_id', ticket.id).eq('estado_pago', 'pagado');
+            const unifiedPaymentsSum = (costsRes.data || []).reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
             
-            // 2. Actualizar estado y metadata
+            const costRef = parseFloat(ticketData.montoFinal || 0);
+            const amount = Math.max(0, costRef - unifiedPaymentsSum);
+
+            const isExceeding = (unifiedPaymentsSum + amount > costRef + 1);
+            const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
+
             const updated = {
                 ...ticketData,
                 estadoId: newState,
                 status_id: newState,
-                // BLINDAJE: El presupuesto DEBE persistirse al solicitar liquidación
-                montoFinal: montoTotalCotizado,
-                partidas: partidasCotización,
-                solicitudLiquidacion: {
-                    monto: amount,
-                    fecha: new Date().toISOString(),
-                    excedeTope: isExceeding
-                },
-                pagoRechazado: null
+                final_balance: amount,
+                solicitudLiquidacion: true,
+                fechaSolicitudLiquidacion: new Date().toISOString()
             };
-            setTicketData(updated);
-            syncToSupabase(updated);
 
-            if (isExceeding) {
-                showToast("Ticket Congelado", "La liquidación excede el presupuesto. Requiere aprobación de Administrador.", "info");
-            } else {
-                showToast("Liquidación Solicitada", `Solicitud de liquidación final enviada por S/ ${amount.toFixed(2)}.`, "success");
-            }
+            setTicketData(updated);
+            await onUpdate?.(ticketData.id, { 
+                status_id: newState,
+                metadata: updated.metadata || updated
+            });
+
+            showToast(
+                newState === "por_liquidar" ? "Ticket en Liquidación" : "Requiere Revisión Admin",
+                newState === "por_liquidar" 
+                    ? "El ticket ha sido enviado a Tesorería para el pago final." 
+                    : "El monto excede lo pactado. Un administrador debe aprobar el cierre.",
+                newState === "por_liquidar" ? "success" : "info"
+            );
         } catch (err) {
-            console.error("Error al solicitar liquidación:", err);
-            showToast("Error de Conexión", "No se pudo procesar la liquidación.", "error");
+            console.error("Error in liquidation request:", err);
+            showToast("Error", "No se pudo procesar la liquidación. Intente nuevamente.", "error");
+        } finally {
+            setIsSavingNegotiation(false);
         }
     };
 
@@ -1274,21 +1293,33 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleApproveBudgetExceed = () => {
-        const updated = {
-            ...ticketData,
-            estadoId: "por_liquidar",
-            // BLINDAJE: Mantener monto al aprobar excepción
-            montoFinal: montoTotalCotizado,
-            partidas: partidasCotización,
-            metadata: {
-                ...ticketData.metadata,
+        setShowExceedApprovalConfirm(true);
+    };
+
+    const handleActualExceedApproval = async () => {
+        setIsSavingNegotiation(true);
+        setShowExceedApprovalConfirm(false);
+        try {
+            const updated = {
+                ...ticketData,
+                estadoId: "por_liquidar",
+                status_id: "por_liquidar",
                 excepcionPresupuestoAprobada: true,
-                fechaAprobacionExcepcion: new Date().toISOString()
-            }
-        };
-        setTicketData(updated);
-        syncToSupabase(updated);
-        showToast("Excepción Aprobada", "El presupuesto ha sido validado y la liquidación ha sido liberada.", "success");
+                fechaAprobacionExcepcion: new Date().toISOString(),
+                aprobadoPor: myProfileId
+            };
+            setTicketData(updated);
+            await onUpdate?.(ticketData.id, { 
+                status_id: "por_liquidar",
+                metadata: updated.metadata || updated
+            });
+            showToast("Excepción Aprobada", "El ticket ha sido liberado para liquidación final.", "success");
+        } catch (err) {
+            console.error("Error approving budget exceed:", err);
+            showToast("Error", "No se pudo aprobar la excepción.", "error");
+        } finally {
+            setIsSavingNegotiation(false);
+        }
     };
 
 
@@ -3741,6 +3772,102 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                             <div className={styles.toastContent}>
                                 <h4>{toast.title}</h4>
                                 <p>{toast.message}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- MODAL DE CONFIRMACIÓN: PASAR A LIQUIDACIÓN --- */}
+                {showLiquidationConfirm && (
+                    <div className={styles.negotiationModal}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '450px' }}>
+                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}>
+                                <div className={styles.negoHeaderTitle}>
+                                    <ClipboardCheck size={24} color="#FFF" />
+                                    <div>
+                                        <h3 style={{ color: '#FFF' }}>Confirmar Envío a Liquidación</h3>
+                                        <p style={{ color: 'rgba(255,255,255,0.7)' }}>Pase de estado final y manual</p>
+                                    </div>
+                                </div>
+                                <button className={styles.negoCloseBtn} onClick={() => setShowLiquidationConfirm(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
+                                    Usted está por enviar el ticket <strong>{ticketData.numeroTicketCliente}</strong> a Tesorería para su liquidación financiera.
+                                </p>
+                                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '15px', borderRadius: '12px', marginTop: '15px' }}>
+                                    <p style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, margin: 0 }}>
+                                        Esta acción:
+                                    </p>
+                                    <ul style={{ fontSize: '12px', color: '#64748B', marginTop: '8px', paddingLeft: '20px' }}>
+                                        <li>Notificará a Tesorería sobre el cierre de trabajos.</li>
+                                        <li>Bloqueará cambios adicionales en la cotización.</li>
+                                        <li><strong>Establecerá la fecha de cierre financiero hoy.</strong></li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowLiquidationConfirm(false)}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={handleActualLiquidation}
+                                    disabled={isSavingNegotiation}
+                                    style={{ background: 'linear-gradient(135deg, #6366F1, #4F46E5)' }}
+                                >
+                                    {isSavingNegotiation ? <Clock size={18} className={styles.spinner} /> : <CheckCircle2 size={18} />}
+                                    <span>SÍ, PASAR A LIQUIDACIÓN</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- MODAL DE CONFIRMACIÓN: APROBAR EXCEPCIÓN --- */}
+                {showExceedApprovalConfirm && (
+                    <div className={styles.negotiationModal}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '450px' }}>
+                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #EF4444, #B91C1C)' }}>
+                                <div className={styles.negoHeaderTitle}>
+                                    <ShieldAlert size={24} color="#FFF" />
+                                    <div>
+                                        <h3 style={{ color: '#FFF' }}>Aprobar Exceso de Presupuesto</h3>
+                                        <p style={{ color: 'rgba(255,255,255,0.7)' }}>Acción de Alta Autoridad</p>
+                                    </div>
+                                </div>
+                                <button className={styles.negoCloseBtn} onClick={() => setShowExceedApprovalConfirm(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div className={styles.blockerNotice} style={{ background: '#FEF2F2', borderColor: '#FEE2E2' }}>
+                                    <AlertTriangle className={styles.blockerIcon} size={24} color="#EF4444" />
+                                    <div className={styles.blockerText}>
+                                        <h4 style={{ color: '#991B1B' }}>Confirmación de Excepción</h4>
+                                        <p style={{ color: '#B91C1C' }}>Al aprobar, usted autoriza el pago de un monto superior al pactado originalmente con el cliente. Esta acción quedará registrada bajo su perfil.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowExceedApprovalConfirm(false)}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={handleActualExceedApproval}
+                                    disabled={isSavingNegotiation}
+                                    style={{ background: 'linear-gradient(135deg, #EF4444, #B91C1C)' }}
+                                >
+                                    {isSavingNegotiation ? <Clock size={18} className={styles.spinner} /> : <ThumbsUp size={18} />}
+                                    <span>AUTORIZAR Y LIBERAR PAGO</span>
+                                </button>
                             </div>
                         </div>
                     </div>
