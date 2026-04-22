@@ -424,13 +424,23 @@ export default function PaymentsPage() {
                 const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
 
                 const pagosLegacy = ticket.historialPagosTecnico || [];
-                const pagos = pagosLegacy; // Mantener compatibilidad con el resto del bucle
                 const totalPagadoLegacy = round2(pagosLegacy.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
                 // ✅ UNIFICACIÓN: Sumar también los costos ya pagados en la tabla ticket_costs
-                const totalPagadoModern = round2((ticket.paidCosts || []).reduce((sum: number, c: any) => sum + round2(c.monto || 0), 0));
+                const paidModernItems = (ticket.paidCosts || []).map((c: any) => ({
+                    id: c.id,
+                    tipo: `Gasto: ${c.categoria}`,
+                    monto: c.monto,
+                    fecha: c.fecha_pago || c.created_at,
+                    estado: 'pagado',
+                    referencia: c.concepto,
+                    isTableCost: true,
+                    costId: c.id
+                }));
+                const totalPagadoModern = round2(paidModernItems.reduce((sum: number, c: any) => sum + round2(c.monto || 0), 0));
                 
                 const totalPagadoArray = round2(totalPagadoLegacy + totalPagadoModern);
+                const allHistory = [...pagosLegacy, ...paidModernItems].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
                 const techData = {
                     id: ticket.tecnico?.id,
@@ -451,16 +461,18 @@ export default function PaymentsPage() {
                 if (ticket.estadoId !== 'ticket_cerrado') {
                     const jobCostBase = round2(costoManoObra + costoMateriales);
 
-                    // 1. Adelanto (SOLO SI HAY SOLICITUD EXPLÍCITA)
-                    if (ticket.solicitudAdelanto && !ticket.adelantoPagado) {
-                        const adelantoMonto = round2(ticket.solicitudAdelanto.monto || 0);
+                    // 1. Adelanto (Metadata Legacy)
+                    const hasAdelantoPaid = !!(ticket.adelantoPagado || pagosLegacy.some((p: any) => p.tipo === 'Adelanto'));
+                    const adelantoRef = ticket.solicitudAdelanto || pagosLegacy.find((p: any) => p.tipo === 'Adelanto');
+                    if (adelantoRef || hasAdelantoPaid) {
+                        const adelantoMonto = round2(adelantoRef?.monto || ticket.montoAdelanto || 0);
                         if (adelantoMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_adelanto`,
                                 tipo: 'Adelanto',
                                 monto: adelantoMonto,
-                                estado: 'pendiente',
-                                fecha: ticket.solicitudAdelanto.fecha || new Date().toISOString()
+                                estado: hasAdelantoPaid ? 'pagado' : 'pendiente',
+                                fecha: adelantoRef?.fecha || ticket.fechaPagoAdelanto || ticket.created_at
                             });
                         }
                     }
@@ -523,31 +535,35 @@ export default function PaymentsPage() {
                         });
                     }
 
-                    // 4. Liquidación Final (SOLO SI HAY SOLICITUD PENDIENTE O EL TICKET ESTÁ EN LIQUIDACIÓN)
-                    if (ticket.solicitudLiquidacion || ticket.estadoId === 'por_liquidar') {
-                        const liqMonto = round2(ticket.solicitudLiquidacion?.monto || saldoReal);
-                        if (liqMonto > 0.01) {
-                            items.push({
-                                id: `${ticket.id}_final`,
-                                tipo: ticket.solicitudLiquidacion ? 'Liquidación Final' : 'Saldo Pendiente (Auto)',
-                                monto: liqMonto,
-                                estado: 'pendiente',
-                                fecha: ticket.solicitudLiquidacion?.fecha || new Date().toISOString(),
-                                concepto: !ticket.solicitudLiquidacion ? "Saldo detectado por el sistema" : undefined
-                            });
-                        }
+                    // 4. Liquidación Final
+                    const hasFinalPaid = !!(ticket.fechaPagoFinal || pagosLegacy.some((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)'));
+                    const finalRef = ticket.solicitudLiquidacion || pagosLegacy.find((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
+                    
+                    if (finalRef || ticket.estadoId === 'por_liquidar' || hasFinalPaid) {
+                        const liqMonto = round2(finalRef?.monto ?? (hasFinalPaid ? (finalRef?.monto || 0) : saldoReal));
+                        
+                        items.push({
+                            id: `${ticket.id}_final`,
+                            tipo: (finalRef?.tipo || 'Liquidación Final'),
+                            monto: liqMonto,
+                            estado: hasFinalPaid ? 'pagado' : 'pendiente',
+                            fecha: finalRef?.fecha || ticket.fechaPagoFinal || new Date().toISOString(),
+                            concepto: (!finalRef && !hasFinalPaid) ? "Saldo detectado por el sistema" : undefined
+                        });
                     }
 
-                    // 5. Movilidad / Visita (SOLO SI HAY SOLICITUD PENDIENTE)
-                    if (ticket.solicitudPagoVisita && !ticket.visitPaymentConfirmed) {
-                        const visitaMonto = round2(ticket.solicitudPagoVisita.monto || visitCost);
+                    // 5. Movilidad / Visita
+                    const hasVisitaPaid = !!(ticket.visitPaymentConfirmed || pagosLegacy.some((p: any) => p.tipo === 'Movilidad / Visita'));
+                    const visitaRef = ticket.solicitudPagoVisita || pagosLegacy.find((p: any) => p.tipo === 'Movilidad / Visita');
+                    if (visitaRef || hasVisitaPaid) {
+                        const visitaMonto = round2(visitaRef?.monto || visitCost);
                         if (visitaMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_visita`,
                                 tipo: 'Movilidad / Visita',
                                 monto: visitaMonto,
-                                estado: 'pendiente',
-                                fecha: ticket.solicitudPagoVisita.fecha || new Date().toISOString()
+                                estado: hasVisitaPaid ? 'pagado' : 'pendiente',
+                                fecha: visitaRef?.fecha || ticket.fechaPagoVisita || new Date().toISOString()
                             });
                         }
                     }
@@ -576,7 +592,7 @@ export default function PaymentsPage() {
                         montoAdelantado: totalPagadoArray,
                         saldoPendiente: totalPactadoInclVisita - totalPagadoArray,
                         items: techItems,
-                        historialDepositos: pagos,
+                        historialDepositos: allHistory,
                         costoVisita: visitCost,
                         voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
                         montoFacturado: ticket.montoFacturado,
@@ -1301,7 +1317,7 @@ export default function PaymentsPage() {
                                                 {/* Col 4: Solicitud Actual */}
                                                 <td>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        {group.items.filter(i => i.estado === 'pendiente').map((item) => {
+                                                        {group.items.map((item) => {
                                                             const cfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F8FAFC', label: item.tipo };
                                                             return (
                                                                 <div key={item.id} style={{
