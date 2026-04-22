@@ -34,15 +34,19 @@ function calcularHoras(ticket: any): number {
 // COMPONENTES DE DASHBOARD CORPORATIVO (RECHARTS)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// 📊 Gráfico Principal: Facturación y Volumen por Gestor
-const RevenueVolumeChart = ({ data }: { data: any[] }) => (
+// 📊 Gráfico Principal: Generado vs Gasto Operativo
+const GeneratedVsExpenseChart = ({ data }: { data: any[] }) => (
     <div style={{ width: '100%', height: 350 }}>
         <ResponsiveContainer>
-            <ComposedChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+            <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                 <defs>
-                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="genGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#002A8F" stopOpacity={1} />
                         <stop offset="100%" stopColor="#001F6B" stopOpacity={1} />
+                    </linearGradient>
+                    <linearGradient id="expGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#94A3B8" stopOpacity={0.8} />
+                        <stop offset="100%" stopColor="#64748B" stopOpacity={0.8} />
                     </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
@@ -50,87 +54,60 @@ const RevenueVolumeChart = ({ data }: { data: any[] }) => (
                     dataKey="nombre" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: '#64748B', fontSize: 12, fontWeight: 700 }}
+                    tick={{ fill: '#64748B', fontSize: 10, fontWeight: 700 }}
                     dy={10}
                 />
                 <YAxis 
-                    yAxisId="left"
                     axisLine={false} 
                     tickLine={false} 
                     tick={{ fill: '#64748B', fontSize: 11 }}
                     tickFormatter={(val) => `S/ ${val.toLocaleString()}`}
                 />
-                <YAxis 
-                    yAxisId="right" 
-                    orientation="right" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#64748B', fontSize: 11 }}
-                />
                 <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', padding: '1rem' }}
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem' }}
                     cursor={{ fill: '#F8FAFC' }}
                     formatter={(value: any, name: any) => [
-                        name?.includes('S/') ? `S/ ${Math.round(value).toLocaleString()}` : value,
+                        `S/ ${Math.round(value).toLocaleString()}`,
                         name
                     ]}
                 />
                 <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 25 }} />
-                <Bar yAxisId="left" dataKey="facturacion" name="Facturación (S/)" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={45} />
-                <Bar yAxisId="left" dataKey="rentabilidad" name="Utilidad (S/)" fill="#10B981" radius={[6, 6, 0, 0]} barSize={15} />
-                <Line yAxisId="right" type="monotone" dataKey="cerrados" name="Tickets Cerrados" stroke="#3B82F6" strokeWidth={4} dot={{ r: 6, fill: '#3B82F6', strokeWidth: 3, stroke: '#fff' }} />
-            </ComposedChart>
+                <Bar dataKey="facturacion" name="Generado (S/)" fill="url(#genGradient)" radius={[6, 6, 0, 0]} barSize={35} />
+                <Bar dataKey="inversion" name="Gasto Operativo (S/)" fill="url(#expGradient)" radius={[6, 6, 0, 0]} barSize={35} />
+            </BarChart>
         </ResponsiveContainer>
     </div>
 );
 
-// 🎯 Gráfico Secundario: Eficiencia de Cierre (Horas) vs SLA
-const EfficiencySLAChart = ({ data }: { data: any[] }) => (
+// 📈 Gráfico Secundario: Utilidad Neta (Productividad Real)
+const NetProfitChart = ({ data }: { data: any[] }) => (
     <div style={{ width: '100%', height: 350 }}>
         <ResponsiveContainer>
-            <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+            <BarChart data={data} margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis 
-                    type="number" 
-                    dataKey="tiempoPromedio" 
-                    name="Tiempo Promedio" 
-                    unit="h" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#64748B', fontSize: 11 }}
+                    dataKey="nombre" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#64748B', fontSize: 10, fontWeight: 700 }}
                 />
                 <YAxis 
-                    type="number" 
-                    dataKey="cumplimientoSLA" 
-                    name="SLA" 
-                    unit="%" 
-                    domain={[0, 100]}
-                    axisLine={false}
-                    tickLine={false}
+                    axisLine={false} 
+                    tickLine={false} 
                     tick={{ fill: '#64748B', fontSize: 11 }}
+                    tickFormatter={(val) => `S/ ${val.toLocaleString()}`}
                 />
-                <ZAxis type="number" dataKey="totalTickets" range={[100, 800]} name="Tickets" />
                 <Tooltip 
-                    cursor={{ strokeDasharray: '3 3' }}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                    formatter={(value: any, name: any) => [
-                        name === 'SLA' ? `${Math.round(value)}%` : name === 'Tiempo Promedio' ? `${Math.round(value)}h` : value,
-                        name
-                    ]}
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem' }}
+                    formatter={(value: any) => [`S/ ${Math.round(value).toLocaleString()}`, "Utilidad Neta"]}
                 />
                 <Legend verticalAlign="top" align="right" iconType="circle" />
-                <Scatter name="Gestores" data={data}>
+                <Bar dataKey="rentabilidad" name="Utilidad Neta (S/)" radius={[6, 6, 0, 0]} barSize={45}>
                     {data.map((entry, index) => (
-                        <Cell 
-                            key={`cell-${index}`} 
-                            fill={entry.cumplimientoSLA > 90 ? '#10B981' : entry.cumplimientoSLA > 70 ? '#F59E0B' : '#EF4444'} 
-                            fillOpacity={0.8}
-                            strokeWidth={2}
-                            stroke="#fff"
-                        />
+                        <Cell key={`cell-${index}`} fill={entry.rentabilidad > 0 ? '#10B981' : '#EF4444'} />
                     ))}
-                </Scatter>
-            </ScatterChart>
+                </Bar>
+            </BarChart>
         </ResponsiveContainer>
     </div>
 );
@@ -630,22 +607,17 @@ export default function ReportesEficienciaPage() {
                         <div className={styles.analyticsVisualGrid}>
                             <div className={styles.analyticsMainCard}>
                                 <div className={styles.chartHeader}>
-                                    <h3>Productividad Comparativa por Gestor</h3>
-                                    <p>Relación entre facturación y tickets resueltos</p>
+                                    <h3>Generado vs Gasto Operativo por Gestora</h3>
+                                    <p>Comparativa de facturación neta vs inversión en tickets</p>
                                 </div>
-                                <RevenueVolumeChart data={productivityByGestor} />
+                                <GeneratedVsExpenseChart data={productivityByGestor} />
                             </div>
                             <div className={styles.analyticsSecondaryCard}>
                                 <div className={styles.chartHeader}>
-                                    <h3>Eficiencia vs SLA</h3>
-                                    <p>Tiempos de respuesta y % de cumplimiento</p>
+                                    <h3>Productividad Neta (Margen Real)</h3>
+                                    <p>Utilidad generada tras descontar inversión operativa</p>
                                 </div>
-                                <EfficiencySLAChart data={productivityByGestor.map(g => ({
-                                    ...g,
-                                    tiempoPromedio: g.avgTime,
-                                    cumplimientoSLA: 100 - g.ratioVencidos,
-                                    totalTickets: g.totalTickets
-                                }))} />
+                                <NetProfitChart data={productivityByGestor} />
                             </div>
                         </div>
 
