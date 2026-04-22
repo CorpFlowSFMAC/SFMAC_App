@@ -1728,7 +1728,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         laborPaymentsModern.reduce((acc: number, c: any) => acc + (parseFloat(c.monto) || 0), 0) + 
         laborPaymentsLegacy.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0)
     );
-    const availableRescue = Math.max(0, round2(pactadoLabor - totalLaborPaid));
+    
+    let availableRescue = Math.max(0, round2(pactadoLabor - totalLaborPaid));
+
+    // REFUERZO: Si no hay pactado definido aún pero el ticket está en ejecución, permitir un rescate base de S/ 100
+    // para gastos de emergencia.
+    if (pactadoLabor <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
+        availableRescue = 100;
+    }
 
     return (
         <>

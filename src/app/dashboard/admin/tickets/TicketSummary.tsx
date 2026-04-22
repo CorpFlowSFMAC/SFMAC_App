@@ -1143,7 +1143,7 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
 }
 
 
-export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue, costos, availableRescue = 0 }: FinancialLiquidationBarProps) {
+export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue, costos, availableRescue: propRescue }: FinancialLiquidationBarProps) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
@@ -1204,6 +1204,29 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
 
     const totalPagadoTecnico = round2(totalPagadoLegacyDrift + totalPagadoModern + additionalManualPayments);
     const montoSaldo = Math.max(0, round2(costoReferencia - totalPagadoTecnico));
+
+    // CALCULO DE RESCATE (si no viene por prop)
+    let availableRescue = propRescue !== undefined ? propRescue : 0;
+    if (propRescue === undefined) {
+        const pactadoLabor = round2(parseFloat(ticket.labor_cost || ticket.costoManoObra || 0));
+        const laborPaymentsModern = (costos || []).filter(c => 
+            (c.estado_pago === 'pagado' || c.estado_pago === 'adelanto' || c.estado_pago === 'pendiente') && 
+            (c.categoria === 'Mano de Obra')
+        );
+        const laborPaymentsLegacy = legacyPaymentsFiltered.filter((p: any) => 
+            ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra'].includes(p.tipo)
+        );
+        const totalLaborPaid = round2(
+            laborPaymentsModern.reduce((acc: number, c: any) => acc + (parseFloat(c.monto) || 0), 0) + 
+            laborPaymentsLegacy.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0)
+        );
+        availableRescue = Math.max(0, round2(pactadoLabor - totalLaborPaid));
+
+        // Fallback para tickets sin pactado definido aún (emergencias)
+        if (pactadoLabor <= 0 && (ticket.estadoId === 'en_ejecucion' || ticket.estadoId === 'visita_realizada')) {
+            availableRescue = 100;
+        }
+    }
 
     // Variables para UI
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
@@ -1605,6 +1628,7 @@ interface TicketSummaryProps {
     ticket: any;
     onProceed: () => void;
     onOpenMaterials?: () => void;
+    onOpenRescue?: () => void;
     costos?: any[];
 }
 
@@ -1623,7 +1647,12 @@ export function TicketSummary({ ticket, onProceed, onOpenMaterials, costos }: Ti
             <DiagnosisInfoBar ticket={ticket} />
             <QuoteAssistantBar ticket={ticket} />
             <QuotationInfoBar ticket={ticket} />
-            <FinancialLiquidationBar ticket={ticket} onOpenMaterials={onOpenMaterials} costos={costos} />
+            <FinancialLiquidationBar 
+                ticket={ticket} 
+                onOpenMaterials={onOpenMaterials} 
+                onOpenRescue={onOpenRescue}
+                costos={costos} 
+            />
             <PaymentHistoryBar ticket={ticket} />
             <UnifiedEvidenceBar ticket={ticket} />
             <DocumentationSummaryBar ticket={ticket} />
