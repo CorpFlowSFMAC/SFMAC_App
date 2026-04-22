@@ -726,7 +726,7 @@ export default function ReportesEficienciaPage() {
                                                     </td>
                                                     <td>
                                                         <div className={styles.statusBadgeSmall} data-state={status}>
-                                                            {TICKET_STATES[status as keyof typeof TICKET_STATES]?.label || status}
+                                                            {TICKET_STATES.find(s => s.id === status)?.nombreCorto || status}
                                                         </div>
                                                     </td>
                                                     <td>
@@ -761,8 +761,6 @@ export default function ReportesEficienciaPage() {
                                 </table>
                             )}
                         </div>
-                    </div>
-                )}
                     </div>
                 )}
 
