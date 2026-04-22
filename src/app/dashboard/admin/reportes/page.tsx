@@ -628,139 +628,163 @@ export default function ReportesEficienciaPage() {
                             </div>
                         </div>
 
-                        <div className={styles.fullStatsTableCard}>
-                            <div className={styles.cardHeaderExt}>
-                                <h3>
-                                    {selectedGestoraId === "global" 
-                                        ? "Ranking General de Eficiencia" 
-                                        : `Tickets Gestionados por ${productivityByGestor.find(g => g.id === selectedGestoraId)?.nombre || 'Gestora'}`
-                                    }
-                                </h3>
-                                {selectedGestoraId !== "global" && (
+                            <div className={styles.fullStatsTableCard}>
+                                <div className={styles.cardHeaderExt}>
+                                    <h3>
+                                        {selectedGestoraId === "global" 
+                                            ? "Mesa de Control Operativa (Todos los Gestores)" 
+                                            : `Tickets Gestionados por ${productivityByGestor.find(g => g.id === selectedGestoraId)?.nombre || 'Gestora'}`
+                                        }
+                                    </h3>
                                     <div className={styles.tableFilterBadge}>
-                                        {filteredTickets.length} Tickets Filtrados
+                                        {selectedGestoraId === "global" ? `${productivityByGestor.length} Gestores Activos` : `${filteredTickets.length} Tickets Filtrados`}
                                     </div>
-                                )}
-                            </div>
-                            
-                            {selectedGestoraId === "global" ? (
-                                <table className={styles.premiumTable}>
-                                    <thead>
-                                        <tr>
-                                            <th>Gestora</th>
-                                            <th>Tickets</th>
-                                            <th>Vencidos</th>
-                                            <th>Salud SLA</th>
-                                            <th>SST</th>
-                                            <th>Meta</th>
-                                            <th>Beneficio</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {productivityByGestor.map((g, i) => (
-                                            <tr key={i}>
-                                                <td className={styles.managerCell}>
-                                                    <div className={styles.avatarMini}>{g.nombre.charAt(0)}</div>
-                                                    <strong>{g.nombre}</strong>
-                                                </td>
-                                                <td>{g.totalTickets}</td>
-                                                <td className={g.vencidos > 0 ? styles.textDanger : ""}>{g.vencidos}</td>
-                                                <td>
-                                                    <div className={styles.statusBubble} style={{ background: g.ratioVencidos < 5 ? '#DCFCE7' : '#FEF2F2', color: g.ratioVencidos < 5 ? '#15803D' : '#DC2626' }}>
-                                                        {Math.round(g.ratioVencidos)}% Venc.
-                                                    </div>
-                                                </td>
-                                                <td>{g.sstCompliance ? <CheckCircle color="#10B981" size={16} /> : <XCircle color="#DC2626" size={16} />}</td>
-                                                <td>
-                                                    <div className={styles.progressThin}>
-                                                        <div className={styles.progressFill} style={{ width: `${Math.min(g.percentMeta, 100)}%`, background: g.percentMeta >= 100 ? '#10B981' : '#3B82F6' }} />
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span className={g.bonoValido ? styles.bonusFlagOn : styles.bonusFlagOff}>
-                                                        {g.bonoValido ? "BONO OK" : "NO APTO"}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <table className={styles.premiumTable}>
-                                    <thead>
-                                        <tr>
-                                            <th>Ticket #</th>
-                                            <th>Cliente / Sede</th>
-                                            <th>Estado</th>
-                                            <th>SLA (Progreso)</th>
-                                            <th>Costo Inv.</th>
-                                            <th>Rent. Neta</th>
-                                            <th>Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredTickets.map((t, i) => {
-                                            const horas = calcularHoras(t);
-                                            const status = normalizeStateId(t.estadoId);
-                                            const costRatio = Math.min((horas / 72) * 100, 100);
-                                            const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-                                            const net = gross / 1.18;
-                                            const inv = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-                                            const profit = net - inv;
-                                            
-                                            // Lógica de semáforo SLA
-                                            let slaColor = "#10B981";
-                                            if (horas > 72) slaColor = "#EF4444";
-                                            else if (horas > 48) slaColor = "#F59E0B";
+                                </div>
+                                
+                                {selectedGestoraId === "global" ? (
+                                    <div className={styles.gestorasGridPermanent}>
+                                        {productivityByGestor.map((g, i) => {
+                                            const facturacion = g.facturacion;
+                                            const inversion = g.inversion;
+                                            const rentabilidad = facturacion - inversion;
+                                            const margen = facturacion > 0 ? (rentabilidad / facturacion) * 100 : 0;
+                                            const metaPercent = Math.min(g.percentMeta, 100);
 
                                             return (
-                                                <tr key={i} className={styles.clickableRow} onClick={() => setActiveTicket(t)}>
-                                                    <td>
-                                                        <div className={styles.ticketIdBadge}>{t.numeroTicketCliente || `T-${t.id.slice(-4)}`}</div>
-                                                    </td>
-                                                    <td>
-                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                            <strong style={{ fontSize: '0.9rem' }}>{t.cliente?.nombre || 'S/C'}</strong>
-                                                            <small style={{ color: '#64748B' }}>{t.sede?.nombre || t.metadata?.codigo_sede_extraido || 'S/S'}</small>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div className={styles.statusBadgeSmall} data-state={status}>
-                                                            {TICKET_STATES.find(s => s.id === status)?.nombreCorto || status}
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div className={styles.slaMiniContainer}>
-                                                            <div className={styles.slaProgressBars}>
-                                                                <div className={styles.slaBarTrack}>
-                                                                    <div 
-                                                                        className={styles.slaBarFill} 
-                                                                        style={{ 
-                                                                            width: `${costRatio}%`, 
-                                                                            backgroundColor: slaColor 
-                                                                        }} 
-                                                                    />
-                                                                </div>
+                                                <div key={i} className={styles.gestoraActionCard} onClick={() => setSelectedGestoraId(g.id)}>
+                                                    <div className={styles.gestoraCardHeader}>
+                                                        <div className={styles.gestoraAvatar}>{g.nombre.charAt(0)}</div>
+                                                        <div className={styles.gestoraNameInfo}>
+                                                            <div className={styles.gName}>{g.nombre}</div>
+                                                            <div className={styles.gStatus}>
+                                                                {g.totalTickets} {g.totalTickets === 1 ? 'Ticket' : 'Tickets'} • {Math.round(g.ratioVencidos)}% Venc.
                                                             </div>
-                                                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: slaColor }}>{Math.round(horas)}h / 72h</span>
                                                         </div>
-                                                    </td>
-                                                    <td>S/ {inv.toLocaleString()}</td>
-                                                    <td className={profit < 0 ? styles.textDanger : styles.textSuccess}>
-                                                        <strong>S/ {profit.toLocaleString()}</strong>
-                                                    </td>
-                                                    <td>
-                                                        <button className={styles.btnTableAction}>
-                                                            <ChevronRight size={16} />
-                                                        </button>
-                                                    </td>
-                                                </tr>
+                                                        <button className={styles.gProfileBtn}><ArrowUpRight size={14} /></button>
+                                                    </div>
+
+                                                    <div className={styles.gestoraMiniFunnel}>
+                                                        <div className={styles.miniBarTrack}>
+                                                            <div className={styles.miniBarProceso} style={{ width: `${(g.proceso / (g.totalTickets||1)) * 100}%` }} title="En Proceso"></div>
+                                                            <div className={styles.miniBarCerrado} style={{ width: `${(g.cerrados / (g.totalTickets||1)) * 100}%` }} title="Cerrados"></div>
+                                                        </div>
+                                                        <div className={styles.miniFunnelLabels}>
+                                                            <span>Ing: {g.totalTickets}</span>
+                                                            <span>Proc: {g.proceso}</span>
+                                                            <span className={styles.textSuccess}>Cerrados: {g.cerrados}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className={styles.gestoraKpisMini}>
+                                                        <div className={styles.miniKpi}>
+                                                            <label>Rent. Neta</label>
+                                                            <strong className={rentabilidad < 0 ? styles.textDanger : styles.textSuccess}>
+                                                                S/ {Math.round(rentabilidad).toLocaleString()}
+                                                            </strong>
+                                                        </div>
+                                                        <div className={styles.miniKpi}>
+                                                            <label>Margen Real</label>
+                                                            <strong style={{ color: margen > 30 ? '#10B981' : '#F59E0B' }}>
+                                                                {Math.round(margen)}%
+                                                            </strong>
+                                                        </div>
+                                                        <div className={styles.miniKpi}>
+                                                            <label>Salud SLA</label>
+                                                            <div className={styles.statusBubble} style={{ background: g.vencidos > 0 ? '#FEF2F2' : '#DCFCE7', color: g.vencidos > 0 ? '#DC2626' : '#15803D', padding: '0.1rem 0.4rem', fontSize: '0.65rem' }}>
+                                                                {g.vencidos > 0 ? `${g.vencidos} Venc.` : 'OPTIMO'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className={styles.gestoraMetaProgress}>
+                                                        <div className={styles.metaLabelRow}>
+                                                            <span>Avance Meta Rentab.</span>
+                                                            <span>{Math.round(metaPercent)}%</span>
+                                                        </div>
+                                                        <div className={styles.progressThin} style={{ height: '4px' }}>
+                                                            <div className={styles.progressFill} style={{ width: `${metaPercent}%`, background: metaPercent >= 100 ? '#10B981' : '#3B82F6' }} />
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+                                    </div>
+                                ) : (
+                                    <table className={styles.premiumTable}>
+                                        <thead>
+                                            <tr>
+                                                <th>Ticket #</th>
+                                                <th>Cliente / Sede</th>
+                                                <th>Estado</th>
+                                                <th>SLA (Progreso)</th>
+                                                <th>Costo Inv.</th>
+                                                <th>Rent. Neta</th>
+                                                <th>Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredTickets.map((t, i) => {
+                                                const horas = calcularHoras(t);
+                                                const status = normalizeStateId(t.estadoId);
+                                                const costRatio = Math.min((horas / 72) * 100, 100);
+                                                const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                                                const net = gross / 1.18;
+                                                const inv = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+                                                const profit = net - inv;
+                                                
+                                                // Lógica de semáforo SLA
+                                                let slaColor = "#10B981";
+                                                if (horas > 72) slaColor = "#EF4444";
+                                                else if (horas > 48) slaColor = "#F59E0B";
+
+                                                return (
+                                                    <tr key={i} className={styles.clickableRow} onClick={() => setActiveTicket(t)}>
+                                                        <td>
+                                                            <div className={styles.ticketIdBadge}>{t.numeroTicketCliente || `T-${t.id.slice(-4)}`}</div>
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                                <strong style={{ fontSize: '0.9rem' }}>{t.cliente?.nombre || 'S/C'}</strong>
+                                                                <small style={{ color: '#64748B' }}>{t.sede?.nombre || t.metadata?.codigo_sede_extraido || 'S/S'}</small>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className={styles.statusBadgeSmall} data-state={status}>
+                                                                {TICKET_STATES.find(s => s.id === status)?.nombreCorto || status}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className={styles.slaMiniContainer}>
+                                                                <div className={styles.slaProgressBars}>
+                                                                    <div className={styles.slaBarTrack}>
+                                                                        <div 
+                                                                            className={styles.slaBarFill} 
+                                                                            style={{ 
+                                                                                width: `${costRatio}%`, 
+                                                                                backgroundColor: slaColor 
+                                                                            }} 
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: slaColor }}>{Math.round(horas)}h / 72h</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>S/ {inv.toLocaleString()}</td>
+                                                        <td className={profit < 0 ? styles.textDanger : styles.textSuccess}>
+                                                            <strong>S/ {profit.toLocaleString()}</strong>
+                                                        </td>
+                                                        <td>
+                                                            <button className={styles.btnTableAction}>
+                                                                <ChevronRight size={16} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
                     </div>
                 )}
 

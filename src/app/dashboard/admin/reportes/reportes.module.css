@@ -1049,3 +1049,134 @@
     .premiumHeader { flex-direction: column; gap: 1.5rem; align-items: flex-start; }
     .kpiRibbon { grid-template-columns: 1fr 1fr; }
 }
+
+.gestorasGridPermanent {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+
+.gestoraActionCard {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 20px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.gestoraAvatar {
+    width: 42px;
+    height: 42px;
+    background: #F1F5F9 !important;
+    color: #002A8F !important;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+}
+
+.gestoraMiniFunnel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.miniBarTrack {
+    height: 8px;
+    background: #F1F5F9;
+    border-radius: 10px;
+    display: flex;
+    overflow: hidden;
+}
+
+.miniBarProceso { background: #F59E0B; height: 100%; }
+.miniBarCerrado { background: #10B981; height: 100%; }
+
+.gestoraKpisMini {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    background: #F8FAFC;
+    padding: 0.75rem;
+    border-radius: 12px;
+}
+
+
+.miniKpi {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.miniKpi label {
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: #94A3B8;
+    text-transform: uppercase;
+}
+
+.miniKpi strong {
+    font-size: 0.85rem;
+    font-weight: 800;
+}
+
+.gestoraMetaProgress {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.metaLabelRow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #64748B;
+}
+
+.gestoraCardHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: relative;
+}
+
+.gestoraNameInfo {
+    flex: 1;
+}
+
+.gName {
+    font-weight: 800;
+    font-size: 1rem;
+    color: #0F172A;
+}
+
+.gStatus {
+    font-size: 0.75rem;
+    color: #64748B;
+    font-weight: 600;
+}
+
+.gProfileBtn {
+    background: #F1F5F9;
+    border: none;
+    padding: 0.4rem;
+    border-radius: 8px;
+    color: #002A8F;
+    cursor: pointer;
+}
+
+.miniFunnelLabels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #94A3B8;
+    text-transform: uppercase;
+}
