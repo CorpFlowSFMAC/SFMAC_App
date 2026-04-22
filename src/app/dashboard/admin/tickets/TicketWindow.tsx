@@ -350,26 +350,35 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         } catch(e) {}
                     }
 
-                    setTicketData((prev: any) => ({
-                        ...prev, ...fullTicket, ...meta, ...cachedMetadata,
-                        metadata: { ...meta, ...cachedMetadata },
-                        estadoId: corregidoEstadoId,
-                        status_id: corregidoEstadoId,
-                        adelantoPagado: meta.adelantoPagado ?? false,
-                        visitPaymentConfirmed: visitConfirmed,
-                        solicitudAdelanto: meta.solicitudAdelanto ?? null,
-                        solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
-                        historialPagosTécnico: meta.historialPagosTécnico ?? [],
-                        gestora: fullTicket.gestora || meta.gestora || null
-                    }));
+                    setTicketData((prev: any) => {
+                        const merged = {
+                            ...prev, ...fullTicket, ...meta, ...cachedMetadata,
+                            metadata: { ...meta, ...cachedMetadata },
+                            estadoId: corregidoEstadoId,
+                            status_id: corregidoEstadoId,
+                            adelantoPagado: meta.adelantoPagado ?? false,
+                            visitPaymentConfirmed: visitConfirmed,
+                            solicitudAdelanto: meta.solicitudAdelanto ?? null,
+                            solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
+                            historialPagosTécnico: meta.historialPagosTécnico ?? [],
+                            gestora: fullTicket.gestora || meta.gestora || null
+                        };
+                        // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
+                        if (cachedMetadata.costoManoObra > 0 && merged.costoManoObra <= 20) {
+                            merged.costoManoObra = cachedMetadata.costoManoObra;
+                        }
+                        if (cachedMetadata.montoFinal > 0 && merged.montoFinal <= 20) {
+                            merged.montoFinal = cachedMetadata.montoFinal;
+                        }
+                        return merged;
+                    });
 
                     // SYNC QUOTATION STATE
-                    if (meta.partidas && meta.partidas.length > 0) {
-                        setPartidasCotización(meta.partidas);
-                    }
-                    if (meta.montoFinal) {
-                        setMontoTotalCotizado(parseFloat(meta.montoFinal));
-                    }
+                    const finalPartidas = (meta.partidas && meta.partidas.length > 0) ? meta.partidas : (cachedMetadata.partidas || []);
+                    if (finalPartidas.length > 0) setPartidasCotización(finalPartidas);
+                    
+                    const finalMonto = parseFloat(meta.montoFinal || cachedMetadata.montoFinal || 0);
+                    if (finalMonto > 0) setMontoTotalCotizado(finalMonto);
 
                     // SYNC DOCUMENTATION STATE
                     if (meta.evidenciasEjecucion) setEvidenciasEjecucion(meta.evidenciasEjecucion);
@@ -419,7 +428,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     [...localPagos2, ...serverPagos2].forEach((p: any) => { if (p?.id) mergedById2.set(p.id, p); });
                     const mergedPagos2 = mergedById2.size > 0 ? Array.from(mergedById2.values()) : serverPagos2;
 
-                    return {
+                    const merged = {
                         ...prev, ...fullTicket, ...meta,
                         metadata: meta,
                         estadoId: finalEstadoId,
@@ -431,6 +440,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         historialPagosTécnico: mergedPagos2,
                         pagoRechazado: meta.pagoRechazado ?? null
                     };
+
+                    // PROTECCIÓN: Si estamos en medio de un sync o tenemos datos locales más frescos, no sobrescribir montos con ceros
+                    if (prev.costoManoObra > 0 && merged.costoManoObra <= 20) merged.costoManoObra = prev.costoManoObra;
+                    if (prev.montoFinal > 0 && merged.montoFinal <= 20) merged.montoFinal = prev.montoFinal;
+
+                    return merged;
                 });
 
                 // SYNC QUOTATION STATE ON REFETCH
@@ -685,6 +700,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const currentDataStr = JSON.stringify(updates);
         if (currentDataStr === lastSyncData.current && !dataOverride) return;
 
+        isSyncing.current = true;
+        try {
+            if (onUpdate) {
+                await onUpdate(ticketData.id, updates);
+            } else {
+                await ticketsAPI.update(ticketData.id, updates);
+            }
+            lastSyncData.current = currentDataStr;
         } catch (err) {
             console.error("Error syncing ticket to Supabase:", err);
         } finally {
@@ -1224,10 +1247,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setShowLiquidationConfirm(false);
         try {
             const costsRes = await supabase.from('ticket_costs').select('monto').eq('ticket_id', ticket.id).eq('estado_pago', 'pagado');
-            const unifiedPaymentsSum = (costsRes.data || []).reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
+            const modernPaymentsSum = (costsRes.data || []).reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
             
-            const costRef = parseFloat(ticketData.montoFinal || 0);
-            const amount = Math.max(0, costRef - unifiedPaymentsSum);
+            // UNIFICACIÓN: Incluir historialPagosTécnico (Legacy) para evitar liquidaciones de monto 0
+            const legacyPaymentsSum = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
+            const unifiedPaymentsSum = round2(modernPaymentsSum + legacyPaymentsSum);
+
+            const costRef = round2(parseFloat(montoTotalCotizado as any || ticketData.montoFinal || 0));
+            const amount = Math.max(0, round2(costRef - unifiedPaymentsSum));
+
+            // Si el monto es 0 pero el ticket NO está pagado, algo anda mal con la sincronización o los datos
+            if (amount <= 0 && costRef > 0) {
+                console.warn("Monto de liquidación calculado como 0 con costo pactado > 0. Revisar pagos.");
+            }
 
             const isExceeding = (unifiedPaymentsSum + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
@@ -1237,8 +1269,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 estadoId: newState,
                 status_id: newState,
                 final_balance: amount,
-                solicitudLiquidacion: true,
-                fechaSolicitudLiquidacion: new Date().toISOString()
+                solicitudLiquidacion: {
+                    fecha: new Date().toISOString(),
+                    monto: amount,
+                    excedeTope: isExceeding
+                }
             };
 
             setTicketData(updated);
@@ -1270,6 +1305,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const updated = {
             ...ticketData,
             estadoId: "documentacion_enviada",
+            status_id: "documentacion_enviada", // Asegurar consistencia
             fechaFinEjecucion: new Date().toISOString(),
             gastos: gastos,
             evidenciasEjecucion: evidenciasEjecucion,
@@ -1280,6 +1316,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             partidas: partidasCotización
         };
         setTicketData(updated);
+        
+        // PERSISTENCIA INMEDIATA: Forzar el sync para evitar regresiones de estado al cerrar la ventana
+        syncToSupabase(updated);
+        
         showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 

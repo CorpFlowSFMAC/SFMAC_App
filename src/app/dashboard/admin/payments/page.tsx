@@ -192,16 +192,17 @@ export default function PaymentsPage() {
             setLoading(true);
             const data = await ticketsAPI.getForPayments();
             
-            // Obtener costos pendientes de la tabla ticket_costs (con datos del especialista)
+            // Obtener costos (pendientes y pagados) de la tabla ticket_costs (con datos del especialista)
             const { data: costs } = await supabase
                 .from('ticket_costs')
-                .select('*, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)')
-                .eq('estado_pago', 'pendiente');
+                .select('*, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)');
 
             const processed = (data || []).map((t: any) => {
                 const flat = flattenTicketForPayments(t);
                 // Inyectar costos asociados
-                flat.pendingCosts = (costs || []).filter((c: any) => c.ticket_id === t.id);
+                const relatedCosts = (costs || []).filter((c: any) => c.ticket_id === t.id);
+                flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
+                flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado');
                 return flat;
             });
 
@@ -422,8 +423,13 @@ export default function PaymentsPage() {
                 const jobCostBase = round2(costoManoObra + costoMateriales);
                 const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
 
-                const pagos = ticket.historialPagosTecnico || [];
-                const totalPagadoArray = round2(pagos.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+                const pagosLegacy = ticket.historialPagosTecnico || [];
+                const totalPagadoLegacy = round2(pagosLegacy.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+                
+                // ✅ UNIFICACIÓN: Sumar también los costos ya pagados en la tabla ticket_costs
+                const totalPagadoModern = round2((ticket.paidCosts || []).reduce((sum: number, c: any) => sum + round2(c.monto || 0), 0));
+                
+                const totalPagadoArray = round2(totalPagadoLegacy + totalPagadoModern);
 
                 const techData = {
                     id: ticket.tecnico?.id,
