@@ -424,6 +424,7 @@ export default function PaymentsPage() {
                 const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
 
                 const pagosLegacy = ticket.historialPagosTecnico || [];
+                const pagos = pagosLegacy; // Mantener compatibilidad con el resto del bucle
                 const totalPagadoLegacy = round2(pagosLegacy.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
                 // ✅ UNIFICACIÓN: Sumar también los costos ya pagados en la tabla ticket_costs
