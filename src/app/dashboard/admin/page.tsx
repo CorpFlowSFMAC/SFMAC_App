@@ -11,6 +11,8 @@ import Link from "next/link";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
+import TicketWindow from "./tickets/TicketWindow";
+import { ticketsAPI } from "@/lib/supabase-api";
 
 // ── Helpers ──────────────────────────────────
 const SLA_HOURS = 72;
@@ -147,6 +149,19 @@ export default function AdminDashboard() {
 
     // Estado para el Modal de Capital Expuesto
     const [showCapitalModal, setShowCapitalModal] = useState(false);
+    const [selectedTicket, setSelectedTicket] = useState<any>(null);
+
+    // Handler para actualizar tickets desde el modal (Dashboard Admin)
+    const handleUpdateTicket = async (id: string, updates: any) => {
+        try {
+            const { data, error } = await ticketsAPI.update(id, updates);
+            if (error) throw error;
+            return data;
+        } catch (err) {
+            console.error("Error updating ticket from dashboard:", err);
+            throw err;
+        }
+    };
 
     const isInRange = (d: string) => {
         const diff = (now.getTime() - new Date(d).getTime()) / 86_400_000;
@@ -890,7 +905,13 @@ export default function AdminDashboard() {
                                         const amountColor = isUtility ? '#8B5CF6' : isPayment ? '#F59E0B' : '#22C55E';
 
                                         return (
-                                            <tr key={t.id + idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}>
+                                            <tr 
+                                                key={t.id + idx} 
+                                                onClick={() => setSelectedTicket(t)}
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
 
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
@@ -1021,7 +1042,13 @@ export default function AdminDashboard() {
                                             const rowBorder = t._isRiesgo ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.03)';
                                             const estadoLabel = (t.estadoId || 'nuevo').replace(/_/g, ' ').toUpperCase();
                                             return (
-                                                <tr key={t.id} style={{ borderBottom: `1px solid ${rowBorder}`, background: rowBg }}>
+                                                <tr 
+                                                    key={t.id} 
+                                                    onClick={() => setSelectedTicket(t)}
+                                                    style={{ borderBottom: `1px solid ${rowBorder}`, background: rowBg, cursor: 'pointer' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = t._isRiesgo ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.02)'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = rowBg}
+                                                >
                                                     <td style={{ padding: '14px 12px' }}>
                                                         <div style={{ fontWeight: 800, fontSize: '0.82rem', color: t._isRiesgo ? '#FCA5A5' : 'white', fontFamily: 'monospace' }}>
                                                             {t.numeroTicketCliente || t.id.substring(0, 8).toUpperCase()}
@@ -1081,7 +1108,7 @@ export default function AdminDashboard() {
             )}
 
             <SectionHeader icon={<Zap size={16} />} title="Acceso Rápido a Módulos" color="#FF6600" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: "0.75rem", marginBottom: '2rem' }}>
                 {[
                     { href: "/dashboard/admin/tickets", label: "Tickets", sub: "Control operativo", icon: Activity, color: "#8B5CF6" },
                     { href: "/dashboard/admin/payments", label: "Tesorería", sub: "Pagos & liquidaciones", icon: DollarSign, color: "#10B981" },
@@ -1114,6 +1141,17 @@ export default function AdminDashboard() {
                     );
                 })}
             </div>
+
+            {/* ── MODAL FLOTANTE DE DETALLE DE TICKET ── */}
+            {selectedTicket && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 11000, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
+                     <TicketWindow 
+                        ticket={selectedTicket} 
+                        onClose={() => setSelectedTicket(null)} 
+                        onUpdate={handleUpdateTicket}
+                    />
+                </div>
+            )}
         </div>
     );
 }
