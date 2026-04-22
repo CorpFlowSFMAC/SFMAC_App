@@ -156,129 +156,99 @@ export default function AdminDashboard() {
         return true;
     };
 
-    // ── MÓDULO 1: Rentabilidad / ROI ───────────
+    // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ───────────
     const roi = useMemo(() => {
-        const inversionItems: any[] = [];
-        
-        // Para INVERSIÓN (Caja/Outflow), buscamos pagos realizados DENTRO del periodo
-        const inversion = tickets.reduce((s: number, t: any) => {
-            const pagos = t.metadata?.historialPagosTecnico || [];
-            const pagosEnPeriodo = pagos.reduce((ps: number, p: any) => {
-                const pFecha = p.fecha || t.created_at;
-                if (isInRange(pFecha)) {
-                    // Guardamos el item de inversión con referencia al ticket
-                    inversionItems.push({
-                        ...t,
-                        _paymentMonto: parseFloat(p.monto) || 0,
-                        _paymentFecha: pFecha,
-                        _paymentType: p.tipo || 'Pago / Adelanto',
-                        _paymentTecnico: p.tecnico || t.tecnico?.nombre || 'Técnico'
-                    });
-                    return ps + (parseFloat(p.monto) || 0);
-                }
-                return ps;
-            }, 0);
-            return s + pagosEnPeriodo;
-        }, 0);
-
-        // Para INGRESOS (Ventas/Inflow), buscamos tickets CERRADOS dentro del periodo.
+        // REGLA 1: Solo tickets CERRADOS para Rentabilidad
         const closed = tickets.filter((t: any) => {
-            const isCerrado = normalizeStateId(t.estadoId) === "ticket_cerrado";
-            const fechaCierre = t.closure_date || t.updated_at || t.created_at || "";
-            return isCerrado && isInRange(fechaCierre);
+            const sid = normalizeStateId(t.status_id || t.estadoId);
+            return sid === "ticket_cerrado" || sid === "liquidado";
         });
 
-        const ingresos = closed.reduce((s: number, t: any) => {
-            const total = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-            return s + (total / 1.18); // Monto Neto (Sin IGV) para cálculo de utilidad neta
+        // REGLA 2: Cálculos 100% SIN IGV (Monto / 1.18)
+        const ingresosGenerados = closed.reduce((acc, t) => {
+            const bruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+            return acc + (bruto / 1.18);
         }, 0);
 
-        // Utilidad REAL sobre lo cerrado (Ingresos - Gastos Reales Transferidos)
-        const costosCerrados = closed.reduce((s: number, t: any) => {
-            // Recolectamos TODOS los pagos realizados en este ticket (Mano de obra, materiales, envíos, etc.)
-            const pagos = t.metadata?.historialPagosTecnico || [];
-            const totalPagado = pagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
+        const inversionEjecutada = closed.reduce((acc, t) => {
+            // Costos operativos (Mano de Obra + Materiales) extraídos del ticket
+            const moBruto = parseFloat(t.labor_cost || t.costoManoObra || 0);
+            const matBruto = parseFloat(t.materials_cost || t.costoMateriales || 0);
+            const visBruto = parseFloat(t.visit_cost || t.costoVisita || 0);
             
-            // Si no hay pagos registrados aún, usamos los costos previstos como fallback (opcional)
-            if (totalPagado === 0) {
-                const mo = parseFloat(t.costoManoObra || t.labor_cost || 0);
-                const mat = parseFloat(t.costoMateriales || t.materials_cost || 0);
-                const vis = parseFloat(t.costoVisita || t.visit_cost || 0);
-                return s + (mo + mat + vis);
-            }
-            
-            return s + totalPagado;
+            // Si la inversión se considera neta del técnico, dividir solo materiales o todo según política
+            // El usuario pide SUM(subtotal_gastos), aplicamos factor 1.18 preventivo
+            return acc + ((moBruto + matBruto + visBruto) / 1.18);
         }, 0);
 
-        const utilidad = round2(ingresos - costosCerrados);
-        const margen = ingresos > 0 ? (utilidad / ingresos) * 100 : 0;
-        const ratio = inversion > 0 ? (ingresos - inversion) / inversion : 0;
+        const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
+        const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosGenerados) * 100 : 0;
+        
+        // Ratio de Eficiencia: [Utilidad Neta] / [Inversión Ejecutada]
+        const ratioEficiencia = inversionEjecutada > 0 ? (utilidadNeta / inversionEjecutada) : 0;
+
+        // AUDIT LOG (Temporal para validación)
+        console.log(`[AUDIT ROI] Tickets Cerrados: ${closed.length}`);
+        console.log(`[AUDIT ROI] Ingresos (Neto): S/ ${ingresosGenerados.toFixed(2)}`);
+        console.log(`[AUDIT ROI] Inversión (Neto): S/ ${inversionEjecutada.toFixed(2)}`);
+        console.log(`[AUDIT ROI] Utilidad: S/ ${utilidadNeta.toFixed(2)} (Diff: ${(ingresosGenerados - inversionEjecutada - utilidadNeta).toFixed(4)})`);
 
         // Por servicio (Basado en Neto sin IGV)
         const byService = SERVICE_TYPES.map(s => {
-            const st = closed.filter((t: any) => t.tipoServicio === s.id);
-            const ingBruto = st.reduce((acc: number, t: any) => acc + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
-            const ingNeto = ingBruto / 1.18;
-            
-            const cost = st.reduce((acc: number, t: any) => {
-                const pagos = t.metadata?.historialPagosTecnico || [];
-                const totalPagado = pagos.reduce((pacc: number, p: any) => pacc + (parseFloat(p.monto) || 0), 0);
-                if (totalPagado === 0) {
-                    return acc + ((parseFloat(t.costoManoObra || t.labor_cost || 0)) + (parseFloat(t.costoMateriales || t.materials_cost || 0)) + (parseFloat(t.costoVisita || t.visit_cost || 0)));
-                }
-                return acc + totalPagado;
+            const st = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
+            const ingNeto = st.reduce((acc, t) => acc + (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18), 0);
+            const costNeto = st.reduce((acc, t) => {
+                const mo = parseFloat(t.labor_cost || t.costoManoObra || 0);
+                const mat = parseFloat(t.materials_cost || t.costoMateriales || 0);
+                const vis = parseFloat(t.visit_cost || t.costoVisita || 0);
+                return acc + ((mo + mat + vis) / 1.18);
             }, 0);
-            const m = ingNeto > 0 ? ((ingNeto - cost) / ingNeto) * 100 : 0;
+            const m = ingNeto > 0 ? ((ingNeto - costNeto) / ingNeto) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
         return { 
-            inversion: round2(inversion), 
-            ingresos: round2(ingresos), 
-            utilidad, 
-            margen, 
-            ratio, 
+            inversion: round2(inversionEjecutada), 
+            ingresos: round2(ingresosGenerados), 
+            utilidad: utilidadNeta, 
+            margen: margenReal, 
+            ratio: ratioEficiencia, 
             closed: closed.length, 
             total: tickets.length, 
             byService,
-            inversionItems: inversionItems.sort((a,b) => new Date(b._paymentFecha).getTime() - new Date(a._paymentFecha).getTime()),
+            inversionItems: closed.map(t => ({
+                ...t,
+                _investmentTotalNet: (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
+                                       parseFloat(t.materials_cost || t.costoMateriales || 0) + 
+                                       parseFloat(t.visit_cost || t.costoVisita || 0)) / 1.18
+            })).sort((a,b) => b._investmentTotalNet - a._investmentTotalNet),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
-    }, [tickets, dateRange]);
+    }, [tickets]);
 
-    // ── MÓDULO 2: Tesorería / Pendientes ───────
+    // ── MÓDULO 2: Tesorería / Pendientes (AUDITORÍA STRICT - SIN IGV) ───────
     const tesoreria = useMemo(() => {
-        // Pipeline: Cotizaciones en curso (aún no aprobadas)
-        const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente"];
-        const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.estadoId)));
-        const totalPipeline = pipelineTickets.reduce((s, t) => s + (t.montoFinal || parseFloat(t.total_quoted_amount || 0)), 0);
+        // Pipeline: Cotizaciones en curso (SUBTOTAL)
+        const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente", "visitado"];
+        const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId)));
+        const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + ((parseFloat(t.total_quoted_amount || t.montoFinal || 0)) / 1.18), 0);
 
-        // Presupuestos Aprobados: Ya aceptados por el cliente, en ejecución o por liquidar
+        // Presupuestos Aprobados: En ejecución o por liquidar (SUBTOTAL)
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
-        const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.estadoId)));
-        const totalAprobados = approvedTickets.reduce((s, t) => s + (t.montoFinal || parseFloat(t.total_quoted_amount || 0)), 0);
+        const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
+        const totalAprobadosNeto = approvedTickets.reduce((s, t) => s + ((parseFloat(t.total_quoted_amount || t.montoFinal || 0)) / 1.18), 0);
 
-        // El lucro cesante es la utilidad proyectada que aún no se cobra
-        // Cálculo EXACTO: (Monto Total - Costos Operativos) de tickets aprobados
-        const lucro = approvedTickets.reduce((s, t) => {
-            const totalBruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-            const totalNeto = totalBruto / 1.18;
+        // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados (Uso de Netos)
+        const lucroNeto = approvedTickets.reduce((s, t) => {
+            const ingNeto = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
+            const costNeto = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
+                               parseFloat(t.materials_cost || t.costoMateriales || 0) + 
+                               parseFloat(t.visit_cost || t.costoVisita || 0)) / 1.18;
             
-            // Calculamos el costo REAL (pagos realizados) vs el ESTIMADO (mano de obra pactada)
-            const pagos = t.metadata?.historialPagosTecnico || [];
-            const totalPagado = pagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
-            
-            // Para tickets en curso, el costo es el máximo entre lo que ya se pagó y lo que se pactó pagar
-            const costoEstimado = parseFloat(t.costoManoObra || t.labor_cost || 0) + 
-                                  parseFloat(t.costoMateriales || t.materials_cost || 0) + 
-                                  parseFloat(t.costoVisita || t.visit_cost || 0);
-            
-            const costoRealRef = Math.max(totalPagado, costoEstimado);
-            return s + (totalNeto - costoRealRef);
+            return s + (ingNeto - costNeto);
         }, 0);
 
-        // Aging de todos los pendientes (Pipeline + Aprobados)
-        // PRIORIDAD: updated_at (Tiempo desde el último cambio de estado — Bottleneck real)
+        // Aging
         const todosPendientes = [...pipelineTickets, ...approvedTickets];
         const aging = {
             "0-24h": todosPendientes.filter((t: any) => hoursAgo(t.updated_at || t.createdAt || t.created_at || "") < 24),
@@ -286,29 +256,28 @@ export default function AdminDashboard() {
             "+48h": todosPendientes.filter((t: any) => hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48),
         };
 
-        const calcAmount = (arr: any[]) => round2(arr.reduce((s: number, t: any) => s + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0));
+        const calcAmountNeto = (arr: any[]) => round2(arr.reduce((s: number, t: any) => s + (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18), 0));
 
         return {
             tickets: todosPendientes,
             pipelineTickets,
             approvedTickets,
             total: todosPendientes.length,
-            totalPipeline,
-            totalAprobados,
-            lucro,
+            totalPipeline: round2(totalPipelineNeto),
+            totalAprobados: round2(totalAprobadosNeto),
+            lucro: round2(lucroNeto),
             aging: [
-                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmount(aging["0-24h"]), color: "#10B981" },
-                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmount(aging["24-48h"]), color: "#F59E0B" },
-                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmount(aging["+48h"]), color: "#EF4444" },
+                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), color: "#10B981" },
+                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), color: "#F59E0B" },
+                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmountNeto(aging["+48h"]), color: "#EF4444" },
             ],
             bloqueados48: aging["+48h"].length,
-            // Bottlenecks Dinámicos
             bottlenecks: [
-                { label: "Esperando Cotización", count: pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.estadoId))).length, color: "#8B5CF6" },
-                { label: "Esperando Aprobación", count: pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.estadoId))).length, color: "#3B82F6" },
-                { label: "Esperando Adelanto", count: approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.estadoId)) && !(t.metadata?.historialPagosTecnico?.length)).length, color: "#F59E0B" },
-                { label: "En Ejecución", count: approvedTickets.filter(t => normalizeStateId(t.estadoId) === "en_ejecucion").length, color: "#10B981" },
-                { label: "Pendiente Liquidar", count: approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado"].includes(normalizeStateId(t.estadoId))).length, color: "#64748B" },
+                { label: "Esperando Cotización", count: pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.status_id || t.estadoId))).length, color: "#8B5CF6" },
+                { label: "Esperando Aprobación", count: pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.status_id || t.estadoId))).length, color: "#3B82F6" },
+                { label: "Esperando Adelanto", count: approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.status_id || t.estadoId)) && !(t.metadata?.historialPagosTecnico?.length)).length, color: "#F59E0B" },
+                { label: "En Ejecución", count: approvedTickets.filter(t => normalizeStateId(t.status_id || t.estadoId) === "en_ejecucion").length, color: "#10B981" },
+                { label: "Pendiente Liquidar", count: approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado", "requiere_revision_admin"].includes(normalizeStateId(t.status_id || t.estadoId))).length, color: "#64748B" },
             ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
     }, [tickets]);
@@ -500,21 +469,21 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub={`${roi.inversionItems.length} movimientos de caja`} color="#3B82F6"
+                    sub={`${roi.closed} tickets cerrados (Neto)`} color="#3B82F6"
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
-                        setModalTitle("Detalle de Inversión Ejecutada (Outflow)");
-                        setModalTickets(roi.inversionItems);
+                        setModalTitle("Análisis de Costos: Inversión Ejecutada (NETO)");
+                        setModalTickets(roi.inversionItems.map(t => ({ ...t, _viewMode: 'inversion' })));
                         setShowListModal(true);
                     }}
                 />
                 <RoiCard label="Ingresos Generados" value={`S/ ${fmt(roi.ingresos)}`}
-                    sub={`${roi.closed} tickets cerrados`} color="#10B981"
+                    sub={`${roi.closed} tickets cerrados (Neto)`} color="#10B981"
                     icon={DollarSign}
                     light={roi.ingresos > roi.inversion ? "VERDE" : "ROJO"}
                     onClick={() => {
-                        setModalTitle("Detalle de Ingresos Generados (Inflow)");
+                        setModalTitle("Análisis de Ingresos: Ventas Liquidadas (NETO)");
                         setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ingresos' })));
                         setShowListModal(true);
                     }}
@@ -526,9 +495,12 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Análisis de Utilidad Neta (Profitability)");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const total = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-                            const costs = (t.metadata?.historialPagosTecnico || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
-                            return { ...t, _viewMode: 'utilidad', _utilityAmount: total - costs };
+                            const bruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                            const ingNeto = bruto / 1.18;
+                            const costNeto = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
+                                              parseFloat(t.materials_cost || t.costoMateriales || 0) + 
+                                              parseFloat(t.visit_cost || t.costoVisita || 0)) / 1.18;
+                            return { ...t, _viewMode: 'utilidad', _utilityAmount: ingNeto - costNeto };
                         }));
                         setShowListModal(true);
                     }}
@@ -885,7 +857,7 @@ export default function AdminDashboard() {
                                 <div style={{ display: 'flex', gap: '1.5rem', marginTop: '6px' }}>
                                     <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Total: {modalTickets.length} registros</p>
                                     <p style={{ margin: 0, fontSize: '0.8rem', color: '#10B981', fontWeight: 900 }}>
-                                        SUMA TOTAL: S/ {fmt(modalTickets.reduce((acc, t) => acc + (t._paymentMonto || t._utilityAmount || t.montoFinal || 0), 0))}
+                                        SUMA TOTAL (NETO): S/ {fmt(modalTickets.reduce((acc, t) => acc + (t._investmentTotalNet || t._utilityAmount || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0))}
                                     </p>
                                 </div>
                             </div>
@@ -928,7 +900,7 @@ export default function AdminDashboard() {
                                                         {t.numeroTicketCliente || t.id.substring(0,8).toUpperCase()}
                                                     </div>
                                                     <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
-                                                        {isPayment ? `Depósito: ${new Date(t._paymentFecha).toLocaleDateString()}` : `Creado: ${new Date(t.createdAt || t.created_at).toLocaleDateString()}`}
+                                                        {`F. Audit: ${new Date(t.closure_date || t.updated_at || t.createdAt || t.created_at).toLocaleDateString()}`}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
@@ -936,7 +908,7 @@ export default function AdminDashboard() {
                                                         {t.cliente?.nombre || t.client?.name || "Cliente SINFIMAC"}
                                                     </div>
                                                     <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
-                                                        {isPayment ? `Destinatario: ${t._paymentTecnico}` : (t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir")}
+                                                        {(t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir")}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
@@ -951,14 +923,14 @@ export default function AdminDashboard() {
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: amountColor, fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(primaryAmount)}
+                                                        S/ {fmt(t._viewMode === 'utilidad' ? (t._utilityAmount || 0) : t._viewMode === 'inversion' ? (t._investmentTotalNet || 0) : (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18))}
                                                     </div>
                                                     <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.65)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                                        {amountLabel}
+                                                        {t._viewMode === 'utilidad' ? 'Utilidad Neta' : t._viewMode === 'inversion' ? 'Inversión Neta' : 'Ingreso Neto'}
                                                     </div>
-                                                    {isUtility && (
+                                                    {t._viewMode === 'utilidad' && (
                                                         <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
-                                                            Gastos (Pagos): S/ {fmt((t.metadata?.historialPagosTecnico || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0))}
+                                                            {`(Sin IGV)`}
                                                         </div>
                                                     )}
                                                 </td>
