@@ -320,8 +320,8 @@ export default function AdminDashboard() {
                     ? (gestoraObj.name || gestoraObj.nombre || gestoraObj.full_name || "Gestora")
                     : (t.gestora?.nombre || t.gestora?.name || "Sin asignar");
 
-                // Resolver especialista (primer pago con nombre, o metadata)
-                const especialista = pagos[0]?.tecnico || t.metadata?.tecnicoAsignado?.name || t.metadata?.tecnico_nombre || "Sin especialista";
+                // Resolver especialista (priorizar objeto normalizado, luego historial, luego metadata)
+                const especialista = t.tecnico?.nombre || pagos[0]?.tecnico || pagos[0]?.destinatario || t.metadata?.tecnicoAsignado?.name || t.metadata?.tecnico_nombre || "Sin especialista";
 
                 // Sede
                 const sede = t.sede?.nombre || t.cliente?.nombre || "Sin sede";
