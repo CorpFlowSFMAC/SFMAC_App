@@ -506,7 +506,7 @@ export default function PaymentsPage() {
                                 concepto: specialistName ? `${c.concepto} · ${specialistName}` : c.concepto,
                                 isTableCost: true,
                                 costId: c.id,
-                                specialistName,
+                                specialistName: (tech && tech.id !== ticket.tecnico?.id) ? specialistName : undefined,
                                 specialistBanco: tech?.bank_name,
                                 specialistCuenta: tech?.account_number,
                                 specialistCCI: tech?.cci,

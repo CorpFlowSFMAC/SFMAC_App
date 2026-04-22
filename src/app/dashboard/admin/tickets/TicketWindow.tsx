@@ -1586,9 +1586,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const visitPayment = ((isVisitConfirmed || hasVisitVoucher) && !hasPaidMobility) ? round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0)) : 0;
     const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto && !hasRegisteredAdelanto) ? round2(parseFloat(ticketData.montoAdelanto)) : 0;
     
-    // REFUERZO: Costos adicionales pactados
+    // REFUERZO: Costos adicionales pactados (Ej: Materiales extra, viáticos adicionales)
+    // EXCLUIMOS 'Mano de Obra' porque esos son adelantos/rescates a cuenta del monto ya pactado.
     const extraPactedCosts = ticketCosts
-        .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita')
+        .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita' && c.categoria !== 'Mano de Obra')
         .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
 
     const jobCostBase = round2(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + extraPactedCosts);
@@ -1685,7 +1686,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // --- CALCULOS PARA RESCATE FINANCIERO ---
     const pactadoLabor = round2(parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0));
     const laborPaymentsModern = ticketCosts.filter(c => 
-        (c.estado_pago === 'pagado' || c.estado_pago === 'adelanto') && 
+        (c.estado_pago === 'pagado' || c.estado_pago === 'adelanto' || c.estado_pago === 'pendiente') && 
         (c.categoria === 'Mano de Obra')
     );
     const laborPaymentsLegacy = legacyPaymentsFiltered.filter((p: any) => 
