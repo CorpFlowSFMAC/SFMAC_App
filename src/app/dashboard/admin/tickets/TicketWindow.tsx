@@ -589,8 +589,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const syncToSupabase = useCallback(async (dataOverride?: any) => {
         const dataToProcess = dataOverride || ticketData;
         if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return;
-        
-        isSyncing.current = true;
 
         const {
             isMaximized, isMinimized, position, zIndex,
@@ -678,8 +676,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
 
                 historialPagosTécnico: (() => {
-                    const localPagos = businessData.historialPagosTécnico || [];
-                    const serverPagos = ticket.historialPagosTécnico || ticket.metadata?.historialPagosTécnico || [];
+                    const localPagos = businessData?.historialPagosTécnico || businessData?.historialPagosTecnico || [];
+                    const serverPagos = ticket?.historialPagosTécnico || ticket?.metadata?.historialPagosTécnico || ticket?.metadata?.historialPagosTecnico || [];
                     const allById = new Map();
                     [...serverPagos, ...localPagos].forEach(p => {
                         if (p?.id) allById.set(p.id, p);
@@ -698,7 +696,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
 
         const currentDataStr = JSON.stringify(updates);
-        if (currentDataStr === lastSyncData.current && !dataOverride) return;
+        if (currentDataStr === lastSyncData.current && !dataOverride) {
+            isSyncing.current = false;
+            return;
+        }
 
         isSyncing.current = true;
         try {
