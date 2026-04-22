@@ -82,9 +82,18 @@ function RoiCard({ label, value, sub, color, icon: Icon, light, onClick }: any) 
 }
 
 // ── Aging Row ───────────────────────────────
-function AgingRow({ label, count, amount, color }: { label: string; count: number; amount: number; color: string }) {
+function AgingRow({ label, count, amount, color, onClick }: { label: string; count: number; amount: number; color: string; onClick?: () => void }) {
     return (
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0.9rem", borderRadius: "10px", background: `${color}08`, border: `1px solid ${color}20` }}>
+        <div 
+            onClick={onClick}
+            style={{ 
+                display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.6rem 0.9rem", borderRadius: "10px", 
+                background: `${color}08`, border: `1px solid ${color}20`,
+                cursor: onClick ? "pointer" : "default", transition: "all 0.2s"
+            }}
+            onMouseEnter={e => { if (onClick) { (e.currentTarget as HTMLElement).style.background = `${color}15`; (e.currentTarget as HTMLElement).style.borderColor = `${color}45`; } }}
+            onMouseLeave={e => { if (onClick) { (e.currentTarget as HTMLElement).style.background = `${color}08`; (e.currentTarget as HTMLElement).style.borderColor = `${color}20`; } }}
+        >
             <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: color, flexShrink: 0, display: "block" }} />
             <span style={{ flex: 1, fontSize: "0.8rem", color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>{label}</span>
             <span style={{ fontSize: "0.78rem", fontWeight: 800, color, minWidth: "24px", textAlign: "right" }}>{count}</span>
@@ -270,6 +279,13 @@ export default function AdminDashboard() {
 
         const calcAmountNeto = (arr: any[]) => round2(arr.reduce((s: number, t: any) => s + (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18), 0));
 
+        // Cuellos de botella detallados
+        const espCot = pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.status_id || t.estadoId)));
+        const espApro = pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.status_id || t.estadoId)));
+        const espAde = approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.status_id || t.estadoId)) && !(t.metadata?.historialPagosTecnico?.length));
+        const enEjec = approvedTickets.filter(t => normalizeStateId(t.status_id || t.estadoId) === "en_ejecucion");
+        const penLiq = approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado", "requiere_revision_admin"].includes(normalizeStateId(t.status_id || t.estadoId)));
+
         return {
             tickets: todosPendientes,
             pipelineTickets,
@@ -279,17 +295,17 @@ export default function AdminDashboard() {
             totalAprobados: round2(totalAprobadosNeto),
             lucro: round2(lucroReal),
             aging: [
-                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), color: "#10B981" },
-                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), color: "#F59E0B" },
-                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmountNeto(aging["+48h"]), color: "#EF4444" },
+                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), tickets: aging["0-24h"], color: "#10B981" },
+                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), tickets: aging["24-48h"], color: "#F59E0B" },
+                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmountNeto(aging["+48h"]), tickets: aging["+48h"], color: "#EF4444" },
             ],
             bloqueados48: aging["+48h"].length,
             bottlenecks: [
-                { label: "Esperando Cotización", count: pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.status_id || t.estadoId))).length, color: "#8B5CF6" },
-                { label: "Esperando Aprobación", count: pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.status_id || t.estadoId))).length, color: "#3B82F6" },
-                { label: "Esperando Adelanto", count: approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.status_id || t.estadoId)) && !(t.metadata?.historialPagosTecnico?.length)).length, color: "#F59E0B" },
-                { label: "En Ejecución", count: approvedTickets.filter(t => normalizeStateId(t.status_id || t.estadoId) === "en_ejecucion").length, color: "#10B981" },
-                { label: "Pendiente Liquidar", count: approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado", "requiere_revision_admin"].includes(normalizeStateId(t.status_id || t.estadoId))).length, color: "#64748B" },
+                { label: "Esperando Cotización", count: espCot.length, tickets: espCot, color: "#8B5CF6" },
+                { label: "Esperando Aprobación", count: espApro.length, tickets: espApro, color: "#3B82F6" },
+                { label: "Esperando Adelanto", count: espAde.length, tickets: espAde, color: "#F59E0B" },
+                { label: "En Ejecución", count: enEjec.length, tickets: enEjec, color: "#10B981" },
+                { label: "Pendiente Liquidar", count: penLiq.length, tickets: penLiq, color: "#64748B" },
             ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
     }, [tickets]);
@@ -648,7 +664,17 @@ export default function AdminDashboard() {
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
                     <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: "0.75rem" }}>Aging de Bloqueo</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                        {tesoreria.aging.map(a => <AgingRow key={a.label} {...a} />)}
+                        {tesoreria.aging.map(a => (
+                            <AgingRow 
+                                key={a.label} 
+                                {...a} 
+                                onClick={() => { 
+                                    setModalTitle(`Tickets en Aging: ${a.label}`); 
+                                    setModalTickets(a.tickets || []); 
+                                    setShowListModal(true); 
+                                }} 
+                            />
+                        ))}
                     </div>
                 </div>
 
@@ -661,7 +687,16 @@ export default function AdminDashboard() {
                         tesoreria.bottlenecks.map(c => {
                             const pct = (c.count / (tesoreria.total || 1)) * 100;
                             return (
-                                <div key={c.label} style={{ marginBottom: "0.6rem" }}>
+                                <div 
+                                    key={c.label} 
+                                    onClick={() => { setModalTitle(c.label); setModalTickets(c.tickets || []); setShowListModal(true); }}
+                                    style={{ 
+                                        marginBottom: "0.6rem", padding: "0.4rem 0.6rem", borderRadius: "8px", 
+                                        cursor: "pointer", transition: "all 0.2s" 
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                                >
                                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.73rem", marginBottom: "3px" }}>
                                         <span style={{ color: "rgba(255,255,255,0.6)" }}>{c.label}</span>
                                         <span style={{ fontWeight: 800, color: c.color }}>{c.count}</span>
