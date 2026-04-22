@@ -302,137 +302,9 @@
     border: 1px dashed #E2E8F0;
 }
 
-/* Funnel Chart Extended */
-.funnelContainerExtended {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    padding: 1rem 0;
-}
+/* Removed Obsolete Funnel Components */
 
-.funnelStageExtended {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 70px;
-}
-
-.funnelShapes {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.funnelSvg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05));
-}
-
-.funnelLabelExtended {
-    position: relative;
-    z-index: 2;
-    text-align: center;
-    color: white;
-}
-
-.funnelNameExt {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    opacity: 0.9;
-    margin-bottom: 0.2rem;
-}
-
-.funnelValueExt {
-    font-size: 1.5rem;
-    font-weight: 900;
-}
-
-.funnelValueExt small {
-    font-size: 0.7rem;
-    font-weight: 400;
-    opacity: 0.8;
-}
-
-.funnelDropIcon {
-    position: absolute;
-    bottom: -15px;
-    z-index: 5;
-    background: white;
-    color: #94A3B8;
-    padding: 2px;
-    border-radius: 50%;
-    border: 1px solid #E2E8F0;
-    display: flex;
-}
-
-/* Premium Gauges */
-.gaugesContainer {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 1.5rem;
-    align-items: center;
-}
-
-.premiumGauge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.gaugeCanvas {
-    position: relative;
-    width: 140px;
-    height: 80px;
-}
-
-.gaugeSvg {
-    width: 100%;
-    height: 100%;
-}
-
-.gaugeLabelCenter {
-    position: absolute;
-    bottom: 5px;
-    width: 100%;
-    text-align: center;
-}
-
-.gVal {
-    font-size: 1.25rem;
-    font-weight: 900;
-    color: #1E293B;
-}
-
-.gVal small {
-    font-size: 0.7rem;
-    margin-left: 1px;
-    opacity: 0.6;
-}
-
-.gSub {
-    font-size: 0.6rem;
-    font-weight: 800;
-    color: #94A3B8;
-    letter-spacing: 0.1em;
-}
-
-.gaugeManagerName {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #475569;
-    text-align: center;
-    width: 100%;
-}
+/* Removed Obsolete Gauge Components */
 
 /* Premium Tables */
 .fullStatsTableCard {
@@ -1179,4 +1051,157 @@
     font-weight: 700;
     color: #94A3B8;
     text-transform: uppercase;
+}
+
+
+/* ANALITYCAL DASHBOARD STYLES */
+
+.productivityAnalyticsLayout {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.kpiAnalyticalGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.5rem;
+}
+
+.kpiAnalyticalCard {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 20px;
+    border: 1px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.kpiAIcon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #EFF6FF;
+    color: #3B82F6;
+}
+
+.kpiAContent label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #94A3B8;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.kpiAContent strong {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #0F172A;
+}
+
+.analyticsVisualGrid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 2.5rem;
+}
+
+.analyticsMainCard, .analyticsSecondaryCard {
+    background: white;
+    border-radius: 24px;
+    border: 1px solid #E2E8F0;
+    padding: 2rem;
+}
+
+.chartHeader {
+    margin-bottom: 2rem;
+}
+
+.chartHeader h3 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0F172A;
+    margin: 0;
+}
+
+.chartHeader p {
+    font-size: 0.9rem;
+    color: #64748B;
+    margin: 0.2rem 0 0 0;
+}
+
+.premiumTableAnalytical {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+
+.sortableHeader {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.sortableHeader:hover {
+    background: #F1F5F9;
+    color: #002A8F;
+}
+
+.tableResponsiveScroll {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 12px;
+}
+.premiumTableAnalytical th {
+    text-align: left;
+    padding: 1.25rem 1rem;
+    background: #F8FAFC;
+    color: #64748B;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    border-bottom: 2px solid #F1F5F9;
+}
+
+.premiumTableAnalytical td {
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid #F1F5F9;
+    font-size: 0.95rem;
+    color: #1E293B;
+}
+
+.managerAnalyticalCell {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.slaBadgeAnalytical {
+    padding: 0.4rem 1rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-align: center;
+    display: inline-block;
+}
+
+.clickableAnalyticalRow {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.clickableAnalyticalRow:hover {
+    background: #F8FAFC;
+}
+
+@media (max-width: 1200px) {
+    .analyticsVisualGrid {
+        grid-template-columns: 1fr;
+    }
 }
