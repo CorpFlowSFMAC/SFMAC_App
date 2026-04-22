@@ -620,19 +620,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             description: businessData.descripcionProblema,
             client_ticket_number: cleanedClientTicketNumber,
             diagnosis: businessData.diagnostico,
-            labor_cost: parseFloat(sourceForPayments.costoManoObra || 0),
-            materials_cost: parseFloat(sourceForPayments.costoMateriales || 0),
-            visit_cost: parseFloat(sourceForPayments.costoVisita || 0),
+            labor_cost: parseFloat(sourceForPayments?.costoManoObra || 0),
+            materials_cost: parseFloat(sourceForPayments?.costoMateriales || 0),
+            visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
             // REFUERZO: Usar siempre el estado local de cotización para evitar reseteos
-            total_quoted_amount: parseFloat(montoTotalCotizado || sourceForPayments.montoFinal || 0),
-            technician_id: tecnico?.id || businessData.technician_id || ticket.technician_id,
-            gestora_id: businessData.gestora?.id || ticket.gestora?.id || ticket.gestora_id,
-            is_sla_paused: businessData.pausadoSLA ?? ticket.is_sla_paused,
-            sla_pause_date: businessData.fechaPausa || ticket.sla_pause_date,
-            sla_reactivation_date: businessData.fechaReactivacion || ticket.sla_reactivation_date,
-            quotation_date: businessData.fechaCotización,
-            execution_date: sourceForPayments.fechaInicioEjecucion || ticket.execution_date,
-            closure_date: sourceForPayments.fechaCierre || ticket.closure_date,
+            total_quoted_amount: parseFloat(montoTotalCotizado || sourceForPayments?.montoFinal || 0),
+            technician_id: tecnico?.id || businessData?.technician_id || ticket?.technician_id,
+            gestora_id: businessData?.gestora?.id || ticket?.gestora?.id || ticket?.gestora_id,
+            is_sla_paused: businessData?.pausadoSLA ?? ticket?.is_sla_paused,
+            sla_pause_date: businessData?.fechaPausa || ticket?.sla_pause_date,
+            sla_reactivation_date: businessData?.fechaReactivacion || ticket?.sla_reactivation_date,
+            quotation_date: businessData?.fechaCotización,
+            execution_date: sourceForPayments?.fechaInicioEjecucion || ticket?.execution_date,
+            closure_date: sourceForPayments?.fechaCierre || ticket?.closure_date,
             metadata: {
                 ...sourceMetadata,
                 evidenciasEjecucion: evidenciasEjecucion,
@@ -672,8 +672,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     return partidasCotización || sourceForPayments.partidas || [];
                 })(),
                 metadata: undefined, // Evitar anidación infinita
-                adelantoPagado: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado || false),
-                fechaPagoAdelanto: (businessData.fechaPagoAdelanto || sourceMetadata.fechaPagoAdelanto),
+                adelantoPagado: (businessData?.adelantoPagado || ticket?.adelantoPagado || sourceMetadata?.adelantoPagado || false),
+                fechaPagoAdelanto: (businessData?.fechaPagoAdelanto || sourceMetadata?.fechaPagoAdelanto),
 
                 historialPagosTécnico: (() => {
                     const localPagos = businessData?.historialPagosTécnico || businessData?.historialPagosTecnico || [];
@@ -685,12 +685,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     return Array.from(allById.values());
                 })(),
 
-                visitPaymentConfirmed: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed || false),
-                fechaPagoVisita: (businessData.fechaPagoVisita || sourceMetadata.fechaPagoVisita),
+                visitPaymentConfirmed: (businessData?.visitPaymentConfirmed || ticket?.visitPaymentConfirmed || sourceMetadata?.visitPaymentConfirmed || false),
+                fechaPagoVisita: (businessData?.fechaPagoVisita || sourceMetadata?.fechaPagoVisita),
 
-                solicitudAdelanto: (businessData.adelantoPagado || ticket.adelantoPagado || sourceMetadata.adelantoPagado) ? null : businessData.solicitudAdelanto,
-                solicitudPagoVisita: (businessData.visitPaymentConfirmed || ticket.visitPaymentConfirmed || sourceMetadata.visitPaymentConfirmed) ? null : businessData.solicitudPagoVisita,
-                pagoRechazado: businessData.pagoRechazado,
+                solicitudAdelanto: (businessData?.adelantoPagado || ticket?.adelantoPagado || sourceMetadata?.adelantoPagado) ? null : businessData?.solicitudAdelanto,
+                solicitudPagoVisita: (businessData?.visitPaymentConfirmed || ticket?.visitPaymentConfirmed || sourceMetadata?.visitPaymentConfirmed) ? null : businessData?.solicitudPagoVisita,
+                pagoRechazado: businessData?.pagoRechazado,
                 tecnico: tecnico
             }
         };
@@ -704,9 +704,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         isSyncing.current = true;
         try {
             if (onUpdate) {
-                await onUpdate(ticketData.id, updates);
+                await onUpdate(ticketData?.id || ticket?.id, updates);
             } else {
-                await ticketsAPI.update(ticketData.id, updates);
+                await ticketsAPI.update(ticketData?.id || ticket?.id, updates);
             }
             lastSyncData.current = currentDataStr;
         } catch (err) {
@@ -714,7 +714,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         } finally {
             isSyncing.current = false;
         }
-    }, [ticketData, ticket.id, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
+    }, [ticketData, ticket?.id, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
 
     useEffect(() => {
         // Sync de fondo mucho menos agresivo (cada 30s) para evitar 'Sync of Death'
