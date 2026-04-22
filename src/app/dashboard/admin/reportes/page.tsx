@@ -38,7 +38,13 @@ function calcularHoras(ticket: any): number {
 const RevenueVolumeChart = ({ data }: { data: any[] }) => (
     <div style={{ width: '100%', height: 350 }}>
         <ResponsiveContainer>
-            <ComposedChart data={data}>
+            <ComposedChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                <defs>
+                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#002A8F" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#001F6B" stopOpacity={1} />
+                    </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis 
                     dataKey="nombre" 
@@ -62,12 +68,17 @@ const RevenueVolumeChart = ({ data }: { data: any[] }) => (
                     tick={{ fill: '#64748B', fontSize: 11 }}
                 />
                 <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', padding: '1rem' }}
                     cursor={{ fill: '#F8FAFC' }}
+                    formatter={(value: any, name: string) => [
+                        name.includes('S/') ? `S/ ${Math.round(value).toLocaleString()}` : value,
+                        name
+                    ]}
                 />
-                <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 20 }} />
-                <Bar yAxisId="left" dataKey="facturacion" name="Facturación (S/)" fill="#002A8F" radius={[6, 6, 0, 0]} barSize={40} />
-                <Line yAxisId="right" type="monotone" dataKey="cerrados" name="Tickets Cerrados" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981', strokeWidth: 2, stroke: '#fff' }} />
+                <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 25 }} />
+                <Bar yAxisId="left" dataKey="facturacion" name="Facturación (S/)" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={45} />
+                <Bar yAxisId="left" dataKey="rentabilidad" name="Utilidad (S/)" fill="#10B981" radius={[6, 6, 0, 0]} barSize={15} />
+                <Line yAxisId="right" type="monotone" dataKey="cerrados" name="Tickets Cerrados" stroke="#3B82F6" strokeWidth={4} dot={{ r: 6, fill: '#3B82F6', strokeWidth: 3, stroke: '#fff' }} />
             </ComposedChart>
         </ResponsiveContainer>
     </div>
@@ -497,37 +508,7 @@ export default function ReportesEficienciaPage() {
                 </div>
             </header>
 
-            {/* Top KPI Ribbon */}
-            <div className={styles.kpiRibbon}>
-                <div className={styles.kpiCardExt}>
-                    <div className={styles.kpiIconExt} style={{ background: '#E0F2FE' }}><DollarSign size={20} color="#0369A1" /></div>
-                    <div className={styles.kpiContentExt}>
-                        <label>Facturación Neta</label>
-                        <strong>S/ {Math.round(profitabilityByClient.reduce((s,c)=>s+c.billing, 0)).toLocaleString()}</strong>
-                    </div>
-                </div>
-                <div className={styles.kpiCardExt}>
-                    <div className={styles.kpiIconExt} style={{ background: '#DCFCE7' }}><Activity size={20} color="#15803D" /></div>
-                    <div className={styles.kpiContentExt}>
-                        <label>Utilidad</label>
-                        <strong>S/ {Math.round(profitabilityByClient.reduce((s,c)=>s+c.profit, 0)).toLocaleString()}</strong>
-                    </div>
-                </div>
-                <div className={styles.kpiCardExt}>
-                    <div className={styles.kpiIconExt} style={{ background: '#F0F9FF' }}><Clock size={20} color="#0EA5E9" /></div>
-                    <div className={styles.kpiContentExt}>
-                        <label>Tiempo Promedio Global</label>
-                        <strong>{Math.round(productivityByGestor.reduce((s,g)=>s+g.avgTime,0)/ (productivityByGestor.length||1))}h</strong>
-                    </div>
-                </div>
-                <div className={styles.kpiCardExt}>
-                    <div className={styles.kpiIconExt} style={{ background: '#FEF2F2' }}><ShieldAlert size={20} color="#DC2626" /></div>
-                    <div className={styles.kpiContentExt}>
-                        <label>Efectividad SLA</label>
-                        <strong>{Math.round(100 - (productivityByGestor.reduce((s,g)=>s+g.ratioVencidos,0)/ (productivityByGestor.length||1)))}%</strong>
-                    </div>
-                </div>
-            </div>
+            {/* Dashboard Container starts directly after tabs to avoid redundancy */}
 
             {/* Main Tabs UI */}
             <nav className={styles.modernTabNav}>
@@ -583,6 +564,54 @@ export default function ReportesEficienciaPage() {
                                         {Math.round(100 - (productivityByGestor.reduce((s,g)=>s+g.ratioVencidos,0)/ (productivityByGestor.length||1)))}%
                                     </strong>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* 👥 Gestoras Quick View Grid - DINÁMICO */}
+                        <div className={styles.gestorasOverviewSection}>
+                            <div className={styles.sectionHeaderExt}>
+                                <h3>Rendimiento Individual de Gestoras</h3>
+                                <p>Distribución de carga y efectividad por responsable</p>
+                            </div>
+                            <div className={styles.gestorasGridPermanent}>
+                                {productivityByGestor.map((g, i) => (
+                                    <div key={i} className={styles.gestoraActionCard} onClick={() => setSelectedGestoraId(g.id)}>
+                                        <div className={styles.gestoraCardHeader}>
+                                            <div className={styles.gestoraAvatar}>{g.nombre.charAt(0)}</div>
+                                            <div className={styles.gestoraNameInfo}>
+                                                <div className={styles.gName}>{g.nombre}</div>
+                                                <div className={styles.gStatus}>{g.cerrados} de {g.totalTickets} tickets cerrados</div>
+                                            </div>
+                                            <div className={styles.gProfileBtn}><ChevronRight size={16} /></div>
+                                        </div>
+                                        <div className={styles.gestoraMiniFunnel}>
+                                            <div className={styles.miniFunnelLabels}>
+                                                <span>Pendientes</span>
+                                                <span>{Math.round((g.cerrados / (g.totalTickets || 1)) * 100)}%</span>
+                                            </div>
+                                            <div className={styles.miniBarTrack}>
+                                                <div className={styles.miniBarProceso} style={{ width: `${(g.totalTickets - g.cerrados) / (g.totalTickets || 1) * 100}%` }} />
+                                                <div className={styles.miniBarCerrado} style={{ width: `${g.cerrados / (g.totalTickets || 1) * 100}%` }} />
+                                            </div>
+                                        </div>
+                                        <div className={styles.gestoraKpisMini}>
+                                            <div className={styles.miniKpi}>
+                                                <label>Facturación</label>
+                                                <strong>S/ {Math.round(g.facturacion).toLocaleString()}</strong>
+                                            </div>
+                                            <div className={styles.miniKpi}>
+                                                <label>SLA</label>
+                                                <strong style={{ color: (100 - g.ratioVencidos) > 90 ? '#10B981' : '#EF4444' }}>
+                                                    {Math.round(100 - g.ratioVencidos)}%
+                                                </strong>
+                                            </div>
+                                            <div className={styles.miniKpi}>
+                                                <label>Promedio</label>
+                                                <strong>{Math.round(g.avgTime)}h</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
@@ -659,12 +688,17 @@ export default function ReportesEficienciaPage() {
                                                     <strong>S/ {Math.round(g.rentabilidad).toLocaleString()}</strong>
                                                 </td>
                                                 <td>{Math.round(g.avgTime)}h</td>
-                                                <td>
-                                                    <div className={styles.slaBadgeAnalytical} style={{ 
-                                                        background: (100 - g.ratioVencidos) > 90 ? '#DCFCE7' : (100 - g.ratioVencidos) > 70 ? '#FEF3C7' : '#FEF2F2',
-                                                        color: (100 - g.ratioVencidos) > 90 ? '#15803D' : (100 - g.ratioVencidos) > 70 ? '#B45309' : '#DC2626'
-                                                    }}>
-                                                        {Math.round(100 - g.ratioVencidos)}%
+                                                <td className={Math.round(100 - g.ratioVencidos) >= 90 ? styles.textSuccess : styles.textDanger}>
+                                                    <div className={styles.slaMiniContainer}>
+                                                        <div className={styles.slaValueText}>{Math.round(100 - g.ratioVencidos)}%</div>
+                                                        <div className={styles.slaProgressBars}>
+                                                            <div className={styles.slaBarTrack}>
+                                                                <div className={styles.slaBarFill} style={{ 
+                                                                    width: `${Math.round(100 - g.ratioVencidos)}%`,
+                                                                    background: (100 - g.ratioVencidos) > 90 ? '#10B981' : (100 - g.ratioVencidos) > 70 ? '#F59E0B' : '#EF4444'
+                                                                }} />
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
