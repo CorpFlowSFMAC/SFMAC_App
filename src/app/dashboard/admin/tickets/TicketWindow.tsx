@@ -10,7 +10,7 @@ import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, 
 import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
-import { normalizeStateId } from "@/lib/ticketStates";
+import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { supabase } from "@/lib/supabase";
 import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
@@ -370,6 +370,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     if (meta.montoFinal) {
                         setMontoTotalCotizado(parseFloat(meta.montoFinal));
                     }
+
+                    // SYNC DOCUMENTATION STATE
+                    if (meta.evidenciasEjecucion) setEvidenciasEjecucion(meta.evidenciasEjecucion);
+                    if (meta.documentosChecklist) setDocumentosChecklist(meta.documentosChecklist);
+
                     setIsInitialLoadComplete(true);
                 } catch (err) {
                     console.error('Error fetching full ticket data:', err);
@@ -405,15 +410,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 const corregidoId2 = (visitConf2 && PRE_STATES.includes(rawId2)) ? 'en_inspeccion' : rawId2;
 
                 setTicketData((prev: any) => {
-                    const E2_ORDER: Record<string, number> = {
-                        'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
-                        'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
-                        'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
-                        'en_ejecucion': 8, 'documentacion_enviada': 9, 'por_liquidar': 10,
-                        'ticket_cerrado': 12
-                    };
-                    const incomingOrder = E2_ORDER[corregidoId2] ?? 0;
-                    const prevOrder = E2_ORDER[prev.estadoId] ?? 0;
+                    const incomingOrder = TICKET_STATE_ORDER[corregidoId2] ?? 0;
+                    const prevOrder = TICKET_STATE_ORDER[prev.estadoId] ?? 0;
                     const finalEstadoId = incomingOrder >= prevOrder ? corregidoId2 : prev.estadoId;
                     const serverPagos2: any[] = meta.historialPagosTécnico || [];
                     const localPagos2: any[] = prev.historialPagosTécnico || [];
@@ -591,16 +589,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const sourceForPayments = businessData;
         const sourceMetadata = businessData;
 
-        const STATE_ORDER: Record<string, number> = {
-            'borrador': 0, 'pendiente': 1, 'nuevo': 1, 'tecnico_asignado': 2,
-            'esperando_pago_visita': 2, 'en_inspeccion': 3, 'visita_realizada': 4,
-            'en_cotizacion': 5, 'cotizacion_enviada': 6, 'cotizacion_aprobada': 7,
-            'en_ejecucion': 8, 'documentacion_enviada': 9, 
-            'requiere_revision_admin': 10, 'por_liquidar': 10,
-            'ticket_cerrado': 12, 'vencido': 13, 'ticket_rechazado': 14, 'ticket_cancelado': 15
-        };
-        const localStateOrder = STATE_ORDER[businessData.estadoId] ?? 0;
-        const serverStateOrder = STATE_ORDER[ticket.status_id] ?? 0;
+        const localStateOrder = TICKET_STATE_ORDER[businessData.estadoId] ?? 0;
+        const serverStateOrder = TICKET_STATE_ORDER[ticket.status_id] ?? 0;
         const resolvedStatusId = localStateOrder >= serverStateOrder ? businessData.estadoId : ticket.status_id;
 
         const cleanedClientTicketNumber = (() => {
@@ -1289,6 +1279,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             partidas: partidasCotización
         };
         setTicketData(updated);
+        syncToSupabase(updated);
         showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 

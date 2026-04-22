@@ -347,3 +347,24 @@ export const normalizeStateId = (stateId: any): string => {
 
     return mapping[sid] || sid;
 };
+
+export const TICKET_STATE_ORDER: Record<string, number> = {
+    'borrador': 0,
+    'pendiente': 1,
+    'nuevo': 1,
+    'tecnico_asignado': 2,
+    'esperando_pago_visita': 2,
+    'en_inspeccion': 3,
+    'visita_realizada': 4,
+    'en_cotizacion': 5,
+    'cotizacion_enviada': 6,
+    'cotizacion_aprobada': 7,
+    'en_ejecucion': 8,
+    'documentacion_enviada': 9,
+    'requiere_revision_admin': 10,
+    'por_liquidar': 10,
+    'ticket_cerrado': 12,
+    'vencido': 13,
+    'ticket_rechazado': 14,
+    'ticket_cancelado': 15
+};
