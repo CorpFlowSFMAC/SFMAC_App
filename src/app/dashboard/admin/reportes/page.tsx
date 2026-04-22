@@ -222,6 +222,17 @@ export default function ReportesEficienciaPage() {
     // Estado para ordenamiento de la tabla
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'rentabilidad', direction: 'desc' });
 
+    // 🎯 Filtrar Gestoras: Solo corporativas (@sinfimac.com) o Administradores
+    const filteredGestoras = useMemo(() => {
+        return gestoras.filter(g => {
+            const email = (g.email || g.correo || "").toLowerCase();
+            const role = (g.role || "").toLowerCase();
+            const isAdmin = role === 'admin' || g.is_admin || g.id === 'admin';
+            const isCorporate = email.endsWith('@sinfimac.com');
+            return isAdmin || isCorporate;
+        });
+    }, [gestoras]);
+
     const handleSort = (key: string) => {
         let direction: 'asc' | 'desc' = 'desc';
         if (sortConfig.key === key && sortConfig.direction === 'desc') {
@@ -304,7 +315,7 @@ export default function ReportesEficienciaPage() {
         const map: any = {};
         
         // Inicializar con todas las gestoras (para asegurar que los nombres aparezcan aunque no tengan tickets)
-        gestoras.forEach(g => {
+        filteredGestoras.forEach(g => {
             const targetObj = gestorasTargets.find(t => t.gestora_id === g.id && t.month_key === currentMonthKey);
             // IMPORTANTE: g.name o g.nombre según lo que devuelva la API
             const finalName = g.name || g.nombre || g.full_name || "Gestora sin Nombre";
@@ -382,7 +393,7 @@ export default function ReportesEficienciaPage() {
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [filteredTickets, gestoras, gestorasTargets, currentMonthKey, sortConfig]);
+    }, [filteredTickets, filteredGestoras, gestorasTargets, currentMonthKey, sortConfig]);
 
     // 🎯 Rentabilidad por Cliente
     const profitabilityByClient = useMemo(() => {
@@ -482,7 +493,7 @@ export default function ReportesEficienciaPage() {
                             className={styles.gestoraSelect}
                         >
                             <option value="global">VISTA GLOBAL (Todos)</option>
-                            {gestoras.map(g => (
+                            {filteredGestoras.map(g => (
                                 <option key={g.id} value={g.id}>
                                     {g.name || g.nombre || "Sin nombre"}
                                 </option>
