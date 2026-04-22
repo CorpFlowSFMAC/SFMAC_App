@@ -503,6 +503,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [allTechnicians, setAllTechnicians] = useState<any[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const isSyncing = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -572,7 +573,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const syncToSupabase = useCallback(async (dataOverride?: any) => {
         const dataToProcess = dataOverride || ticketData;
-        if (!onUpdate || !dataToProcess || !isInitialLoadComplete) return;
+        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return;
+        
+        isSyncing.current = true;
 
         const {
             isMaximized, isMinimized, position, zIndex,
@@ -682,14 +685,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         const currentDataStr = JSON.stringify(updates);
         if (currentDataStr === lastSyncData.current && !dataOverride) return;
 
-        try {
-            await onUpdate(ticket.id, updates);
-            lastSyncData.current = currentDataStr;
-            localStorage.setItem(`ticket_state_${ticket.id}`, JSON.stringify(dataToProcess));
         } catch (err) {
             console.error("Error syncing ticket to Supabase:", err);
+        } finally {
+            isSyncing.current = false;
         }
-    }, [ticketData, ticket.id, onUpdate]);
+    }, [ticketData, ticket.id, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
 
     useEffect(() => {
         // Sync de fondo mucho menos agresivo (cada 30s) para evitar 'Sync of Death'
@@ -1279,7 +1280,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             partidas: partidasCotización
         };
         setTicketData(updated);
-        syncToSupabase(updated);
         showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
 
