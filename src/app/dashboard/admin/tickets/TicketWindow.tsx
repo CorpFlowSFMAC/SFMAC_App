@@ -335,7 +335,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                     // --- RESTAURACIÓN SELECTIVA DEL CACHE LOCAL ---
                     const savedState = localStorage.getItem(`ticket_state_${ticket.id}`);
-                    let cachedMetadata = {};
+                    let cachedMetadata: any = {};
                     if (savedState) {
                         try {
                             const parsed = JSON.parse(savedState);
