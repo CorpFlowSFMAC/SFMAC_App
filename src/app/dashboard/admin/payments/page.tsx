@@ -580,7 +580,7 @@ export default function PaymentsPage() {
                 });
 
                 // A: Añadir fila del Técnico Principal (si tiene items o historial)
-                if (techItems.length > 0 || (pagos.length > 0 && techItems.length === 0 && pagasParaEsteBeneficiario(pagos, 'técnico'))) {
+                if (techItems.length > 0 || (allHistory.length > 0 && techItems.length === 0 && pagasParaEsteBeneficiario(allHistory, 'técnico'))) {
                     allGroups.push({
                         ticketId: ticket.id,
                         realTicketId: ticket.id,
@@ -594,7 +594,7 @@ export default function PaymentsPage() {
                         items: techItems,
                         historialDepositos: allHistory,
                         costoVisita: visitCost,
-                        voucherVisita: pagos.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
+                        voucherVisita: allHistory.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
                         montoFacturado: ticket.montoFacturado,
                         utilidad: Math.max(0, (ticket.montoFacturado || 0) - (totalPactadoInclVisita + visitCost)),
                         descripcion: ticket.descripcionServicio || '',
