@@ -70,8 +70,8 @@ const RevenueVolumeChart = ({ data }: { data: any[] }) => (
                 <Tooltip 
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', padding: '1rem' }}
                     cursor={{ fill: '#F8FAFC' }}
-                    formatter={(value: any, name: string) => [
-                        name.includes('S/') ? `S/ ${Math.round(value).toLocaleString()}` : value,
+                    formatter={(value: any, name: any) => [
+                        name?.includes('S/') ? `S/ ${Math.round(value).toLocaleString()}` : value,
                         name
                     ]}
                 />
