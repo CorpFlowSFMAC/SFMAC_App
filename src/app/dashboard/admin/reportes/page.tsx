@@ -228,7 +228,7 @@ export default function ReportesEficienciaPage() {
             const email = (g.email || g.correo || "").toLowerCase();
             const role = (g.role || "").toLowerCase();
             const isAdmin = role === 'admin' || g.is_admin || g.id === 'admin';
-            const isCorporate = email.endsWith('@sinfimac.com');
+            const isCorporate = email.endsWith('@sinfimac.pe');
             return isAdmin || isCorporate;
         });
     }, [gestoras]);

@@ -81,7 +81,7 @@ export default function LoginPage() {
 
         try {
             const { username, password } = formData;
-            const email = username.includes("@") ? username : `${username}@sinfimac.com`;
+            const email = username.includes("@") ? username : `${username}@sinfimac.pe`;
 
             const { data, error: authError } = await supabase.auth.signInWithPassword({
                 email: email,
