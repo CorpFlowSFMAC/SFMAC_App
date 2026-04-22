@@ -481,11 +481,11 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub={`${roi.closed} tickets cerrados (Neto)`} color="#3B82F6"
+                    sub={`${roi.closed} tickets cerrados (Monto Real)`} color="#3B82F6"
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
-                        setModalTitle("Análisis de Costos: Inversión Ejecutada (NETO)");
+                        setModalTitle("Análisis de Costos: Inversión Ejecutada (REAL)");
                         setModalTickets(roi.inversionItems.map(t => ({ ...t, _viewMode: 'inversion' })));
                         setShowListModal(true);
                     }}
@@ -509,10 +509,10 @@ export default function AdminDashboard() {
                         setModalTickets(roi.ingresosItems.map(t => {
                             const bruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
                             const ingNeto = bruto / 1.18;
-                            const costNeto = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
+                            const costReal = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
                                               parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                                              parseFloat(t.visit_cost || t.costoVisita || 0)) / 1.18;
-                            return { ...t, _viewMode: 'utilidad', _utilityAmount: ingNeto - costNeto };
+                                              parseFloat(t.visit_cost || t.costoVisita || 0));
+                            return { ...t, _viewMode: 'utilidad', _utilityAmount: ingNeto - costReal };
                         }));
                         setShowListModal(true);
                     }}
