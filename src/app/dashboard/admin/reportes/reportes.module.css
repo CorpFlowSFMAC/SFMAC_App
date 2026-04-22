@@ -53,8 +53,40 @@
 
 .headerControls {
     display: flex;
-    gap: 1.5rem;
+    gap: 1rem;
     align-items: center;
+}
+
+.gestoraFilterBox {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: white;
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    transition: all 0.2s ease;
+}
+
+.gestoraFilterBox:hover {
+    border-color: #002A8F;
+    box-shadow: 0 4px 8px rgba(0,42,143,0.05);
+}
+
+.filterIcon {
+    color: #64748B;
+}
+
+.gestoraSelect {
+    border: none;
+    background: transparent;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #1E293B;
+    outline: none;
+    cursor: pointer;
+    min-width: 200px;
 }
 
 .navSegments {
@@ -256,6 +288,20 @@
     color: #64748B;
 }
 
+.funnelDrillDownHint {
+    margin-top: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #64748B;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: #F8FAFC;
+    padding: 0.75rem;
+    border-radius: 10px;
+    border: 1px dashed #E2E8F0;
+}
+
 /* Funnel Chart Extended */
 .funnelContainerExtended {
     display: flex;
@@ -429,6 +475,212 @@
     color: #0F172A !important;
     font-weight: 700;
 }
+
+.clickableRow {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clickableRow:hover {
+    background: #F1F5F9 !important;
+    transform: scale(1.002);
+}
+
+.ticketIdBadge {
+    background: #E2E8F0;
+    color: #475569;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    display: inline-block;
+    border: 1px solid #CBD5E1;
+}
+
+.statusBadgeSmall {
+    padding: 0.35rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #F1F5F9;
+    color: #64748B;
+}
+
+.statusBadgeSmall[data-state="ticket_cerrado"],
+.statusBadgeSmall[data-state="liquidado"] {
+    background: #DCFCE7 !important;
+    color: #15803D !important;
+}
+
+.statusBadgeSmall[data-state="nuevo"],
+.statusBadgeSmall[data-state="asignado_a_tecnico"] {
+    background: #E0F2FE !important;
+    color: #0369A1 !important;
+}
+
+.statusBadgeSmall[data-state="trabajo_en_curso"] {
+    background: #FEF3C7 !important;
+    color: #B45309 !important;
+}
+
+.slaMiniContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    width: 100px;
+}
+
+.slaProgressBars {
+    width: 100%;
+}
+
+.slaBarTrack {
+    height: 4px;
+    background: #F1F5F9;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #E2E8F0;
+}
+
+.slaBarFill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.5s ease;
+}
+
+.tableFilterBadge {
+    background: #002A8F;
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.btnTableAction {
+    background: transparent;
+    border: none;
+    color: #94A3B8;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.btnTableAction:hover {
+    background: #E2E8F0;
+    color: #002A8F;
+}
+
+.textDanger { color: #EF4444 !important; }
+.textSuccess { color: #10B981 !important; }
+
+.clickableRow {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clickableRow:hover {
+    background: #F1F5F9 !important;
+    transform: scale(1.002);
+}
+
+.ticketIdBadge {
+    background: #E2E8F0;
+    color: #475569;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    display: inline-block;
+    border: 1px solid #CBD5E1;
+}
+
+.statusBadgeSmall {
+    padding: 0.35rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #F1F5F9;
+    color: #64748B;
+}
+
+.statusBadgeSmall[data-state="ticket_cerrado"],
+.statusBadgeSmall[data-state="liquidado"] {
+    background: #DCFCE7;
+    color: #15803D;
+}
+
+.statusBadgeSmall[data-state="nuevo"],
+.statusBadgeSmall[data-state="asignado_a_tecnico"] {
+    background: #E0F2FE;
+    color: #0369A1;
+}
+
+.statusBadgeSmall[data-state="trabajo_en_curso"] {
+    background: #FEF3C7;
+    color: #B45309;
+}
+
+.slaMiniContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    width: 100px;
+}
+
+.slaProgressBars {
+    width: 100%;
+}
+
+.slaBarTrack {
+    height: 4px;
+    background: #F1F5F9;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #E2E8F0;
+}
+
+.slaBarFill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.5s ease;
+}
+
+.tableFilterBadge {
+    background: #002A8F;
+    color: white;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.btnTableAction {
+    background: transparent;
+    border: none;
+    color: #94A3B8;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.btnTableAction:hover {
+    background: #E2E8F0;
+    color: #002A8F;
+}
+
+.textDanger { color: #EF4444 !important; }
+.textSuccess { color: #10B981 !important; }
 
 .managerCell {
     display: flex;

@@ -12,6 +12,7 @@ import styles from "./reportes.module.css";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId, TICKET_STATES } from "@/lib/ticketStates";
 import { round2 } from "@/lib/formatters";
+import TicketWindow from "../tickets/TicketWindow";
 
 /** Calcula horas transcurridas desde el inicio del SLA */
 function calcularHoras(ticket: any): number {
@@ -30,7 +31,7 @@ function calcularHoras(ticket: any): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 🎯 Funnel Chart (Embudo de Productividad) - Re-diseñado para ser más elegante
-const FunnelChart = ({ data }: { data: { label: string, value: number, color: string }[] }) => {
+const FunnelChart = ({ data, onStageClick }: { data: { label: string, value: number, color: string }[], onStageClick?: (label: string) => void }) => {
     const max = Math.max(...data.map(d => d.value), 1);
     
     return (
@@ -40,7 +41,12 @@ const FunnelChart = ({ data }: { data: { label: string, value: number, color: st
                 const nextWidth = data[i+1] ? (data[i+1].value / max) * 100 : width * 0.8;
                 
                 return (
-                    <div key={i} className={styles.funnelStageExtended} style={{ opacity: 1 - i * 0.05 }}>
+                    <div 
+                        key={i} 
+                        className={styles.funnelStageExtended} 
+                        style={{ opacity: 1 - i * 0.05, cursor: onStageClick ? 'pointer' : 'default' }}
+                        onClick={() => onStageClick?.(item.label)}
+                    >
                         <div className={styles.funnelShapes}>
                             <svg viewBox="0 0 200 60" preserveAspectRatio="none" className={styles.funnelSvg}>
                                 <path 
@@ -220,8 +226,15 @@ export default function ReportesEficienciaPage() {
     
     const [selectedPeriod, setSelectedPeriod] = useState<"current" | "previous">("current");
     const [selectedTab, setSelectedTab] = useState<"productivity" | "bonuses" | "profitability" | "admin" | "risk">("productivity");
+    const [selectedGestoraId, setSelectedGestoraId] = useState<string>("global");
     const [editingTarget, setEditingTarget] = useState<Record<string, number>>({});
+    const [activeTicket, setActiveTicket] = useState<any>(null);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Estado para drill-down del embudo
+    const [showDrillDown, setShowDrillDown] = useState(false);
+    const [drillDownTitle, setDrillDownTitle] = useState("");
+    const [drillDownTickets, setDrillDownTickets] = useState<any[]>([]);
 
     // Mes actual formateado como KEY (YYYY-MM)
     const currentMonthKey = useMemo(() => {
@@ -253,9 +266,44 @@ export default function ReportesEficienciaPage() {
             const dateStr = t.createdAt || t.created_at || t.fechaCreacion;
             if (!dateStr) return false;
             const date = new Date(dateStr);
-            return date >= startOfMonth && date <= endOfMonth;
+            const isInPeriod = date >= startOfMonth && date <= endOfMonth;
+            
+            if (!isInPeriod) return false;
+            
+            // Filtro por Gestora
+            if (selectedGestoraId !== "global") {
+                return t.gestora_id === selectedGestoraId;
+            }
+            
+            return true;
         });
-    }, [tickets, selectedPeriod]);
+    }, [tickets, selectedPeriod, selectedGestoraId]);
+
+    // 🎯 Auditoría de Rentabilidad Negativa (Console Tracking)
+    useEffect(() => {
+        if (filteredTickets.length > 0) {
+            const negativeTickets = filteredTickets.filter(t => {
+                const billingGross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                const billingNet = billingGross / 1.18;
+                
+                // Inversión: Mano de Obra + Materiales + Viáticos (Sin IGV)
+                const inversion = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+                
+                return (billingNet - inversion) < -1; // Tolerancia de 1 sol
+            });
+
+            if (negativeTickets.length > 0) {
+                console.group("🚨 AUDITORÍA: TICKETS CON RENTABILIDAD NEGATIVA");
+                negativeTickets.forEach(t => {
+                    const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                    const net = gross / 1.18;
+                    const inv = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+                    console.warn(`Ticket: ${t.numeroTicketCliente || t.id} | Neto: S/ ${net.toFixed(2)} | Inversión: S/ ${inv.toFixed(2)} | ROI: S/ ${(net - inv).toFixed(2)}`);
+                });
+                console.groupEnd();
+            }
+        }
+    }, [filteredTickets]);
 
     // 🎯 Productividad por Gestor Expandida
     const productivityByGestor = useMemo(() => {
@@ -301,10 +349,11 @@ export default function ReportesEficienciaPage() {
             if (horas > 72 && sid !== 'ticket_cerrado') map[gid].vencidos++;
             if (sid === 'ticket_cerrado') map[gid].horasCierre.push(horas);
 
-            // Montos Financieros
-            // Sincronización: Facturación Total solo suma tickets cerrados o por liquidar
+            // Montos Financieros - APLICANDO REGLA "NETO SIN IGV"
             if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
-                map[gid].facturacion += parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                // Si el monto ya es neto lo usamos, si no, dividimos entre 1.18
+                const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                map[gid].facturacion += gross / 1.18;
             }
             
             const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
@@ -343,9 +392,10 @@ export default function ReportesEficienciaPage() {
             if (!cid || !map[cid]) return;
             const sid = normalizeStateId(t.status_id || t.estadoId);
             
-            // Sincronización: Solo sumamos facturación real de tickets cerrados/liquidando
+            // Sincronización: Facturación NETA (Sin IGV)
             if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
-                map[cid].billing += parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                map[cid].billing += gross / 1.18;
             }
             
             const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
@@ -420,6 +470,22 @@ export default function ReportesEficienciaPage() {
                     </div>
                 </div>
                 <div className={styles.headerControls}>
+                    <div className={styles.gestoraFilterBox}>
+                        <User size={16} className={styles.filterIcon} />
+                        <select 
+                            value={selectedGestoraId}
+                            onChange={(e) => setSelectedGestoraId(e.target.value)}
+                            className={styles.gestoraSelect}
+                        >
+                            <option value="global">VISTA GLOBAL (Todos)</option>
+                            {gestoras.map(g => (
+                                <option key={g.id} value={g.id}>
+                                    {g.name || g.nombre || "Sin nombre"}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className={styles.navSegments}>
                         <button 
                             className={selectedPeriod === 'current' ? styles.segActive : styles.seg} 
@@ -501,74 +567,202 @@ export default function ReportesEficienciaPage() {
                                         <p>Flujo desde asignación hasta cierre efectivo</p>
                                     </div>
                                 </div>
-                                <FunnelChart data={[
-                                    { label: 'Ingresados', value: filteredTickets.length, color: '#3B82F6' },
-                                    { label: 'En Ejecución', value: filteredTickets.length - productivityByGestor.reduce((s,g)=>s+g.cerrados,0), color: '#F59E0B' },
-                                    { label: 'Cerrados OK', value: productivityByGestor.reduce((s,g)=>s+g.cerrados,0), color: '#10B981' },
-                                ]} />
+                                <FunnelChart 
+                                    data={[
+                                        { 
+                                            label: 'Ingresados', 
+                                            value: filteredTickets.length, 
+                                            color: '#3B82F6' 
+                                        },
+                                        { 
+                                            label: 'En Proceso', 
+                                            value: filteredTickets.filter(t => !['liquidado', 'ticket_cerrado', 'por_liquidar'].includes(normalizeStateId(t.estadoId))).length, 
+                                            color: '#F59E0B' 
+                                        },
+                                        { 
+                                            label: 'Cerrados OK', 
+                                            value: filteredTickets.filter(t => ['liquidado', 'ticket_cerrado', 'por_liquidar'].includes(normalizeStateId(t.estadoId))).length, 
+                                            color: '#10B981' 
+                                        },
+                                    ]} 
+                                    onStageClick={(label) => {
+                                        setDrillDownTitle(`Tickets en Etapa: ${label}`);
+                                        if (label === 'Ingresados') {
+                                            setDrillDownTickets(filteredTickets);
+                                        } else if (label === 'En Proceso') {
+                                            setDrillDownTickets(filteredTickets.filter(t => !['liquidado', 'ticket_cerrado', 'por_liquidar'].includes(normalizeStateId(t.estadoId))));
+                                        } else {
+                                            setDrillDownTickets(filteredTickets.filter(t => ['liquidado', 'ticket_cerrado', 'por_liquidar'].includes(normalizeStateId(t.estadoId))));
+                                        }
+                                        setShowDrillDown(true);
+                                    }}
+                                />
+                                <div className={styles.funnelDrillDownHint}>
+                                    <Info size={14} /> <span>Los datos se recalcularán según el Gestor seleccionado arriba.</span>
+                                </div>
                             </div>
 
                             <div className={styles.elegantCard}>
                                 <div className={styles.cardHeaderExt}>
                                     <div>
                                         <h3>Velocidad de Respuesta</h3>
-                                        <p>Tiempo promedio de cierre por gestora</p>
+                                        <p>Tiempo promedio de cierre (Horas Productivas)</p>
                                     </div>
                                 </div>
                                 <div className={styles.gaugesContainer}>
-                                    {productivityByGestor.slice(0, 4).map((g, i) => (
-                                        <VelocityGauge key={i} value={g.avgTime} label={g.nombre} />
-                                    ))}
+                                    {selectedGestoraId === "global" ? (
+                                        productivityByGestor.slice(0, 4).map((g, i) => (
+                                            <VelocityGauge key={i} value={g.avgTime} label={g.nombre} />
+                                        ))
+                                    ) : (
+                                        <div className={styles.individualGaugeWrapper}>
+                                            {productivityByGestor.filter(g => g.id === selectedGestoraId).map((g, i) => (
+                                                <VelocityGauge key={i} value={g.avgTime} label={g.nombre} max={168} />
+                                            ))}
+                                            <div className={styles.gaugeExplanation}>
+                                                <p>Promedio de gestión individual en horas. Excluye tiempos de pausa y espera de cotización.</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
                         <div className={styles.fullStatsTableCard}>
                             <div className={styles.cardHeaderExt}>
-                                <h3>Ranking General de Eficiencia</h3>
+                                <h3>
+                                    {selectedGestoraId === "global" 
+                                        ? "Ranking General de Eficiencia" 
+                                        : `Tickets Gestionados por ${productivityByGestor.find(g => g.id === selectedGestoraId)?.nombre || 'Gestora'}`
+                                    }
+                                </h3>
+                                {selectedGestoraId !== "global" && (
+                                    <div className={styles.tableFilterBadge}>
+                                        {filteredTickets.length} Tickets Filtrados
+                                    </div>
+                                )}
                             </div>
-                            <table className={styles.premiumTable}>
-                                <thead>
-                                    <tr>
-                                        <th>Gestora</th>
-                                        <th>Tickets</th>
-                                        <th>Vencidos</th>
-                                        <th>Salud SLA</th>
-                                        <th>SST</th>
-                                        <th>Meta</th>
-                                        <th>Beneficio</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {productivityByGestor.map((g, i) => (
-                                        <tr key={i}>
-                                            <td className={styles.managerCell}>
-                                                <div className={styles.avatarMini}>{g.nombre.charAt(0)}</div>
-                                                <strong>{g.nombre}</strong>
-                                            </td>
-                                            <td>{g.totalTickets}</td>
-                                            <td className={g.vencidos > 0 ? styles.textDanger : ""}>{g.vencidos}</td>
-                                            <td>
-                                                <div className={styles.statusBubble} style={{ background: g.ratioVencidos < 5 ? '#DCFCE7' : '#FEF2F2', color: g.ratioVencidos < 5 ? '#15803D' : '#DC2626' }}>
-                                                    {Math.round(g.ratioVencidos)}% Venc.
-                                                </div>
-                                            </td>
-                                            <td>{g.sstCompliance ? <CheckCircle color="#10B981" size={16} /> : <XCircle color="#DC2626" size={16} />}</td>
-                                            <td>
-                                                <div className={styles.progressThin}>
-                                                    <div className={styles.progressFill} style={{ width: `${Math.min(g.percentMeta, 100)}%`, background: g.percentMeta >= 100 ? '#10B981' : '#3B82F6' }} />
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={g.bonoValido ? styles.bonusFlagOn : styles.bonusFlagOff}>
-                                                    {g.bonoValido ? "BONO OK" : "NO APTO"}
-                                                </span>
-                                            </td>
+                            
+                            {selectedGestoraId === "global" ? (
+                                <table className={styles.premiumTable}>
+                                    <thead>
+                                        <tr>
+                                            <th>Gestora</th>
+                                            <th>Tickets</th>
+                                            <th>Vencidos</th>
+                                            <th>Salud SLA</th>
+                                            <th>SST</th>
+                                            <th>Meta</th>
+                                            <th>Beneficio</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {productivityByGestor.map((g, i) => (
+                                            <tr key={i}>
+                                                <td className={styles.managerCell}>
+                                                    <div className={styles.avatarMini}>{g.nombre.charAt(0)}</div>
+                                                    <strong>{g.nombre}</strong>
+                                                </td>
+                                                <td>{g.totalTickets}</td>
+                                                <td className={g.vencidos > 0 ? styles.textDanger : ""}>{g.vencidos}</td>
+                                                <td>
+                                                    <div className={styles.statusBubble} style={{ background: g.ratioVencidos < 5 ? '#DCFCE7' : '#FEF2F2', color: g.ratioVencidos < 5 ? '#15803D' : '#DC2626' }}>
+                                                        {Math.round(g.ratioVencidos)}% Venc.
+                                                    </div>
+                                                </td>
+                                                <td>{g.sstCompliance ? <CheckCircle color="#10B981" size={16} /> : <XCircle color="#DC2626" size={16} />}</td>
+                                                <td>
+                                                    <div className={styles.progressThin}>
+                                                        <div className={styles.progressFill} style={{ width: `${Math.min(g.percentMeta, 100)}%`, background: g.percentMeta >= 100 ? '#10B981' : '#3B82F6' }} />
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span className={g.bonoValido ? styles.bonusFlagOn : styles.bonusFlagOff}>
+                                                        {g.bonoValido ? "BONO OK" : "NO APTO"}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <table className={styles.premiumTable}>
+                                    <thead>
+                                        <tr>
+                                            <th>Ticket #</th>
+                                            <th>Cliente / Sede</th>
+                                            <th>Estado</th>
+                                            <th>SLA (Progreso)</th>
+                                            <th>Costo Inv.</th>
+                                            <th>Rent. Neta</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredTickets.map((t, i) => {
+                                            const horas = calcularHoras(t);
+                                            const status = normalizeStateId(t.estadoId);
+                                            const costRatio = Math.min((horas / 72) * 100, 100);
+                                            const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                                            const net = gross / 1.18;
+                                            const inv = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
+                                            const profit = net - inv;
+                                            
+                                            // Lógica de semáforo SLA
+                                            let slaColor = "#10B981";
+                                            if (horas > 72) slaColor = "#EF4444";
+                                            else if (horas > 48) slaColor = "#F59E0B";
+
+                                            return (
+                                                <tr key={i} className={styles.clickableRow} onClick={() => setActiveTicket(t)}>
+                                                    <td>
+                                                        <div className={styles.ticketIdBadge}>{t.numeroTicketCliente || `T-${t.id.slice(-4)}`}</div>
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                            <strong style={{ fontSize: '0.9rem' }}>{t.cliente?.nombre || 'S/C'}</strong>
+                                                            <small style={{ color: '#64748B' }}>{t.sede?.nombre || t.metadata?.codigo_sede_extraido || 'S/S'}</small>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className={styles.statusBadgeSmall} data-state={status}>
+                                                            {TICKET_STATES[status as keyof typeof TICKET_STATES]?.label || status}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className={styles.slaMiniContainer}>
+                                                            <div className={styles.slaProgressBars}>
+                                                                <div className={styles.slaBarTrack}>
+                                                                    <div 
+                                                                        className={styles.slaBarFill} 
+                                                                        style={{ 
+                                                                            width: `${costRatio}%`, 
+                                                                            backgroundColor: slaColor 
+                                                                        }} 
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: slaColor }}>{Math.round(horas)}h / 72h</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>S/ {inv.toLocaleString()}</td>
+                                                    <td className={profit < 0 ? styles.textDanger : styles.textSuccess}>
+                                                        <strong>S/ {profit.toLocaleString()}</strong>
+                                                    </td>
+                                                    <td>
+                                                        <button className={styles.btnTableAction}>
+                                                            <ChevronRight size={16} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
+                    </div>
+                )}
                     </div>
                 )}
 
