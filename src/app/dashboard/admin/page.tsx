@@ -171,14 +171,11 @@ export default function AdminDashboard() {
         }, 0);
 
         const inversionEjecutada = closed.reduce((acc, t) => {
-            // Costos operativos (Mano de Obra + Materiales) extraídos del ticket
-            const moBruto = parseFloat(t.labor_cost || t.costoManoObra || 0);
-            const matBruto = parseFloat(t.materials_cost || t.costoMateriales || 0);
-            const visBruto = parseFloat(t.visit_cost || t.costoVisita || 0);
-            
-            // Si la inversión se considera neta del técnico, dividir solo materiales o todo según política
-            // El usuario pide SUM(subtotal_gastos), aplicamos factor 1.18 preventivo
-            return acc + ((moBruto + matBruto + visBruto) / 1.18);
+            // REGLA CLARIFICADA: La inversión (pagos a técnicos, materiales, etc.) se toma TAL CUAL se deposita (BRUTO/REAL)
+            const mo = parseFloat(t.labor_cost || t.costoManoObra || 0);
+            const mat = parseFloat(t.materials_cost || t.costoMateriales || 0);
+            const vis = parseFloat(t.visit_cost || t.costoVisita || 0);
+            return acc + (mo + mat + vis);
         }, 0);
 
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
@@ -197,13 +194,13 @@ export default function AdminDashboard() {
         const byService = SERVICE_TYPES.map(s => {
             const st = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
             const ingNeto = st.reduce((acc, t) => acc + (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18), 0);
-            const costNeto = st.reduce((acc, t) => {
+            const costReal = st.reduce((acc, t) => {
                 const mo = parseFloat(t.labor_cost || t.costoManoObra || 0);
                 const mat = parseFloat(t.materials_cost || t.costoMateriales || 0);
                 const vis = parseFloat(t.visit_cost || t.costoVisita || 0);
-                return acc + ((mo + mat + vis) / 1.18);
+                return acc + (mo + mat + vis);
             }, 0);
-            const m = ingNeto > 0 ? ((ingNeto - costNeto) / ingNeto) * 100 : 0;
+            const m = ingNeto > 0 ? ((ingNeto - costReal) / ingNeto) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
@@ -218,10 +215,10 @@ export default function AdminDashboard() {
             byService,
             inversionItems: closed.map(t => ({
                 ...t,
-                _investmentTotalNet: (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
+                _investmentTotalReal: (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
                                        parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                                       parseFloat(t.visit_cost || t.costoVisita || 0)) / 1.18
-            })).sort((a,b) => b._investmentTotalNet - a._investmentTotalNet),
+                                       parseFloat(t.visit_cost || t.costoVisita || 0))
+            })).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
     }, [tickets]);
@@ -238,14 +235,14 @@ export default function AdminDashboard() {
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
         const totalAprobadosNeto = approvedTickets.reduce((s, t) => s + ((parseFloat(t.total_quoted_amount || t.montoFinal || 0)) / 1.18), 0);
 
-        // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados (Uso de Netos)
-        const lucroNeto = approvedTickets.reduce((s, t) => {
+        // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados (Ingreso Neto - Gasto Real)
+        const lucroReal = approvedTickets.reduce((s, t) => {
             const ingNeto = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
-            const costNeto = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
+            const costReal = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
                                parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                               parseFloat(t.visit_cost || t.costoVisita || 0)) / 1.18;
+                               parseFloat(t.visit_cost || t.costoVisita || 0));
             
-            return s + (ingNeto - costNeto);
+            return s + (ingNeto - costReal);
         }, 0);
 
         // Aging
@@ -265,7 +262,7 @@ export default function AdminDashboard() {
             total: todosPendientes.length,
             totalPipeline: round2(totalPipelineNeto),
             totalAprobados: round2(totalAprobadosNeto),
-            lucro: round2(lucroNeto),
+            lucro: round2(lucroReal),
             aging: [
                 { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), color: "#10B981" },
                 { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), color: "#F59E0B" },
@@ -923,10 +920,10 @@ export default function AdminDashboard() {
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: amountColor, fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(t._viewMode === 'utilidad' ? (t._utilityAmount || 0) : t._viewMode === 'inversion' ? (t._investmentTotalNet || 0) : (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18))}
+                                                        S/ {fmt(t._viewMode === 'utilidad' ? (t._utilityAmount || 0) : t._viewMode === 'inversion' ? (t._investmentTotalReal || 0) : (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18))}
                                                     </div>
                                                     <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.65)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                                        {t._viewMode === 'utilidad' ? 'Utilidad Neta' : t._viewMode === 'inversion' ? 'Inversión Neta' : 'Ingreso Neto'}
+                                                        {t._viewMode === 'utilidad' ? 'Utilidad Neta' : t._viewMode === 'inversion' ? 'Monto Real (Salida)' : 'Ingreso Neto'}
                                                     </div>
                                                     {t._viewMode === 'utilidad' && (
                                                         <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
