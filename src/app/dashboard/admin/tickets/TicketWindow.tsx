@@ -1712,7 +1712,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             });
 
             if (isExceeding) {
-                showToast("Aprobación Requerida", "Esta solicitud excede el pactado. Se ha enviado al Administrador para su autorización.", "warning");
+                showToast("Aprobación Requerida", "Esta solicitud excede el pactado. Se ha enviado al Administrador para su autorización.", "info");
             } else {
                 showToast("Solicitud Enviada", "El rescate financiero ha sido registrado y enviado a Tesorería.", "success");
             }
