@@ -602,16 +602,19 @@ export default function PaymentsPage() {
                     const finalRef = ticket.solicitudLiquidacion || pagosLegacy.find((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
                     
                     if (finalRef || ticket.estadoId === 'por_liquidar' || hasFinalPaid) {
-                        const liqMonto = round2(finalRef?.monto ?? (hasFinalPaid ? (finalRef?.monto || 0) : saldoReal));
+                        const liqMonto = round2(finalRef?.monto ?? (hasFinalPaid ? (finalRef?.monto || 0) : Math.max(0, saldoReal)));
                         
-                        items.push({
-                            id: `${ticket.id}_final`,
-                            tipo: (finalRef?.tipo || 'Liquidación Final'),
-                            monto: liqMonto,
-                            estado: hasFinalPaid ? 'pagado' : 'pendiente',
-                            fecha: finalRef?.fecha || ticket.fechaPagoFinal || new Date().toISOString(),
-                            concepto: (!finalRef && !hasFinalPaid) ? "Saldo detectado por el sistema" : undefined
-                        });
+                        // Solo agregamos el item si hay un monto real que pagar o si ya está pagado
+                        if (liqMonto > 0.01 || hasFinalPaid) {
+                            items.push({
+                                id: `${ticket.id}_final`,
+                                tipo: (finalRef?.tipo || 'Liquidación Final'),
+                                monto: liqMonto,
+                                estado: hasFinalPaid ? 'pagado' : 'pendiente',
+                                fecha: finalRef?.fecha || ticket.fechaPagoFinal || new Date().toISOString(),
+                                concepto: (!finalRef && !hasFinalPaid) ? "Saldo detectado por el sistema" : undefined
+                            });
+                        }
                     }
 
                     // 5. Movilidad / Visita
@@ -652,7 +655,7 @@ export default function PaymentsPage() {
                         tecnico: techData,
                         montoPactado: totalPactadoInclVisita,
                         montoAdelantado: totalPagadoArray,
-                        saldoPendiente: totalPactadoInclVisita - totalPagadoArray,
+                        saldoPendiente: Math.max(0, round2(totalPactadoInclVisita - totalPagadoArray)),
                         items: techItems,
                         historialDepositos: allHistory,
                         costoVisita: visitCost,
@@ -959,9 +962,9 @@ export default function PaymentsPage() {
     const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
     const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
 
-    const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente').length, 0);
+    const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).length, 0);
     const totalPendingAmount = round2(paymentGroups.reduce((acc, g) =>
-        acc + g.items.filter(i => i.estado === 'pendiente').reduce((s, i) => s + i.monto, 0), 0));
+        acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).reduce((s, i) => s + i.monto, 0), 0));
 
     const filteredGroups = paymentGroups.filter(g => {
         // Filtro por estado
