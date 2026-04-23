@@ -512,8 +512,8 @@ export default function PaymentsPage() {
                 }));
 
                 const uniqueHistory = [...pagosLegacy];
-                costsAsHistory.forEach(costPayment => {
-                    const alreadyPresent = uniqueHistory.some(p => 
+                costsAsHistory.forEach((costPayment: any) => {
+                    const alreadyPresent = uniqueHistory.some((p: any) => 
                         p.id === costPayment.id || 
                         (Math.abs(p.monto - costPayment.monto) < 0.01 && 
                          p.tipo === costPayment.tipo &&
