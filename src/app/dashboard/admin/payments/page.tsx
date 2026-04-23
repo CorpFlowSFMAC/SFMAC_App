@@ -514,10 +514,12 @@ export default function PaymentsPage() {
                 const uniqueHistory = [...pagosLegacy];
                 costsAsHistory.forEach((costPayment: any) => {
                     const alreadyPresent = uniqueHistory.some((p: any) => 
+                        // Deduplicación por ID (Si usamos el UUID del costo en la metadata)
                         p.id === costPayment.id || 
+                        // Deduplicación por Monto + Tipo + Fecha (Tolerancia de 1 hora para compensar desfases de servidor/cliente)
                         (Math.abs(p.monto - costPayment.monto) < 0.01 && 
-                         p.tipo === costPayment.tipo &&
-                         new Date(p.fecha).getTime() === new Date(costPayment.fecha).getTime())
+                         (p.tipo || '').toLowerCase() === (costPayment.tipo || '').toLowerCase() &&
+                         Math.abs(new Date(p.fecha).getTime() - new Date(costPayment.fecha).getTime()) < 3600000)
                     );
                     if (!alreadyPresent) uniqueHistory.push(costPayment);
                 });
@@ -881,8 +883,9 @@ export default function PaymentsPage() {
         }
     };
 
-    const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
-        const pagoId = `pago_${group.realTicketId}_${Date.now()}`;
+        // ★ FIX: Si es un costo de la tabla ticket_costs, usamos su UUID real como ID en la metadata.
+        // Esto permite que el motor de unificación (deduplicación) sepa que son el mismo registro.
+        const pagoId = (item.isTableCost && item.costId) ? item.costId : `pago_${group.realTicketId}_${Date.now()}`;
         const nuevoPago = {
             id: pagoId,
             monto: item.monto,

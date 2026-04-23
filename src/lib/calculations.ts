@@ -59,9 +59,20 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         const isFee = feeCategories.some(f => hTipo.includes(f)) || ['refuerzo', 'liquidación final'].includes(hTipo);
         if (!isFee) return false;
 
+        // Evitar doble contabilidad: Si el pago ya existe en la tabla moderna (m)
         return !technicianFeesArr.some((m: any) => {
             const mMonto = round2(m.monto || 0);
-            return Math.abs(hMonto - mMonto) < 0.01;
+            // 1. Coincidencia exacta por ID (UUID)
+            if (m.id && h.id && m.id === h.id) return true;
+            
+            // 2. Coincidencia heurística: Monto + Tipo + Fecha (Tolerancia 1h)
+            const sameAmount = Math.abs(hMonto - mMonto) < 0.01;
+            const sameType = (m.categoria || '').toLowerCase().includes(hTipo) || hTipo.includes((m.categoria || '').toLowerCase());
+            const hDate = new Date(h.fecha).getTime();
+            const mDate = new Date(m.fecha_pago || m.created_at).getTime();
+            const sameDate = Math.abs(hDate - mDate) < 3600000; // 1 hora de tolerancia
+
+            return sameAmount && sameType && sameDate;
         });
     });
     
