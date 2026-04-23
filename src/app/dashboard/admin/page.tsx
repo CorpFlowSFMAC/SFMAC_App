@@ -172,18 +172,39 @@ export default function AdminDashboard() {
         }
     };
 
-    const isInRange = (d: string) => {
-        const diff = (now.getTime() - new Date(d).getTime()) / 86_400_000;
-        if (dateRange === "today") return diff < 1;
-        if (dateRange === "week") return diff < 7;
-        if (dateRange === "month") return diff < 30;
+    const isInRange = (dateStr: string) => {
+        if (dateRange === "all") return true;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return false;
+        const today = new Date();
+
+        if (dateRange === "today") {
+            return d.toDateString() === today.toDateString();
+        }
+        if (dateRange === "week") {
+            const startOfWeek = new Date(today);
+            const day = today.getDay() || 7;
+            startOfWeek.setDate(today.getDate() - (day - 1));
+            startOfWeek.setHours(0, 0, 0, 0);
+            return d >= startOfWeek;
+        }
+        if (dateRange === "month") {
+            return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+        }
         return true;
     };
 
     // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ───────────
     const roi = useMemo(() => {
-        // REGLA 1: Solo tickets desde APROBADA en adelante para Rentabilidad (Ventas Reales)
-        const closed = tickets.filter((t: any) => {
+        // REGLA 1: Solo tickets con actividad o creación en el rango seleccionado
+        const inPeriod = tickets.filter((t: any) => {
+            // El ticket entra en el ROI si fue creado en el periodo O si fue cerrado en el periodo
+            const createdInRange = isInRange(t.created_at || t.createdAt);
+            const closedInRange = t.closure_date ? isInRange(t.closure_date) : false;
+            return createdInRange || closedInRange;
+        });
+
+        const closed = inPeriod.filter((t: any) => {
             const sid = normalizeStateId(t.status_id || t.estadoId);
             const approvedOrLater = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin", "ticket_cerrado", "liquidado"];
             return approvedOrLater.includes(sid);
@@ -191,23 +212,19 @@ export default function AdminDashboard() {
 
         // REGLA 2: Cálculos 100% SIN IGV (Usando Base Imponible / Subtotal)
         const ingresosGenerados = closed.reduce((acc, t) => {
-            // Priorizamos el cálculo del servidor (net_income_agg) que ya contempla el subtotal real
             if (t.net_income_agg !== undefined) return acc + parseFloat(t.net_income_agg || 0);
-            
             const bruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
             return acc + (bruto / 1.18);
         }, 0);
 
-        const inversionEjecutada = closed.reduce((acc, t) => {
-            // REGLA FORENSE: La inversión real se extrae de la sumatoria de ticket_costs (total_costs_agg)
-            // Esto incluye: MO, Materiales, Viáticos, Adelantos, Rescates y cualquier otro egreso.
-            if (t.total_costs_agg !== undefined) return acc + parseFloat(t.total_costs_agg || 0);
-
-            // Fallback de seguridad para tickets sin registros en ticket_costs
-            const mo = parseFloat(t.labor_cost || t.costoManoObra || 0);
-            const mat = parseFloat(t.materials_cost || t.costoMateriales || 0);
-            const vis = parseFloat(t.visit_cost || t.costoVisita || 0);
-            return acc + (mo + mat + vis);
+        // REGLA 3: Inversión Ejecutada (Egresos Reales del Periodo)
+        // Para que coincida con Tesorería, debemos sumar los pagos realizados en este mes
+        const inversionEjecutada = tickets.reduce((acc, t) => {
+            const historial = t.metadata?.historialPagosTecnico || t.historialPagosTecnico || [];
+            const pagosEnRango = historial.filter((p: any) => 
+                p.estado === 'pagado' && isInRange(p.fecha)
+            );
+            return acc + pagosEnRango.reduce((sum: number, p: any) => sum + parseFloat(p.monto || 0), 0);
         }, 0);
 
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);

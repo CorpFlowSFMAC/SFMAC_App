@@ -440,7 +440,7 @@ export const ticketsAPI = {
 
     async getSummaryAll() {
         const { data, error } = await supabase
-            .rpc('get_tickets_summary_v3');
+            .rpc('get_tickets_summary_v4');
 
         if (error) throw error;
         return data;
