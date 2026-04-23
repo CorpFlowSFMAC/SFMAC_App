@@ -100,10 +100,21 @@ function flattenTicketForPayments(t: any) {
     }
     
     // Unificar historial y asegurar que adelantos/visitas clásicos sean contados
-    const history = [
+    const rawHistory = [
         ...(meta.historialPagosTecnico || []),
         ...(t.historialPagosTecnico || [])
-    ].filter(p => p && p.monto > 0 && p.estado !== 'anulado');
+    ];
+    
+    // Deduplicar por ID para evitar doble contabilidad si el mismo pago viene de dos fuentes
+    const seenIds = new Set();
+    const history = rawHistory.filter(p => {
+        if (!p || !p.monto || p.monto <= 0 || p.estado === 'anulado') return false;
+        if (p.id) {
+            if (seenIds.has(p.id)) return false;
+            seenIds.add(p.id);
+        }
+        return true;
+    });
 
     const hasPaidMobility = history.some((p: any) =>
         p.tipo === 'Movilidad / Visita' ||
@@ -487,21 +498,11 @@ export default function PaymentsPage() {
                 const pagosLegacy = ticket.historialPagosTecnico || [];
                 const totalPagadoLegacy = round2(pagosLegacy.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
-                // ✅ UNIFICACIÓN: Sumar también los costos ya pagados en la tabla ticket_costs
-                const paidModernItems = (ticket.paidCosts || []).map((c: any) => ({
-                    id: c.id,
-                    tipo: `Gasto: ${c.categoria}`,
-                    monto: c.monto,
-                    fecha: c.fecha_pago || c.created_at,
-                    estado: 'pagado',
-                    referencia: c.concepto,
-                    isTableCost: true,
-                    costId: c.id
-                }));
-                const totalPagadoModern = round2(paidModernItems.reduce((sum: number, c: any) => sum + round2(c.monto || 0), 0));
-                
-                const totalPagadoArray = round2(totalPagadoLegacy + totalPagadoModern);
-                const allHistory = [...pagosLegacy, ...paidModernItems].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+                // ✅ UNIFICACIÓN: Los costos pagados en la tabla ticket_costs ya se registran 
+                // en el historialPagosTecnico a través de updatePaymentSafe. 
+                // NO los sumamos de nuevo para evitar el error de saldo negativo (Doble Contabilidad).
+                const totalPagadoArray = totalPagadoLegacy;
+                const allHistory = [...pagosLegacy].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
                 const techData = {
                     id: ticket.tecnico?.id,
