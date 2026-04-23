@@ -189,14 +189,21 @@ export default function AdminDashboard() {
             return approvedOrLater.includes(sid);
         });
 
-        // REGLA 2: Cálculos 100% SIN IGV (Monto / 1.18)
+        // REGLA 2: Cálculos 100% SIN IGV (Usando Base Imponible / Subtotal)
         const ingresosGenerados = closed.reduce((acc, t) => {
+            // Priorizamos el cálculo del servidor (net_income_agg) que ya contempla el subtotal real
+            if (t.net_income_agg !== undefined) return acc + parseFloat(t.net_income_agg || 0);
+            
             const bruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
             return acc + (bruto / 1.18);
         }, 0);
 
         const inversionEjecutada = closed.reduce((acc, t) => {
-            // REGLA CLARIFICADA: La inversión (pagos a técnicos, materiales, etc.) se toma TAL CUAL se deposita (BRUTO/REAL)
+            // REGLA FORENSE: La inversión real se extrae de la sumatoria de ticket_costs (total_costs_agg)
+            // Esto incluye: MO, Materiales, Viáticos, Adelantos, Rescates y cualquier otro egreso.
+            if (t.total_costs_agg !== undefined) return acc + parseFloat(t.total_costs_agg || 0);
+
+            // Fallback de seguridad para tickets sin registros en ticket_costs
             const mo = parseFloat(t.labor_cost || t.costoManoObra || 0);
             const mat = parseFloat(t.materials_cost || t.costoMateriales || 0);
             const vis = parseFloat(t.visit_cost || t.costoVisita || 0);
