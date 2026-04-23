@@ -883,6 +883,7 @@ export default function PaymentsPage() {
         }
     };
 
+    const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
         // ★ FIX: Si es un costo de la tabla ticket_costs, usamos su UUID real como ID en la metadata.
         // Esto permite que el motor de unificación (deduplicación) sepa que son el mismo registro.
         const pagoId = (item.isTableCost && item.costId) ? item.costId : `pago_${group.realTicketId}_${Date.now()}`;
