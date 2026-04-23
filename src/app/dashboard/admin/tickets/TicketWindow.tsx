@@ -1636,12 +1636,41 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         return /^MB\d{6}\.\d{2}$/.test(num);
     }, []);
 
+    // --- BIFURCACIÓN CONTABLE (COMPRAS VS RESCATES) ---
+    
+    // 1. GASTOS OPERATIVOS (Compras, Logística, Materiales, etc.)
+    // Estos reducen la rentabilidad pero NO el saldo del técnico.
+    const operationalExpenses = ticketCosts
+        .filter(c => !['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
+        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
+
+    // 2. ADELANTOS AL TÉCNICO (Mano de Obra, Rescates, Adelanto Inicial)
+    // Estos REDUCEN el saldo disponible del técnico.
+    const modernAdvances = ticketCosts
+        .filter(c => ['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
+        .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado' || (c.estado_pago || '').toLowerCase() === 'adelanto')
+        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
+    
+    const legacyAdvances = legacyPaymentsFiltered
+        .filter((p: any) => ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra', 'Rescate'].includes(p.tipo))
+        .reduce((acc, p) => acc + round2(parseFloat(p.monto) || 0), 0);
+
+    const totalTechnicianAdvances = round2(modernAdvances + legacyAdvances + classicAdvance);
+
+    // 3. COSTO DE MANO DE OBRA PACTADO
+    const pactedMO = round2(parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0));
+
+    // 4. RENTABILIDAD REAL (Fórmula Blindada)
+    // Rentabilidad = Presupuesto - [Gastos Operativos + MAX(MO Pactada, Total Adelantos)]
+    // Si los adelantos superan el pactado, el excedente castiga la rentabilidad.
     const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
-    const grossMargin = approvedAmount - totalCosts;
-    const capitalExposed = ticketCosts
-        .filter(c => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto')
-        .reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
-    const costPercentage = approvedAmount > 0 ? (totalCosts / approvedAmount) * 100 : 0;
+    const totalTechnicianCost = Math.max(pactedMO, totalTechnicianAdvances);
+    const totalTicketCosts = round2(operationalExpenses + totalTechnicianCost);
+    
+    const grossMargin = round2(approvedAmount - totalTicketCosts);
+    const costPercentage = approvedAmount > 0 ? (totalTicketCosts / approvedAmount) * 100 : 0;
+    
+    const capitalExposed = round2(operationalExpenses + totalTechnicianAdvances);
 
     const handleCloseInternal = () => {
         // Optimismo visual: Cerramos la interfaz inmediatamente
@@ -1728,25 +1757,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     };
 
-    // --- CALCULOS PARA RESCATE FINANCIERO ---
-    const pactadoLabor = round2(parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0));
-    const laborPaymentsModern = ticketCosts.filter(c => 
-        (c.estado_pago === 'pagado' || c.estado_pago === 'adelanto' || c.estado_pago === 'pendiente') && 
-        (c.categoria === 'Mano de Obra')
-    );
-    const laborPaymentsLegacy = legacyPaymentsFiltered.filter((p: any) => 
-        ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra'].includes(p.tipo)
-    );
-    const totalLaborPaid = round2(
-        laborPaymentsModern.reduce((acc: number, c: any) => acc + (parseFloat(c.monto) || 0), 0) + 
-        laborPaymentsLegacy.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0)
-    );
+    // --- CÁLCULOS PARA RESCATE FINANCIERO (FÓRMULA ESTRICTA) ---
+    // Regla: El rescate solo descuenta de la MO Pactada y los adelantos/rescates previos.
+    // Las "Compras" (Materiales/Logística) NO afectan este saldo.
+    const totalPactadoTecnico = pactedMO;
     
-    let availableRescue = Math.max(0, round2(pactadoLabor - totalLaborPaid));
+    // Sumamos adelantos previos (pagados + pendientes para evitar duplicar solicitud)
+    const pendingAdvancesModern = ticketCosts
+        .filter(c => ['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
+        .filter(c => (c.estado_pago || '').toLowerCase() === 'pendiente' || (c.estado_pago || '').toLowerCase() === 'requiere_aprobacion_admin')
+        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
+    
+    const totalAdelantadoAlTecnico = round2(totalTechnicianAdvances + pendingAdvancesModern);
+    
+    let availableRescue = Math.max(0, round2(totalPactadoTecnico - totalAdelantadoAlTecnico));
 
     // REFUERZO: Si no hay pactado definido aún pero el ticket está en ejecución, permitir un rescate base de S/ 100
-    // para gastos de emergencia.
-    if (pactadoLabor <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
+    if (totalPactadoTecnico <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
         availableRescue = 100;
     }
 
@@ -3558,7 +3585,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 </div>
                                 <div className={styles.negoTitleGroup}>
                                     <h3 style={{ color: 'white' }}>Rescate Financiero</h3>
-                                    <span style={{ color: 'rgba(255,255,255,0.9)' }}>Adelanto adicional de mano de obra</span>
+                                    <span style={{ color: 'rgba(255,255,255,0.9)' }}>Adelanto adicional sobre saldo del técnico</span>
                                 </div>
                                 <button className={styles.closeNegoBtn} onClick={() => setShowRescueModal(false)} style={{ color: 'white' }}>
                                     <X size={20} />
@@ -3571,12 +3598,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                     {/* Indicador de Saldo */}
                                     <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#92400E' }}>
-                                            <span>Mano de Obra Pactada:</span>
-                                            <span style={{ fontWeight: 700 }}>S/ {pactadoLabor.toFixed(2)}</span>
+                                            <span>Monto Pactado MO:</span>
+                                            <span style={{ fontWeight: 700 }}>S/ {totalPactadoTecnico.toFixed(2)}</span>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#92400E' }}>
-                                            <span>Ya Adelantado/Pagado:</span>
-                                            <span style={{ fontWeight: 700 }}>- S/ {totalLaborPaid.toFixed(2)}</span>
+                                            <span>Adelantos/Rescates Previos:</span>
+                                            <span style={{ fontWeight: 700 }}>- S/ {totalAdelantadoAlTecnico.toFixed(2)}</span>
                                         </div>
                                         <div style={{ height: '1px', background: '#FEF3C7', margin: '4px 0' }} />
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#F59E0B', fontWeight: 900 }}>
