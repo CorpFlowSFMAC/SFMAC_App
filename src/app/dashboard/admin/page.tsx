@@ -182,10 +182,11 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ───────────
     const roi = useMemo(() => {
-        // REGLA 1: Solo tickets CERRADOS para Rentabilidad
+        // REGLA 1: Solo tickets desde APROBADA en adelante para Rentabilidad (Ventas Reales)
         const closed = tickets.filter((t: any) => {
             const sid = normalizeStateId(t.status_id || t.estadoId);
-            return sid === "ticket_cerrado" || sid === "liquidado";
+            const approvedOrLater = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin", "ticket_cerrado", "liquidado"];
+            return approvedOrLater.includes(sid);
         });
 
         // REGLA 2: Cálculos 100% SIN IGV (Monto / 1.18)

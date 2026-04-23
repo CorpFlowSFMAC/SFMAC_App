@@ -1027,6 +1027,82 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         };
         setTicketData(approved);
         syncToSupabase(approved);
+        showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
+    };
+
+    const handleReadjustQuote = () => {
+        const readjust = {
+            ...ticketData,
+            estadoId: "en_cotizacion",
+            pausadoSLA: false,
+            fechaReactivacion: new Date().toISOString(),
+            modificacionAutorizada: true
+        };
+        setTicketData(readjust);
+        syncToSupabase(readjust);
+        showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición para realizar ajustes.", "info");
+    };
+
+    const [showCancelModal, setShowCancelModal] = useState(false);
+    const [cancelForm, setCancelForm] = useState({ mobilityCost: '', reason: '' });
+    const [isCancelling, setIsCancelling] = useState(false);
+
+    const handleOpenCancel = () => {
+        setCancelForm({ mobilityCost: '', reason: '' });
+        setShowCancelModal(true);
+    };
+
+    const handleCancelQuote = async () => {
+        const mobility = parseFloat(cancelForm.mobilityCost) || 0;
+        
+        setIsCancelling(true);
+        try {
+            const currentId = ticket.id || ticketData.id;
+            const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
+
+            // 1. Si hay costo de movilidad, registrarlo como gasto real
+            if (mobility > 0 && technicianId) {
+                await ticketCostsAPI.create({
+                    ticket_id: currentId,
+                    concepto: `Gasto Movilidad / Triaje (Servicio Anulado): ${cancelForm.reason || 'Sin motivo'}`,
+                    categoria: "Movilidad / Visita",
+                    specialist_id: technicianId,
+                    monto: mobility,
+                    estado_pago: "pendiente",
+                    solicitado_por: myProfileId || undefined
+                });
+            }
+
+            // 2. Anular el ticket (Ingreso = 0)
+            const cancelled = {
+                ...ticketData,
+                estadoId: "ticket_cancelado",
+                status_id: "ticket_cancelado",
+                total_quoted_amount: 0,
+                montoFinal: 0,
+                closure_date: new Date().toISOString(),
+                metadata: {
+                    ...ticketData.metadata,
+                    motivoCancelacion: cancelForm.reason,
+                    gastoMovilidadAnulacion: mobility
+                }
+            };
+
+            setTicketData(cancelled);
+            await syncToSupabase(cancelled);
+            
+            showToast("Ticket Anulado", mobility > 0 
+                ? `Servicio cancelado. Se registró un egreso de S/ ${mobility.toFixed(2)} por movilidad.`
+                : "Servicio cancelado sin costos asociados.", "info");
+            
+            setShowCancelModal(false);
+            onClose();
+        } catch (err) {
+            console.error("Error cancelling ticket:", err);
+            showToast("Error", "No se pudo anular el ticket correctamente.", "error");
+        } finally {
+            setIsCancelling(false);
+        }
     };
 
     const handleAuthorizeModification = async () => {
@@ -2687,26 +2763,32 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 </p>
                                             </div>
 
-                                            <div className={styles.waitingBadge}>
-                                                <Clock size={18} />
-                                                <span>Esperando Aprobación del Cliente</span>
-                                            </div>
-
-                                            <div className={styles.actionButtonGroup}>
+                                                                          <div className={styles.actionButtonGroup}>
                                                 <button
                                                     className={styles.primaryActionBtn}
                                                     onClick={handleApproveQuote}
+                                                    style={{ background: 'linear-gradient(135deg, #10B981, #059669)', border: 'none', color: 'white' }}
                                                 >
                                                     <ThumbsUp size={22} />
-                                                    <span>REGISTRAR APROBACIÓN DEL CLIENTE</span>
+                                                    <span>EL CLIENTE APRUEBA COTIZACIÓN</span>
                                                 </button>
 
                                                 <button
                                                     className={styles.secondaryActionBtn}
-                                                    onClick={() => setTicketData({ ...ticketData, estadoId: 'en_cotizacion' })}
+                                                    onClick={handleReadjustQuote}
+                                                    style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', color: '#475569' }}
                                                 >
-                                                    <Edit3 size={18} />
-                                                    <span>RENEGOCIAR O AJUSTAR COTIZACIÓN</span>
+                                                    <RefreshCw size={18} />
+                                                    <span>SOLICITA REAJUSTE / REPROGAMAR</span>
+                                                </button>
+
+                                                <button
+                                                    className={styles.secondaryActionBtn}
+                                                    onClick={handleOpenCancel}
+                                                    style={{ background: '#FEF2F2', border: '1.5px solid #FCA5A5', color: '#B91C1C' }}
+                                                >
+                                                    <XCircle size={18} />
+                                                    <span>EL CLIENTE ANULA / RECHAZA</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -3130,7 +3212,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     <div className={styles.summarySection}>
                                                         <div className={styles.mainFinancialRow}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <span className={styles.rowLabel}>Monto Pactado Trabajo</span>
+                                                                <span className={styles.rowLabel}>{["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId) ? "Presupuesto Proyectado" : "Monto Pactado Trabajo"}</span>
                                                                 {availableRescue > 0 && ticketData.estadoId !== "ticket_cerrado" && (
                                                                     <button 
                                                                         onClick={handleOpenRescue}
@@ -3269,26 +3351,32 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             S/ {(ticketData.estadoId === "ticket_cerrado" 
                                                                 ? unifiedPaymentsSum 
                                                                 : Math.max(0, techPactedTotal - unifiedPaymentsSum)
-                                                            ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* SECCIÓN DE RENTABILIDAD REAL (PUNTO 3 DEL OBJETIVO) */}
-                                                    <div className={styles.profitabilityPanel} style={{ 
+                                                                                   <div className={styles.profitabilityPanel} style={{ 
                                                         marginTop: '20px', 
                                                         padding: '16px', 
                                                         borderRadius: '16px', 
-                                                        background: grossMargin > 0 ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #DC2626, #991B1B)',
+                                                        background: ["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId)
+                                                            ? 'linear-gradient(135deg, #3B82F6, #1D4ED8)' // Azul para proyectado
+                                                            : grossMargin > 0 ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #DC2626, #991B1B)',
                                                         color: 'white',
                                                         boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
                                                     }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rentabilidad Real</span>
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                                {["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId)
+                                                                    ? "Rentabilidad Proyectada"
+                                                                    : "Rentabilidad Real"
+                                                                }
+                                                            </span>
                                                             <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '2px 8px', background: 'rgba(255,255,255,0.2)', borderRadius: '6px' }}>
                                                                 {costPercentage.toFixed(1)}% Costo
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '1.6rem', fontWeight: 900, display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                                                            <span style={{ fontSize: '1rem', opacity: 0.8 }}>S/</span>
+                                                            {grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                        </div>
+gap: '4px' }}>
                                                             <span style={{ fontSize: '1rem', opacity: 0.8 }}>S/</span>
                                                             {grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </div>
@@ -3988,6 +4076,72 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 >
                                     {isSavingNegotiation ? <Clock size={18} className={styles.spinner} /> : <ThumbsUp size={18} />}
                                     <span>AUTORIZAR Y LIBERAR PAGO</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- MODAL DE ANULACIÓN / CANCELACIÓN --- */}
+                {showCancelModal && (
+                    <div className={styles.negotiationModal}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '450px' }}>
+                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #DC2626, #991B1B)' }}>
+                                <div className={styles.negoHeaderTitle}>
+                                    <XCircle size={24} color="#FFF" />
+                                    <div>
+                                        <h3 style={{ color: '#FFF' }}>Anulación de Servicio</h3>
+                                        <p style={{ color: 'rgba(255,255,255,0.7)' }}>El cliente rechaza el presupuesto</p>
+                                    </div>
+                                </div>
+                                <button className={styles.negoCloseBtn} onClick={() => setShowCancelModal(false)}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Costo de Movilidad / Triaje (A pagar al técnico)</label>
+                                        <div className={styles.negoInputGroup}>
+                                            <div className={styles.negoInputPrefix}>S/</div>
+                                            <input
+                                                type="number"
+                                                placeholder="0.00"
+                                                value={cancelForm.mobilityCost}
+                                                onChange={e => setCancelForm(prev => ({ ...prev, mobilityCost: e.target.value }))}
+                                                style={{ width: '100%', padding: '10px 14px 10px 30px', borderRadius: '10px', border: '1.5px solid #E2E8F0', outline: 'none', color: '#1E293B', fontWeight: 700 }}
+                                            />
+                                        </div>
+                                        <p style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
+                                            * Se registrará como un egreso para la empresa, impactando negativamente la rentabilidad del ticket.
+                                        </p>
+                                    </div>
+
+                                    <div className={styles.negoInputWrapper}>
+                                        <label>Motivo de la Anulación</label>
+                                        <textarea
+                                            placeholder="Describa brevemente por qué el cliente no aprobó..."
+                                            value={cancelForm.reason}
+                                            onChange={e => setCancelForm(prev => ({ ...prev, reason: e.target.value }))}
+                                            style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', outline: 'none', minHeight: '80px', color: '#1E293B', fontSize: '13px' }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setShowCancelModal(false)}>
+                                    Volver
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={handleCancelQuote}
+                                    disabled={isCancelling}
+                                    style={{ background: 'linear-gradient(135deg, #DC2626, #991B1B)' }}
+                                >
+                                    {isCancelling ? <Clock size={18} className={styles.spinner} /> : <Trash2 size={18} />}
+                                    <span>CONFIRMAR ANULACIÓN DEFINITIVA</span>
                                 </button>
                             </div>
                         </div>
