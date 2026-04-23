@@ -1632,7 +1632,7 @@ interface TicketSummaryProps {
     costos?: any[];
 }
 
-export function TicketSummary({ ticket, onProceed, onOpenMaterials, costos }: TicketSummaryProps) {
+export function TicketSummary({ ticket, onProceed, onOpenMaterials, onOpenRescue, costos }: TicketSummaryProps) {
     return (
         <div className={styles.container}>
             <InfoBarBase
