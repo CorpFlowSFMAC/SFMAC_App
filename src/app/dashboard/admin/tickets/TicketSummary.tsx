@@ -1157,12 +1157,13 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
         balance: montoSaldo,
         grossMargin: rentabilidadReal,
         marginPercent: pctReal,
-        pactedMO: pactadoLaborBase
+        pactedMO: pactadoLaborBase,
+        paidModernArr,
+        legacyPaymentsFiltered
     } = finances;
 
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
-    const totalPagadoModern = finances.paidModernArr.reduce((s: number, c: any) => s + (parseFloat(c.monto) || 0), 0);
-    const legacyPaymentsFiltered = finances.legacyPaymentsFiltered;
+    const totalPagadoModern = paidModernArr.reduce((s: number, c: any) => s + (parseFloat(c.monto) || 0), 0);
     const totalPagadoLegacyDrift = legacyPaymentsFiltered.reduce((s: number, p: any) => s + round2(p.monto || 0), 0);
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)

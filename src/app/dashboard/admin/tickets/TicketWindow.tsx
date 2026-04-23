@@ -296,6 +296,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
 
     const [ticketCosts, setTicketCosts] = useState<any[]>([]);
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // LÓGICA FINANCIERA CENTRALIZADA (calculateTicketFinances)
+    // ─────────────────────────────────────────────────────────────────────────────
+    const finances = calculateTicketFinances(ticketData, ticketCosts);
+    const {
+        totalPactedDebt: techPactedTotal,
+        totalPaidCalculated: unifiedPaymentsSum,
+        balance: finalBalance,
+        grossMargin,
+        marginPercent: pctReal,
+        paidModernArr,
+        legacyPaymentsFiltered,
+        extraCosts: extraPactedCosts,
+        totalInvestment: totalTicketCosts,
+        pactedMO,
+        balance: baseRescue
+    } = finances;
+
+    let availableRescue = baseRescue;
+    // REFUERZO: Emergencias sin pactado definido aún
+    if (pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
+        if (availableRescue <= 0) availableRescue = 100;
+    }
     const [loadingCosts, setLoadingCosts] = useState(false);
 
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
@@ -1626,8 +1650,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             const montoGasto = parseFloat(materialsForm.monto);
             const costoPactado = techPactedTotal;
             
-            // Si el nuevo gasto hace que el total de gastos supere el pactado, escalar
-            const excedePresupuesto = (totalCosts + montoGasto > costoPactado + 0.01);
+            // Si el nuevo gasto hace que el total de honorarios supere el pactado, escalar
+            const excedePresupuesto = (unifiedPaymentsSum + montoGasto > techPactedTotal + 0.01);
 
             await ticketCostsAPI.create({
                 ticket_id: ticket.id,
@@ -1667,33 +1691,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // LÓGICA FINANCIERA CENTRALIZADA (calculateTicketFinances)
-    // ─────────────────────────────────────────────────────────────────────────────
-    const finances = calculateTicketFinances(ticketData, ticketCosts);
-    const {
-        totalPactedDebt: techPactedTotal,
-        totalPaidCalculated: unifiedPaymentsSum,
-        balance: finalBalance,
-        grossMargin,
-        marginPercent: pctReal,
-        paidModernArr,
-        legacyPaymentsFiltered,
-        extraCosts: extraPactedCosts,
-        totalInvestment: totalTicketCosts
-    } = finances;
 
-    // Disponibilidad de Rescate (Saldo disponible según nueva regla de negocio)
-    let availableRescue = finances.balance;
-    
-    // REFUERZO: Emergencias sin pactado definido aún
-    if (finances.pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
-        if (availableRescue <= 0) availableRescue = 100;
-    }
 
     const jobCostBase = finances.totalPactedDebt;
     const visitPayment = round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0));
+    const classicAdvance = round2(parseFloat(ticketData.montoAdelantoManual || ticketData.adelantoMonto || 0));
     const rentabilidadReal = grossMargin;
+    const paymentsSummary = unifiedPaymentsSum;
+    const costPercentage = 100 - pctReal;
 
     const isClientTicketFormatValid = useCallback((num?: string) => {
         if (!num || num.trim() === "") return false;
