@@ -96,7 +96,10 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const confirmedTotal = round2(confirmedFeesModern + confirmedFeesLegacy + additionalFeesManual);
     const inProcessTotal = round2(inProcessFeesModern + inProcessFeesLegacy);
     const totalTechnicianHonorarios = round2(confirmedTotal + inProcessTotal);
-    const balance = Math.max(0, round2(pactedMO - totalTechnicianHonorarios));
+    
+    // ★ REGLA DE ORO: El saldo se calcula contra la DEUDA TOTAL PACTADA (MO + Mat + Extras)
+    // No solo contra el MO, para permitir que el técnico reciba pagos por materiales pactados sin desbalancear el ticket.
+    const balance = Math.max(0, round2(totalPactedDebt - totalTechnicianHonorarios));
 
     // D. Gastos Operativos (NO se restan del saldo del técnico)
     const operationalCategories = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'viáticos / movilidad'];

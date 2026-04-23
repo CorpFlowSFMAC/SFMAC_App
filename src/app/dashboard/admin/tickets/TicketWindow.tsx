@@ -707,23 +707,29 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             ...businessData
         } = dataToProcess;
 
-        // Determinamos si es un admin usando la constante superior
-        
-        // CORRECCIÓN CRITICAL: Usamos siempre businessData (el estado actual de la UI) como fuente de verdad.
-        // Anteriormente se forzaba 'ticket' (datos viejos del servidor) para gestoras, 
-        // lo que anulaba cualquier cambio realizado por ellas.
         const sourceForPayments = businessData;
         const sourceMetadata = businessData;
-
-        const localStateOrder = TICKET_STATE_ORDER[businessData.estadoId] ?? 0;
-        const serverStateOrder = TICKET_STATE_ORDER[ticket.status_id] ?? 0;
-        const resolvedStatusId = localStateOrder >= serverStateOrder ? businessData.estadoId : ticket.status_id;
 
         const cleanedClientTicketNumber = (() => {
             const val = businessData.numeroTicketCliente;
             if (!val || val.trim() === "" || val.startsWith("#")) return null;
             return val.trim();
         })();
+
+        // ★ AUDITORÍA Y SEGURIDAD: Leer metadata actual del servidor antes de sincronizar
+        // Esto evita que si la ventana estuvo abierta mucho tiempo, sobreescriba pagos hechos por tesorería.
+        const { data: serverTicket } = await supabase
+            .from('tickets')
+            .select('metadata, status_id, technician_id, gestora_id')
+            .eq('id', ticketData.id)
+            .single();
+
+        const serverMeta = serverTicket?.metadata || {};
+        const serverStatusId = serverTicket?.status_id;
+
+        const localStateOrder = TICKET_STATE_ORDER[businessData.estadoId] ?? 0;
+        const serverStateOrder = TICKET_STATE_ORDER[serverStatusId] ?? 0;
+        const resolvedStatusId = localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId;
 
         const updates: any = {
             status_id: resolvedStatusId,
@@ -733,90 +739,40 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             labor_cost: parseFloat(sourceForPayments?.costoManoObra || 0),
             materials_cost: parseFloat(sourceForPayments?.costoMateriales || 0),
             visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
-            // REFUERZO: Usar siempre el estado local de cotización para evitar reseteos
             total_quoted_amount: parseFloat(montoTotalCotizado || sourceForPayments?.montoFinal || 0),
-            technician_id: tecnico?.id || businessData?.technician_id || ticket?.technician_id,
-            gestora_id: businessData?.gestora?.id || ticket?.gestora?.id || ticket?.gestora_id,
-            is_sla_paused: businessData?.pausadoSLA ?? ticket?.is_sla_paused,
-            sla_pause_date: businessData?.fechaPausa || ticket?.sla_pause_date,
-            sla_reactivation_date: businessData?.fechaReactivacion || ticket?.sla_reactivation_date,
-            quotation_date: businessData?.fechaCotización,
-            execution_date: sourceForPayments?.fechaInicioEjecucion || ticket?.execution_date,
-            closure_date: sourceForPayments?.fechaCierre || ticket?.closure_date,
+            technician_id: tecnico?.id || serverTicket?.technician_id,
+            gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
+                ...serverMeta,
                 ...sourceMetadata,
-                evidenciasEjecucion: evidenciasEjecucion,
-                documentosChecklist: documentosChecklist,
-                // Aseguramos que estos campos críticos vivan en la raíz del JSONB
-                estadoId: resolvedStatusId,
-                descripcionProblema: businessData.descripcionProblema,
-                numeroTicketCliente: cleanedClientTicketNumber,
-                diagnostico: businessData.diagnostico,
-                costoManoObra: parseFloat(sourceForPayments.costoManoObra || 0),
-                costoMateriales: parseFloat(sourceForPayments.costoMateriales || 0),
-                costoVisita: parseFloat(sourceForPayments.costoVisita || 0),
-                montoFinal: (() => {
-                    const currentVal = parseFloat(montoTotalCotizado as any || 0);
-                    // PROTECCIÓN: No bajar a 0 si ya teníamos un monto y estamos en ejecución
-                    if (currentVal <= 0 && sourceForPayments.montoFinal > 0 && resolvedStatusId === 'en_ejecucion') {
-                        return parseFloat(sourceForPayments.montoFinal as any);
-                    }
-                    return currentVal;
-                })(),
-                partidas: (() => {
-                    const totalVal = parseFloat(montoTotalCotizado as any || 0);
-                    // PROTECCIÓN: No sobreescribir con vacío si hay presupuesto pero las partidas fallaron
-                    if ((!partidasCotización || partidasCotización.length === 0) && totalVal > 0) {
-                        return [
-                            {
-                                id: 'emergency_restore',
-                                item: '01',
-                                cantidad: 1,
-                                unidad: 'GLB',
-                                descripcion: 'Servicios de Mantenimiento (Auto-recuperado)',
-                                precioUnitario: totalVal,
-                                total: totalVal
-                            }
-                        ];
-                    }
-                    return partidasCotización || sourceForPayments.partidas || [];
-                })(),
-                metadata: undefined, // Evitar anidación infinita
-                adelantoPagado: (businessData?.adelantoPagado || ticket?.adelantoPagado || sourceMetadata?.adelantoPagado || false),
-                fechaPagoAdelanto: (businessData?.fechaPagoAdelanto || sourceMetadata?.fechaPagoAdelanto),
-
+                // PROTECCIÓN DE HISTORIAL: Nunca sobreescribir con datos locales viejos
                 historialPagosTécnico: (() => {
                     const localPagos = businessData?.historialPagosTécnico || businessData?.historialPagosTecnico || [];
-                    const serverPagos = ticket?.historialPagosTécnico || ticket?.metadata?.historialPagosTécnico || ticket?.metadata?.historialPagosTecnico || [];
+                    const serverPagos = serverMeta.historialPagosTécnico || serverMeta.historialPagosTecnico || [];
                     const allById = new Map();
                     [...serverPagos, ...localPagos].forEach(p => {
                         if (p?.id) allById.set(p.id, p);
                     });
                     return Array.from(allById.values());
                 })(),
-
-                visitPaymentConfirmed: (businessData?.visitPaymentConfirmed || ticket?.visitPaymentConfirmed || sourceMetadata?.visitPaymentConfirmed || false),
-                fechaPagoVisita: (businessData?.fechaPagoVisita || sourceMetadata?.fechaPagoVisita),
-
-                solicitudAdelanto: (businessData?.adelantoPagado || ticket?.adelantoPagado || sourceMetadata?.adelantoPagado) ? null : businessData?.solicitudAdelanto,
-                solicitudPagoVisita: (businessData?.visitPaymentConfirmed || ticket?.visitPaymentConfirmed || sourceMetadata?.visitPaymentConfirmed) ? null : businessData?.solicitudPagoVisita,
-                pagoRechazado: businessData?.pagoRechazado,
-                tecnico: tecnico
+                estadoId: resolvedStatusId,
+                visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
+                adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
+                evidenciasEjecucion,
+                documentosChecklist,
+                metadata: undefined // Evitar anidación infinita
             }
         };
 
         const currentDataStr = JSON.stringify(updates);
-        if (currentDataStr === lastSyncData.current && !dataOverride) {
-            isSyncing.current = false;
-            return;
-        }
+        if (currentDataStr === lastSyncData.current && !dataOverride) return;
 
         isSyncing.current = true;
         try {
             if (onUpdate) {
-                await onUpdate(ticketData?.id || ticket?.id, updates);
+                await onUpdate(ticketData.id, updates);
             } else {
-                await ticketsAPI.update(ticketData?.id || ticket?.id, updates);
+                await ticketsAPI.update(ticketData.id, updates);
             }
             lastSyncData.current = currentDataStr;
         } catch (err) {
@@ -824,7 +780,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         } finally {
             isSyncing.current = false;
         }
-    }, [ticketData, ticket?.id, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
+    }, [ticketData, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
 
     useEffect(() => {
         // Sync de fondo mucho menos agresivo (cada 30s) para evitar 'Sync of Death'
