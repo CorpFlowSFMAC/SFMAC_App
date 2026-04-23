@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -3351,12 +3351,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             S/ {(ticketData.estadoId === "ticket_cerrado" 
                                                                 ? unifiedPaymentsSum 
                                                                 : Math.max(0, techPactedTotal - unifiedPaymentsSum)
-                                                                                   <div className={styles.profitabilityPanel} style={{ 
+                                                            ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className={styles.profitabilityPanel} style={{ 
                                                         marginTop: '20px', 
                                                         padding: '16px', 
                                                         borderRadius: '16px', 
                                                         background: ["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId)
-                                                            ? 'linear-gradient(135deg, #3B82F6, #1D4ED8)' // Azul para proyectado
+                                                            ? 'linear-gradient(135deg, #3B82F6, #1D4ED8)' 
                                                             : grossMargin > 0 ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #DC2626, #991B1B)',
                                                         color: 'white',
                                                         boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
@@ -3373,10 +3377,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '1.6rem', fontWeight: 900, display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                                                            <span style={{ fontSize: '1rem', opacity: 0.8 }}>S/</span>
-                                                            {grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                        </div>
-gap: '4px' }}>
                                                             <span style={{ fontSize: '1rem', opacity: 0.8 }}>S/</span>
                                                             {grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </div>
