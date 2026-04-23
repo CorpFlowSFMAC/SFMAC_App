@@ -496,13 +496,34 @@ export default function PaymentsPage() {
                 const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
 
                 const pagosLegacy = ticket.historialPagosTecnico || [];
-                const totalPagadoLegacy = round2(pagosLegacy.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
-                // ✅ UNIFICACIÓN: Los costos pagados en la tabla ticket_costs ya se registran 
-                // en el historialPagosTecnico a través de updatePaymentSafe. 
-                // NO los sumamos de nuevo para evitar el error de saldo negativo (Doble Contabilidad).
-                const totalPagadoArray = totalPagadoLegacy;
-                const allHistory = [...pagosLegacy].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+                // ✅ UNIFICACIÓN: Incluir pagos de ticket_costs que no estén en legacy metadata
+                // Esto asegura que pagos realizados vía "Gastos/Compras" aparezcan en el historial de Tesorería.
+                const paidCostsArr = ticket.paidCosts || [];
+                const costsAsHistory = paidCostsArr.map((c: any) => ({
+                    id: c.id,
+                    monto: c.monto,
+                    fecha: c.fecha_pago || c.created_at,
+                    tipo: c.categoria,
+                    estado: 'pagado',
+                    referencia: c.concepto,
+                    voucherRef: c.url_comprobante,
+                    isTableCost: true
+                }));
+
+                const uniqueHistory = [...pagosLegacy];
+                costsAsHistory.forEach(costPayment => {
+                    const alreadyPresent = uniqueHistory.some(p => 
+                        p.id === costPayment.id || 
+                        (Math.abs(p.monto - costPayment.monto) < 0.01 && 
+                         p.tipo === costPayment.tipo &&
+                         new Date(p.fecha).getTime() === new Date(costPayment.fecha).getTime())
+                    );
+                    if (!alreadyPresent) uniqueHistory.push(costPayment);
+                });
+
+                const totalPagadoArray = round2(uniqueHistory.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+                const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
                 const techData = {
                     id: ticket.tecnico?.id,
@@ -617,9 +638,11 @@ export default function PaymentsPage() {
                     }
 
                     // 5. Movilidad / Visita
-                    const hasVisitaPaid = !!(ticket.visitPaymentConfirmed || pagosLegacy.some((p: any) => p.tipo === 'Movilidad / Visita'));
-                    const visitaRef = ticket.solicitudPagoVisita || pagosLegacy.find((p: any) => p.tipo === 'Movilidad / Visita');
-                    if (!hasVisitaPaid && visitaRef) {
+                    // ★ FIX: Si hay costo de visita y no está pagado, mostrar siempre como pendiente,
+                    // incluso si la gestora no ha pulsado "Solicitar Pago" explícitamente.
+                    const hasVisitaPaid = !!(ticket.visitPaymentConfirmed || allHistory.some((p: any) => p.tipo === 'Movilidad / Visita' || p.tipo === 'Viáticos / Movilidad'));
+                    const visitaRef = ticket.solicitudPagoVisita || allHistory.find((p: any) => p.tipo === 'Movilidad / Visita' || p.tipo === 'Viáticos / Movilidad');
+                    if (!hasVisitaPaid && (visitaRef || visitCost > 0)) {
                         const visitaMonto = round2(visitaRef?.monto || visitCost);
                         if (visitaMonto > 0.01) {
                             items.push({
@@ -966,7 +989,19 @@ export default function PaymentsPage() {
         acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).reduce((s, i) => s + i.monto, 0), 0));
 
     const filteredGroups = paymentGroups.filter(g => {
-        // Filtro por estado
+        const lowerSearch = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const match = (val: string) => (val || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(lowerSearch);
+        
+        const matchesSearch = !searchTerm || 
+            match(g.ticketNum) ||
+            match(g.cliente) ||
+            match(g.sede) ||
+            match(g.tecnico?.nombre) ||
+            match(g.descripcion || "");
+
+        // ★ UX FIX: Si el usuario está buscando, ignoramos el filtro de estado
+        if (searchTerm && matchesSearch) return true;
+
         const matchesStatus = filter === 'todos' ||
                             (filter === 'pendiente' && g.items.some(i => i.estado === 'pendiente')) ||
                             (filter === 'pagado' && g.historialDepositos.length > 0);
