@@ -5,6 +5,7 @@ import { getServiceById } from "@/lib/serviceTypes";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { round2, formatSoles } from "@/lib/formatters";
+import { calculateTicketFinances } from "@/lib/calculations";
 import styles from "./TicketSummary.module.css";
 
 interface InfoBarBaseProps {
@@ -1149,93 +1150,20 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
     if (!ticket.montoFinal && !ticket.montoTotalCotizado && !ticket.costoManoObra) return null;
 
-    const visitCost = round2(ticket.costoVisita || ticket.costoPasaje || 0);
-    
-    // Sumar todos los gastos adicionales registrados (Materiales, Logística, etc.) que no sean adelantos o visitas
-    const extraCosts = (costos || [])
-        .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita')
-        .reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
-        
-    const jobCostBase = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0) + extraCosts);
-    // El costo de referencia (Costo Operativo) es lo pactado. 
-    // Si hay trabajo, usamos MO+Mat. Si solo es visita, usamos el costo de visita.
-    const costoReferencia = jobCostBase > 0 ? jobCostBase : visitCost;
+    const finances = calculateTicketFinances(ticket, costos);
+    const { 
+        totalPactedDebt: costoReferencia, 
+        totalPaidCalculated: totalPagadoTecnico, 
+        balance: montoSaldo,
+        grossMargin: rentabilidadReal,
+        marginPercent: pctReal,
+        pactedMO: pactadoLaborBase
+    } = finances;
 
-    // Deduplicación inteligente de pagos:
-    // El 'ticket_costs' es la fuente de verdad moderna. 
-    // El 'historialPagosTecnico' puede contener duplicados de 'ticket_costs' creados por el módulo de Tesorería.
-    const paidModernArr = (costos || []).filter(c => c.estado_pago === 'pagado');
-    const totalPagadoModern = paidModernArr.reduce((sum: number, c: any) => sum + (parseFloat(c.monto) || 0), 0);
-
-    const history = ticket.historialPagosTecnico || [];
-    const legacyPaymentsFiltered = history.filter((h: any) => {
-        // Evitamos contar registros de historial que ya existan en la tabla moderna de costos
-        // Sincronización basada en coincidencia de monto y categoría/tipo
-        const hMonto = round2(h.monto || 0);
-        if (hMonto <= 0) return false;
-
-        const isMirrorOfModern = paidModernArr.some((m: any) => {
-            const mMonto = round2(m.monto || 0);
-            const matchesAmount = Math.abs(hMonto - mMonto) < 0.01;
-            const matchesCategory = h.tipo === m.categoria || h.tipo === `Gasto: ${m.categoria}`;
-            return matchesAmount && matchesCategory;
-        });
-
-        return !isMirrorOfModern;
-    });
-
-    const totalPagadoLegacyDrift = legacyPaymentsFiltered.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
-
-    // Inyectar pagos manuales marcados en el ticket pero no en el historial/costos
-    let additionalManualPayments = 0;
-    const hasPaidMobilityInCalculatedHistory = [...legacyPaymentsFiltered, ...paidModernArr].some((p: any) => 
-        (p.tipo || p.categoria) === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita")
-    );
-    const hasPaidAdelantoInCalculatedHistory = [...legacyPaymentsFiltered, ...paidModernArr].some((p: any) => 
-        (p.tipo || p.categoria) === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto")
-    );
-
-    if ((ticket.visitPaymentConfirmed || ticket.fechaPagoVisita) && !hasPaidMobilityInCalculatedHistory) {
-        additionalManualPayments += visitCost;
-    }
-    if (ticket.adelantoPagado && !hasPaidAdelantoInCalculatedHistory) {
-        additionalManualPayments += parseFloat(ticket.montoAdelanto || 0);
-    }
-
-    const totalPagadoTecnico = round2(totalPagadoLegacyDrift + totalPagadoModern + additionalManualPayments);
-    const montoSaldo = Math.max(0, round2(costoReferencia - totalPagadoTecnico));
-
-    // CALCULO DE RESCATE (si no viene por prop)
-    let availableRescue = propRescue !== undefined ? propRescue : 0;
-    if (propRescue === undefined) {
-        const pactadoLabor = round2(parseFloat(ticket.labor_cost || ticket.costoManoObra || 0));
-        const laborPaymentsModern = (costos || []).filter(c => 
-            (c.estado_pago === 'pagado' || c.estado_pago === 'adelanto' || c.estado_pago === 'pendiente') && 
-            (c.categoria === 'Mano de Obra')
-        );
-        const laborPaymentsLegacy = legacyPaymentsFiltered.filter((p: any) => 
-            ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra'].includes(p.tipo)
-        );
-        const totalLaborPaid = round2(
-            laborPaymentsModern.reduce((acc: number, c: any) => acc + (parseFloat(c.monto) || 0), 0) + 
-            laborPaymentsLegacy.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0)
-        );
-        availableRescue = Math.max(0, round2(pactadoLabor - totalLaborPaid));
-
-        // Fallback para tickets sin pactado definido aún (emergencias)
-        if (pactadoLabor <= 0 && (ticket.estadoId === 'en_ejecucion' || ticket.estadoId === 'visita_realizada')) {
-            availableRescue = 100;
-        }
-    }
-
-    // Variables para UI
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
-    const pctReal = (totalPagadoTecnico / (costoReferencia || 1)) * 100;
-    const montoAdelanto = totalPagadoTecnico || round2(ticket.montoAdelanto || 0);
-
-    const pactadoLaborBase = round2(parseFloat(ticket.labor_cost || ticket.costoManoObra || 0));
-    const excedenteReal = Math.max(0, totalPagadoTecnico - pactadoLaborBase);
-    const rentabilidadReal = round2(montoTotalCliente - (round2(ticket.costoMateriales || 0) + pactadoLaborBase + excedenteReal));
+    const totalPagadoModern = finances.paidModernArr.reduce((s: number, c: any) => s + (parseFloat(c.monto) || 0), 0);
+    const legacyPaymentsFiltered = finances.legacyPaymentsFiltered;
+    const totalPagadoLegacyDrift = legacyPaymentsFiltered.reduce((s: number, p: any) => s + round2(p.monto || 0), 0);
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
     const visibleStates = [
@@ -1248,6 +1176,8 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
     ];
 
     if (!visibleStates.includes(ticket.estadoId)) return null;
+
+    const availableRescue = finances.balance;
 
     return (
         <div
@@ -1433,7 +1363,10 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
     // Fuente Moderna
-    const paidModernArr = (costos || []).filter(c => c.estado_pago === 'pagado');
+    const paidModernArr = (costos || []).filter(c => {
+        const st = (c.estado_pago || '').toLowerCase();
+        return st === 'pagado' || st === 'adelanto' || st === 'abonado';
+    });
     
     // Fuente Legacy con Deduplicación
     const history = ticket.historialPagosTecnico || [];
@@ -1442,7 +1375,9 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
         if (hMonto <= 0) return false;
         const isMirrorOfModern = paidModernArr.some((m: any) => {
             const mMonto = round2(m.monto || 0);
-            return Math.abs(hMonto - mMonto) < 0.01 && (h.tipo === m.categoria || h.tipo === `Gasto: ${m.categoria}`);
+            const hTipo = (h.tipo || '').toLowerCase();
+            const mCat = (m.categoria || '').toLowerCase();
+            return Math.abs(hMonto - mMonto) < 0.01 && (hTipo === mCat || hTipo === `gasto: ${mCat}`);
         });
         return !isMirrorOfModern;
     });

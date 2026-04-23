@@ -11,6 +11,7 @@ import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
+import { calculateTicketFinances } from "@/lib/calculations";
 import { supabase } from "@/lib/supabase";
 import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
@@ -1594,14 +1595,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
 
     const handleDeleteCost = async (costId: string) => {
-        if (!confirm("¿Está seguro de eliminar este registro de costo?")) return;
+        if (!confirm("¿Está seguro de anular este registro de costo? Esta acción es irreversible pero mantendrá la trazabilidad.")) return;
         try {
-            await ticketCostsAPI.delete(costId);
+            await ticketCostsAPI.update(costId, { estado_pago: 'ANULADO' });
             await loadCosts();
-            showToast("Registro Eliminado", "El costo ha sido quitado del desglose.", "info");
+            showToast("Registro Anulado", "El costo ha sido marcado como ANULADO.", "info");
         } catch (err) {
-            console.error("Error deleting cost:", err);
-            showToast("Error", "No se pudo eliminar el registro.", "error");
+            console.error("Error anulling cost:", err);
+            showToast("Error", "No se pudo anular el registro.", "error");
         }
     };
 
@@ -1630,11 +1631,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             await ticketCostsAPI.create({
                 ticket_id: ticket.id,
-                concepto: materialsForm.concepto.trim(),
+                monto: montoGasto,
                 categoria: materialsForm.categoria || "Materiales",
+                concepto: materialsForm.concepto.trim(),
                 specialist_id: materialsForm.specialist_id,
                 proveedor: materialsForm.specialistName,
-                monto: montoGasto,
                 estado_pago: "pendiente",
                 solicitado_por: myProfileId || undefined
             });
@@ -1666,52 +1667,33 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
 
-    const totalCosts = ticketCosts.reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
-    
-    // MODERNO: Pagos registrados en ticket_costs (Source of Truth)
-    const paidModernArr = ticketCosts.filter(c => 
-        (c.estado_pago || '').toLowerCase() === 'pagado' || 
-        (c.estado_pago || '').toLowerCase() === 'adelanto'
-    );
-    const paymentsSummary = paidModernArr.reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
-    
-    // LEGACY: Historial antiguo con DEDUPLICACIÓN inteligente
-    const rawHistory = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).filter((p: any) => p && p.estado !== 'anulado');
-    
-    // Filtrar de legacy lo que ya está en moderno (por monto y categoría)
-    const legacyPaymentsFiltered = rawHistory.filter((h: any) => {
-        const hMonto = round2(h.monto || 0);
-        if (hMonto <= 0) return false;
-        const existsInModern = paidModernArr.some((m: any) => {
-            const mMonto = round2(m.monto || 0);
-            return Math.abs(hMonto - mMonto) < 0.01 && (h.tipo === m.categoria || h.tipo === `Gasto: ${m.categoria}`);
-        });
-        return !existsInModern;
-    });
+    // ─────────────────────────────────────────────────────────────────────────────
+    // LÓGICA FINANCIERA CENTRALIZADA (calculateTicketFinances)
+    // ─────────────────────────────────────────────────────────────────────────────
+    const finances = calculateTicketFinances(ticketData, ticketCosts);
+    const {
+        totalPactedDebt: techPactedTotal,
+        totalPaidCalculated: unifiedPaymentsSum,
+        balance: finalBalance,
+        grossMargin,
+        marginPercent: pctReal,
+        paidModernArr,
+        legacyPaymentsFiltered,
+        extraCosts: extraPactedCosts,
+        totalInvestment: totalTicketCosts
+    } = finances;
 
-    const oldPaymentsSum = legacyPaymentsFiltered.reduce((sum: number, p: any) => sum + round2(parseFloat(p.monto) || 0), 0);
+    // Disponibilidad de Rescate (Saldo disponible según nueva regla de negocio)
+    let availableRescue = finances.balance;
     
-    // Detección para compatibilidad con flujos automáticos
-    const hasPaidMobility = rawHistory.some((p: any) => p.tipo === 'Movilidad / Visita' || (p.referencia || '').toLowerCase().includes("visita"));
-    const hasRegisteredAdelanto = rawHistory.some((p: any) => p.tipo === 'Adelanto' || (p.referencia || '').toLowerCase().includes("adelanto"));
+    // REFUERZO: Emergencias sin pactado definido aún
+    if (finances.pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
+        if (availableRescue <= 0) availableRescue = 100;
+    }
 
-    const hasVisitVoucher = !!(ticketData.voucherVisita || ticketData.visit_voucher);
-    const isVisitConfirmed = !!(ticketData.visit_payment_confirmed || ticketData.visitPaymentConfirmed || ticketData.fechaPagoVisita);
-    
-    const visitPayment = ((isVisitConfirmed || hasVisitVoucher) && !hasPaidMobility) ? round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0)) : 0;
-    const classicAdvance = (ticketData.adelantoPagado && ticketData.montoAdelanto && !hasRegisteredAdelanto) ? round2(parseFloat(ticketData.montoAdelanto)) : 0;
-    
-    // REFUERZO: Costos adicionales pactados (Ej: Materiales extra, viáticos adicionales)
-    // EXCLUIMOS 'Mano de Obra' porque esos son adelantos/rescates a cuenta del monto ya pactado.
-    const extraPactedCosts = ticketCosts
-        .filter(c => c.categoria !== 'Adelanto' && c.categoria !== 'Movilidad / Visita' && c.categoria !== 'Mano de Obra')
-        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
-
-    const jobCostBase = round2(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0) + extraPactedCosts);
-    const techPactedTotal = jobCostBase > 0 ? jobCostBase : visitPayment;
-
-    // SUMA UNIFICADA Y SIN DUPLICADOS
-    const unifiedPaymentsSum = round2(paymentsSummary + oldPaymentsSum + visitPayment + classicAdvance);
+    const jobCostBase = finances.totalPactedDebt;
+    const visitPayment = round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0));
+    const rentabilidadReal = grossMargin;
 
     const isClientTicketFormatValid = useCallback((num?: string) => {
         if (!num || num.trim() === "") return false;
@@ -1719,41 +1701,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         return /^MB\d{6}\.\d{2}$/.test(num);
     }, []);
 
-    // --- BIFURCACIÓN CONTABLE (COMPRAS VS RESCATES) ---
-    
-    // 1. GASTOS OPERATIVOS (Compras, Logística, Materiales, etc.)
-    // Estos reducen la rentabilidad pero NO el saldo del técnico.
-    const operationalExpenses = ticketCosts
-        .filter(c => !['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
-        .reduce((acc: number, c: any) => acc + round2(parseFloat(c.monto) || 0), 0);
-
-    // 2. ADELANTOS AL TÉCNICO (Mano de Obra, Rescates, Adelanto Inicial)
-    // Estos REDUCEN el saldo disponible del técnico.
-    const modernAdvances = ticketCosts
-        .filter(c => ['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
-        .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado' || (c.estado_pago || '').toLowerCase() === 'adelanto')
-        .reduce((acc: number, c: any) => acc + round2(parseFloat(c.monto) || 0), 0);
-    
-    const legacyAdvances = legacyPaymentsFiltered
-        .filter((p: any) => ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra', 'Rescate'].includes(p.tipo))
-        .reduce((acc: number, p: any) => acc + round2(parseFloat(p.monto) || 0), 0);
-
-    const totalTechnicianAdvances = round2(modernAdvances + legacyAdvances + classicAdvance);
-
-    // 3. COSTO DE MANO DE OBRA PACTADO
-    const pactedMO = round2(parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0));
-
-    // 4. RENTABILIDAD REAL (Fórmula Blindada)
-    // Rentabilidad = Presupuesto - [Gastos Operativos + MAX(MO Pactada, Total Adelantos)]
-    // Si los adelantos superan el pactado, el excedente castiga la rentabilidad.
-    const approvedAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
-    const totalTechnicianCost = Math.max(pactedMO, totalTechnicianAdvances);
-    const totalTicketCosts = round2(operationalExpenses + totalTechnicianCost);
-    
-    const grossMargin = round2(approvedAmount - totalTicketCosts);
-    const costPercentage = approvedAmount > 0 ? (totalTicketCosts / approvedAmount) * 100 : 0;
-    
-    const capitalExposed = round2(operationalExpenses + totalTechnicianAdvances);
+    const capitalExposed = finances.totalPaidCalculated;
 
     const handleCloseInternal = () => {
         // Optimismo visual: Cerramos la interfaz inmediatamente
@@ -1812,7 +1760,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             await ticketCostsAPI.create({
                 ticket_id: ticketData.id,
                 monto: montoNum,
-                categoria: 'Mano de Obra',
+                categoria: 'Rescate Financiero',
                 concepto: isExceeding 
                     ? `EXCEDENTE DE MANO DE OBRA: ${rescueForm.motivo}`
                     : `Rescate Financiero: ${rescueForm.motivo || 'Sin motivo especificado'} (Prioridad Alta)`,
@@ -1844,21 +1792,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // Regla: El rescate solo descuenta de la MO Pactada y los adelantos/rescates previos.
     // Las "Compras" (Materiales/Logística) NO afectan este saldo.
     const totalPactadoTecnico = pactedMO;
+    const totalAdelantadoAlTecnico = finances.totalPaidCalculated;
     
-    // Sumamos adelantos previos (pagados + pendientes para evitar duplicar solicitud)
-    const pendingAdvancesModern = ticketCosts
-        .filter(c => ['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
-        .filter(c => (c.estado_pago || '').toLowerCase() === 'pendiente' || (c.estado_pago || '').toLowerCase() === 'requiere_aprobacion_admin')
-        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
-    
-    const totalAdelantadoAlTecnico = round2(totalTechnicianAdvances + pendingAdvancesModern);
-    
-    let availableRescue = Math.max(0, round2(totalPactadoTecnico - totalAdelantadoAlTecnico));
-
     // REFUERZO: Si no hay pactado definido aún pero el ticket está en ejecución, permitir un rescate base de S/ 100
-    if (totalPactadoTecnico <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
-        availableRescue = 100;
-    }
+    // (Lógica movida arriba a la sección financiera centralizada)
 
     return (
         <>
@@ -3248,7 +3185,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             <div className={styles.depositsListPremium}>
                                                                 {/* Pagos de la nueva tabla */}
                                                                 {ticketCosts
-                                                                    .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado')
+                                                                    .filter(c => {
+                                                                        const st = (c.estado_pago || '').toLowerCase();
+                                                                        return st === 'pagado' || st === 'adelanto' || st === 'abonado';
+                                                                    })
                                                                     .map((p: any, i: number) => (
                                                                     <div key={`new-${i}`} className={styles.depositEntry}>
                                                                         <div className={styles.depositLabel}>
