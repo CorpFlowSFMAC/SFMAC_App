@@ -1,5 +1,5 @@
 "use client";
-// Forced redeploy: v1.1 fix applied
+// Forced redeploy: v1.2 - Sincronizado con Flujo de Cotización y Borrado Inteligente
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
@@ -113,9 +113,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             // 1. Verificar si hay gastos
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
             if (costs && costs.length > 0) {
+                const pendingCount = costs.filter((c: any) => c.estado_pago === 'pendiente').length;
+                const paidCount = costs.filter((c: any) => c.estado_pago === 'pagado').length;
+                
                 setShowDeleteModal(false);
                 setShowTransferModal(true);
-                showToast("Bloqueo de Seguridad", "Este ticket tiene gastos registrados. Trasládelos antes de borrar.", "info");
+                showToast(
+                    "Bloqueo de Seguridad", 
+                    `Este ticket tiene ${costs.length} registros en costos (${paidCount} pagados, ${pendingCount} pendientes). Debe eliminarlos o trasladarlos antes de borrar el ticket.`, 
+                    "info"
+                );
                 return;
             }
 
@@ -1899,7 +1906,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 : `Ticket #${ticketData.id.slice(-6)}`)
                                         }
                                     </h3>
-                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.2.8_FINAL_FIX</span></span>
+                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.2.9 - Sincronizado</span></span>
                                 </div>
                             </>
                         ) : (
@@ -2763,7 +2770,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 </p>
                                             </div>
 
-                                                                          <div className={styles.actionButtonGroup}>
+                                            <div className={styles.actionButtonGroup}>
                                                 <button
                                                     className={styles.primaryActionBtn}
                                                     onClick={handleApproveQuote}

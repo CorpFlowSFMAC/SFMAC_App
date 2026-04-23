@@ -1271,15 +1271,22 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
             <div className={styles.verticalDivider} />
 
             <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Presupuesto Cliente</span>
+                <span className={styles.infoLabel}>
+                    {["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? "Presupuesto Proyectado" : "Presupuesto Cliente"}
+                </span>
                 <span className={styles.infoValue} style={{ color: '#1E293B', fontWeight: 900 }}>
                     S/ {formatSoles(montoTotalCliente)}
                 </span>
             </div>
 
             <div className={styles.infoItem} style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '12px' }}>
-                <span className={styles.infoLabel} style={{ color: '#059669' }}>Rentabilidad Real</span>
-                <span className={styles.infoValue} style={{ color: rentabilidadReal < 0 ? '#EF4444' : '#059669', fontWeight: 900 }}>
+                <span className={styles.infoLabel} style={{ color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? '#3B82F6' : '#059669' }}>
+                    {["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? "Rentabilidad Proyectada" : "Rentabilidad Real"}
+                </span>
+                <span className={styles.infoValue} style={{ 
+                    color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? '#3B82F6' : (rentabilidadReal < 0 ? '#EF4444' : '#059669'), 
+                    fontWeight: 900 
+                }}>
                     S/ {formatSoles(rentabilidadReal)}
                 </span>
             </div>
@@ -1289,6 +1296,16 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                     <CreditCard size={10} /> PAGOS REALIZADOS ({pctReal.toFixed(0)}%)
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px' }}>
+                    {/* Gastos Pendientes (Alerta Visual) */}
+                    {(costos || []).filter(c => c.estado_pago === 'pendiente').length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FEF2F2', padding: '2px 8px', borderRadius: '6px', border: '1px solid #FCA5A5', marginBottom: '2px' }}>
+                            <AlertTriangle size={10} color="#B91C1C" />
+                            <span style={{ fontSize: '9px', fontWeight: 800, color: '#B91C1C' }}>
+                                {(costos || []).filter(c => c.estado_pago === 'pendiente').length} GASTO(S) PENDIENTE(S)
+                            </span>
+                        </div>
+                    )}
+
                     {/* Lista Unificada de Pagos - Deduplicada en UI para claridad */}
                     {[...legacyPaymentsFiltered, ...paidModernArr].length > 0 ? (
                         <>
@@ -1298,13 +1315,10 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                                     background: 'rgba(255, 255, 255, 0.6)', padding: '2px 8px', borderRadius: '6px',
                                     border: '1px solid rgba(226, 232, 240, 0.8)', boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
                                     backdropFilter: 'blur(4px)'
-                                }}>
-                                    <span style={{ fontSize: '10px', color: '#1E293B', fontWeight: 800 }}>
-                                        S/ {formatSoles(p.monto)}
-                                    </span>
-                                    <span style={{ fontSize: '8px', color: '#64748B', textTransform: 'uppercase', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {p.tipo || p.categoria || 'Pago'}
-                                    </span>
+                                } as any}>
+                                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#10B981' }} />
+                                    <span style={{ fontSize: '10px', color: '#475569', fontWeight: 600 }}>{p.tipo || p.categoria}:</span>
+                                    <span style={{ fontSize: '10px', color: '#059669', fontWeight: 900 }}>S/ {formatSoles(p.monto)}</span>
                                     {(p.url_comprobante || p.voucher || p.voucherRef) && (
                                         <Eye 
                                             size={10} 
