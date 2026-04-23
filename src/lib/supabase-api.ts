@@ -829,6 +829,7 @@ export const ticketCostsAPI = {
         estado_pago: string;
         url_comprobante?: string;
         solicitado_por?: string;
+        motivo?: string;
     }) {
         // Strip undefined / empty-string optional UUID fields to avoid FK violations
         const safePayload: Record<string, any> = {
@@ -842,6 +843,7 @@ export const ticketCostsAPI = {
         if (cost.specialist_id)     safePayload.specialist_id = cost.specialist_id;
         if (cost.url_comprobante)   safePayload.url_comprobante = cost.url_comprobante;
         if (cost.solicitado_por)    safePayload.solicitado_por = cost.solicitado_por;
+        if (cost.motivo)            safePayload.motivo = cost.motivo;
 
         const { data, error } = await supabase
             .from('ticket_costs')
@@ -864,6 +866,7 @@ export const ticketCostsAPI = {
         monto: number;
         estado_pago: string;
         url_comprobante: string;
+        motivo: string;
     }>) {
         const { data, error } = await supabase
             .from('ticket_costs')
