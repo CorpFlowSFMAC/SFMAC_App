@@ -1006,19 +1006,7 @@ export default function PaymentsPage() {
                             (filter === 'pendiente' && g.items.some(i => i.estado === 'pendiente')) ||
                             (filter === 'pagado' && g.historialDepositos.length > 0);
         
-        if (!matchesStatus) return false;
-
-        // Filtro de búsqueda (Buscador Premium Multivariable)
-        if (!searchTerm) return true;
-        
-        const term = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const match = (val: string) => (val || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(term);
-
-        return match(g.ticketNum) ||
-               match(g.cliente) ||
-               match(g.sede) ||
-               match(g.tecnico?.nombre) ||
-               match(g.descripcion || "");
+        return matchesSearch && matchesStatus;
     });
 
     const TIPO_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
