@@ -186,35 +186,93 @@ function flattenTicketForPayments(t: any) {
 export default function PaymentsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    const fetchPaymentTickets = React.useCallback(async () => {
+    const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
         try {
-            setLoading(true);
-            const data = await ticketsAPI.getForPayments();
+            if (!isSilent) setLoading(true);
+            setFetchError(null);
+
+            // Timeout de 15 segundos para la petición
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout de conexión')), 15000)
+            );
+
+            const fetchPromise = (async () => {
+                const data = await ticketsAPI.getForPayments();
+                const { data: costs, error: costsErr } = await supabase
+                    .from('ticket_costs')
+                    .select('*, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)');
+                
+                if (costsErr) throw costsErr;
+                return { data, costs };
+            })();
+
+            const { data, costs } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+
+            const processed = (data || []).filter(Boolean).map((t: any) => {
+                try {
+                    const flat = flattenTicketForPayments(t);
+                    const relatedCosts = (costs || []).filter((c: any) => c.ticket_id === t.id);
+                    
+                    flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
+                    flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
+                    flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
+                    
+                    return flat;
+                } catch (e) {
+                    console.error('[Payments] Error processing ticket:', t.id, e);
+                    return null;
+                }
+            }).filter(Boolean);
             
-            // Obtener costos (pendientes y pagados) de la tabla ticket_costs (con datos del especialista)
-            const { data: costs } = await supabase
-                .from('ticket_costs')
-                .select('*, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)');
-
-            const processed = (data || []).map((t: any) => {
-                const flat = flattenTicketForPayments(t);
-                // Inyectar costos asociados
-                const relatedCosts = (costs || []).filter((c: any) => c.ticket_id === t.id);
-                flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
-                flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado');
-                return flat;
-            });
-
             setTickets(processed);
-        } catch (err) {
-            console.error('[Payments] Error fetching tickets:', err);
-            // Mostrar error amigable al usuario (se puede usar un toast o estado de error)
-            alert("Error al conectar con el servidor. Por favor, reintente en unos momentos.");
+        } catch (err: any) {
+            console.error('[Payments] Fetch Error:', err);
+            setFetchError(err.message || "Error de conexión");
         } finally {
             setLoading(false);
         }
-    }, [flattenTicketForPayments]);
+    }, []);
+
+    // Debounced fetch for realtime events
+    const debouncedFetch = React.useCallback(() => {
+        if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+        fetchTimerRef.current = setTimeout(() => {
+            fetchPaymentTickets(true); // Refresco silencioso en segundo plano
+        }, 1000);
+    }, [fetchPaymentTickets]);
+
+    const handleApproveExceedance = async (costId: string) => {
+        try {
+            const { error } = await supabase
+                .from('ticket_costs')
+                .update({ estado_pago: 'pendiente' })
+                .eq('id', costId);
+            
+            if (error) throw error;
+            fetchPaymentTickets();
+        } catch (err) {
+            console.error('Error approving exceedance:', err);
+            alert('Error al aprobar el excedente');
+        }
+    };
+
+    const handleRejectExceedance = async (costId: string) => {
+        try {
+            const { error } = await supabase
+                .from('ticket_costs')
+                .update({ estado_pago: 'RECHAZADO' })
+                .eq('id', costId);
+            
+            if (error) throw error;
+            fetchPaymentTickets();
+        } catch (err) {
+            console.error('Error rejecting exceedance:', err);
+            alert('Error al rechazar el excedente');
+        }
+    };
 
     useEffect(() => { fetchPaymentTickets(); }, [fetchPaymentTickets]);
 
@@ -223,15 +281,18 @@ export default function PaymentsPage() {
             .channel('payments:realtime_sync')
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'tickets' },
-                () => { fetchPaymentTickets(); }
+                () => { debouncedFetch(); }
             )
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'ticket_costs' },
-                () => { fetchPaymentTickets(); }
+                () => { debouncedFetch(); }
             )
             .subscribe();
-        return () => { supabase.removeChannel(channel); };
-    }, [fetchPaymentTickets]);
+        return () => { 
+            if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+            supabase.removeChannel(channel); 
+        };
+    }, [debouncedFetch]);
 
     const refresh = fetchPaymentTickets;
 
@@ -931,8 +992,58 @@ export default function PaymentsPage() {
     };
 
 
+    // Obtener todos los excedentes pendientes de todos los tickets
+    const allExceedanceRequests = tickets.flatMap(t => (t.exceedanceRequests || []).map((r: any) => ({ ...r, ticket: t })));
+
     return (
         <div className={styles.paymentsContainer}>
+            
+            {/* 🚨 SECCIÓN DE ALERTAS: EXCEDENTES PENDIENTES DE APROBACIÓN */}
+            {allExceedanceRequests.length > 0 && (
+                <div style={{
+                    marginBottom: '24px', background: '#FEF2F2', border: '2px solid #EF4444',
+                    borderRadius: '16px', padding: '20px', boxShadow: '0 10px 15px -3px rgba(239, 68, 68, 0.1)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                        <AlertCircle size={24} color="#EF4444" />
+                        <h3 style={{ margin: 0, color: '#991B1B', fontSize: '1.1rem', fontWeight: 900 }}>
+                            Solicitudes de Rescate por Excedente Pendientes ({allExceedanceRequests.length})
+                        </h3>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
+                        {allExceedanceRequests.map((req: any) => (
+                            <div key={req.id} style={{ background: 'white', border: '1px solid #FEE2E2', borderRadius: '12px', padding: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div>
+                                        <p style={{ margin: 0, fontSize: '0.7rem', color: '#94A3B8', fontWeight: 800 }}>TICKET: {req.ticket?.numeroTicketCliente || req.ticket?.id.slice(-6)}</p>
+                                        <p style={{ margin: '2px 0 0', fontSize: '0.85rem', fontWeight: 700, color: '#1E293B' }}>{req.ticket?.tecnico?.nombre}</p>
+                                    </div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#EF4444' }}>
+                                        {formatSoles(req.monto)}
+                                    </div>
+                                </div>
+                                <div style={{ background: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', fontSize: '0.75rem', color: '#475569', borderLeft: '3px solid #64748B' }}>
+                                    <strong>Justificación:</strong> {req.motivo || 'No se proporcionó motivo.'}
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                                    <button 
+                                        onClick={() => handleApproveExceedance(req.id)}
+                                        style={{ flex: 1, background: '#10B981', color: 'white', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                                    >
+                                        <CheckCircle2 size={14} /> APROBAR
+                                    </button>
+                                    <button 
+                                        onClick={() => handleRejectExceedance(req.id)}
+                                        style={{ flex: 1, background: '#EF4444', color: 'white', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                                    >
+                                        <X size={14} /> RECHAZAR
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* ─── HEADER PREMIUM ──────────────────────────────── */}
             <header style={{
@@ -971,6 +1082,28 @@ export default function PaymentsPage() {
                     Actualizar
                 </button>
             </header>
+
+            {fetchError && (
+                <div style={{
+                    background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C',
+                    padding: '12px 20px', borderRadius: '12px', marginBottom: '20px',
+                    display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', fontWeight: 600,
+                    animation: 'slideDown 0.3s ease'
+                }}>
+                    <AlertCircle size={18} />
+                    <span style={{ flex: 1 }}>Error de conexión: {fetchError}. Los datos podrían no estar actualizados.</span>
+                    <button 
+                        onClick={() => refresh()} 
+                        style={{ 
+                            background: 'white', border: '1px solid #FCA5A5', padding: '6px 12px', 
+                            borderRadius: '8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700,
+                            color: '#B91C1C', transition: 'all 0.2s'
+                        }}
+                    >
+                        Reintentar ahora
+                    </button>
+                </div>
+            )}
 
             {/* ─── STAT CARDS ──────────────────────────────────── */}
             <div style={{

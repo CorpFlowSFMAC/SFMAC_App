@@ -1270,4 +1270,4 @@
     background: #FEE2E2;
     border-color: #FECACA;
     transform: translateY(-1px);
-}
+}@keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

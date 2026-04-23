@@ -1233,6 +1233,10 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
     const pctReal = (totalPagadoTecnico / (costoReferencia || 1)) * 100;
     const montoAdelanto = totalPagadoTecnico || round2(ticket.montoAdelanto || 0);
 
+    const pactadoLaborBase = round2(parseFloat(ticket.labor_cost || ticket.costoManoObra || 0));
+    const excedenteReal = Math.max(0, totalPagadoTecnico - pactadoLaborBase);
+    const rentabilidadReal = round2(montoTotalCliente - (round2(ticket.costoMateriales || 0) + pactadoLaborBase + excedenteReal));
+
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
     const visibleStates = [
         "cotizacion_enviada",
@@ -1270,6 +1274,13 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                 <span className={styles.infoLabel}>Presupuesto Cliente</span>
                 <span className={styles.infoValue} style={{ color: '#1E293B', fontWeight: 900 }}>
                     S/ {formatSoles(montoTotalCliente)}
+                </span>
+            </div>
+
+            <div className={styles.infoItem} style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '12px' }}>
+                <span className={styles.infoLabel} style={{ color: '#059669' }}>Rentabilidad Real</span>
+                <span className={styles.infoValue} style={{ color: rentabilidadReal < 0 ? '#EF4444' : '#059669', fontWeight: 900 }}>
+                    S/ {formatSoles(rentabilidadReal)}
                 </span>
             </div>
 

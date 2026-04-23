@@ -1685,25 +1685,38 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
 
-        if (montoNum > availableRescue) {
-            showToast("Tope Excedido", `El monto solicitado (S/ ${montoNum}) supera el saldo disponible (S/ ${availableRescue}).`, "error");
+        const isExceeding = montoNum > (availableRescue + 0.01);
+        
+        // REGLA: Si excede, el motivo es obligatorio
+        if (isExceeding && !rescueForm.motivo.trim()) {
+            showToast("Motivo Obligatorio", "Para solicitudes que exceden el saldo pactado, debe indicar el motivo detallado.", "error");
             return;
         }
 
         setIsSavingRescue(true);
         try {
+            const estadoInicial = isExceeding ? 'REQUIERE_APROBACION_ADMIN' : 'pendiente';
+            
             await ticketCostsAPI.create({
                 ticket_id: ticketData.id,
                 monto: montoNum,
                 categoria: 'Mano de Obra',
-                concepto: `Rescate Financiero: ${rescueForm.motivo || 'Sin motivo especificado'} (Prioridad Alta)`,
-                estado_pago: 'pendiente',
+                concepto: isExceeding 
+                    ? `EXCEDENTE DE MANO DE OBRA: ${rescueForm.motivo}`
+                    : `Rescate Financiero: ${rescueForm.motivo || 'Sin motivo especificado'} (Prioridad Alta)`,
+                motivo: rescueForm.motivo.trim(),
+                estado_pago: estadoInicial,
                 solicitado_por: myProfileId || undefined,
                 specialist_id: ticketData.technician_id,
                 proveedor: 'Rescate Financiero'
             });
 
-            showToast("Solicitud Enviada", "El rescate financiero ha sido registrado y enviado a Tesorería.", "success");
+            if (isExceeding) {
+                showToast("Aprobación Requerida", "Esta solicitud excede el pactado. Se ha enviado al Administrador para su autorización.", "warning");
+            } else {
+                showToast("Solicitud Enviada", "El rescate financiero ha sido registrado y enviado a Tesorería.", "success");
+            }
+            
             setShowRescueModal(false);
             loadCosts();
         } catch (err: any) {
@@ -3562,20 +3575,33 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                             />
                                         </div>
                                         {parseFloat(rescueForm.monto) > availableRescue && (
-                                            <p style={{ fontSize: '0.75rem', color: '#EF4444', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                <AlertTriangle size={12} /> El monto supera el saldo disponible pactado.
-                                            </p>
+                                            <div style={{ 
+                                                background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: '8px', 
+                                                padding: '10px', marginTop: '10px'
+                                            }}>
+                                                <p style={{ fontSize: '0.75rem', color: '#EF4444', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
+                                                    <AlertTriangle size={14} /> EXCESO DE PRESUPUESTO DETECTADO
+                                                </p>
+                                                <p style={{ fontSize: '0.7rem', color: '#B91C1C', marginTop: '4px', lineHeight: 1.4 }}>
+                                                    Atención: Este monto supera el saldo pactado. Requerirá autorización del Administrador y <strong>afectará la rentabilidad neta</strong> del ticket.
+                                                </p>
+                                            </div>
                                         )}
                                     </div>
 
                                     <div className={styles.negoInputWrapper}>
-                                        <label>Motivo del Rescate (Opcional)</label>
+                                        <label>Motivo del Rescate {parseFloat(rescueForm.monto) > availableRescue ? <span style={{color: '#EF4444'}}>(OBLIGATORIO)</span> : '(Opcional)'}</label>
                                         <textarea
-                                            placeholder="Indique por qué se solicita este adelanto extra..."
+                                            placeholder={parseFloat(rescueForm.monto) > availableRescue 
+                                                ? "Justifique detalladamente por qué se requiere este excedente..." 
+                                                : "Indique por qué se solicita este adelanto extra..."
+                                            }
                                             value={rescueForm.motivo}
                                             onChange={e => setRescueForm(prev => ({ ...prev, motivo: e.target.value }))}
+                                            required={parseFloat(rescueForm.monto) > availableRescue}
                                             style={{ 
-                                                width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', 
+                                                width: '100%', padding: '10px 14px', borderRadius: '10px', 
+                                                border: parseFloat(rescueForm.monto) > availableRescue && !rescueForm.motivo.trim() ? '1.5px solid #EF4444' : '1.5px solid #E2E8F0', 
                                                 outline: 'none', background: 'white', color: '#1E293B', fontWeight: 500, minHeight: '80px', resize: 'vertical'
                                             }}
                                         />
@@ -3590,11 +3616,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 <button 
                                     className={styles.negoConfirmBtn} 
                                     onClick={handleSubmitRescueRequest}
-                                    disabled={isSavingRescue || !rescueForm.monto || parseFloat(rescueForm.monto) <= 0 || parseFloat(rescueForm.monto) > availableRescue}
-                                    style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}
+                                    disabled={isSavingRescue || !rescueForm.monto || parseFloat(rescueForm.monto) <= 0 || (parseFloat(rescueForm.monto) > availableRescue && !rescueForm.motivo.trim())}
+                                    style={{ 
+                                        background: parseFloat(rescueForm.monto) > availableRescue 
+                                            ? 'linear-gradient(135deg, #EF4444, #B91C1C)' 
+                                            : 'linear-gradient(135deg, #F59E0B, #D97706)' 
+                                    }}
                                 >
-                                    {isSavingRescue ? <Clock size={18} className={styles.spinner} /> : <Coins size={18} />}
-                                    <span>Solicitar Adelanto Extra</span>
+                                    {isSavingRescue ? <Clock size={18} className={styles.spinner} /> : (parseFloat(rescueForm.monto) > availableRescue ? <ShieldAlert size={18} /> : <Coins size={18} />)}
+                                    <span>{parseFloat(rescueForm.monto) > availableRescue ? "Solicitar Aprobación por Excedente" : "Solicitar Adelanto Extra"}</span>
                                 </button>
                             </div>
                         </div>
