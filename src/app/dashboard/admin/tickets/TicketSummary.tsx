@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package } from "lucide-react";
+import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package, Truck } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -1161,7 +1161,8 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
         marginPercent: pctReal,
         pactedMO: pactadoLaborBase,
         paidModernArr,
-        legacyPaymentsFiltered
+        legacyPaymentsFiltered,
+        operationalCostsArr
     } = finances;
 
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
@@ -1239,9 +1240,9 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                     )}
 
                     {/* Lista Unificada de Pagos - Deduplicada en UI para claridad */}
-                    {[...legacyPaymentsFiltered, ...paidModernArr].length > 0 ? (
+                    {[...legacyPaymentsFiltered, ...paidModernArr, ...operationalCostsArr].length > 0 ? (
                         <>
-                            {[...legacyPaymentsFiltered, ...paidModernArr].slice(0, 3).map((p: any, idx: number) => (
+                            {[...legacyPaymentsFiltered, ...paidModernArr, ...operationalCostsArr].slice(0, 3).map((p: any, idx: number) => (
                                 <div key={p.id || idx} style={{ 
                                     display: 'flex', alignItems: 'center', gap: '6px', 
                                     background: 'rgba(255, 255, 255, 0.6)', padding: '2px 8px', borderRadius: '6px',
@@ -1263,9 +1264,9 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                                     )}
                                 </div>
                             ))}
-                            {[...legacyPaymentsFiltered, ...paidModernArr].length > 3 && (
+                            {[...legacyPaymentsFiltered, ...paidModernArr, ...operationalCostsArr].length > 3 && (
                                 <span style={{ fontSize: '9px', color: '#64748B', fontStyle: 'italic', paddingLeft: '8px' }}>
-                                    + {[...legacyPaymentsFiltered, ...paidModernArr].length - 3} depósitos adicionales
+                                    + {[...legacyPaymentsFiltered, ...paidModernArr, ...operationalCostsArr].length - 3} depósitos adicionales
                                 </span>
                             )}
                         </>
@@ -1405,7 +1406,8 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
             'Movilidad / Visita': { bg: '#EDE9FE', color: '#5B21B6', label: 'Movilidad' },
             'Materiales': { bg: '#FCE7F3', color: '#BE185D', label: 'Materiales' },
             'Logística': { bg: '#F1F5F9', color: '#475569', label: 'Logística' },
-            'Rescate Financiero': { bg: '#FFF7ED', color: '#C2410C', label: 'Rescate' }
+            'Rescate Financiero': { bg: '#FFF7ED', color: '#C2410C', label: 'Rescate' },
+            'Viáticos / Movilidad': { bg: '#EDE9FE', color: '#5B21B6', label: 'Viáticos' }
         };
         const cleanTipo = tipoStr.replace('Gasto: ', '');
         return map[cleanTipo] || { bg: '#F1F5F9', color: '#475569', label: cleanTipo || 'Pago' };

@@ -313,7 +313,7 @@ export default function PaymentsPage() {
     }, []);
 
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
-    const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
+    const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('pendiente');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Función para ver voucher con carga diferida (lazy loading)
@@ -526,14 +526,14 @@ export default function PaymentsPage() {
                     // 1. Adelanto (Metadata Legacy)
                     const hasAdelantoPaid = !!(ticket.adelantoPagado || pagosLegacy.some((p: any) => p.tipo === 'Adelanto'));
                     const adelantoRef = ticket.solicitudAdelanto || pagosLegacy.find((p: any) => p.tipo === 'Adelanto');
-                    if (adelantoRef || hasAdelantoPaid) {
+                    if (!hasAdelantoPaid && adelantoRef) {
                         const adelantoMonto = round2(adelantoRef?.monto || ticket.montoAdelanto || 0);
                         if (adelantoMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_adelanto`,
                                 tipo: 'Adelanto',
                                 monto: adelantoMonto,
-                                estado: hasAdelantoPaid ? 'pagado' : 'pendiente',
+                                estado: 'pendiente',
                                 fecha: adelantoRef?.fecha || ticket.fechaPagoAdelanto || ticket.created_at
                             });
                         }
@@ -601,18 +601,17 @@ export default function PaymentsPage() {
                     const hasFinalPaid = !!(ticket.fechaPagoFinal || pagosLegacy.some((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)'));
                     const finalRef = ticket.solicitudLiquidacion || pagosLegacy.find((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
                     
-                    if (finalRef || ticket.estadoId === 'por_liquidar' || hasFinalPaid) {
-                        const liqMonto = round2(finalRef?.monto ?? (hasFinalPaid ? (finalRef?.monto || 0) : Math.max(0, saldoReal)));
+                    if (!hasFinalPaid && (finalRef || ticket.estadoId === 'por_liquidar')) {
+                        const liqMonto = round2(finalRef?.monto ?? Math.max(0, saldoReal));
                         
-                        // Solo agregamos el item si hay un monto real que pagar o si ya está pagado
-                        if (liqMonto > 0.01 || hasFinalPaid) {
+                        if (liqMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_final`,
                                 tipo: (finalRef?.tipo || 'Liquidación Final'),
                                 monto: liqMonto,
-                                estado: hasFinalPaid ? 'pagado' : 'pendiente',
+                                estado: 'pendiente',
                                 fecha: finalRef?.fecha || ticket.fechaPagoFinal || new Date().toISOString(),
-                                concepto: (!finalRef && !hasFinalPaid) ? "Saldo detectado por el sistema" : undefined
+                                concepto: (!finalRef) ? "Saldo detectado por el sistema" : undefined
                             });
                         }
                     }
@@ -620,14 +619,14 @@ export default function PaymentsPage() {
                     // 5. Movilidad / Visita
                     const hasVisitaPaid = !!(ticket.visitPaymentConfirmed || pagosLegacy.some((p: any) => p.tipo === 'Movilidad / Visita'));
                     const visitaRef = ticket.solicitudPagoVisita || pagosLegacy.find((p: any) => p.tipo === 'Movilidad / Visita');
-                    if (visitaRef || hasVisitaPaid) {
+                    if (!hasVisitaPaid && visitaRef) {
                         const visitaMonto = round2(visitaRef?.monto || visitCost);
                         if (visitaMonto > 0.01) {
                             items.push({
                                 id: `${ticket.id}_visita`,
                                 tipo: 'Movilidad / Visita',
                                 monto: visitaMonto,
-                                estado: hasVisitaPaid ? 'pagado' : 'pendiente',
+                                estado: 'pendiente',
                                 fecha: visitaRef?.fecha || ticket.fechaPagoVisita || new Date().toISOString()
                             });
                         }
@@ -970,7 +969,7 @@ export default function PaymentsPage() {
         // Filtro por estado
         const matchesStatus = filter === 'todos' ||
                             (filter === 'pendiente' && g.items.some(i => i.estado === 'pendiente')) ||
-                            (filter === 'pagado' && (g.items.some(i => i.estado === 'pagado') || g.historialDepositos.length > 0));
+                            (filter === 'pagado' && g.historialDepositos.length > 0);
         
         if (!matchesStatus) return false;
 

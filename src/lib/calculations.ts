@@ -16,7 +16,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const extraCosts = (costs || [])
         .filter(c => {
             const cat = (c.categoria || '').toLowerCase();
-            return !['adelanto', 'movilidad / visita', 'mano de obra', 'rescate', 'viáticos'].includes(cat);
+            return !['adelanto', 'adelanto operativo', 'mano de obra', 'rescate', 'rescate financiero'].includes(cat);
         })
         .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
 
@@ -26,7 +26,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     // 2. PAGOS REALIZADOS Y SALDO TÉCNICO (Regla Inmutable)
     
     // Categorías que afectan los honorarios del técnico
-    const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate'];
+    const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate', 'viáticos', 'movilidad', 'viáticos / movilidad'];
     const confirmedStates = ['pagado'];
     const inProcessStates = ['pendiente', 'requiere_aprobacion', 'requiere_aprobacion_admin'];
     const exclusionStates = ['rechazado', 'anulado'];
@@ -110,7 +110,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const marginPercent = clientAmount > 0 ? (grossMargin / clientAmount) * 100 : 0;
 
     return {
-        totalPactedDebt: pactedMO,
+        totalPactedDebt,
         totalPaidCalculated: totalTechnicianHonorarios,
         totalConfirmed: confirmedTotal,
         totalInProcess: inProcessTotal,

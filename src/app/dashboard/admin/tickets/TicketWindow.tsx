@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -320,6 +320,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     if (pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
         if (availableRescue <= 0) availableRescue = 100;
     }
+    const isVisitPaid = ticketData.visitPaymentConfirmed || ticketCosts.some(c => 
+        (c.categoria || '').toLowerCase().includes('movilidad') && 
+        (c.estado_pago || '').toLowerCase() === 'pagado'
+    );
     const [loadingCosts, setLoadingCosts] = useState(false);
 
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
@@ -358,6 +362,42 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 },
                 () => {
                     loadCosts();
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'tickets',
+                    filter: `id=eq.${ticketData.id}`
+                },
+                async () => {
+                    // Refresco completo del ticket cuando cambia algo en la tabla tickets (estado, metadata, etc)
+                    const fullTicket = await ticketsAPI.getById(ticketData.id);
+                    if (fullTicket) {
+                        let meta = fullTicket.metadata || {};
+                        while (meta.metadata && typeof meta.metadata === 'object') {
+                            meta = { ...meta, ...meta.metadata };
+                            delete meta.metadata;
+                        }
+                        const rawEstadoId = normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo');
+                        const visitConfirmed = meta.visitPaymentConfirmed ?? false;
+                        
+                        const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
+                        const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
+                            ? 'en_inspeccion'
+                            : rawEstadoId;
+
+                        setTicketData((prev: any) => ({
+                            ...prev,
+                            ...fullTicket,
+                            ...meta,
+                            estadoId: corregidoEstadoId,
+                            status_id: corregidoEstadoId,
+                            visitPaymentConfirmed: visitConfirmed
+                        }));
+                    }
                 }
             )
             .subscribe();
@@ -593,6 +633,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         showDropdown: false,
     });
     const [isSavingMaterials, setIsSavingMaterials] = useState(false);
+    
+    const handleOpenExpenseModal = (category: string = "Materiales", concepto: string = "") => {
+        setMaterialsForm({
+            ...materialsForm,
+            categoria: category,
+            concepto: concepto,
+            monto: category === 'Viáticos / Movilidad' ? (ticketData.visit_cost || '').toString() : '',
+            specialist_id: ticketData.technician_id || '',
+            specialistName: ticketData.tecnico?.name || '',
+            searchQuery: ticketData.tecnico?.name || '',
+            showDropdown: false
+        });
+        setShowMaterialsModal(true);
+    };
 
     const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizaciónBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
@@ -858,14 +912,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 tecnico: assignmentData.tecnico,
                 costoVisita: visitaCost,
                 fechaAsignacion: assignmentData.fechaAsignacion,
-                estadoId: newEstadoId,
-                ...(hasVisitCost ? {
-                    solicitudPagoVisita: {
-                        monto: visitaCost,
-                        fecha: new Date().toISOString(),
-                        estado: 'pendiente'
-                    }
-                } : {})
+                estadoId: newEstadoId
             }
         };
 
@@ -874,6 +921,21 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 await onUpdate(ticketData.id, dbUpdates);
             } else {
                 await ticketsAPI.update(ticketData.id, dbUpdates);
+            }
+
+            // Unificación: Si hay costo de visita, insertamos registro estándar en ticket_costs
+            if (hasVisitCost) {
+                await ticketCostsAPI.create({
+                    ticket_id: ticketData.id,
+                    monto: visitaCost,
+                    categoria: 'Viáticos / Movilidad',
+                    concepto: 'Costo por Visita Técnica (Asignación)',
+                    specialist_id: assignmentData.tecnico?.id,
+                    proveedor: (assignmentData.tecnico?.nombre || '') + ' ' + (assignmentData.tecnico?.apellido || ''),
+                    estado_pago: 'pendiente',
+                    solicitado_por: myProfileId || undefined
+                });
+                await loadCosts();
             }
         } catch (err) {
             console.error('Error persisting assignment to Supabase:', err);
@@ -884,14 +946,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             ...assignmentData,
             estadoId: newEstadoId,
             status_id: newEstadoId,
-            costoVisita: visitaCost,
-            ...(hasVisitCost ? {
-                solicitudPagoVisita: {
-                    monto: visitaCost,
-                    fecha: new Date().toISOString(),
-                    estado: 'pendiente'
-                }
-            } : {})
+            costoVisita: visitaCost
         }));
         setShowAssignmentDrawer(false);
     };
@@ -1121,7 +1176,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 await ticketCostsAPI.create({
                     ticket_id: currentId,
                     concepto: `Gasto Movilidad / Triaje (Servicio Anulado): ${cancelForm.reason || 'Sin motivo'}`,
-                    categoria: "Movilidad / Visita",
+                    categoria: "Viáticos / Movilidad",
                     specialist_id: technicianId,
                     monto: mobility,
                     estado_pago: "pendiente",
@@ -1702,7 +1757,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             setMaterialsForm({ concepto: "", monto: "", categoria: "Materiales", specialist_id: "", specialistName: "", searchQuery: "", showDropdown: false });
             showToast(
                 "Solicitud Enviada a Tesorería",
-                `Compra de materiales para ${materialsForm.specialistName} registrada. Pendiente de abono.`,
+                `Solicitud de ${materialsForm.categoria} registrada para ${materialsForm.specialistName}. Pendiente de abono.`,
                 "success"
             );
         } catch (err: any) {
@@ -1997,7 +2052,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                              />
                             <FinancialLiquidationBar 
                                 ticket={ticketData} 
-                                onOpenMaterials={() => setShowMaterialsModal(true)} 
+                                onOpenMaterials={() => handleOpenExpenseModal()} 
                                 onOpenRescue={handleOpenRescue}
                                 costos={ticketCosts}
                                 availableRescue={availableRescue}
@@ -2129,7 +2184,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {ticketData.estadoId === "esperando_pago_visita" && !ticketData.visitPaymentConfirmed && (
+                                    {ticketData.estadoId === "esperando_pago_visita" && !isVisitPaid && (
                                             <div className={styles.stepPlaceholder}>
                                                 <div className={styles.waitingForManager} style={{ padding: '40px', background: '#F8FAFC', borderRadius: '24px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
                                                     <div style={{ background: '#3B82F6', padding: '15px', borderRadius: '50%', color: 'white', display: 'flex' }}>
@@ -2148,7 +2203,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                             </div>
                                         )}
 
-                                    {(ticketData.estadoId === "en_inspeccion" || (ticketData.estadoId === "esperando_pago_visita" && ticketData.visitPaymentConfirmed)) && (
+                                    {(ticketData.estadoId === "en_inspeccion" || (ticketData.estadoId === "esperando_pago_visita" && isVisitPaid)) && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.schedulingBox}>
                                                 <div className={styles.schedulingHeader}>
@@ -2503,7 +2558,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
                                                     </div>
                                                     <div className={styles.quotationMainEditor}>
-                                                        {/* LÃƒâ€œgica Diferenciada: BCP vs Otros Clientes */}
+                                                        {/* Lógica Diferenciada: BCP vs Otros Clientes */}
                                                         {ticketData.cliente?.nombre?.toUpperCase().includes("BCP") ? (
                                                             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
@@ -2518,7 +2573,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     </div>
                                                                 </div>
 
-                                                                {/* Zona de Carga / VisualizaciÃƒÂ³n */}
+                                                                {/* Zona de Carga / Visualización */}
                                                                 {!bcpQuotationFile ? (
                                                                     <div
                                                                         onClick={() => (ticketData.estadoId === 'en_cotizacion' || ticketData.modificacionAutorizada) && bcpFileInputRef.current?.click()}
@@ -2655,7 +2710,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </div>
 
                                                                 <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '12px', fontStyle: 'italic' }}>
-                                                                    * El sistema calcula automÃƒ¡ticamente el IGV (18%) y el Total basÃƒ¡ndose en el subtotal ingresado para garantizar la precisiÃƒÂ³n.
+                                                                    * El sistema calcula automáticamente el IGV (18%) y el Total basándose en el subtotal ingresado para garantizar la precisión.
                                                                 </p>
                                                                 <input
                                                                     type='file'
@@ -2666,7 +2721,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 />
                                                             </div>
                                                         ) : (
-                                                            // --- VISTA ESTÃƒâ€œÃ‚Â NDAR (EDITOR PDF) ---
+                                                            // --- VISTA ESTÁNDAR (EDITOR PDF) ---
                                                             <OnlineQuotationEditor
                                                                 ref={quotationEditorRef}
                                                                 isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
@@ -2704,7 +2759,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             partidas: partidasCotización,
                                                                             fechaUltimaModificacion: new Date().toISOString()
                                                                         });
-                                                                        showToast("Cotización Guardada", "Cambios guardados y cotizaciÃƒÂ³n bloqueada nuevamente.", "success");
+                                                                        showToast("Cotización Guardada", "Cambios guardados y cotización bloqueada nuevamente.", "success");
                                                                     }}
                                                                 >
                                                                     <CheckCircle size={18} />
@@ -2712,7 +2767,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 </button>
                                                             ) : (
                                                                 <div className={styles.readonlyNotice}>
-                                                                    La cotizaciÃƒÂ³n se encuentra en modo lectura.
+                                                                    La cotización se encuentra en modo lectura.
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2929,7 +2984,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                         <button
                                                             className={styles.secondaryActionBtn}
-                                                            onClick={() => setShowMaterialsModal(true)}
+                                                            onClick={() => handleOpenExpenseModal()}
                                                             style={{ 
                                                                 marginTop: '10px', 
                                                                 display: 'flex', 
@@ -3425,7 +3480,77 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         </div>
                                     )}
 
-                                    {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId || "") && (
+                                    {["ticket_cancelado", "ticket_rechazado"].includes(ticketData.estadoId || "") && (
+                                        <div className={styles.cancelledViewPremium} style={{ 
+                                            padding: '40px', 
+                                            background: '#FFF1F2', 
+                                            borderRadius: '24px', 
+                                            border: '2px dashed #FDA4AF',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            textAlign: 'center',
+                                            gap: '20px'
+                                        }}>
+                                            <div style={{ background: '#BE123C', color: 'white', padding: '16px', borderRadius: '50%', boxShadow: '0 10px 15px -3px rgba(190, 18, 60, 0.2)' }}>
+                                                <X size={40} />
+                                            </div>
+                                            <div>
+                                                <h3 style={{ color: '#881337', fontSize: '24px', fontWeight: 900, marginBottom: '8px' }}>
+                                                    SERVICIO {ticketData.estadoId === "ticket_cancelado" ? "ANULADO" : "RECHAZADO"}
+                                                </h3>
+                                                <p style={{ color: '#9F1239', fontWeight: 500, maxWidth: '500px' }}>
+                                                    Este ticket ha sido finalizado sin ejecución de trabajo. 
+                                                    Si el técnico realizó un triaje o visita presencial, debe registrar el pago de movilidad aquí.
+                                                </p>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
+                                                <button 
+                                                    onClick={() => handleOpenExpenseModal('Viáticos / Movilidad', `Pago por Movilidad / Triaje (Ticket ${ticketData.estadoId === "ticket_cancelado" ? "Anulado" : "Rechazado"})`)}
+                                                    style={{
+                                                        background: '#BE123C',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        padding: '12px 24px',
+                                                        borderRadius: '12px',
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '8px',
+                                                        boxShadow: '0 4px 6px -1px rgba(190, 18, 60, 0.2)'
+                                                    }}
+                                                >
+                                                    <Truck size={18} />
+                                                    PAGAR MOVILIDAD / TRIAJE
+                                                </button>
+                                                
+                                                <button 
+                                                    onClick={onClose}
+                                                    style={{
+                                                        background: 'white',
+                                                        color: '#475569',
+                                                        border: '1.5px solid #E2E8F0',
+                                                        padding: '12px 24px',
+                                                        borderRadius: '12px',
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    CERRAR VENTANA
+                                                </button>
+                                            </div>
+
+                                            {ticketData.metadata?.motivoCancelacion && (
+                                                <div style={{ marginTop: '10px', padding: '12px', background: 'rgba(255,255,255,0.5)', borderRadius: '12px', fontSize: '0.85rem', color: '#881337', maxWidth: '400px' }}>
+                                                    <strong>Motivo:</strong> {ticketData.metadata.motivoCancelacion}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado", "ticket_cancelado", "ticket_rechazado"].includes(ticketData.estadoId || "") && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.statusBadge}>{ticketData.estadoId?.replace('_', ' ')}</div>
                                             <p>Este módulo operativo se encuentra en preparación.</p>
