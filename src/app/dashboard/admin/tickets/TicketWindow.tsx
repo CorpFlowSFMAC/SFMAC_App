@@ -1642,18 +1642,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // Estos reducen la rentabilidad pero NO el saldo del técnico.
     const operationalExpenses = ticketCosts
         .filter(c => !['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
-        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
+        .reduce((acc: number, c) => acc + round2(parseFloat(c.monto) || 0), 0);
 
     // 2. ADELANTOS AL TÉCNICO (Mano de Obra, Rescates, Adelanto Inicial)
     // Estos REDUCEN el saldo disponible del técnico.
     const modernAdvances = ticketCosts
         .filter(c => ['Adelanto', 'Mano de Obra', 'Rescate'].includes(c.categoria))
         .filter(c => (c.estado_pago || '').toLowerCase() === 'pagado' || (c.estado_pago || '').toLowerCase() === 'adelanto')
-        .reduce((acc, c) => acc + round2(parseFloat(c.monto) || 0), 0);
+        .reduce((acc: number, c) => acc + round2(parseFloat(c.monto) || 0), 0);
     
     const legacyAdvances = legacyPaymentsFiltered
         .filter((p: any) => ['Adelanto', 'Refuerzo', 'Liquidación Final', 'Mano de Obra', 'Rescate'].includes(p.tipo))
-        .reduce((acc, p) => acc + round2(parseFloat(p.monto) || 0), 0);
+        .reduce((acc: number, p) => acc + round2(parseFloat(p.monto) || 0), 0);
 
     const totalTechnicianAdvances = round2(modernAdvances + legacyAdvances + classicAdvance);
 
