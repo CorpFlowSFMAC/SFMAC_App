@@ -3245,6 +3245,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                             ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
+
+                                                    {/* SECCIÓN DE RENTABILIDAD REAL (PUNTO 3 DEL OBJETIVO) */}
+                                                    <div className={styles.profitabilityPanel} style={{ 
+                                                        marginTop: '20px', 
+                                                        padding: '16px', 
+                                                        borderRadius: '16px', 
+                                                        background: grossMargin > 0 ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #DC2626, #991B1B)',
+                                                        color: 'white',
+                                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rentabilidad Real</span>
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '2px 8px', background: 'rgba(255,255,255,0.2)', borderRadius: '6px' }}>
+                                                                {costPercentage.toFixed(1)}% Costo
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ fontSize: '1.6rem', fontWeight: 900, display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                                                            <span style={{ fontSize: '1rem', opacity: 0.8 }}>S/</span>
+                                                            {grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                        </div>
+                                                        <p style={{ fontSize: '0.7rem', marginTop: '6px', opacity: 0.8, lineHeight: 1.3 }}>
+                                                            Margen bruto tras descontar mano de obra pactada, materiales y rescates financieros.
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
 
