@@ -1154,6 +1154,8 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
     const { 
         totalPactedDebt: costoReferencia, 
         totalPaidCalculated: totalPagadoTecnico, 
+        totalConfirmed,
+        totalInProcess,
         balance: montoSaldo,
         grossMargin: rentabilidadReal,
         marginPercent: pctReal,
@@ -1163,8 +1165,7 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
     } = finances;
 
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
-    const totalPagadoModern = paidModernArr.reduce((s: number, c: any) => s + (parseFloat(c.monto) || 0), 0);
-    const totalPagadoLegacyDrift = legacyPaymentsFiltered.reduce((s: number, p: any) => s + round2(p.monto || 0), 0);
+    const paymentPercentage = costoReferencia > 0 ? (totalConfirmed / costoReferencia) * 100 : 0;
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
     const visibleStates = [
@@ -1224,7 +1225,7 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
 
             <div className={styles.infoItem} style={{ flex: 1.5 }}>
                 <span className={styles.infoLabel} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <CreditCard size={10} /> PAGOS REALIZADOS ({pctReal.toFixed(0)}%)
+                    <CreditCard size={10} /> PAGOS CONFIRMADOS ({paymentPercentage.toFixed(0)}%)
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px' }}>
                     {/* Gastos Pendientes (Alerta Visual) */}
@@ -1383,15 +1384,17 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
         return !isMirrorOfModern;
     });
 
+    // Todos los registros (para mostrar con estados)
     const combinedPagos = [...legacyPaymentsFiltered, ...paidModernArr].sort((a, b) => {
         const dateA = new Date(a.fecha || a.created_at || a.updated_at || 0).getTime();
         const dateB = new Date(b.fecha || b.created_at || b.updated_at || 0).getTime();
-        return dateB - dateA; // Orden descendente por fecha
+        return dateB - dateA; 
     });
 
     if (combinedPagos.length === 0) return null;
 
-    const totalPagado = combinedPagos.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+    const finances = calculateTicketFinances(ticket, costos);
+    const totalPagadoConfirmado = finances.totalConfirmed;
 
     const getTipoBadge = (p: any) => {
         const tipoStr = p.tipo || p.categoria || "";
@@ -1401,10 +1404,22 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
             'Liquidación Final': { bg: '#D1FAE5', color: '#065F46', label: 'Liquidación' },
             'Movilidad / Visita': { bg: '#EDE9FE', color: '#5B21B6', label: 'Movilidad' },
             'Materiales': { bg: '#FCE7F3', color: '#BE185D', label: 'Materiales' },
-            'Logística': { bg: '#F1F5F9', color: '#475569', label: 'Logística' }
+            'Logística': { bg: '#F1F5F9', color: '#475569', label: 'Logística' },
+            'Rescate Financiero': { bg: '#FFF7ED', color: '#C2410C', label: 'Rescate' }
         };
         const cleanTipo = tipoStr.replace('Gasto: ', '');
         return map[cleanTipo] || { bg: '#F1F5F9', color: '#475569', label: cleanTipo || 'Pago' };
+    };
+
+    const getStatusStyle = (p: any) => {
+        const st = (p.estado_pago || p.estado || 'pagado').toLowerCase();
+        if (st === 'rechazado' || st === 'anulado') {
+            return { opacity: 0.6, textDecoration: 'line-through', color: '#94A3B8' };
+        }
+        if (st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin') {
+            return { opacity: 0.7, fontStyle: 'italic' };
+        }
+        return {};
     };
 
     const resolveVoucher = (p: any): string => {
@@ -1455,6 +1470,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                                 borderRadius: '8px',
                                 border: '1px solid #E2E8F0',
                                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                ...getStatusStyle(p)
                             }}
                         >
                             {/* Número */}
@@ -1473,9 +1489,21 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                             </span>
 
                             {/* Monto */}
-                            <span style={{ fontSize: '12px', fontWeight: 900, color: '#065F46' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 900, color: (p.estado_pago || p.estado || 'pagado').toLowerCase() === 'rechazado' ? '#94A3B8' : '#065F46' }}>
                                 S/ {formatSoles(p.monto)}
                             </span>
+
+                            {/* Etiquetas de Estado */}
+                            {(() => {
+                                const st = (p.estado_pago || p.estado || 'pagado').toLowerCase();
+                                if (st === 'rechazado' || st === 'anulado') return (
+                                    <span style={{ fontSize: '9px', fontWeight: 800, color: '#EF4444', background: '#FEF2F2', padding: '1px 6px', borderRadius: '4px' }}>❌ Denegado</span>
+                                );
+                                if (st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin') return (
+                                    <span style={{ fontSize: '9px', fontWeight: 800, color: '#F59E0B', background: '#FFFBEB', padding: '1px 6px', borderRadius: '4px' }}>⏳ Pendiente Tesorería</span>
+                                );
+                                return null;
+                            })()}
 
                             {/* Fecha */}
                             {p.fecha && (
@@ -1517,11 +1545,11 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                             )}
 
                             {/* Sin voucher */}
-                            {!voucherSrc && (
+                            {!voucherSrc && (p.estado_pago || p.estado || 'pagado').toLowerCase() === 'pagado' && (
                                 <span style={{ fontSize: '9px', color: '#CBD5E1', fontStyle: 'italic' }}>sin comprobante</span>
                             )}
 
-                            <CheckCircle2 size={12} color="#10B981" style={{ flexShrink: 0 }} />
+                            {(p.estado_pago || p.estado || 'pagado').toLowerCase() === 'pagado' && <CheckCircle2 size={12} color="#10B981" style={{ flexShrink: 0 }} />}
                         </div>
                     );
                 })}
@@ -1532,9 +1560,9 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                     gap: '8px', paddingTop: '4px', borderTop: '1px dashed #BBF7D0', marginTop: '2px'
                 }}>
                     <TrendingUp size={12} color="#059669" />
-                    <span style={{ fontSize: '11px', color: '#059669', fontWeight: 700 }}>Total transferido:</span>
+                    <span style={{ fontSize: '11px', color: '#059669', fontWeight: 700 }}>Total transferido (Confirmado):</span>
                     <span style={{ fontSize: '13px', fontWeight: 900, color: '#065F46' }}>
-                        S/ {formatSoles(totalPagado)}
+                        S/ {formatSoles(totalPagadoConfirmado)}
                     </span>
                 </div>
             </div>

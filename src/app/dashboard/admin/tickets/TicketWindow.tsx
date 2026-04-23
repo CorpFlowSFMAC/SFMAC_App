@@ -331,17 +331,41 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const hasLoadedRef = useRef<string | null>(null);
     const loadCosts = useCallback(async () => {
-        if (!ticket?.id) return;
+        if (!ticketData?.id) return;
         setLoadingCosts(true);
         try {
-            const data = await ticketCostsAPI.getByTicket(ticket.id);
-            setTicketCosts(data || []);
+            const costs = await ticketCostsAPI.getByTicket(ticketData.id);
+            setTicketCosts(costs || []);
         } catch (err) {
             console.error("Error loading costs:", err);
         } finally {
             setLoadingCosts(false);
         }
     }, [ticket?.id]);
+
+    useEffect(() => {
+        if (!ticketData?.id) return;
+
+        const channel = supabase
+            .channel(`ticket_costs_${ticketData.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'ticket_costs',
+                    filter: `ticket_id=eq.${ticketData.id}`
+                },
+                () => {
+                    loadCosts();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [ticketData.id, loadCosts]);
 
     useEffect(() => {
         if (!ticket?.id || hasLoadedRef.current === ticket.id) return;
@@ -3192,20 +3216,35 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 {ticketCosts
                                                                     .filter(c => {
                                                                         const st = (c.estado_pago || '').toLowerCase();
-                                                                        return st === 'pagado' || st === 'adelanto' || st === 'abonado';
+                                                                        // Incluimos todos excepto los que el usuario decida ocultar (opcional), 
+                                                                        // pero por ahora mostramos todo para transparencia.
+                                                                        return true; 
                                                                     })
-                                                                    .map((p: any, i: number) => (
-                                                                    <div key={`new-${i}`} className={styles.depositEntry}>
-                                                                        <div className={styles.depositLabel}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <ArrowDownLeft size={14} style={{ color: '#10B981' }} />
-                                                                                {p.categoria === 'Mano de Obra' ? 'PAGO M.O.' : p.categoria === 'Materiales' ? 'COMPRA MAT.' : p.categoria.toUpperCase()}
+                                                                    .map((p: any, i: number) => {
+                                                                        const st = (p.estado_pago || '').toLowerCase();
+                                                                        const isRejected = st === 'rechazado' || st === 'anulado';
+                                                                        const isPending = st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
+                                                                        
+                                                                        return (
+                                                                        <div key={`new-${i}`} className={styles.depositEntry} style={{ 
+                                                                            opacity: isPending ? 0.7 : (isRejected ? 0.5 : 1),
+                                                                            textDecoration: isRejected ? 'line-through' : 'none'
+                                                                        }}>
+                                                                            <div className={styles.depositLabel}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                    {isRejected ? <XCircle size={14} style={{ color: '#EF4444' }} /> : (isPending ? <Clock size={14} style={{ color: '#F59E0B' }} /> : <ArrowDownLeft size={14} style={{ color: '#10B981' }} />)}
+                                                                                    {p.categoria === 'Mano de Obra' ? 'PAGO M.O.' : p.categoria === 'Materiales' ? 'COMPRA MAT.' : p.categoria.toUpperCase()}
+                                                                                    {isRejected && <span style={{ fontSize: '9px', fontWeight: 800, color: '#EF4444', background: '#FEF2F2', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>DENIEGADO</span>}
+                                                                                    {isPending && <span style={{ fontSize: '9px', fontWeight: 800, color: '#F59E0B', background: '#FFFBEB', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>PENDIENTE</span>}
+                                                                                </div>
+                                                                                <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}</span>
                                                                             </div>
-                                                                            <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}</span>
+                                                                            <span className={styles.depositAmount} style={{ color: isRejected ? '#94A3B8' : (isPending ? '#F59E0B' : '#059669') }}>
+                                                                                - S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                                            </span>
                                                                         </div>
-                                                                        <span className={styles.depositAmount}>- S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                                    </div>
-                                                                ))}
+                                                                        );
+                                                                    })}
 
                                                                 {/* Pago de Visita (Movilidad) */}
                                                                 {visitPayment > 0 && (

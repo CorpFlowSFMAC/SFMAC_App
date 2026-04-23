@@ -25,27 +25,36 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     // 2. PAGOS REALIZADOS Y SALDO TÉCNICO (Regla Inmutable)
     
-    // A. Honorarios del Técnico (Lo que se RESTA del Monto Pactado)
-    // Categorías: Mano de Obra, Adelanto, Adelanto Operativo, Rescate Financiero
-    // Estados: Todos excepto RECHAZADO y ANULADO (Incluye PENDIENTE para no sobregirar)
+    // Categorías que afectan los honorarios del técnico
     const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate'];
+    const confirmedStates = ['pagado'];
+    const inProcessStates = ['pendiente', 'requiere_aprobacion', 'requiere_aprobacion_admin'];
     const exclusionStates = ['rechazado', 'anulado'];
 
+    // A. Honorarios Modernos (Filtrados por estado)
     const technicianFeesArr = (costs || []).filter(c => {
         const cat = (c.categoria || '').toLowerCase();
-        const st = (c.estado_pago || '').toLowerCase();
-        return feeCategories.includes(cat) && !exclusionStates.includes(st);
+        return feeCategories.includes(cat);
     });
-    
-    const totalFeesModern = technicianFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+
+    // Solo lo que ya salió del banco
+    const confirmedFeesModern = technicianFeesArr
+        .filter(c => confirmedStates.includes((c.estado_pago || '').toLowerCase()))
+        .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+
+    // Lo que está en cola (retiene saldo)
+    const inProcessFeesModern = technicianFeesArr
+        .filter(c => inProcessStates.includes((c.estado_pago || '').toLowerCase()))
+        .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+
+    const totalFeesModern = confirmedFeesModern + inProcessFeesModern;
 
     // B. Fuente Legacy (Deduplicada)
-    const rawHistory = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).filter((p: any) => p && p.estado !== 'anulado');
+    const rawHistory = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).filter((p: any) => p && !exclusionStates.includes((p.estado || '').toLowerCase()));
     
     const legacyPaymentsFiltered = rawHistory.filter((h: any) => {
         const hMonto = round2(h.monto || 0);
         if (hMonto <= 0) return false;
-        // Solo considerar honorarios en legacy para el saldo
         const hTipo = (h.tipo || '').toLowerCase();
         const isFee = feeCategories.some(f => hTipo.includes(f)) || ['refuerzo', 'liquidación final'].includes(hTipo);
         if (!isFee) return false;
@@ -55,7 +64,16 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
             return Math.abs(hMonto - mMonto) < 0.01;
         });
     });
-    const totalFeesLegacy = legacyPaymentsFiltered.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+    
+    const confirmedFeesLegacy = legacyPaymentsFiltered
+        .filter((p: any) => confirmedStates.includes((p.estado || 'pagado').toLowerCase()))
+        .reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+    
+    const inProcessFeesLegacy = legacyPaymentsFiltered
+        .filter((p: any) => inProcessStates.includes((p.estado || '').toLowerCase()))
+        .reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
+
+    const totalFeesLegacy = confirmedFeesLegacy + inProcessFeesLegacy;
 
     // C. Pagos Manuales (Solo si no están en las listas anteriores)
     let additionalFeesManual = 0;
@@ -64,11 +82,12 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         if (!exists) additionalFeesManual += parseFloat(ticketData.montoAdelanto || 0);
     }
 
-    const totalTechnicianHonorarios = round2(totalFeesModern + totalFeesLegacy + additionalFeesManual);
+    const confirmedTotal = round2(confirmedFeesModern + confirmedFeesLegacy + additionalFeesManual);
+    const inProcessTotal = round2(inProcessFeesModern + inProcessFeesLegacy);
+    const totalTechnicianHonorarios = round2(confirmedTotal + inProcessTotal);
     const balance = Math.max(0, round2(pactedMO - totalTechnicianHonorarios));
 
     // D. Gastos Operativos (NO se restan del saldo del técnico)
-    // Materiales, Insumos, Viáticos, Movilidad, Logística, Envíos
     const operationalCategories = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'viáticos / movilidad'];
     const operationalCostsArr = (costs || []).filter(c => {
         const cat = (c.categoria || '').toLowerCase();
@@ -79,9 +98,6 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     // 3. RENTABILIDAD
     const clientAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
-    
-    // Inversión Total = Honorarios Totales (incluyendo excedentes) + Gastos Operativos Reales
-    // Si el pactedMat (presupuesto) ya está cubierto por registros en operationalCostsArr, no lo sumamos doble.
     const actualMaterialCosts = operationalCostsArr
         .filter(c => (c.categoria || '').toLowerCase().includes('material'))
         .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
@@ -90,13 +106,14 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const otherOperational = totalOperationalCosts - actualMaterialCosts;
 
     const totalInvestment = round2(totalTechnicianHonorarios + materialsToSum + otherOperational);
-    
     const grossMargin = round2(clientAmount - totalInvestment);
     const marginPercent = clientAmount > 0 ? (grossMargin / clientAmount) * 100 : 0;
 
     return {
-        totalPactedDebt: pactedMO, // El pacted debt para el técnico es solo la MO
+        totalPactedDebt: pactedMO,
         totalPaidCalculated: totalTechnicianHonorarios,
+        totalConfirmed: confirmedTotal,
+        totalInProcess: inProcessTotal,
         balance,
         grossMargin,
         marginPercent,
@@ -104,7 +121,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         pactedMO,
         pactedMat,
         extraCosts: totalOperationalCosts,
-        paidModernArr: technicianFeesArr,
+        paidModernArr: technicianFeesArr, // Todos los honorarios no anulados/rechazados
         legacyPaymentsFiltered,
         operationalCostsArr
     };

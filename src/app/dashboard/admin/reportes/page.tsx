@@ -16,6 +16,7 @@ import styles from "./reportes.module.css";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId, TICKET_STATES } from "@/lib/ticketStates";
 import { round2 } from "@/lib/formatters";
+import { calculateTicketFinances } from "@/lib/calculations";
 import TicketWindow from "../tickets/TicketWindow";
 
 /** Calcula horas transcurridas desde el inicio del SLA */
@@ -265,22 +266,22 @@ export default function ReportesEficienciaPage() {
     useEffect(() => {
         if (filteredTickets.length > 0) {
             const negativeTickets = filteredTickets.filter(t => {
+                const finances = calculateTicketFinances(t, []); // En reporte masivo no tenemos costs individuales cargados aún, pero usamos la lógica unificada
                 const billingGross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
                 const billingNet = billingGross / 1.18;
+                const inversion = finances.totalPaidCalculated;
                 
-                // Inversión: Mano de Obra + Materiales + Viáticos (Sin IGV)
-                const inversion = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-                
-                return (billingNet - inversion) < -1; // Tolerancia de 1 sol
+                return (billingNet - inversion) < -1;
             });
 
             if (negativeTickets.length > 0) {
                 console.group("🚨 AUDITORÍA: TICKETS CON RENTABILIDAD NEGATIVA");
                 negativeTickets.forEach(t => {
-                    const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-                    const net = gross / 1.18;
-                    const inv = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-                    console.warn(`Ticket: ${t.numeroTicketCliente || t.id} | Neto: S/ ${net.toFixed(2)} | Inversión: S/ ${inv.toFixed(2)} | ROI: S/ ${(net - inv).toFixed(2)}`);
+                    const finances = calculateTicketFinances(t, []);
+                    const billingGross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                    const billingNet = billingGross / 1.18;
+                    const inversion = finances.totalPaidCalculated;
+                    console.warn(`Ticket: ${t.numeroTicketCliente || t.id} | Neto: S/ ${billingNet.toFixed(2)} | Inversión: S/ ${inversion.toFixed(2)} | ROI: S/ ${(billingNet - inversion).toFixed(2)}`);
                 });
                 console.groupEnd();
             }
@@ -331,15 +332,15 @@ export default function ReportesEficienciaPage() {
             if (horas > 72 && sid !== 'ticket_cerrado') map[gid].vencidos++;
             if (sid === 'ticket_cerrado') map[gid].horasCierre.push(horas);
 
+            const finances = calculateTicketFinances(t, []); // Usar lógica centralizada
+            
             // Montos Financieros - APLICANDO REGLA "NETO SIN IGV"
             if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
-                // Si el monto ya es neto lo usamos, si no, dividimos entre 1.18
                 const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
                 map[gid].facturacion += gross / 1.18;
             }
             
-            const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-            map[gid].inversion += pagos;
+            map[gid].inversion += finances.totalPaidCalculated;
         });
 
         const baseList = Object.values(map).map((g: any) => {
@@ -390,8 +391,8 @@ export default function ReportesEficienciaPage() {
                 map[cid].billing += gross / 1.18;
             }
             
-            const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + p.monto, 0);
-            map[cid].costs += pagos;
+            const finances = calculateTicketFinances(t, []);
+            map[cid].costs += finances.totalPaidCalculated;
         });
 
         return Object.values(map).map((c: any) => {
