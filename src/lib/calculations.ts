@@ -7,136 +7,42 @@ import { round2 } from "./formatters";
 export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const ticketData = ticket.metadata || ticket;
     
-    // 1. COSTO PACTADO (Referencia de Deuda)
-    const pactedMO = round2(parseFloat(ticketData.labor_cost || ticketData.costoManoObra || 0));
-    const pactedMat = round2(parseFloat(ticketData.material_cost || ticketData.costoMateriales || 0));
-    const visitCost = round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0));
-
-    // Gastos Adicionales (Materiales extra, viáticos, etc. que NO sean adelantos/rescates)
-    const extraCosts = (costs || [])
-        .filter(c => {
-            const cat = (c.categoria || '').toLowerCase();
-            return !['adelanto', 'adelanto operativo', 'mano de obra', 'rescate', 'rescate financiero'].includes(cat);
-        })
-        .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-
-    const jobCostBase = round2(pactedMO + pactedMat + extraCosts);
-    const totalPactedDebt = jobCostBase > 0 ? jobCostBase : visitCost;
-
-    // 2. PAGOS REALIZADOS Y SALDO TÉCNICO (Regla Inmutable)
+    // 1. REGLA INMUTABLE: Los valores vienen pre-calculados desde el backend (vw_ticket_financials)
+    const saldoDB = parseFloat(ticket.saldo_tecnico || 0);
+    const margenDB = parseFloat(ticket.margen_real || 0) * 100;
+    const utilidadDB = parseFloat(ticket.utilidad_neta || 0);
+    const inversionDB = parseFloat(ticket.total_costs_agg || 0);
+    const ingresosDB = parseFloat(ticket.ingresos_reales || 0);
+    const pactedMO = parseFloat(ticket.monto_pactado_mo || ticketData.labor_cost || ticketData.costoManoObra || 0);
+    const extraCosts = parseFloat(ticket.gastos_flujo_a || 0);
     
-    // Categorías que afectan los honorarios del técnico
-    const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate', 'viáticos', 'movilidad', 'viáticos / movilidad'];
-    const confirmedStates = ['pagado'];
-    const inProcessStates = ['pendiente', 'requiere_aprobacion', 'requiere_aprobacion_admin'];
-    const exclusionStates = ['rechazado', 'anulado'];
-
-    // A. Honorarios Modernos (Filtrados por estado)
-    const technicianFeesArr = (costs || []).filter(c => {
-        const cat = (c.categoria || '').toLowerCase();
-        return feeCategories.includes(cat);
-    });
-
-    // Solo lo que ya salió del banco
-    const confirmedFeesModern = technicianFeesArr
-        .filter(c => confirmedStates.includes((c.estado_pago || '').toLowerCase()))
-        .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-
-    // Lo que está en cola (retiene saldo)
-    const inProcessFeesModern = technicianFeesArr
-        .filter(c => inProcessStates.includes((c.estado_pago || '').toLowerCase()))
-        .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-
-    const totalFeesModern = confirmedFeesModern + inProcessFeesModern;
-
-    // B. Fuente Legacy (Deduplicada)
-    const rawHistory = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).filter((p: any) => p && !exclusionStates.includes((p.estado || '').toLowerCase()));
-    
-    const legacyPaymentsFiltered = rawHistory.filter((h: any) => {
-        const hMonto = round2(h.monto || 0);
-        if (hMonto <= 0) return false;
-        const hTipo = (h.tipo || '').toLowerCase();
-        const isFee = feeCategories.some(f => hTipo.includes(f)) || ['refuerzo', 'liquidación final'].includes(hTipo);
-        if (!isFee) return false;
-
-        // Evitar doble contabilidad: Si el pago ya existe en la tabla moderna (m)
-        return !technicianFeesArr.some((m: any) => {
-            const mMonto = round2(m.monto || 0);
-            // 1. Coincidencia exacta por ID (UUID)
-            if (m.id && h.id && m.id === h.id) return true;
-            
-            // 2. Coincidencia heurística: Monto + Tipo + Fecha (Tolerancia 1h)
-            const sameAmount = Math.abs(hMonto - mMonto) < 0.01;
-            const sameType = (m.categoria || '').toLowerCase().includes(hTipo) || hTipo.includes((m.categoria || '').toLowerCase());
-            const hDate = new Date(h.fecha).getTime();
-            const mDate = new Date(m.fecha_pago || m.created_at).getTime();
-            const sameDate = Math.abs(hDate - mDate) < 3600000; // 1 hora de tolerancia
-
-            return sameAmount && sameType && sameDate;
-        });
-    });
-    
-    const confirmedFeesLegacy = legacyPaymentsFiltered
-        .filter((p: any) => confirmedStates.includes((p.estado || 'pagado').toLowerCase()))
-        .reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
-    
-    const inProcessFeesLegacy = legacyPaymentsFiltered
-        .filter((p: any) => inProcessStates.includes((p.estado || '').toLowerCase()))
-        .reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0);
-
-    const totalFeesLegacy = confirmedFeesLegacy + inProcessFeesLegacy;
-
-    // C. Pagos Manuales (Solo si no están en las listas anteriores)
-    let additionalFeesManual = 0;
-    if (ticketData.adelantoPagado && ticketData.montoAdelanto) {
-        const exists = [...legacyPaymentsFiltered, ...technicianFeesArr].some(p => Math.abs(round2(p.monto || 0) - round2(ticketData.montoAdelanto || 0)) < 0.01);
-        if (!exists) additionalFeesManual += parseFloat(ticketData.montoAdelanto || 0);
-    }
-
-    const confirmedTotal = round2(confirmedFeesModern + confirmedFeesLegacy + additionalFeesManual);
-    const inProcessTotal = round2(inProcessFeesModern + inProcessFeesLegacy);
-    const totalTechnicianHonorarios = round2(confirmedTotal + inProcessTotal);
-    
-    // ★ REGLA DE ORO: El saldo se calcula contra la DEUDA TOTAL PACTADA (MO + Mat + Extras)
-    // No solo contra el MO, para permitir que el técnico reciba pagos por materiales pactados sin desbalancear el ticket.
-    const balance = Math.max(0, round2(totalPactedDebt - totalTechnicianHonorarios));
-
-    // D. Gastos Operativos (NO se restan del saldo del técnico)
+    // Categorizar costos para visualización (solo lectura)
     const operationalCategories = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'viáticos / movilidad'];
     const operationalCostsArr = (costs || []).filter(c => {
         const cat = (c.categoria || '').toLowerCase();
-        const st = (c.estado_pago || '').toLowerCase();
-        return operationalCategories.includes(cat) && !exclusionStates.includes(st);
+        return operationalCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
     });
-    const totalOperationalCosts = operationalCostsArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
 
-    // 3. RENTABILIDAD
-    const clientAmount = parseFloat(ticketData.total_quoted_amount || ticketData.montoFinal || 0);
-    const actualMaterialCosts = operationalCostsArr
-        .filter(c => (c.categoria || '').toLowerCase().includes('material'))
-        .reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-    
-    const materialsToSum = Math.max(pactedMat, actualMaterialCosts);
-    const otherOperational = totalOperationalCosts - actualMaterialCosts;
-
-    const totalInvestment = round2(totalTechnicianHonorarios + materialsToSum + otherOperational);
-    const grossMargin = round2(clientAmount - totalInvestment);
-    const marginPercent = clientAmount > 0 ? (grossMargin / clientAmount) * 100 : 0;
+    const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate', 'honorarios'];
+    const technicianFeesArr = (costs || []).filter(c => {
+        const cat = (c.categoria || '').toLowerCase();
+        return feeCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
+    });
 
     return {
-        totalPactedDebt,
-        totalPaidCalculated: totalTechnicianHonorarios,
-        totalConfirmed: confirmedTotal,
-        totalInProcess: inProcessTotal,
-        balance,
-        grossMargin,
-        marginPercent,
-        totalInvestment,
+        totalPactedDebt: pactedMO, // El monto base pactado
+        totalPaidCalculated: parseFloat(ticket.adelantos_flujo_b || 0),
+        totalConfirmed: parseFloat(ticket.adelantos_flujo_b || 0),
+        totalInProcess: 0,
+        balance: saldoDB, // Saldo inmutable desde la BD
+        grossMargin: utilidadDB,
+        marginPercent: margenDB,
+        totalInvestment: inversionDB,
         pactedMO,
-        pactedMat,
-        extraCosts: totalOperationalCosts,
-        paidModernArr: technicianFeesArr, // Todos los honorarios no anulados/rechazados
-        legacyPaymentsFiltered,
+        pactedMat: 0,
+        extraCosts,
+        paidModernArr: technicianFeesArr, 
+        legacyPaymentsFiltered: [],
         operationalCostsArr
     };
 }

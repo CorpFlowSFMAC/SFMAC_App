@@ -210,23 +210,16 @@ export default function AdminDashboard() {
             return approvedOrLater.includes(sid);
         });
 
-        // REGLA 2: Cálculos 100% SIN IGV (Usando Base Imponible / Subtotal)
-        const ingresosGenerados = closed.reduce((acc, t) => {
-            if (t.net_income_agg !== undefined) return acc + parseFloat(t.net_income_agg || 0);
-            const bruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-            return acc + (bruto / 1.18);
-        }, 0);
+        // REGLA 2: Lectura Inmutable (Backend Single Source of Truth)
+        // Está estrictamente prohibido calcular IGV o sumar costos en el Frontend.
+        const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
 
-        // REGLA 3: Inversión Ejecutada (Egresos Reales del Periodo)
-        // Para que coincida con Tesorería, debemos sumar los pagos realizados en este mes
-        const inversionEjecutada = tickets.reduce((acc, t) => {
-            const historial = t.metadata?.historialPagosTecnico || t.historialPagosTecnico || [];
-            const pagosEnRango = historial.filter((p: any) => 
-                p.estado === 'pagado' && isInRange(p.fecha)
-            );
-            return acc + pagosEnRango.reduce((sum: number, p: any) => sum + parseFloat(p.monto || 0), 0);
-        }, 0);
+        // REGLA 3: Inversión Ejecutada (Costos Devengados del Periodo)
+        // Suma inmutable calculada por el backend (total_costs_agg = Flujo A + Flujo B)
+        const inversionEjecutada = closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || 0), 0);
 
+        // Utilidad y Margen se leen de la suma global para consistencia, 
+        // aunque el Backend ya calcula por ticket.
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
         const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosGenerados) * 100 : 0;
         
@@ -239,16 +232,11 @@ export default function AdminDashboard() {
         console.log(`[AUDIT ROI] Inversión (Neto): S/ ${inversionEjecutada.toFixed(2)}`);
         console.log(`[AUDIT ROI] Utilidad: S/ ${utilidadNeta.toFixed(2)} (Diff: ${(ingresosGenerados - inversionEjecutada - utilidadNeta).toFixed(4)})`);
 
-        // Por servicio (Basado en Neto sin IGV)
+        // Por servicio (Lectura inmutable del backend)
         const byService = SERVICE_TYPES.map(s => {
             const st = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
-            const ingNeto = st.reduce((acc, t) => acc + (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18), 0);
-            const costReal = st.reduce((acc, t) => {
-                const mo = parseFloat(t.labor_cost || t.costoManoObra || 0);
-                const mat = parseFloat(t.materials_cost || t.costoMateriales || 0);
-                const vis = parseFloat(t.visit_cost || t.costoVisita || 0);
-                return acc + (mo + mat + vis);
-            }, 0);
+            const ingNeto = st.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
+            const costReal = st.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || 0), 0);
             const m = ingNeto > 0 ? ((ingNeto - costReal) / ingNeto) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
@@ -272,27 +260,20 @@ export default function AdminDashboard() {
         };
     }, [tickets]);
 
-    // ── MÓDULO 2: Tesorería / Pendientes (AUDITORÍA STRICT - SIN IGV) ───────
+    // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
     const tesoreria = useMemo(() => {
-        // Pipeline: Cotizaciones en curso (SUBTOTAL)
+        // Pipeline: Cotizaciones en curso
         const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente", "visitado"];
         const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + ((parseFloat(t.total_quoted_amount || t.montoFinal || 0)) / 1.18), 0);
+        const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
 
-        // Presupuestos Aprobados: En ejecución o por liquidar (SUBTOTAL)
+        // Presupuestos Aprobados: En ejecución o por liquidar
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const totalAprobadosNeto = approvedTickets.reduce((s, t) => s + ((parseFloat(t.total_quoted_amount || t.montoFinal || 0)) / 1.18), 0);
+        const totalAprobadosNeto = approvedTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
 
-        // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados (Ingreso Neto - Gasto Real)
-        const lucroReal = approvedTickets.reduce((s, t) => {
-            const ingNeto = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
-            const costReal = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
-                               parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                               parseFloat(t.visit_cost || t.costoVisita || 0));
-            
-            return s + (ingNeto - costReal);
-        }, 0);
+        // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados
+        const lucroReal = approvedTickets.reduce((s, t) => s + parseFloat(t.utilidad_neta || 0), 0);
 
         // Aging
         const todosPendientes = [...pipelineTickets, ...approvedTickets];

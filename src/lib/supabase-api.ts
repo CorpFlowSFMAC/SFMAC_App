@@ -432,7 +432,8 @@ export const ticketsAPI = {
         const { data, error } = await supabase
             .from('tickets')
             .select('*, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(200); // Límite de seguridad para evitar egress masivo
 
         if (error) throw error;
         return data;
@@ -440,7 +441,8 @@ export const ticketsAPI = {
 
     async getSummaryAll() {
         const { data, error } = await supabase
-            .rpc('get_tickets_summary_v4');
+            .rpc('get_tickets_summary_v5')
+            .limit(500); // Límite generoso para dashboard pero controlado
 
         if (error) throw error;
         return data;
@@ -448,7 +450,8 @@ export const ticketsAPI = {
 
     async getForPayments() {
         const { data, error } = await supabase
-            .rpc('get_payment_tickets_v2');
+            .rpc('get_payment_tickets_v2')
+            .limit(300); // Tesorería suele manejar menos volumen activo
 
         if (error) throw error;
         return data;
@@ -456,10 +459,7 @@ export const ticketsAPI = {
 
     async getById(id: string) {
         const { data, error } = await supabase
-            .from('tickets')
-            .select('*, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
-            .eq('id', id)
-            .single();
+            .rpc('get_ticket_detail_v5', { p_id: id });
 
         if (error) throw error;
         return data;
@@ -470,7 +470,8 @@ export const ticketsAPI = {
             .from('tickets')
             .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, gestora_id, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
             .eq('status_id', statusId)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(100);
 
         if (error) throw error;
         return data;
@@ -481,7 +482,8 @@ export const ticketsAPI = {
             .from('tickets')
             .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, gestora_id, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
             .eq('technician_id', technicianId)
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(100);
 
         if (error) throw error;
         return data;

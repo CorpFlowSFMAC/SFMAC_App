@@ -121,6 +121,20 @@ export const normalizeTicket = (t: any) => {
         creadoPor: t.created_by || t.creadoPor || realMetadata.creadoPor,
         diagnostico:
             t.diagnosis || t.diagnostico || realMetadata.diagnostico,
+            
+        // --- IMMUTABLE FINANCIAL FIELDS FROM BACKEND ---
+        // Ensure these always come from the root `t` object (vw_ticket_financials)
+        // and are not overwritten by stale legacy values in `realMetadata`.
+        saldo_tecnico: t.saldo_tecnico,
+        margen_real: t.margen_real,
+        utilidad_neta: t.utilidad_neta,
+        inversion_ejecutada: t.inversion_ejecutada ?? t.total_costs_agg,
+        total_costs_agg: t.total_costs_agg,
+        ingresos_reales: t.ingresos_reales,
+        monto_pactado_mo: t.monto_pactado_mo,
+        gastos_flujo_a: t.gastos_flujo_a,
+        adelantos_flujo_b: t.adelantos_flujo_b,
+
         metadata: realMetadata, // Objeto de metadata limpio (sin anidamiento excesivo)
     };
 };
@@ -160,6 +174,8 @@ export function useTickets() {
             const data = await ticketsAPI.getSummaryAll();
             return (data || []).map(normalizeTicket).filter(Boolean);
         },
+        staleTime: 1000 * 60, // 60s - Tickets no cambian tan rápido para vista general
+        gcTime: 1000 * 60 * 5, // 5 min
     });
 }
 
@@ -175,7 +191,8 @@ export function useTicketDetail(ticketId: string | null) {
             return normalizeTicket(data);
         },
         enabled: !!ticketId,
-        staleTime: 1000 * 30, // Detalle del ticket siempre un poco fresquito (30s)
+        staleTime: 1000 * 30, // Detalle del ticket 30s
+        gcTime: 1000 * 60 * 10, // Mantener en memoria 10 min
     });
 }
 
@@ -189,6 +206,7 @@ export function usePaymentTickets() {
             const data = await ticketsAPI.getForPayments();
             return data || [];
         },
+        staleTime: 1000 * 60, // 60s - Módulo de tesorería
     });
 }
 
@@ -202,6 +220,7 @@ export function useClients() {
             const data = await clientsAPI.getAll();
             return data || [];
         },
+        staleTime: 1000 * 60 * 5, // 5 min - Clientes son estáticos
     });
 }
 
@@ -215,6 +234,7 @@ export function useTechnicians() {
             const data = await techniciansAPI.getAll();
             return data || [];
         },
+        staleTime: 1000 * 60 * 5, // 5 min - Técnicos son estáticos
     });
 }
 
@@ -228,6 +248,7 @@ export function useGestoras() {
             const data = await gestorasAPI.getAll();
             return data || [];
         },
+        staleTime: 1000 * 60 * 10, // 10 min - Gestoras casi nunca cambian
     });
 }
 
@@ -241,6 +262,7 @@ export function useGestorasTargets() {
             const data = await gestorasTargetsAPI.getAll();
             return data || [];
         },
+        staleTime: 1000 * 60 * 5, // 5 min
     });
 }
 

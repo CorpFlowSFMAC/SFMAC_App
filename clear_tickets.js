@@ -18,11 +18,11 @@ async function clearDB() {
     const { data: tickets, error: fetchErr } = await supabase
       .from('tickets')
       .select('id');
-      
+
     if (fetchErr) throw fetchErr;
-    
+
     console.log(`Encontrados ${tickets.length} tickets. Eliminando...`);
-    
+
     // We can delete all where id is not null. 
     // IMPORTANT: Note that sometimes REST API requires a filter for DELETE. 
     const { error: delErr } = await supabase
@@ -32,12 +32,12 @@ async function clearDB() {
       .or('id.is.null,id.not.is.null'); // safer way to match all
 
     if (delErr) {
-        console.error("Fallo con filtros, intentando eliminacion individual...");
-        for(let i=0; i<tickets.length; i++) {
-           await supabase.from('tickets').delete().eq('id', tickets[i].id);
-        }
+      console.error("Fallo con filtros, intentando eliminacion individual...");
+      for (let i = 0; i < tickets.length; i++) {
+        await supabase.from('tickets').delete().eq('id', tickets[i].id);
+      }
     }
-    
+
     console.log("✅ Purga de tickets completada con éxito.");
   } catch (error) {
     console.error("❌ Error purgando base de datos:", error.message || error);

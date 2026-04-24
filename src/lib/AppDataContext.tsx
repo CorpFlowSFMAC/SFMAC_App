@@ -223,16 +223,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "tickets" },
-                async (payload) => {
+                (payload) => {
                     if (payload.eventType === "INSERT") {
+                        // Inserción requiere fetch porque el summary es una vista con joins
                         queryClient.invalidateQueries({
                             queryKey: queryKeys.tickets.all,
                         });
                     } else if (payload.eventType === "UPDATE") {
-                        const ticketId = (payload.new as any).id;
+                        const pNew = payload.new as any;
+                        const ticketId = pNew.id;
                         if (!ticketId) return;
 
-                        const pNew = payload.new as any;
+                        // Actualizar Summary en caché local usando el payload
                         queryClient.setQueryData(
                             queryKeys.tickets.summary(),
                             (old: any[] | undefined) =>
@@ -249,6 +251,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     })
                                     : old
                         );
+                        
+                        // Marcar detalle como stale pero NO disparar fetch inmediato
                         queryClient.invalidateQueries({ 
                             queryKey: queryKeys.tickets.detail(ticketId),
                             refetchType: 'none'
@@ -272,10 +276,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "ticket_costs" },
-                () => {
-                    queryClient.invalidateQueries({
-                        queryKey: queryKeys.tickets.all,
-                    });
+                (payload) => {
+                    const ticketId = (payload.new as any)?.ticket_id || (payload.old as any)?.ticket_id;
+                    if (ticketId) {
+                        // Solo invalidar el ticket afectado, no toda la base de datos
+                        queryClient.invalidateQueries({
+                            queryKey: queryKeys.tickets.detail(ticketId),
+                        });
+                        // El summary también podría cambiar (totales), pero lo hacemos silencioso
+                        queryClient.invalidateQueries({
+                            queryKey: queryKeys.tickets.summary(),
+                            refetchType: 'none'
+                        });
+                    }
                 }
             )
             .subscribe();
