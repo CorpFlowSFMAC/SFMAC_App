@@ -434,7 +434,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
 
                     {/* 📙 PASO 0 (Gestor): Confirmación de Autoasignación (Regla 1) 📙 */}
                     {!isAdmin && currentStep === 1 && creatorGestoraId && (
-                        <div style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', borderRadios: '10px', padding: '10px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', borderRadius: '10px', padding: '10px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <UserCheck size={16} color="#16a34a" />
                             <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803d' }}>
                                 📋 Regla 1 – Autoasignación: Este ticket quedará asignado a <strong>{creatorGestoraNombre || 'tu cuenta'}</strong>.
