@@ -27,31 +27,6 @@ export default function LoginPage() {
         // Random quote on mount
         const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
         setQuote(randomQuote);
-
-        /**
-         * NUCLEAR STORAGE & COOKIE CLEANUP:
-         * To match Incognito behavior, we must purge EVURYTHING.
-         */
-        if (typeof window !== 'undefined') {
-            // 1. Purge ALL cookies
-            const cookies = document.cookie.split(";");
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i];
-                const eqPos = cookie.indexOf("=");
-                const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
-                document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
-                // Also try with current domain
-                document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=" + window.location.hostname;
-            }
-            
-            // 2. Purge ALL localStorage
-            localStorage.clear();
-            
-            // 3. Purge ALL sessionStorage
-            sessionStorage.clear();
-
-            console.log("🧹 Nuclear cleanup completed. Browser state is now equivalent to Incognito.");
-        }
     }, [router]);
 
     const handleMicrosoftLogin = async () => {
@@ -61,7 +36,7 @@ export default function LoginPage() {
                 provider: 'azure', 
                 options: {
                     scopes: 'openid profile email',
-                    redirectTo: `${window.location.origin}/`
+                    redirectTo: `${window.location.origin}/dashboard`
                 }
             });
             if (error) throw error;
@@ -91,7 +66,7 @@ export default function LoginPage() {
                 // Get role from user metadata (provided during sign up or admin managed)
                 const role = data.user.user_metadata?.role || (username.toLowerCase() === 'admin' ? 'admin' : 'gestor');
 
-                document.cookie = `userRole=${role}; path=/; max-age=86400`;
+                document.cookie = `userRole=${role}; path=/; max-age=86400; SameSite=Lax`;
                 localStorage.setItem("userRole", role);
 
                 router.push(role === 'admin' ? "/dashboard/admin" : "/dashboard/gestor");
