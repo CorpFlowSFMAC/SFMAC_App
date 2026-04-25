@@ -10,9 +10,9 @@ import {
 } from '@/lib/supabase-api';
 import { supabase } from '@/lib/supabase';
 
-// ============================================
+// =========================================================
 // CLIENTS HOOKS
-// ============================================
+// =========================================================
 
 export function useClients() {
     const [clients, setClients] = useState<any[]>([]);
@@ -112,9 +112,9 @@ export function useClient(id: string | null) {
     return { client, loading, error };
 }
 
-// ============================================
+// =========================================================
 // BRANCHES HOOKS
-// ============================================
+// =========================================================
 
 export function useBranches(clientId?: string) {
     const [branches, setBranches] = useState<any[]>([]);
@@ -122,16 +122,25 @@ export function useBranches(clientId?: string) {
     const [error, setError] = useState<Error | null>(null);
 
     const fetchBranches = useCallback(async () => {
+        // Optimización: No cargar si el clientId es un string vacío (comportamiento de Wizard)
+        if (clientId === "") {
+            setBranches([]);
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
+            setBranches([]); // Limpiar sedes anteriores para evitar confusión
             const data = clientId
                 ? await branchesAPI.getByClient(clientId)
                 : await branchesAPI.getAll();
-            setBranches(data);
+            setBranches(data || []);
             setError(null);
         } catch (err) {
             setError(err as Error);
             console.error('Error fetching branches:', err);
+            setBranches([]); // Asegurar que no queden datos inconsistentes
         } finally {
             setLoading(false);
         }
@@ -231,9 +240,9 @@ export function useBranchesByZone(zone: string) {
     return { branches, loading, error };
 }
 
-// ============================================
+// =========================================================
 // TECHNICIANS HOOKS
-// ============================================
+// =========================================================
 
 export function useTechnicians(status?: string) {
     const [technicians, setTechnicians] = useState<any[]>([]);
@@ -349,7 +358,7 @@ export function useTechnician(id: string | null) {
 const normalizeTicket = (t: any) => {
     if (!t) return null;
 
-    // 🛡️ ANTI-RECURSIVIDAD: Extraer el objeto real de metadatos si está anidado
+    // 🛑️ ANTI-RECURSIVIDAD: Extraer el objeto real de metadatos si está anidado
     let realMetadata = t.metadata || {};
     while (realMetadata.metadata && typeof realMetadata.metadata === 'object') {
         realMetadata = { ...realMetadata, ...realMetadata.metadata };
@@ -437,9 +446,9 @@ const normalizeTicket = (t: any) => {
     };
 };
 
-// ============================================
+// =========================================================
 // TICKETS HOOKS
-// ============================================
+// =========================================================
 
 export function useTickets(statusId?: string, technicianId?: string, fullData: boolean = false) {
     const [tickets, setTickets] = useState<any[]>([]);
@@ -459,7 +468,7 @@ export function useTickets(statusId?: string, technicianId?: string, fullData: b
                 // Solo si explícitamente se piden los metadatos pesados (ej: en módulo de pagos si no hay de otra)
                 data = await ticketsAPI.getAll();
             } else {
-                // 🔥 CARGA LIGERA POR DEFECTO: Omitimos metadatos (imágenes base64) para máxima velocidad
+                // 💊 CARGA LIGERA POR DEFECTO: Omitimos metadatos (imágenes base64) para máxima velocidad
                 data = await ticketsAPI.getSummaryAll();
             }
 
@@ -487,7 +496,7 @@ export function useTickets(statusId?: string, technicianId?: string, fullData: b
             }, (payload) => {
                 if (payload.eventType === 'INSERT') {
                     // Para nuevos tickets, quizás conviene recargar para traer las relaciones (clients, branch)
-                    // que Supabase no envía en el payload simple de realtime.
+                    // que Supabase no enívía en el payload simple de realtime.
                     fetchTickets();
                 } else if (payload.eventType === 'UPDATE') {
                     // Actualizamos localmente si ya lo tenemos
@@ -602,9 +611,9 @@ export function useTicket(id: string | null) {
     };
 }
 
-// ============================================
+// =========================================================
 // PAYMENTS HOOKS
-// ============================================
+// =========================================================
 
 export function useTicketPayments(ticketId: string | null) {
     const [payments, setPayments] = useState<any[]>([]);
@@ -685,9 +694,9 @@ export function useTicketPayments(ticketId: string | null) {
     };
 }
 
-// ============================================
+// =========================================================
 // EVIDENCES HOOKS
-// ============================================
+// =========================================================
 
 export function useTicketEvidences(ticketId: string | null) {
     const [evidences, setEvidences] = useState<any[]>([]);
@@ -753,9 +762,9 @@ export function useTicketEvidences(ticketId: string | null) {
     };
 }
 
-// ============================================
+// =========================================================
 // UTILITY HOOKS
-// ============================================
+// =========================================================
 
 /**
  * Hook para obtener estadísticas de tickets por estado
