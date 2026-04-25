@@ -30,7 +30,7 @@ export default function LoginPage() {
 
         /**
          * NUCLEAR STORAGE & COOKIE CLEANUP:
-         * To match Incognito behavior, we must purge EVERYTHING.
+         * To match Incognito behavior, we must purge EVURYTHING.
          */
         if (typeof window !== 'undefined') {
             // 1. Purge ALL cookies
@@ -50,7 +50,7 @@ export default function LoginPage() {
             // 3. Purge ALL sessionStorage
             sessionStorage.clear();
 
-            console.log("💥 Nuclear cleanup completed. Browser state is now equivalent to Incognito.");
+            console.log("🧹 Nuclear cleanup completed. Browser state is now equivalent to Incognito.");
         }
     }, [router]);
 
@@ -58,13 +58,10 @@ export default function LoginPage() {
         setIsLoading(true);
         try {
             const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'azure',
+                provider: 'azure', 
                 options: {
                     scopes: 'openid profile email',
-                    redirectTo: `${window.location.origin}/`,
-                    queryParams: {
-                        prompt: 'select_account'
-                    }
+                    redirectTo: `${window.location.origin}/`
                 }
             });
             if (error) throw error;
