@@ -71,9 +71,11 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
         (g.email || "").toLowerCase().includes(gestorSearch.toLowerCase())
     );
 
-    // 🔗 INTEGRACIÓN CON CONTEXTO GLOBAL (Realtime compartido)
+    // 📙 INTEGRACIÓN CON CONTEXTO GLOBAL (Realtime compartido)
     const { clients: rawClients, loadingClients, tickets: allExistingTickets } = useAppData();
-    const { branches: allBranches, loading: loadingBranches } = useBranches();
+    
+    // ⚡️ OPTIMIZACIÓN: Solo cargar sedes del cliente seleccionado para reducir latencia
+    const { branches: sedesFiltradas, loading: loadingBranches } = useBranches(formData.clienteId);
 
     // Mapear clientes al formato esperado por el Wizard
     const clientes = (rawClients || []).map((c: any) => ({
@@ -208,7 +210,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
         if (isSubmitting) return;
 
         if (formData.tieneNumeroCliente && isTicketClienteDuplicate()) {
-            alert("❌ Error: El número de ticket de cliente ya existe en el sistema. Por favor use uno único.");
+            alert("✘ Error: El número de ticket de cliente ya existe en el sistema. Por favor use uno único.");
             setCurrentStep(3);
             return;
         }
@@ -301,24 +303,22 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
         c.ruc.includes(searchTerm)
     );
 
-    // 🔗 Obtener sedes del cliente seleccionado desde Supabase
-    const sedesDisponibles = formData.clienteId ?
-        (allBranches || [])
-            .filter((b: any) => b.client_id === formData.clienteId)
-            .filter((b: any) =>
-                b.name.toLowerCase().includes(searchTermSede.toLowerCase()) ||
-                b.address.toLowerCase().includes(searchTermSede.toLowerCase()) ||
-                (b.zone && b.zone.toLowerCase().includes(searchTermSede.toLowerCase()))
-            )
-            .map((b: any) => ({
-                id: b.id,
-                tipo: "Agencia",
-                nombre: b.name,
-                direccion: b.address,
-                distrito: "",
-                codigoTopaz: "",
-                zona: b.zone || ""
-            })) : [];
+    // 📙 Sedes filtradas del cliente seleccionado
+    const sedesDisponibles = (sedesFiltradas || [])
+        .filter((b: any) =>
+            b.name.toLowerCase().includes(searchTermSede.toLowerCase()) ||
+            (b.address && b.address.toLowerCase().includes(searchTermSede.toLowerCase())) ||
+            (b.zone && b.zone.toLowerCase().includes(searchTermSede.toLowerCase()))
+        )
+        .map((b: any) => ({
+            id: b.id,
+            tipo: "Agencia",
+            nombre: b.name,
+            direccion: b.address,
+            distrito: "",
+            codigoTopaz: "",
+            zona: b.zone || ""
+        }));
 
     return (
         <div className={styles.overlay}>
@@ -371,7 +371,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
 
                 {/* CONTENT */}
                 <div className={styles.wizardContent}>
-                    {/* ── PASO 0: SELECCIÓN DE GESTOR(A) — Solo Admin (Regla 2) ── */}
+                    {/* 📙 PASO 0: SELECCIÓN DE GESTOR(A) – Solo Admin (Regla 2) 📙 */}
                     {isAdmin && currentStep === 0 && (
                         <div className={styles.step}>
                             <h3 className={styles.stepTitle}>
@@ -379,7 +379,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                 Asignar Gestor(a) Responsable
                             </h3>
                             <p className={styles.stepDescription} style={{ color: '#6366f1', fontWeight: 600, fontSize: '13px', marginBottom: '12px' }}>
-                                📋 <strong>Regla 2 — Asignación Abierta:</strong> Como Administrador, selecciona el/la gestor(a) que gestionará este ticket.
+                                📋 <strong>Regla 2 – Asignación Abierta:</strong> Como Administrador, selecciona el/la gestor(a) que gestionará este ticket.
                             </p>
 
                             <div className={styles.searchBox}>
@@ -429,12 +429,12 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                         </div>
                     )}
 
-                    {/* ── PASO 0 (Gestor): Confirmación de Autoasignación (Regla 1) ── */}
+                    {/* 📙 PASO 0 (Gestor): Confirmación de Autoasignación (Regla 1) 📙 */}
                     {!isAdmin && currentStep === 1 && creatorGestoraId && (
-                        <div style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', borderRadius: '10px', padding: '10px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', borderRadios: '10px', padding: '10px 14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <UserCheck size={16} color="#16a34a" />
                             <span style={{ fontSize: '12px', fontWeight: 700, color: '#15803d' }}>
-                                📋 Regla 1 — Autoasignación: Este ticket quedará asignado a <strong>{creatorGestoraNombre || 'tu cuenta'}</strong>.
+                                📋 Regla 1 – Autoasignación: Este ticket quedará asignado a <strong>{creatorGestoraNombre || 'tu cuenta'}</strong>.
                             </span>
                         </div>
                     )}
@@ -532,7 +532,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                         <p>RUC: {formData.cliente.ruc}</p>
                                     </div>
 
-                                    {/* 🔍 BUSCADOR DE SEDES */}
+                                    {/* 🔎 BUSCADOR DE SEDES */}
                                     <div className={styles.searchBoxSede}>
                                         <Search size={16} />
                                         <input
@@ -545,7 +545,12 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                 </div>
                             )}
 
-                            {sedesDisponibles.length === 0 ? (
+                            {loadingBranches ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '1rem', color: '#6366f1' }}>
+                                    <RefreshCw size={40} style={{ animation: 'spin 1.5s linear infinite' }} />
+                                    <p style={{ fontWeight: 600 }}>Cargando sedes de {formData.cliente?.nombre}...</p>
+                                </div>
+                            ) : sedesDisponibles.length === 0 ? (
                                 <div className={styles.emptyMessage}>
                                     <p>⚠️ Este cliente no tiene sedes registradas.</p>
                                     <p>Por favor, agrega sedes en el módulo de Gestión de Clientes.</p>
@@ -577,7 +582,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                                     <p className={styles.sedeDistrito}>{sede.distrito}</p>
                                                 )}
                                                 {sede.codigoTopaz && (
-                                                    <span className={styles.sedeCode}>CÓdigo: {sede.codigoTopaz}</span>
+                                                    <span className={styles.sedeCode}>CÓDIGO: {sede.codigoTopaz}</span>
                                                 )}
                                             </div>
                                         </div>
@@ -680,7 +685,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                                 />
                                                 {formData.numeroTicketCliente && isTicketClienteDuplicate() && (
                                                     <span className={styles.errorHint} style={{ color: '#EF4444' }}>
-                                                        ❌ Este número de ticket ya existe. Debe ser único.
+                                                        ✘ Este número de ticket ya existe. Debe ser único.
                                                     </span>
                                                 )}
                                                 {formData.numeroTicketCliente && !isTicketClienteValid() && !isTicketClienteDuplicate() && (
