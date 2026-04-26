@@ -29,12 +29,35 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         return feeCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
     });
 
+    // 2. CÁLCULO EN TIEMPO REAL (Reactividad inmediata ante nuevos registros)
+    const confirmedFees = technicianFeesArr.reduce((sum, c) => {
+        const st = (c.estado_pago || c.estado || '').toLowerCase();
+        // Solo sumamos lo efectivamente pagado/abonado
+        if (['pagado', 'adelanto', 'abonado', 'completado'].includes(st)) {
+            return sum + round2(parseFloat(c.monto || 0));
+        }
+        return sum;
+    }, 0);
+
+    // El total confirmado es lo mayor entre lo que dice la DB (vía view) y lo que tenemos localmente en el array de costos
+    const totalConfirmedSum = Math.max(parseFloat(ticket.adelantos_flujo_b || 0), confirmedFees);
+    const totalInProcessSum = technicianFeesArr.reduce((sum, c) => {
+        const st = (c.estado_pago || c.estado || '').toLowerCase();
+        if (['pendiente', 'requiere_aprobacion', 'requiere_aprobacion_admin'].includes(st)) {
+            return sum + round2(parseFloat(c.monto || 0));
+        }
+        return sum;
+    }, 0);
+
+    // El saldo real es el pactado menos lo que ya se pagó (confirmado)
+    const realBalance = Math.max(0, round2(pactedMO - totalConfirmedSum));
+
     return {
-        totalPactedDebt: pactedMO, // El monto base pactado
-        totalPaidCalculated: parseFloat(ticket.adelantos_flujo_b || 0),
-        totalConfirmed: parseFloat(ticket.adelantos_flujo_b || 0),
-        totalInProcess: 0,
-        balance: saldoDB, // Saldo inmutable desde la BD
+        totalPactedDebt: pactedMO,
+        totalPaidCalculated: totalConfirmedSum,
+        totalConfirmed: totalConfirmedSum,
+        totalInProcess: totalInProcessSum,
+        balance: realBalance, 
         grossMargin: utilidadDB,
         marginPercent: margenDB,
         totalInvestment: inversionDB,
