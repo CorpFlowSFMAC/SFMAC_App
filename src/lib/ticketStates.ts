@@ -362,7 +362,7 @@ export const TICKET_STATE_ORDER: Record<string, number> = {
     'en_ejecucion': 8,
     'documentacion_enviada': 9,
     'requiere_revision_admin': 10,
-    'por_liquidar': 10,
+    'por_liquidar': 11,
     'ticket_cerrado': 12,
     'vencido': 13,
     'ticket_rechazado': 14,

@@ -502,7 +502,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             // PREVENIR PARPADEO Y REGRESIONES: Comparar el avance del flujo
             const serverStatusOrder = TICKET_STATE_ORDER[corregidoEstadoId] ?? 0;
             const prevStatusOrder = TICKET_STATE_ORDER[prev.estadoId] ?? 0;
-            const shouldPreservePrevState = prevStatusOrder > serverStatusOrder;
+            const shouldPreservePrevState = prevStatusOrder >= serverStatusOrder;
 
             return {
                 ...prev,
@@ -1435,19 +1435,41 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setIsSavingNegotiation(true);
         setShowExceedApprovalConfirm(false);
         try {
+            // 1. Preparar metadata correcta (Evitar bug de updated.metadata || updated)
+            const newMetadata = {
+                ...(ticketData.metadata || {}),
+                excepcionPresupuestoAprobada: true,
+                fechaAprobacionExcepcion: new Date().toISOString(),
+                aprobadoPor: myProfileId,
+                is_frozen: false // Asegurar limpieza de bandera si existe
+            };
+
             const updated = {
                 ...ticketData,
                 estadoId: "por_liquidar",
                 status_id: "por_liquidar",
-                excepcionPresupuestoAprobada: true,
-                fechaAprobacionExcepcion: new Date().toISOString(),
-                aprobadoPor: myProfileId
+                metadata: newMetadata
             };
+
+            // 2. Actualización local inmediata para respuesta instantánea de la UI
             setTicketData(updated);
-            await onUpdate?.(ticketData.id, { 
-                status_id: "por_liquidar",
-                metadata: updated.metadata || updated
-            });
+
+            // 3. Persistencia en Servidor
+            if (onUpdate) {
+                const result = await onUpdate(ticketData.id, { 
+                    status_id: "por_liquidar",
+                    metadata: newMetadata
+                });
+                
+                // 4. Sincronización final con el resultado del servidor y recarga de costos
+                if (result) {
+                    setTicketData(prev => ({ ...prev, ...result, estadoId: "por_liquidar" }));
+                }
+                
+                // Forzar recarga de costos para asegurar que los cálculos financieros se actualicen
+                await loadCosts();
+            }
+
             showToast("Excepción Aprobada", "El ticket ha sido liberado para liquidación final.", "success");
         } catch (err) {
             console.error("Error approving budget exceed:", err);
