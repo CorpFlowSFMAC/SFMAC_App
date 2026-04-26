@@ -317,8 +317,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     } = finances;
 
     let availableRescue = baseRescue;
-    // REFUERZO: Emergencias sin pactado definido aún
-    if (pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
+    // REFUERZO: Emergencias o estados activos sin pactado definido aún (para permitir solicitud base)
+    if (pactedMO <= 0 && ['visita_realizada', 'en_cotizacion', 'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion'].includes(ticketData.estadoId)) {
         if (availableRescue <= 0) availableRescue = 100;
     }
     const isVisitPaid = ticketData.visitPaymentConfirmed || ticketCosts.some(c => 

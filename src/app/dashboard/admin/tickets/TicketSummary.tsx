@@ -1180,7 +1180,7 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
 
     if (!visibleStates.includes(ticket.estadoId)) return null;
 
-    const availableRescue = finances.balance;
+    const availableRescue = propRescue !== undefined ? propRescue : Math.max(finances.balance, finances.pactedMO - finances.totalPaidCalculated);
 
     return (
         <div
