@@ -21,8 +21,8 @@ const defaultOptions: CompressionOptions = {
  * @returns Archivo comprimido
  */
 export async function compressImage(file: File, options: CompressionOptions = {}): Promise<File> {
-    if (!file.type.startsWith('image/')) {
-        return file; // No es una imagen, devolver original
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+        return file;
     }
 
     // No comprimir si ya es suficientemente pequeña (e.g. < 500KB)

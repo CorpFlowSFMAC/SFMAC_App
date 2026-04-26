@@ -220,21 +220,31 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
 
         // Convertir evidencias a Base64 para guardarlas en Supabase (metadata)
         const processFiles = async () => {
-            const results = await Promise.all(
-                formData.evidencias.map(file => {
-                    return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (e) => resolve({
-                            name: file.name,
-                            type: file.type,
-                            size: file.size,
-                            url: e.target?.result
+            if (!formData.evidencias || formData.evidencias.length === 0) {
+                return [];
+            }
+
+            try {
+                const results = await Promise.all(
+                    formData.evidencias.map(file => {
+                        return new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onload = (e) => resolve({
+                                name: file.name,
+                                type: file.type,
+                                size: file.size,
+                                url: e.target?.result
+                            });
+                            reader.onerror = () => resolve(null);
+                            reader.readAsDataURL(file);
                         });
-                        reader.readAsDataURL(file);
-                    });
-                })
-            );
-            return results;
+                    })
+                );
+                return results.filter(Boolean);
+            } catch (err) {
+                console.error("Error processing files:", err);
+                return [];
+            }
         };
 
         const evidenciasBase64 = await processFiles();
