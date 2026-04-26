@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
+import { compressImage } from "@/lib/imageCompression";
 import styles from "./TicketWindow.module.css";
 
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
@@ -864,10 +865,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setShowAssignmentDrawer(true);
     };
 
-    const handleFieldEvidenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFieldEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            const newfiles = Array.from(e.target.files);
-            const promises = newfiles.map(file => {
+            const rawFiles = Array.from(e.target.files);
+            
+            // Compresión de imágenes
+            const compressedFiles = await Promise.all(
+                rawFiles.map(file => compressImage(file))
+            );
+
+            const promises = compressedFiles.map(file => {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.readAsDataURL(file);
@@ -1511,11 +1518,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files) return;
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const rawFiles = e.target.files;
+        if (!rawFiles) return;
 
-        Array.from(files).forEach(file => {
+        const files = Array.from(rawFiles);
+        
+        // Compresión paralela
+        const compressedFiles = await Promise.all(
+            files.map(file => compressImage(file))
+        );
+
+        compressedFiles.forEach(file => {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const url = event.target?.result as string;
