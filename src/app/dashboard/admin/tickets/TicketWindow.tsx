@@ -1463,7 +1463,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 
                 // 4. Sincronización final con el resultado del servidor y recarga de costos
                 if (result) {
-                    setTicketData(prev => ({ ...prev, ...result, estadoId: "por_liquidar" }));
+                    setTicketData((prev: any) => ({ ...prev, ...result, estadoId: "por_liquidar" }));
                 }
                 
                 // Forzar recarga de costos para asegurar que los cálculos financieros se actualicen
