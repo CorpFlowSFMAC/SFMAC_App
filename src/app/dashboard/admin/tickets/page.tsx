@@ -66,25 +66,46 @@ export default function TicketsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("active");
     const [statFilter, setStatFilter] = useState<"all" | "nuevos" | "enProceso" | "revision">("all");
-    const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
-    const [isAdminState, setIsAdminState] = useState<boolean>(false);
+    // 🚀 Cache inicial de identidad en sessionStorage para evitar flash del empty state
+    // mientras se resuelve la identidad del gestor (race condition).
+    const [myGestoraId, setMyGestoraId] = useState<string | null>(() => {
+        if (typeof window === 'undefined') return null;
+        return sessionStorage.getItem('tickets_my_gestora_id') || null;
+    });
+    const [isAdminState, setIsAdminState] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return sessionStorage.getItem('tickets_is_admin') === '1';
+    });
+    const [gestoraResolved, setGestoraResolved] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        return sessionStorage.getItem('tickets_gestora_resolved') === '1';
+    });
 
 
     const fetchGestora = useCallback(async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             const rawEmail = user?.email || localStorage.getItem('userEmail');
-            if (!rawEmail) return;
+            if (!rawEmail) {
+                setGestoraResolved(true);
+                if (typeof window !== 'undefined') sessionStorage.setItem('tickets_gestora_resolved', '1');
+                return;
+            }
 
             const userEmail = rawEmail.toLowerCase();
             const userRole = (localStorage.getItem('userRole') || '').toUpperCase();
+            let resolvedAdmin = false;
+            let resolvedGestoraId: string | null = null;
+
             if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
+                resolvedAdmin = true;
                 setIsAdminState(true);
             }
 
             // REVISIÓN DE GESTORAS
             const { data: g } = await supabase.from('gestoras').select('id, name, email').ilike('email', userEmail).maybeSingle();
             if (g?.id) {
+                resolvedGestoraId = g.id;
                 setMyGestoraId(g.id);
             }
 
@@ -93,16 +114,31 @@ export default function TicketsPage() {
             if (p) {
                 const normalizedRole = (p.rol || '').toUpperCase();
                 if (normalizedRole === 'SUPERADMIN' || normalizedRole === 'ADMIN') {
+                    resolvedAdmin = true;
                     setIsAdminState(true);
                 }
                 if (!g?.id && p.id) {
+                    resolvedGestoraId = p.id;
                     setMyGestoraId(p.id);
                 }
             }
+
+            // Persistir en sessionStorage para que la próxima navegación sea instantánea
+            if (typeof window !== 'undefined') {
+                if (resolvedGestoraId) {
+                    sessionStorage.setItem('tickets_my_gestora_id', resolvedGestoraId);
+                } else {
+                    sessionStorage.removeItem('tickets_my_gestora_id');
+                }
+                sessionStorage.setItem('tickets_is_admin', resolvedAdmin ? '1' : '0');
+                sessionStorage.setItem('tickets_gestora_resolved', '1');
+            }
         } catch (error) {
             console.error("Error fetching gestora context:", error);
+        } finally {
+            setGestoraResolved(true);
         }
-    }, [queryClient]);
+    }, []);
 
     useEffect(() => {
         fetchGestora();
@@ -538,7 +574,26 @@ export default function TicketsPage() {
 
             {/* 🎫 LISTA CON SEPARADORES POR SECCIÓN EN MODO BÚSQUEDA GLOBAL */}
             <div className={styles.ticketsList}>
-                {filteredTickets.length === 0 ? (
+                {(() => {
+                    // 🚀 Mientras carga (tickets o identidad del gestor) NO mostrar empty state
+                    // para evitar el flash de "Crea tu primer ticket" en sesiones de gestoras.
+                    const stillResolvingIdentity = !gestoraResolved && !isAdminState && !myGestoraId;
+                    const isLoadingView = loadingTickets || stillResolvingIdentity;
+                    if (isLoadingView && filteredTickets.length === 0) {
+                        return (
+                            <div className={styles.emptyState} data-testid="tickets-loading-state">
+                                <div className={styles.emptyIcon} style={{ animation: 'spin 1.2s linear infinite' }}>
+                                    <Clock size={40} />
+                                </div>
+                                <h3>Cargando tus tickets…</h3>
+                                <p>Estamos sincronizando tu bandeja con el servidor.</p>
+                                <style>{`@keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }`}</style>
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
+                {filteredTickets.length === 0 && !loadingTickets && (gestoraResolved || isAdminState || myGestoraId) ? (
                     <div className={styles.emptyState}>
                         <div className={styles.emptyIcon}>
                             <Search size={40} />
