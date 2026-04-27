@@ -681,6 +681,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const windowRef = useRef<HTMLDivElement>(null);
 
     const lastSyncData = useRef<string>("");
+    
+    // ✅ FIX 2026-04-27: Refs para prevenir ejecución doble
+    const requestAdvanceRef = useRef(false);
+    const confirmAdvanceRef = useRef(false);
 
     const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
@@ -1237,6 +1241,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
     const handleConfirmAdvance = async () => {
+        // ✅ FIX 2026-04-27: Prevenir ejecución doble
+        if (confirmAdvanceRef.current) return;
+        confirmAdvanceRef.current = true;
+
         let amount = 0;
         let displayLabel = "";
 
@@ -1326,9 +1334,15 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             showToast("Error de Conexión", "No se pudo registrar el adelanto correctamente.", "error");
         } finally {
             setIsConfirmingPayment(false);
+            // ✅ Limpiar flag execution
+            confirmAdvanceRef.current = false;
         }
     };
     const handleRequestAdvance = async () => {
+        // ✅ FIX 2026-04-27: Prevenir ejecución doble
+        if (requestAdvanceRef.current) return;
+        requestAdvanceRef.current = true;
+
         let amount = 0;
         let pctVal = 0;
 
@@ -1368,12 +1382,19 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             };
             setTicketData(updated);
             await syncToSupabase(updated);
+            
+            // ✅ FIX 2026-04-27: Esperar a que Supabase procese antes de limpiar estado
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
             showToast("Solicitud Enviada", `Se ha solicitado el adelanto de S/ ${amount.toFixed(2)}.`, "success");
         } catch (err) {
             console.error("Error al solicitar adelanto:", err);
             showToast("Error de Conexión", "No se pudo registrar la solicitud.", "error");
+        } finally {
+            // ✅ Limpiar flag execution
+            requestAdvanceRef.current = false;
         }
     };
 
