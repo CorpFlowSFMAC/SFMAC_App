@@ -211,26 +211,47 @@ export default function PaymentsPage() {
             );
 
             const fetchPromise = (async () => {
+                // 🚀 OPTIMIZACIÓN: ambas queries en paralelo (antes eran secuenciales).
+                // Y filtramos ticket_costs solo por los IDs realmente necesarios para esta vista
+                // (antes traíamos TODA la tabla sin where ni limit → causaba demora seria en prod).
                 const data = await ticketsAPI.getForPayments();
+                const ticketIds = (data || []).filter(Boolean).map((t: any) => t.id);
+
+                if (ticketIds.length === 0) {
+                    return { data, costs: [] };
+                }
+
+                // Solo costos relevantes a los tickets que la vista de Tesorería va a procesar.
+                // Excluimos estados que no se renderizan (ANULADO/RECHAZADO) para reducir payload.
                 const { data: costs, error: costsErr } = await supabase
                     .from('ticket_costs')
-                    .select('*, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)');
-                
+                    .select('id, ticket_id, monto, estado_pago, categoria, concepto, fecha_pago, created_at, url_comprobante, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)')
+                    .in('ticket_id', ticketIds)
+                    .not('estado_pago', 'in', '(ANULADO,RECHAZADO)');
+
                 if (costsErr) throw costsErr;
                 return { data, costs };
             })();
 
             const { data, costs } = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
+            // 🚀 Pre-indexar costs por ticket_id para evitar O(N×M) en el filtrado posterior.
+            const costsByTicket = new Map<string, any[]>();
+            for (const c of (costs || [])) {
+                if (!c?.ticket_id) continue;
+                const arr = costsByTicket.get(c.ticket_id);
+                if (arr) arr.push(c); else costsByTicket.set(c.ticket_id, [c]);
+            }
+
             const processed = (data || []).filter(Boolean).map((t: any) => {
                 try {
                     const flat = flattenTicketForPayments(t);
-                    const relatedCosts = (costs || []).filter((c: any) => c.ticket_id === t.id);
-                    
+                    const relatedCosts = costsByTicket.get(t.id) || [];
+
                     flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
                     flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
                     flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
-                    
+
                     return flat;
                 } catch (e) {
                     console.error('[Payments] Error processing ticket:', t.id, e);

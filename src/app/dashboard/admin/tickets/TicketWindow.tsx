@@ -316,7 +316,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     } = finances;
 
     let availableRescue = baseRescue;
-    // REFUERZO: Emergencias sin pactado definido aún
+    // 🔓 RESCATE FINANCIERO – DESBLOQUEO DESDE COTIZACIÓN ENVIADA (Estado 6 en adelante).
+    // Regla de negocio: la MO pactada con el técnico ya está definida internamente al enviar
+    // la cotización al cliente. El técnico no debe esperar a la aprobación bancaria del cliente
+    // para tener liquidez. Si pactedMO > 0, el saldo disponible se calcula sobre la MO interna
+    // menos los adelantos ya pagados, sin depender del saldo_tecnico del backend (que se
+    // estabiliza recién al aprobarse la cotización).
+    const RESCUE_ELIGIBLE_STATES = new Set([
+        'cotizacion_enviada',      // Estado 6 ← desbloqueo
+        'cotizacion_aprobada',     // Estado 7
+        'en_ejecucion',            // Estado 8
+        'documentacion_enviada',
+        'por_liquidar',
+        'liquidado',
+        'visitado',
+        'visita_realizada',
+        'requiere_revision_admin',
+    ]);
+    if (pactedMO > 0 && RESCUE_ELIGIBLE_STATES.has(ticketData.estadoId)) {
+        const alreadyPaidToTech = Math.max(0, unifiedPaymentsSum || 0);
+        const computed = Math.max(0, pactedMO - alreadyPaidToTech);
+        // Si el saldo del backend aún no se inicializa o está debajo del computado, usamos el computado.
+        if (computed > availableRescue) availableRescue = computed;
+    }
+    // REFUERZO LEGACY: Emergencias sin pactado definido aún
     if (pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
         if (availableRescue <= 0) availableRescue = 100;
     }
