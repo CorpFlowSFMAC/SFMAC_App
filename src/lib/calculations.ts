@@ -19,11 +19,13 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     // ✅ FIX 2026-04-27: Calcular pagos directamente desde costs
     const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate', 'honorarios'];
     const technicianFeesArr = (costs || []).filter(c => {
-        return feeCategories.includes((c.categoria || '').toLowerCase()) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
+        const match = feeCategories.includes((c.categoria || '').toLowerCase()) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
+        return match;
     });
     
     // Calcular suma directa de costs (más confiable que columna del backend)
     const totalPaidFromCosts = technicianFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+    console.log("[DEBUG calculateTicketFinances] Costs:", costs?.length, "Filtered:", technicianFeesArr.length, "Sum:", totalPaidFromCosts);
     
     // Fallback: si no hay costs, usar columna del backend
     const totalPaidCalculated = totalPaidFromCosts > 0 ? totalPaidFromCosts : parseFloat(ticket.adelantos_flujo_b || 0);

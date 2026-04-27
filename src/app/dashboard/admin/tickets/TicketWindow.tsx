@@ -376,6 +376,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setLoadingCosts(true);
         try {
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
+            console.log("[DEBUG loadCosts] costs loaded:", costs?.length, "items");
             setTicketCosts(costs || []);
             
             // Actualizar silenciosamente los cálculos financieros del backend
