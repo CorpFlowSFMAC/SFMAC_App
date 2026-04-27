@@ -205,9 +205,9 @@ export default function PaymentsPage() {
             if (!isSilent) setLoading(true);
             setFetchError(null);
 
-            // Timeout de 15 segundos para la petición
+            // Timeout extendido a 30s; con conexión lenta 15s no alcanzaba.
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout de conexión')), 15000)
+                setTimeout(() => reject(new Error('Timeout de conexión')), 30000)
             );
 
             const fetchPromise = (async () => {
@@ -215,48 +215,81 @@ export default function PaymentsPage() {
                 const data = await ticketsAPI.getForPayments();
                 const ticketIds = (data || []).filter(Boolean).map((t: any) => t.id);
 
-                // 🚀 Paso 2: TODAS las solicitudes pendientes de ticket_costs
-                // independientemente del estado del ticket. Esto captura solicitudes
-                // que la gestora envió en estados que el RPC excluye (p.ej.
-                // cotizacion_enviada). Sin esto, Tesorería mostraría "0 registros"
-                // aunque la gestora ya hubiera enviado la solicitud.
-                const COST_COLS = 'id, ticket_id, monto, estado_pago, categoria, concepto, fecha_pago, created_at, url_comprobante, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)';
+                // 🚀 Paso 2: dos queries desacopladas y rápidas a ticket_costs.
+                // (a) PENDIENTES + REQUIERE_APROBACION — set chico (solo lo no pagado).
+                //     Sin filtro por ticket_id → captura solicitudes "huérfanas" cuyo
+                //     ticket no devolvió el RPC.
+                // (b) HISTORIAL — scoped a ticketIds del RPC, con estados pagados.
+                // Antes era una sola query .or() o select(*) que en producción excedía
+                // 15 segundos por:
+                //   - join nested a `technicians` con muchas columnas
+                //   - sin .limit()
+                //   - sin filtro estricto de estado
+                // Ahora: columnas mínimas, .limit(), estado bien filtrado.
+                const COST_COLS = 'id, ticket_id, monto, estado_pago, categoria, concepto, fecha_pago, created_at, url_comprobante, specialist_id';
 
-                const allPendingCostsPromise = supabase
+                const pendingPromise = supabase
                     .from('ticket_costs')
                     .select(COST_COLS)
-                    .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN']);
+                    .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN'])
+                    .order('created_at', { ascending: false })
+                    .limit(500);
 
-                const ticketCostsPromise = ticketIds.length > 0
+                const historyPromise = ticketIds.length > 0
                     ? supabase
                         .from('ticket_costs')
                         .select(COST_COLS)
                         .in('ticket_id', ticketIds)
-                        .not('estado_pago', 'in', '(ANULADO,RECHAZADO)')
+                        .in('estado_pago', ['pagado', 'adelanto'])
+                        .order('created_at', { ascending: false })
+                        .limit(1000)
                     : Promise.resolve({ data: [], error: null } as any);
 
-                const [pendingRes, scopedRes] = await Promise.all([allPendingCostsPromise, ticketCostsPromise]);
+                const [pendingRes, historyRes] = await Promise.all([pendingPromise, historyPromise]);
                 if (pendingRes.error) throw pendingRes.error;
-                if (scopedRes.error) throw scopedRes.error;
+                if (historyRes.error) throw historyRes.error;
 
-                // Unión por id (sin duplicados) para obtener el set completo de costs relevantes.
+                // Unión por id (defensivo) — pendiente nunca debe colisionar con pagado,
+                // pero si la BD tuviera un ID duplicado preferimos el pendiente.
                 const costMap = new Map<string, any>();
-                for (const c of (scopedRes.data || [])) costMap.set(c.id, c);
-                for (const c of (pendingRes.data || [])) if (!costMap.has(c.id)) costMap.set(c.id, c);
-                const costs = Array.from(costMap.values());
+                for (const c of (historyRes.data || [])) costMap.set(c.id, c);
+                for (const c of (pendingRes.data || [])) costMap.set(c.id, c);
+                const rawCosts = Array.from(costMap.values());
 
-                // 🚀 Paso 3: ¿algún cost pendiente apunta a un ticket que el RPC no
-                // devolvió? Cargamos esos tickets "huérfanos" para que Tesorería los
-                // muestre.
+                // 🚀 Paso 3: hidratar `technicians` con UNA query liviana
+                // (el RPC original hacía nested join — lento + pesado en payload).
+                const specialistIds = Array.from(new Set(
+                    rawCosts.map((c: any) => c.specialist_id).filter(Boolean)
+                ));
+                let techniciansById: Record<string, any> = {};
+                if (specialistIds.length > 0) {
+                    const { data: techData, error: techErr } = await supabase
+                        .from('technicians')
+                        .select('id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number')
+                        .in('id', specialistIds);
+                    if (techErr) throw techErr;
+                    techniciansById = Object.fromEntries((techData || []).map((t: any) => [t.id, t]));
+                }
+                const costs = rawCosts.map((c: any) => ({
+                    ...c,
+                    technicians: c.specialist_id ? techniciansById[c.specialist_id] || null : null,
+                }));
+
+                // 🚀 Paso 4: tickets "huérfanos" — solicitudes pendientes cuyo ticket
+                // no fue devuelto por el RPC (porque su status_id está fuera del
+                // filtro server-side, ej. cotizacion_enviada).
                 const orphanIds = Array.from(new Set(
-                    costs.map((c: any) => c.ticket_id).filter((id: string) => id && !ticketIds.includes(id))
+                    (pendingRes.data || [])
+                        .map((c: any) => c.ticket_id)
+                        .filter((id: string) => id && !ticketIds.includes(id))
                 ));
                 let orphanTickets: any[] = [];
                 if (orphanIds.length > 0) {
                     const { data: orphanData, error: orphanErr } = await supabase
                         .from('tickets')
-                        .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, technician_id, gestora_id, metadata, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
-                        .in('id', orphanIds);
+                        .select('id, status_id, service_type, description, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, technician_id, gestora_id, metadata, clients(id, name, ruc), branch_offices(id, name, address), technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number), gestora:gestoras(id, name)')
+                        .in('id', orphanIds)
+                        .limit(200);
                     if (orphanErr) throw orphanErr;
                     orphanTickets = orphanData || [];
                 }
