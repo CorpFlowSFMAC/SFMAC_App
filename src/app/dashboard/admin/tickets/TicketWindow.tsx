@@ -1303,6 +1303,10 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates, columnUpdates);
 
+            // ✅ FIX 2026-04-27: Esperar a que Supabase procese la actualización antes de recargar
+            // Esto evita el parpadeo entre estados al发送确认 de adelanto
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
             const updated = {
                 ...ticketData,
                 estadoId: newState,
