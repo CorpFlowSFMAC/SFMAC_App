@@ -440,9 +440,11 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
+        // Usar versión ligera sin metadata para evitar payload masivo
+        // La metadata puede pesar >2MB por ticket (historial de pagos, etc)
         const { data, error } = await supabase
-            .rpc('get_tickets_summary_v5')
-            .limit(500); // Límite generoso para dashboard pero controlado
+            .rpc('get_tickets_summary_light')
+            .limit(200);
 
         if (error) throw error;
         return data;
