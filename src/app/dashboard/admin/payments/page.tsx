@@ -874,11 +874,17 @@ export default function PaymentsPage() {
 
     // ★ USAMOS CONTEXTO PARA ACTUALIZACIÓN INMEDIATA EN DASHBOARD
     const { updatePaymentSafe } = useAppData();
+    const denyPaymentRef = useRef(false);
 
     const handleDenyPayment = async (group: PaymentTicketGroup, item: PaymentItem) => {
         if (!confirm(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}? Esta acción cancelará la solicitud permanentemente.`)) {
             return;
         }
+
+        // ✅ FIX 2026-04-27: Prevenir ejecución doble con flag
+        const executingRef = denyPaymentRef;
+        if (executingRef.current) return;
+        executingRef.current = true;
 
         try {
             // 0. DETERMINAR SI REVERTIMOS ESTADO
@@ -970,6 +976,8 @@ export default function PaymentsPage() {
         } catch (err) {
             console.error('[Payments] Error denying payment:', err);
             alert('Error al denegar el pago.');
+        } finally {
+            executingRef.current = false;
         }
     };
 
