@@ -551,13 +551,22 @@ export default function PaymentsPage() {
     }
 
     // ★ FIX CORE: Calcula totales mensuales usando claves YYYY-MM
+    // 2026-04-27: AHORA INCLUYE tanto historialPagosTecnico (metadata) COMO paidCosts (tabla ticket_costs)
     const calculateMonthlyTotalsFromTickets = (allTickets: any[]) => {
         const totals: { [key: string]: number } = {};
         allTickets.forEach(ticket => {
+            // 1️⃣ Incluir pagos legacy de historialPagosTecnico (metadata)
             (ticket.historialPagosTecnico || []).forEach((p: any) => {
                 if (p.monto && p.fecha && p.estado !== 'anulado') {
                     const key = getMonthKey(p.fecha);
                     totals[key] = round2((totals[key] || 0) + round2(p.monto));
+                }
+            });
+            // 2️⃣ Incluir pagos de ticket_costs (paidCosts)
+            (ticket.paidCosts || []).forEach((c: any) => {
+                if (c.monto && c.fecha_pago) {
+                    const key = getMonthKey(c.fecha_pago);
+                    totals[key] = round2((totals[key] || 0) + round2(c.monto));
                 }
             });
         });
