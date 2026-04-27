@@ -641,12 +641,13 @@ export default function PaymentsPage() {
                 const totalPagadoParaTecnico = round2(pagosParaTecnico.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 const totalPagadoParaRentabilidad = round2(pagosParaRentabilidad.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
-                // ✅ SEPARACIÓN CORRECTA: Saldo del técnico = MO pactada - pagos de Rescate/Adelanto
-                // NO se restan materiales ni movilidad (eso es para rentabilidad)
+                // ✅ SEPARACIÓN CORRECTA: Saldo del técnico = (MO + Materiales) - pagos de Rescate/Adelanto
+                // Los pagos de rescates/adelantos se restan del pactado total (no de cada categoría)
+                // NOTA: Los pagos de "compras" (materiales adicionales, viáticos) van a rentabilidad, no al técnico
                 const costoManoObraPactado = costoManoObra; // Solo MO para el técnico
                 
-                // El saldo pendiente al técnico (rescates/adelantos no reducen el pactado total, solo lo que se le debe)
-                const saldoPendienteTecnico = round2(costoManoObraPactado - totalPagadoParaTecnico);
+                // El saldo pendiente al técnico: Total pactado - pagos de rescate/adelanto al técnico
+                const saldoPendienteTecnico = round2(totalPactadoInclVisita - totalPagadoParaTecnico);
                 
                 const totalPagadoArray = totalPagadoParaTecnico + totalPagadoParaRentabilidad;
                 const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
@@ -802,7 +803,9 @@ export default function PaymentsPage() {
                         cliente: ticket.cliente?.nombre || 'Cliente',
                         sede: ticket.sede?.nombre || 'Sede',
                         tecnico: techData,
-                        montoPactado: costoManoObraPactado,  // Solo MO para el técnico
+                        // Total pactado = MO + Materiales (para el técnico esto representa el costo total de ejecución)
+                        // El saldo pendiente es: pactado - pagos de rescate/adelanto
+                        montoPactado: totalPactadoInclVisita,
                         montoAdelantado: totalPagadoParaTecnico,  // Solo rescates/adelantos
                         saldoPendiente: Math.max(0, saldoPendienteTecnico),
                         items: techItems,
