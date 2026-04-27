@@ -550,21 +550,28 @@ export default function PaymentsPage() {
         );
     }
 
-    // ★ FIX CORE: Calcula totales mensuales usando claves YYYY-MM
-    // 2026-04-27: AHORA INCLUYE tanto historialPagosTecnico (metadata) COMO paidCosts (tabla ticket_costs)
+    // ★ FIX 2026-04-27: CORREGIR monthlyTotals - SOLO pagos al técnico (rescates/adelantos)
+    // Las compras (materiales/movilidad/logística) NO van al técnico, van a rentabilidad
     const calculateMonthlyTotalsFromTickets = (allTickets: any[]) => {
         const totals: { [key: string]: number } = {};
+        
+        const isPagoParaTecnico = (tipo: string): boolean => {
+            const t = (tipo || '').toLowerCase();
+            return t.includes('rescate') || t.includes('adelanto') || t.includes('refuerzo') || 
+                   t.includes('liquidación') || t.includes('saldo pendiente');
+        };
+
         allTickets.forEach(ticket => {
-            // 1️⃣ Incluir pagos legacy de historialPagosTecnico (metadata)
+            // 1️⃣ Incluir pagos legacy de historialPagosTecnico (solo si son para técnico)
             (ticket.historialPagosTecnico || []).forEach((p: any) => {
-                if (p.monto && p.fecha && p.estado !== 'anulado') {
+                if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
                     const key = getMonthKey(p.fecha);
                     totals[key] = round2((totals[key] || 0) + round2(p.monto));
                 }
             });
-            // 2️⃣ Incluir pagos de ticket_costs (paidCosts)
+            // 2️⃣ Incluir pagos de ticket_costs (solo si son para técnico)
             (ticket.paidCosts || []).forEach((c: any) => {
-                if (c.monto && c.fecha_pago) {
+                if (c.monto && c.fecha_pago && isPagoParaTecnico(c.categoria)) {
                     const key = getMonthKey(c.fecha_pago);
                     totals[key] = round2((totals[key] || 0) + round2(c.monto));
                 }
@@ -619,7 +626,29 @@ export default function PaymentsPage() {
                     if (!alreadyPresent) uniqueHistory.push(costPayment);
                 });
 
-                const totalPagadoArray = round2(uniqueHistory.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+                // ✅ FIX 2026-04-27: SEPARAR PAGOS PARA TÉCNICO vs COMPRAS
+                // SOLO los pagos de tipo "Rescate/Adelanto/Refuerzo/Liquidación Final" van al técnico
+                // Los pagos de "Materiales/Mano de Obra/Viáticos/Logística" son compras que afectan rentabilidad
+                const isPagoParaTecnico = (tipo: string): boolean => {
+                    const t = (tipo || '').toLowerCase();
+                    return t.includes('rescate') || t.includes('adelanto') || t.includes('refuerzo') || 
+                           t.includes('liquidación') || t.includes('saldo pendiente');
+                };
+
+                const pagosParaTecnico = uniqueHistory.filter(p => isPagoParaTecnico(p.tipo));
+                const pagosParaRentabilidad = uniqueHistory.filter(p => !isPagoParaTecnico(p.tipo));
+                
+                const totalPagadoParaTecnico = round2(pagosParaTecnico.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+                const totalPagadoParaRentabilidad = round2(pagosParaRentabilidad.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
+                
+                // ✅ SEPARACIÓN CORRECTA: Saldo del técnico = MO pactada - pagos de Rescate/Adelanto
+                // NO se restan materiales ni movilidad (eso es para rentabilidad)
+                const costoManoObraPactado = costoManoObra; // Solo MO para el técnico
+                
+                // El saldo pendiente al técnico (rescates/adelantos no reducen el pactado total, solo lo que se le debe)
+                const saldoPendienteTecnico = round2(costoManoObraPactado - totalPagadoParaTecnico);
+                
+                const totalPagadoArray = totalPagadoParaTecnico + totalPagadoParaRentabilidad;
                 const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
                 const techData = {
@@ -634,7 +663,8 @@ export default function PaymentsPage() {
 
                 // 2026-04-10 13:20 - Treasury Fix: Solo mostrar solicitudes pendientes reales
                 const items: PaymentItem[] = [];
-                const saldoReal = round2(totalPactadoInclVisita - totalPagadoArray);
+                // Usar el saldo correcto basado en pagos al técnico (no todas las compras)
+                const saldoReal = saldoPendienteTecnico;
 
                 // Relaxed condition: Process tickets that are not closed, even if formal saldo is 0
                 // (This allows material requests and early advances to show up before the quote is approved)
@@ -772,9 +802,9 @@ export default function PaymentsPage() {
                         cliente: ticket.cliente?.nombre || 'Cliente',
                         sede: ticket.sede?.nombre || 'Sede',
                         tecnico: techData,
-                        montoPactado: totalPactadoInclVisita,
-                        montoAdelantado: totalPagadoArray,
-                        saldoPendiente: Math.max(0, round2(totalPactadoInclVisita - totalPagadoArray)),
+                        montoPactado: costoManoObraPactado,  // Solo MO para el técnico
+                        montoAdelantado: totalPagadoParaTecnico,  // Solo rescates/adelantos
+                        saldoPendiente: Math.max(0, saldoPendienteTecnico),
                         items: techItems,
                         historialDepositos: allHistory,
                         costoVisita: visitCost,
