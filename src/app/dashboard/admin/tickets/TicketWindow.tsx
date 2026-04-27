@@ -3238,7 +3238,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                         <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '12px' }}>
                                                             <span className={styles.rowLabel} style={{ fontWeight: 800 }}>Total Depósitos Previos</span>
-                                                            <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })} <sup>[DEBUG: costs={ticketCosts?.length}]</sup></span>
                                                         </div>
 
                                                         {(paymentsSummary > 0 || legacyPaymentsFiltered.length > 0 || visitPayment > 0 || classicAdvance > 0) && (
