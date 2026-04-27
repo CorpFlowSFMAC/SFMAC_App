@@ -198,6 +198,7 @@ export default function PaymentsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    console.log('[DEBUG-pagos] Estado tickets:', tickets.length, 'loading:', loading,'error:', fetchError);
     const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
@@ -327,6 +328,7 @@ export default function PaymentsPage() {
                 }
             }).filter(Boolean);
             
+            console.log('[DEBUG-pagos] Tickets procesados:', processed?.length);
             setTickets(processed);
         } catch (err: any) {
             console.error('[Payments] Fetch Error:', err);
