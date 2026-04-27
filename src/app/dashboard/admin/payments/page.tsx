@@ -212,7 +212,10 @@ export default function PaymentsPage() {
 
             const fetchPromise = (async () => {
                 // 🚀 Paso 1: tickets vía RPC (filtra por estados de pago server-side).
+                console.log('[DEBUG-pagos] Iniciando fetchPaymentTickets...');
                 const data = await ticketsAPI.getForPayments();
+                console.log('[DEBUG-pagos] getForPayments retornó:', data?.length, 'tickets');
+                
                 const ticketIds = (data || []).filter(Boolean).map((t: any) => t.id);
 
                 // 🚀 Paso 2: dos queries desacopladas y rápidas a ticket_costs.
