@@ -1,7 +1,7 @@
 "use client";
 // Forced redeploy: v1.2 - Sincronizado con Flujo de Cotización y Borrado Inteligente
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
@@ -298,9 +298,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [ticketCosts, setTicketCosts] = useState<any[]>([]);
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // LÓGICA FINANCIERA CENTRALIZADA (calculateTicketFinances)
+    // LÓGICA FINANCIERA CENTRALIZADA (calculateTicketFinances) - se recalcula con ticketCosts
     // ─────────────────────────────────────────────────────────────────────────────
-    const finances = calculateTicketFinances(ticketData, ticketCosts);
+    const finances = useMemo(
+        () => calculateTicketFinances(ticketData, ticketCosts),
+        [ticketData, ticketCosts]  // ✅ Recalcular cuando cambien los costs
+    );
     const {
         totalPactedDebt: techPactedTotal,
         totalPaidCalculated: unifiedPaymentsSum,
@@ -1313,7 +1316,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             // ✅ FIX 2026-04-27: Esperar a que Supabase procese la actualización antes de recargar
             // Esto evita el parpadeo entre estados al发送确认 de adelanto
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await new Promise(resolve => setTimeout(resolve, 1200));
             
             const updated = {
                 ...ticketData,
@@ -1384,7 +1387,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             await syncToSupabase(updated);
             
             // ✅ FIX 2026-04-27: Esperar a que Supabase procese antes de limpiar estado
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await new Promise(resolve => setTimeout(resolve, 1200));
             
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);

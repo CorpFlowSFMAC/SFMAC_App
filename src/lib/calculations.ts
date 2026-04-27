@@ -16,6 +16,19 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const pactedMO = parseFloat(ticket.monto_pactado_mo || ticketData.labor_cost || ticketData.costoManoObra || 0);
     const extraCosts = parseFloat(ticket.gastos_flujo_a || 0);
     
+    // ✅ FIX 2026-04-27: Calcular pagos directamente desde costs (no depender solo del backend)
+    const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate', 'honorarios'];
+    const technicianFeesArr = (costs || []).filter(c => {
+        const cat = (c.categoria || '').toLowerCase();
+        return feeCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
+    });
+    
+    // Calcular suma directa de costs (más confiable que columna del backend)
+    const totalPaidFromCosts = technicianFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+    
+    // Fallback: si no hay costs, usar columna del backend
+    const totalPaidCalculated = totalPaidFromCosts > 0 ? totalPaidFromCosts : parseFloat(ticket.adelantos_flujo_b || 0);
+
     // Categorizar costos para visualización (solo lectura)
     const operationalCategories = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'viáticos / movilidad'];
     const operationalCostsArr = (costs || []).filter(c => {
@@ -23,16 +36,10 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         return operationalCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
     });
 
-    const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate', 'honorarios'];
-    const technicianFeesArr = (costs || []).filter(c => {
-        const cat = (c.categoria || '').toLowerCase();
-        return feeCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
-    });
-
     return {
         totalPactedDebt: pactedMO, // El monto base pactado
-        totalPaidCalculated: parseFloat(ticket.adelantos_flujo_b || 0),
-        totalConfirmed: parseFloat(ticket.adelantos_flujo_b || 0),
+        totalPaidCalculated, // ✅ Ahora calcula desde costs directamente
+        totalConfirmed: totalPaidCalculated,
         totalInProcess: 0,
         balance: saldoDB, // Saldo inmutable desde la BD
         grossMargin: utilidadDB,
