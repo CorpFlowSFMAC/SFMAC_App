@@ -211,26 +211,58 @@ export default function PaymentsPage() {
             );
 
             const fetchPromise = (async () => {
-                // 🚀 OPTIMIZACIÓN: ambas queries en paralelo (antes eran secuenciales).
-                // Y filtramos ticket_costs solo por los IDs realmente necesarios para esta vista
-                // (antes traíamos TODA la tabla sin where ni limit → causaba demora seria en prod).
+                // 🚀 Paso 1: tickets vía RPC (filtra por estados de pago server-side).
                 const data = await ticketsAPI.getForPayments();
                 const ticketIds = (data || []).filter(Boolean).map((t: any) => t.id);
 
-                if (ticketIds.length === 0) {
-                    return { data, costs: [] };
+                // 🚀 Paso 2: TODAS las solicitudes pendientes de ticket_costs
+                // independientemente del estado del ticket. Esto captura solicitudes
+                // que la gestora envió en estados que el RPC excluye (p.ej.
+                // cotizacion_enviada). Sin esto, Tesorería mostraría "0 registros"
+                // aunque la gestora ya hubiera enviado la solicitud.
+                const COST_COLS = 'id, ticket_id, monto, estado_pago, categoria, concepto, fecha_pago, created_at, url_comprobante, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)';
+
+                const allPendingCostsPromise = supabase
+                    .from('ticket_costs')
+                    .select(COST_COLS)
+                    .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN']);
+
+                const ticketCostsPromise = ticketIds.length > 0
+                    ? supabase
+                        .from('ticket_costs')
+                        .select(COST_COLS)
+                        .in('ticket_id', ticketIds)
+                        .not('estado_pago', 'in', '(ANULADO,RECHAZADO)')
+                    : Promise.resolve({ data: [], error: null } as any);
+
+                const [pendingRes, scopedRes] = await Promise.all([allPendingCostsPromise, ticketCostsPromise]);
+                if (pendingRes.error) throw pendingRes.error;
+                if (scopedRes.error) throw scopedRes.error;
+
+                // Unión por id (sin duplicados) para obtener el set completo de costs relevantes.
+                const costMap = new Map<string, any>();
+                for (const c of (scopedRes.data || [])) costMap.set(c.id, c);
+                for (const c of (pendingRes.data || [])) if (!costMap.has(c.id)) costMap.set(c.id, c);
+                const costs = Array.from(costMap.values());
+
+                // 🚀 Paso 3: ¿algún cost pendiente apunta a un ticket que el RPC no
+                // devolvió? Cargamos esos tickets "huérfanos" para que Tesorería los
+                // muestre.
+                const orphanIds = Array.from(new Set(
+                    costs.map((c: any) => c.ticket_id).filter((id: string) => id && !ticketIds.includes(id))
+                ));
+                let orphanTickets: any[] = [];
+                if (orphanIds.length > 0) {
+                    const { data: orphanData, error: orphanErr } = await supabase
+                        .from('tickets')
+                        .select('id, status_id, service_type, description, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, technician_id, gestora_id, metadata, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
+                        .in('id', orphanIds);
+                    if (orphanErr) throw orphanErr;
+                    orphanTickets = orphanData || [];
                 }
 
-                // Solo costos relevantes a los tickets que la vista de Tesorería va a procesar.
-                // Excluimos estados que no se renderizan (ANULADO/RECHAZADO) para reducir payload.
-                const { data: costs, error: costsErr } = await supabase
-                    .from('ticket_costs')
-                    .select('id, ticket_id, monto, estado_pago, categoria, concepto, fecha_pago, created_at, url_comprobante, technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number)')
-                    .in('ticket_id', ticketIds)
-                    .not('estado_pago', 'in', '(ANULADO,RECHAZADO)');
-
-                if (costsErr) throw costsErr;
-                return { data, costs };
+                const fullData = [...(data || []), ...orphanTickets];
+                return { data: fullData, costs };
             })();
 
             const { data, costs } = await Promise.race([fetchPromise, timeoutPromise]) as any;

@@ -334,10 +334,20 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         'requiere_revision_admin',
     ]);
     if (pactedMO > 0 && RESCUE_ELIGIBLE_STATES.has(ticketData.estadoId)) {
-        const alreadyPaidToTech = Math.max(0, unifiedPaymentsSum || 0);
-        const computed = Math.max(0, pactedMO - alreadyPaidToTech);
-        // Si el saldo del backend aún no se inicializa o está debajo del computado, usamos el computado.
-        if (computed > availableRescue) availableRescue = computed;
+        // 🔄 REACTIVIDAD: usar paidModernArr (excluye ANULADO/RECHAZADO, incluye
+        // pendiente + REQUIERE_APROBACION + pagado). Esto hace que al crear una
+        // solicitud de rescate, availableRescue baje de inmediato sin necesidad
+        // de cerrar/abrir la ventana.
+        const totalRequestedToTech = (paidModernArr || []).reduce(
+            (sum: number, c: any) => sum + (parseFloat(c.monto) || 0),
+            0
+        );
+        const computed = Math.max(0, pactedMO - totalRequestedToTech);
+        // Tomamos el mínimo entre saldo del backend y el computado client-side
+        // para evitar sobre-otorgar liquidez.
+        availableRescue = (availableRescue > 0)
+            ? Math.min(availableRescue, computed)
+            : computed;
     }
     // REFUERZO LEGACY: Emergencias sin pactado definido aún
     if (pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
@@ -672,7 +682,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const lastSyncData = useRef<string>("");
 
-    const syncToSupabase = useCallback(async (dataOverride?: any) => {
+    const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
         if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return;
 
@@ -705,7 +715,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         const localStateOrder = TICKET_STATE_ORDER[businessData.estadoId] ?? 0;
         const serverStateOrder = TICKET_STATE_ORDER[serverStatusId] ?? 0;
-        const resolvedStatusId = localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId;
+        // 🔁 BYPASS controlado: Reajuste/Reprogramar y otras transiciones intencionales
+        // necesitan poder retroceder de estado. Si el caller lo solicita, forzamos el local.
+        const resolvedStatusId = options?.allowStateRollback
+            ? businessData.estadoId
+            : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId);
 
         const updates: any = {
             status_id: resolvedStatusId,
@@ -1082,7 +1096,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             modificacionAutorizada: true
         };
         setTicketData(readjust);
-        syncToSupabase(readjust);
+        // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion para reajuste.
+        syncToSupabase(readjust, { allowStateRollback: true });
         showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición para realizar ajustes.", "info");
     };
 
@@ -2739,7 +2754,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                     style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', color: '#475569' }}
                                                 >
                                                     <RefreshCw size={18} />
-                                                    <span>SOLICITA REAJUSTE / REPROGAMAR</span>
+                                                    <span>SOLICITA REAJUSTE / REPROGRAMAR</span>
                                                 </button>
 
                                                 <button
