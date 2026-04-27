@@ -217,23 +217,88 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
 
         setIsSubmitting(true);
 
-        // Convertir evidencias a Base64 para guardarlas en Supabase (metadata)
+        // 🚀 OPTIMIZACIÓN: Si no hay archivos, saltamos toda la fase de
+        // procesamiento/compresión. Si hay imágenes, las comprimimos en cliente
+        // (Canvas, sin dependencias extras) para no saturar JSONB en Supabase.
+        // - Imágenes → redimensionar a 1600px lado largo + JPEG calidad 0.75
+        // - Otros archivos (PDF, docs) → base64 directo, sin alterar
+        const compressImage = (file: File): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const MAX_SIDE = 1600;
+                        let { width, height } = img;
+                        if (width > MAX_SIDE || height > MAX_SIDE) {
+                            if (width >= height) {
+                                height = Math.round((height * MAX_SIDE) / width);
+                                width = MAX_SIDE;
+                            } else {
+                                width = Math.round((width * MAX_SIDE) / height);
+                                height = MAX_SIDE;
+                            }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) throw new Error('Canvas 2D no disponible');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        // PNG con transparencia → mantener PNG; resto → JPEG comprimido
+                        const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+                        const dataUrl = canvas.toDataURL(outType, 0.75);
+                        URL.revokeObjectURL(url);
+                        resolve(dataUrl);
+                    } catch (err) {
+                        URL.revokeObjectURL(url);
+                        reject(err);
+                    }
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('No se pudo cargar la imagen para comprimir'));
+                };
+                img.src = url;
+            });
+
+        const fileToBase64 = (file: File): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(String(e.target?.result || ''));
+                reader.onerror = () => reject(new Error('Error leyendo archivo'));
+                reader.readAsDataURL(file);
+            });
+
         const processFiles = async () => {
-            const results = await Promise.all(
-                formData.evidencias.map(file => {
-                    return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = (e) => resolve({
-                            name: file.name,
-                            type: file.type,
-                            size: file.size,
-                            url: e.target?.result
-                        });
-                        reader.readAsDataURL(file);
-                    });
+            // 🚦 Atajo: sin archivos → no hacemos nada (evita Promise.all + FileReader vacíos).
+            if (!formData.evidencias || formData.evidencias.length === 0) return [];
+
+            return Promise.all(
+                formData.evidencias.map(async (file) => {
+                    let url: string;
+                    let outSize = file.size;
+                    try {
+                        if (file.type.startsWith('image/')) {
+                            url = await compressImage(file);
+                            // Estimación aproximada del tamaño post-compresión (base64 → bytes)
+                            outSize = Math.round((url.length - (url.indexOf(',') + 1)) * 0.75);
+                        } else {
+                            url = await fileToBase64(file);
+                        }
+                    } catch (err) {
+                        console.error('[CreateTicket] Compresión falló, uso original:', err);
+                        url = await fileToBase64(file);
+                    }
+                    return {
+                        name: file.name,
+                        type: file.type,
+                        size: outSize,
+                        originalSize: file.size,
+                        url,
+                    };
                 })
             );
-            return results;
         };
 
         const evidenciasBase64 = await processFiles();

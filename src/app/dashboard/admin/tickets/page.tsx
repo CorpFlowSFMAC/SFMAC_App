@@ -177,8 +177,10 @@ export default function TicketsPage() {
 
 
     const handleCreateTicket = async (newTicket: any) => {
+        // 🚀 createTicket ya inserta en cache local (setQueryData en AppDataContext)
+        // y el canal realtime mantiene sincronía. Eliminamos refreshTickets() redundante
+        // que disparaba un refetch HTTP completo y bloqueaba el cierre del modal.
         await createTicket(newTicket);
-        await refreshTickets();
     };
 
     // 🚀 LÓgica de Limpieza de Tickets (One-time)

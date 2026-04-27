@@ -433,9 +433,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         async (data: any) => {
             const created = await ticketsAPI.create(data);
             const normalized = normalizeTicket(created);
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.tickets.all,
-            });
+            // 🚀 OPTIMIZACIÓN: en lugar de invalidar (refetch HTTP de toda la lista),
+            // insertamos el nuevo ticket directo en la cache. El canal realtime
+            // (postgres_changes en `tickets`) sincroniza otras pestañas/usuarios.
+            queryClient.setQueryData(
+                queryKeys.tickets.summary(),
+                (old: any[] | undefined) => (old ? [normalized, ...old] : [normalized])
+            );
             return normalized;
         },
         [queryClient]
