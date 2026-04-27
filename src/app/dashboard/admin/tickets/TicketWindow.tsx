@@ -1302,11 +1302,26 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
             const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
 
+            // ✅ FIX 2026-04-27: Agregar el pago también a historialPagosTecnico para módulo Tesorería
+            const nuevoPagoHistorial = {
+                id: `adv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                monto: amount,
+                fecha: new Date().toISOString(),
+                tipo: 'Adelanto Operativo',
+                estado: 'confirmado',
+                referencia: displayLabel,
+                voucherRef: null
+            };
+            const historialActual = ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || [];
+            const nuevoHistorial = [...historialActual, nuevoPagoHistorial];
+
+
             const metadataUpdates = {
-                adelantoPagado: true,
+                AdelantoPagado: true,
                 montoAdelanto: unifiedPaymentsSum + amount,
                 fechaPagoAdelanto: new Date().toISOString(),
-                solicitudAdelanto: null
+                solicitudAdelanto: null,
+                historialPagosTecnico: nuevoHistorial
             };
 
             const columnUpdates = {
