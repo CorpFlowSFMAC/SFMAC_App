@@ -635,38 +635,38 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                             💡 Mostrando las primeras 60 de {allFilteredSedes.length} sedes. Use el buscador para filtrar.
                                         </p>
                                     )}
-                                <div className={styles.sedesGrid}>
-                                    {sedesDisponibles.map((sede: any) => (
-                                        <div
-                                            key={sede.id}
-                                            className={`${styles.sedeCard} ${formData.sedeId === sede.id ? styles.sedeCardSelected : ''}`}
-                                            onClick={() => handleSelectSede(sede)}
-                                        >
-                                            <div className={styles.sedeCardHeader}>
-                                                <div className={styles.sedeIconWrapper}>
-                                                    <Building2 size={24} />
+                                    <div className={styles.sedesGrid}>
+                                        {sedesDisponibles.map((sede: any) => (
+                                            <div
+                                                key={sede.id}
+                                                className={`${styles.sedeCard} ${formData.sedeId === sede.id ? styles.sedeCardSelected : ''}`}
+                                                onClick={() => handleSelectSede(sede)}
+                                            >
+                                                <div className={styles.sedeCardHeader}>
+                                                    <div className={styles.sedeIconWrapper}>
+                                                        <Building2 size={24} />
+                                                    </div>
+                                                    {formData.sedeId === sede.id && (
+                                                        <CheckCircle size={20} className={styles.checkIconSede} />
+                                                    )}
                                                 </div>
-                                                {formData.sedeId === sede.id && (
-                                                    <CheckCircle size={20} className={styles.checkIconSede} />
-                                                )}
-                                            </div>
-                                            <div className={styles.sedeCardBody}>
-                                                <span className={styles.sedeTipo}>{sede.tipo}</span>
-                                                <h4>{sede.nombre}</h4>
-                                                <div className={styles.sedeLocation}>
-                                                    <MapPin size={14} />
-                                                    <span>{sede.direccion}</span>
+                                                <div className={styles.sedeCardBody}>
+                                                    <span className={styles.sedeTipo}>{sede.tipo}</span>
+                                                    <h4>{sede.nombre}</h4>
+                                                    <div className={styles.sedeLocation}>
+                                                        <MapPin size={14} />
+                                                        <span>{sede.direccion}</span>
+                                                    </div>
+                                                    {sede.distrito && (
+                                                        <p className={styles.sedeDistrito}>{sede.distrito}</p>
+                                                    )}
+                                                    {sede.codigoTopaz && (
+                                                        <span className={styles.sedeCodigo}>CÓDIGO: {sede.codigoTopaz}</span>
+                                                    )}
                                                 </div>
-                                                {sede.distrito && (
-                                                    <p className={styles.sedeDistrito}>{sede.distrito}</p>
-                                                )}
-                                                {sede.codigoTopaz && (
-                                                    <span className={styles.sedeCode}>CÓDIGO: {sede.codigoTopaz}</span>
-                                                )}
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
                                 </>
                             )}
                         </div>
@@ -902,60 +902,60 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                             </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* SECCIÓN 2: DETALLES DEL SERVICIO */}
-                                <div className={styles.resumenMainContent}>
-                                    <div className={styles.resumenDetailHeader}>
-                                        <div className={styles.detailBadge}>
-                                            <Wrench size={14} />
-                                            {formData.tipoServicioNombre}
-                                        </div>
-                                        {formData.tieneNumeroCliente && (
-                                            <div className={styles.ticketClienteBadge}>
-                                                Ticket Cliente: {formData.numeroTicketCliente}
+                                    {/* SECCIÓN 2: DETALLES DEL SERVICIO */}
+                                    <div className={styles.resumenMainContent}>
+                                        <div className={styles.resumenDetailHeader}>
+                                            <div className={styles.detailBadge}>
+                                                <Wrench size={14} />
+                                                {formData.tipoServicioNombre}
                                             </div>
+                                            {formData.tieneNumeroCliente && (
+                                                <div className={styles.ticketClienteBadge}>
+                                                    Ticket Cliente: {formData.numeroTicketCliente}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className={styles.resumenDescriptionBox}>
+                                            <div className={styles.quoteIcon}>“</div>
+                                            <p>{formData.descripcionProblema}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* SECCIÓN 3: EVIDENCIAS Y META */}
+                                    <div className={styles.resumenFooterRow}>
+                                        <div className={styles.metaItem}>
+                                            <ImageIcon size={14} />
+                                            <span>{formData.evidencias.length} Archivos Adjuntos</span>
+                                        </div>
+                                        <div className={styles.metaItem}>
+                                            <Search size={14} />
+                                            <span>Creado por {formData.creadoPor}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className={styles.confirmationAction}>
+                                    <p className={styles.confirmationTip}>🚀 Al presionar el botón se notificará automáticamente al área técnica.</p>
+                                    <button 
+                                        className={styles.generarBtn} 
+                                        onClick={handleGenerarTicket}
+                                        disabled={isSubmitting}
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Sparkles size={18} className={styles.spinning} />
+                                                GENERANDO...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle size={18} />
+                                                CONFIRMAR Y GENERAR TICKET
+                                            </>
                                         )}
-                                    </div>
-
-                                    <div className={styles.resumenDescriptionBox}>
-                                        <div className={styles.quoteIcon}>“</div>
-                                        <p>{formData.descripcionProblema}</p>
-                                    </div>
+                                    </button>
                                 </div>
-
-                                {/* SECCIÓN 3: EVIDENCIAS Y META */}
-                                <div className={styles.resumenFooterRow}>
-                                    <div className={styles.metaItem}>
-                                        <ImageIcon size={14} />
-                                        <span>{formData.evidencias.length} Archivos Adjuntos</span>
-                                    </div>
-                                    <div className={styles.metaItem}>
-                                        <Search size={14} />
-                                        <span>Creado por {formData.creadoPor}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className={styles.confirmationAction}>
-                                <p className={styles.confirmationTip}>🚀 Al presionar el botón se notificará automáticamente al área técnica.</p>
-                                <button 
-                                    className={styles.generarBtn} 
-                                    onClick={handleGenerarTicket}
-                                    disabled={isSubmitting}
-                                >
-                                    {isSubmitting ? (
-                                        <>
-                                            <Sparkles size={18} className={styles.spinning} />
-                                            GENERANDO...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <CheckCircle size={18} />
-                                            CONFIRMAR Y GENERAR TICKET
-                                        </>
-                                    )}
-                                </button>
                             </div>
                         </div>
                     )}
