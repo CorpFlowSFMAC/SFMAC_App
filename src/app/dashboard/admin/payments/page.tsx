@@ -235,15 +235,15 @@ export default function PaymentsPage() {
                     .order('created_at', { ascending: false })
                     .limit(500);
 
-                const historyPromise = ticketIds.length > 0
-                    ? supabase
-                        .from('ticket_costs')
-                        .select(COST_COLS)
-                        .in('ticket_id', ticketIds)
-                        .in('estado_pago', ['pagado', 'adelanto'])
-                        .order('created_at', { ascending: false })
-                        .limit(1000)
-                    : Promise.resolve({ data: [], error: null } as any);
+                // 🚀 FIX 2026-04-27: No filtrar por ticketIds del RPC
+                // porque hay casos donde el ticket no aparece pero sus pagos sí.
+                // Obtenemos TODOS los costos pagados y luego sus tickets.
+                const historyPromise = supabase
+                    .from('ticket_costs')
+                    .select(COST_COLS)
+                    .in('estado_pago', ['pagado', 'adelanto'])
+                    .order('created_at', { ascending: false })
+                    .limit(2000); // Límite mayor para asegurar cobertura
 
                 const [pendingRes, historyRes] = await Promise.all([pendingPromise, historyPromise]);
                 if (pendingRes.error) throw pendingRes.error;
@@ -278,11 +278,11 @@ export default function PaymentsPage() {
                 // 🚀 Paso 4: tickets "huérfanos" — solicitudes pendientes cuyo ticket
                 // no fue devuelto por el RPC (porque su status_id está fuera del
                 // filtro server-side, ej. cotizacion_enviada).
-                const orphanIds = Array.from(new Set(
-                    (pendingRes.data || [])
-                        .map((c: any) => c.ticket_id)
-                        .filter((id: string) => id && !ticketIds.includes(id))
-                ));
+                // FIX 2026-04-27: Incluir tanto costos pendientes como pagados
+                const orphanIds = Array.from(new Set([
+                    ...(pendingRes.data || []).map((c: any) => c.ticket_id),
+                    ...(historyRes.data || []).map((c: any) => c.ticket_id)
+                ].filter((id: string) => id && !ticketIds.includes(id))));
                 let orphanTickets: any[] = [];
                 if (orphanIds.length > 0) {
                     const { data: orphanData, error: orphanErr } = await supabase
