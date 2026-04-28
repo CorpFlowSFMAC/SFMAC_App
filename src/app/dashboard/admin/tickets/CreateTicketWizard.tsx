@@ -75,7 +75,15 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
     const { clients: rawClients, loadingClients, tickets: allExistingTickets } = useAppData();
     
     // ⚡️ OPTIMIZACIÓN: Solo cargar sedes del cliente seleccionado para reducir latencia
-    const { branches: sedesFiltradas, loading: loadingBranches, error: errorBranches } = useBranches(formData.clienteId);
+    const { branches: sedesFiltradas, loading: loadingBranches, error: errorBranches, refetch: refetchBranches } = useBranches(formData.clienteId);
+    
+    // Forzar refetch cuando cambia el clienteId
+    useEffect(() => {
+        if (formData.clienteId && formData.clienteId.length > 0) {
+            console.log("[Wizard] Cliente cambiado a:", formData.clienteId, "- forzando refetch de sedes...");
+            refetchBranches?.();
+        }
+    }, [formData.clienteId]);
 
     // Mapear clientes al formato esperado por el Wizard
     const clientes = (rawClients || []).map((c: any) => ({

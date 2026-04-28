@@ -35,3 +35,37 @@ Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
 ⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
 Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
  GET /login 500 in 1248ms (compile: 804ms, render: 444ms)
+⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⨯ Error: [Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.
+    at module evaluation (src/lib/supabase.ts:7:11)
+    at module evaluation (src/app/login/page.tsx:8:1)
+   5 |
+   6 | if (!supabaseUrl || !supabaseAnonKey) {
+>  7 |     throw new Error('[Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.');
+     |           ^
+   8 | }
+   9 |
+  10 | export const supabase = createClient(supabaseUrl, supabaseAnonKey); {
+  digest: '3693204329'
+}
+⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /login 500 in 299ms (compile: 4ms, render: 295ms)
+⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⨯ Error: [Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.
+    at module evaluation (src/lib/supabase.ts:7:11)
+    at module evaluation (src/app/login/page.tsx:8:1)
+   5 |
+   6 | if (!supabaseUrl || !supabaseAnonKey) {
+>  7 |     throw new Error('[Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.');
+     |           ^
+   8 | }
+   9 |
+  10 | export const supabase = createClient(supabaseUrl, supabaseAnonKey); {
+  digest: '3693204329'
+}
+⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+ GET /login 500 in 303ms (compile: 4ms, render: 299ms)

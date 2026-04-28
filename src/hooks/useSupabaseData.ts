@@ -162,6 +162,11 @@ export function useBranches(clientId?: string) {
         fetchBranches();
     }, [fetchBranches]);
 
+    // Función de refetch manual
+    const refetch = useCallback(() => {
+        fetchBranches();
+    }, [fetchBranches]);
+
     const createBranch = useCallback(async (branchData: {
         client_id: string;
         name: string;
@@ -213,15 +218,7 @@ export function useBranches(clientId?: string) {
         }
     }, []);
 
-    return {
-        branches,
-        loading,
-        error,
-        refresh: fetchBranches,
-        createBranch,
-        updateBranch,
-        deleteBranch
-    };
+    return { branches, loading, error, refetch, createBranch, updateBranch, deleteBranch };
 }
 
 export function useBranchesByZone(zone: string) {

@@ -480,7 +480,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                     // DETERMINAR EL ESTADO FINAL: Nunca retroceder
                     const serverStateOrder = TICKET_STATE_ORDER[corregidoEstadoId] ?? 0;
-                    const cachedStateOrder = TICKET_STATE_ORDER[cachedEstadoId] ?? 0;
+                    const cachedStateOrder = TICKET_STATE_ORDER[cachedEstadoId ?? ''] ?? 0;
                     // GANA el más avanzado
                     const finalEstadoId = cachedStateOrder >= serverStateOrder 
                         ? (cachedEstadoId || corregidoEstadoId) 
