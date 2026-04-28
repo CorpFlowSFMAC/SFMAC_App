@@ -451,9 +451,22 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
+        // Intentar función ultra-ligera primero para evitar timeout
+        // Si falla (RPC no existe), caer a la versión anterior
+        try {
+            const { data, error } = await supabase
+                .rpc('get_payment_tickets_light')
+                .limit(50);
+            
+            if (!error && data) return data;
+        } catch (e) {
+            console.warn('[getForPayments] RPC ligera no disponible, usando fallback:', e);
+        }
+        
+        // Fallback: función original
         const { data, error } = await supabase
             .rpc('get_payment_tickets_v2')
-            .limit(300); // Tesorería suele manejar menos volumen activo
+            .limit(50);
 
         if (error) throw error;
         return data;
