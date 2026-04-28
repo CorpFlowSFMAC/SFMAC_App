@@ -875,6 +875,9 @@ export default function PaymentsPage() {
             return 0;
         });
 
+        console.log('[DEBUG-processTickets] Grupos generados:', allGroups.length, 'de', allTickets.length, 'tickets');
+        console.log('[DEBUG-processTickets] Muestra de estados:', allTickets.slice(0,3).map(t => t.estadoId).join(', '));
+        console.log('[DEBUG-processTickets] Muestra de items por grupo:', allGroups.slice(0,3).map(g => g.items.length).join(', '));
         setPaymentGroups(allGroups);
         calculateMonthlyTotalsFromTickets(allTickets);
     };
