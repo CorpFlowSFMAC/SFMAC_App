@@ -71,6 +71,16 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         return matchesZone && matchesSkill && matchesSearch && isActive;
     }) || [];
 
+    // Load - fetch directo para debug
+    useEffect(() => {
+        if (!isOpen) return;
+        
+        fetch('/api/debug/technicians-schema')
+            .then(res => res.json())
+            .then(data => console.log('[Debug] Schema response:', data))
+            .catch(err => console.error('[Debug] Error:', err));
+    }, [isOpen]);
+
     // Debug: ver estructura del primer técnico
     if (technicians && technicians.length > 0) {
         console.log('[TechnicianDrawer] Primer técnico - todas las keys:', Object.keys(technicians[0]));
