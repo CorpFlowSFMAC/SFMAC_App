@@ -451,9 +451,9 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
-        /// ✅Función ultra-ligera sin límites artificiales
+        /// ✅ Función ultra-ligera V2 - incluye todos los ticketsexcepto cancelados
         const { data, error } = await supabase
-            .rpc('get_payment_tickets_ultra_light');
+            .rpc('get_payment_tickets_ultra_light_v2');
 
         if (error) throw error;
         return data;
