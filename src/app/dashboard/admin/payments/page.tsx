@@ -296,6 +296,11 @@ export default function PaymentsPage() {
                     flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
                     flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
 
+                    // ★ ARQUITECTURA FINANCIERA: MOSTRAR TODOS LOS TICKETS ABIERTOS
+                    // incluyendo los que ya tienen pagos confirmados (no solo pendientes)
+                    // El filtro de 'pendiente' ahora es a nivel de UI, no de datos
+                    flat.isOpen = !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id);
+                    
                     return flat;
                 } catch (e) {
                     console.error('[Payments] Error processing ticket:', t.id, e);
@@ -1156,11 +1161,16 @@ export default function PaymentsPage() {
         // Los tickets cerrados NO aparecen en la bandeja activa
         if (isTicketClosed) return false;
         
-        // Los tickets abiertos siempre aparecen, sin importar el estado de pago
-        // El filtro 'pendiente' ahora muestra tickets abiertos (adelanto puede estar pagado o no)
+        // ★ ARQUITECTURA FINANCIERA V2:
+        // - filtro 'pendiente' = TODOS los tickets ABIERTOS (sin importar si tienen pagos hechos)
+        // - Solo verificamos si el ticket está abierto (no cancelado/rechazado/cerrado)
+        const isOpen = g.isOpen !== false;
+        
+        // Los tickets abiertos siempre aparecen
+        // El filtro 'pendiente' ahora muestra tickets abiertos (el admins puede ver ambos)
         // El filtro 'pagado' muestra tickets con historial de depósitos
         const matchesStatus = filter === 'todos' ||
-                            (filter === 'pendiente' && !isTicketClosed) ||  // Todos los tickets abiertos
+                            (filter === 'pendiente' && isOpen) ||  // Todos los tickets abiertos
                             (filter === 'pagado' && g.historialDepositos.length > 0);
         
         return matchesSearch && matchesStatus;
