@@ -71,6 +71,12 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         return matchesZone && matchesSkill && matchesSearch && isActive;
     }) || [];
 
+    // Debug: ver estructura del primer técnico
+    if (technicians && technicians.length > 0) {
+        console.log('[TechnicianDrawer] Primer técnico - todas las keys:', Object.keys(technicians[0]));
+        console.log('[TechnicianDrawer] Primer técnico - datos:', technicians[0]);
+    }
+
     const handleAssign = () => {
         if (!selectedTechnician) return;
 
