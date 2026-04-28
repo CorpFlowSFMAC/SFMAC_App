@@ -216,6 +216,12 @@ export default function PaymentsPage() {
                 console.log('[DEBUG-pagos] Iniciando fetchPaymentTickets...');
                 const data = await ticketsAPI.getForPayments();
                 console.log('[DEBUG-pagos] getForPayments retornó:', data?.length, 'tickets');
+                // Debug: verificar si hay tickets con solicitudAdelanto
+                const ticketsConAdelanto = data?.filter((t: any) => t.metadata?.solicitudAdelanto);
+                console.log('[DEBUG-pagos] Tickets con solicitudAdelanto:', ticketsConAdelanto?.length);
+                if (ticketsConAdelanto?.length > 0) {
+                    console.log('[DEBUG-pagos] Primer ticket con Adelanto:', ticketsConAdelanto[0]?.id, ticketsConAdelanto[0]?.metadata?.solicitudAdelanto);
+                }
                 
                 const limitedData = (data || []).slice(0, 100);
                 const ticketIds = limitedData.filter(Boolean).map((t: any) => t.id);
