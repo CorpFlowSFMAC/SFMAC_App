@@ -451,10 +451,10 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
-        // ✅ USAR SOLO la función ultra-ligera - sin fallback
+        // ✅ USAR SOLO función ultra-ligera
         const { data, error } = await supabase
-            .rpc('get_payment_tickets_light')
-            .limit(50);
+            .rpc('get_payment_tickets_ultra_light')
+            .limit(30);
 
         if (error) throw error;
         return data;
