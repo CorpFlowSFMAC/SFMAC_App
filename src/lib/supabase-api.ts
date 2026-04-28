@@ -461,10 +461,31 @@ export const ticketsAPI = {
     },
 
     async getById(id: string) {
+        // Obtener detalle del ticket
         const { data, error } = await supabase
             .rpc('get_ticket_detail_v5', { p_id: id });
 
         if (error) throw error;
+        
+        // Si el ticket viene sin datos financieros, obtenerlos por separado (ultra-ligero)
+        if (data && (!data.utilidad_neta || !data.saldo_tecnico)) {
+            try {
+                const financials = await supabase.rpc('get_ticket_financials_detail', { p_id: id });
+                if (financials.data) {
+                    data.saldo_tecnico = financials.data.saldo_tecnico;
+                    data.utilidad_neta = financials.data.utilidad_neta;
+                    data.margen_real = financials.data.margen_real;
+                    data.ingresos_reales = financials.data.ingresos_reales;
+                    data.total_costs_agg = financials.data.total_costs_agg;
+                    data.monto_pactado_mo = financials.data.monto_pactado_mo;
+                    data.gastos_flujo_a = financials.data.gastos_flujo_a;
+                    data.adelantos_flujo_b = financials.data.adelantos_flujo_b;
+                }
+            } catch (e) {
+                console.error("Error fetching financials:", e);
+            }
+        }
+        
         return data;
     },
 

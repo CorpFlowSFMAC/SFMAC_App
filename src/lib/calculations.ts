@@ -7,14 +7,30 @@ import { round2 } from "./formatters";
 export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const ticketData = ticket.metadata || ticket;
     
-    // 1. REGLA INMUTABLE: Los valores vienen pre-calculados desde el backend (vw_ticket_financials)
-    const saldoDB = parseFloat(ticket.saldo_tecnico || 0);
-    const margenDB = parseFloat(ticket.margen_real || 0) * 100;
-    const utilidadDB = parseFloat(ticket.utilidad_neta || 0);
-    const inversionDB = parseFloat(ticket.total_costs_agg || 0);
-    const ingresosDB = parseFloat(ticket.ingresos_reales || 0);
-    const pactedMO = parseFloat(ticket.monto_pactado_mo || ticketData.labor_cost || ticketData.costoManoObra || 0);
-    const extraCosts = parseFloat(ticket.gastos_flujo_a || 0);
+    // 1. Intentar obtener valores pre-calculados desde el backend
+    let saldoDB = parseFloat(ticket.saldo_tecnico || ticketData.saldo_tecnico || 0);
+    let margenDB = parseFloat(ticket.margen_real || ticketData.margen_real || 0);
+    let utilidadDB = parseFloat(ticket.utilidad_neta || ticketData.utilidad_neta || 0);
+    let inversionDB = parseFloat(ticket.total_costs_agg || ticketData.total_costs_agg || 0);
+    let ingresosDB = parseFloat(ticket.ingresos_reales || ticketData.ingresos_reales || 0);
+    let pactedMO = parseFloat(ticket.monto_pactado_mo || ticketData.monto_pactado_mo || ticketData.labor_cost || ticketData.costoManoObra || 0);
+    let extraCosts = parseFloat(ticket.gastos_flujo_a || ticketData.gastos_flujo_a || 0);
+    let adelantosDB = parseFloat(ticket.adelantos_flujo_b || ticketData.adelantos_flujo_b || 0);
+    
+    // ✅ FALLBACK: Si los valores del backend están en cero pero hay costs, calcular desde costos
+    const hasCosts = costs && costs.length > 0;
+    
+    // Si el margen está en cero pero hay presupuesto y costos, calcular localmente
+    const presupuesto = parseFloat(ticket.total_quoted_amount || ticketData.total_quoted_amount || ticketData.montoFinal || 0);
+    if (hasCosts && (margenDB === 0 || utilidadDB === 0) && presupuesto > 0) {
+        // Calcular depuis costs
+        const totalCost = costs.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+        if (totalCost > 0) {
+            inversionDB = totalCost;
+            utilidadDB = round2(presupuesto - totalCost);
+            margenDB = presupuesto > 0 ? round2((utilidadDB / presupuesto) * 100) : 0;
+        }
+    }
     
     // ✅ FIX 2026-04-27: Calcular pagos directamente desde costs
     const feeCategories = [
@@ -34,7 +50,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     console.log("[DEBUG calculateTicketFinances] Costs:", costs?.length, "Filtered:", technicianFeesArr.length, "Sum:", totalPaidFromCosts);
     
     // Fallback: si no hay costs, usar columna del backend
-    const totalPaidCalculated = totalPaidFromCosts > 0 ? totalPaidFromCosts : parseFloat(ticket.adelantos_flujo_b || 0);
+    const totalPaidCalculated = totalPaidFromCosts > 0 ? totalPaidFromCosts : (hasCosts ? 0 : adelantosDB);
 
     // Categorizar costos para visualización (solo lectura)
     const operationalCategories = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'viáticos / movilidad'];
