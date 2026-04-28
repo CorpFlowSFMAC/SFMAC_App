@@ -34,14 +34,14 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
     const [isExporting, setIsExporting] = useState(false);
     const [items, setItems] = useState<Partida[]>(() => {
         if (initialItems && initialItems.length > 0) {
-            return initialItems.map((it, idx) => ({
+            return initialItems.map((it: any, idx: number) => ({
                 id: it.id || Math.random().toString(36).substr(2, 9),
                 item: it.item || (idx + 1).toString().padStart(2, '0'),
                 descripcion: it.descripcion || "",
                 unidad: it.unidad || "GLB",
-                cantidad: it.cantidad || 1,
-                precioUnitario: it.precioUnitario || 0,
-                total: it.total || 0
+                cantidad: Number(it.cantidad) || 1,
+                precioUnitario: Number(it.precioUnitario) || 0,
+                total: Number(it.total) || (Number(it.cantidad) * Number(it.precioUnitario)) || 0
             }));
         }
         return [
@@ -143,17 +143,20 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
     }, [items, grandTotal, isLocked, onUpdate]);
 
     useEffect(() => {
+        // Solo recargar items si hay datos válidos en initialItems Y no hay items actuales con valores reales
+        // Convertimos a número para evitar problemas con tipos
         if (initialItems && initialItems.length > 0) {
-            const hasActualItems = items.some(i => i.precioUnitario > 0 || i.descripcion !== "Mano de obra especializada para el servicio");
-            if (!hasActualItems || isLocked) {
-                setItems(initialItems.map((it, idx) => ({
+            const hasActualItems = items.some(i => Number(i.precioUnitario) > 0 || (i.descripcion && i.descripcion !== "Mano de obra especializada para el servicio"));
+            // Solo recargar si está bloqueado y NO tiene items actuales o si hay items pero todos están en cero
+            if ((!hasActualItems || isLocked) && !items.every(i => Number(i.precioUnitario) === 0)) {
+                setItems(initialItems.map((it: any, idx: number) => ({
                     id: it.id || Math.random().toString(36).substr(2, 9),
                     item: it.item || (idx + 1).toString().padStart(2, '0'),
                     descripcion: it.descripcion || "",
                     unidad: it.unidad || "GLB",
-                    cantidad: it.cantidad || 1,
-                    precioUnitario: it.precioUnitario || 0,
-                    total: it.total || 0
+                    cantidad: Number(it.cantidad) || 1,
+                    precioUnitario: Number(it.precioUnitario) || 0,
+                    total: Number(it.total) || (Number(it.cantidad) * Number(it.precioUnitario)) || 0
                 })));
             }
         }
