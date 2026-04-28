@@ -220,7 +220,7 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                                         <div className={styles.techDetails}>
                                             <div className={styles.detailItem}>
                                                 <Phone size={12} />
-                                                <span>{tech.phone || tech.celular || tech.telefono || tech.numero_telefono || tech.contact_phone || tech.mobile || '---'}</span>
+                                                <span>{tech.phone || tech.celular || tech.telefono || tech.numero_telefono || tech.contact_phone || tech.mobile || `(keys: ${Object.keys(tech).join(', ')})`}</span>
                                             </div>
                                             <div className={styles.detailItem}>
                                                 <MapPin size={12} />
