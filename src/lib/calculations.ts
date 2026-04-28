@@ -47,7 +47,6 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     
     // Calcular suma directa de costs (más confiable que columna del backend)
     const totalPaidFromCosts = technicianFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-    console.log("[DEBUG calculateTicketFinances] Costs:", costs?.length, "Filtered:", technicianFeesArr.length, "Sum:", totalPaidFromCosts);
     
     // Fallback: si no hay costs, usar columna del backend
     const totalPaidCalculated = totalPaidFromCosts > 0 ? totalPaidFromCosts : (hasCosts ? 0 : adelantosDB);

@@ -376,23 +376,23 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setLoadingCosts(true);
         try {
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
-            console.log("[DEBUG loadCosts] costs loaded:", costs?.length, "items");
             setTicketCosts(costs || []);
             
             // Actualizar silenciosamente los cálculos financieros del backend
+            // Solo actualizar si hay valores válidos (no 0, no undefined)
             try {
                 const updatedTicket = await ticketsAPI.getById(ticketData.id);
-                if (updatedTicket) {
+                if (updatedTicket && updatedTicket.utilidad_neta != null) {
                     setTicketData((prev: any) => ({
                         ...prev,
-                        saldo_tecnico: updatedTicket.saldo_tecnico,
-                        utilidad_neta: updatedTicket.utilidad_neta,
-                        margen_real: updatedTicket.margen_real,
-                        ingresos_reales: updatedTicket.ingresos_reales,
-                        monto_pactado_mo: updatedTicket.monto_pactado_mo,
-                        total_costs_agg: updatedTicket.total_costs_agg,
-                        gastos_flujo_a: updatedTicket.gastos_flujo_a,
-                        adelantos_flujo_b: updatedTicket.adelantos_flujo_b
+                        saldo_tecnico: updatedTicket.saldo_tecnico ?? prev.saldo_tecnico,
+                        utilidad_neta: updatedTicket.utilidad_neta ?? prev.utilidad_neta,
+                        margen_real: updatedTicket.margen_real ?? prev.margen_real,
+                        ingresos_reales: updatedTicket.ingresos_reales ?? prev.ingresos_reales,
+                        monto_pactado_mo: updatedTicket.monto_pactado_mo ?? prev.monto_pactado_mo,
+                        total_costs_agg: updatedTicket.total_costs_agg ?? prev.total_costs_agg,
+                        gastos_flujo_a: updatedTicket.gastos_flujo_a ?? prev.gastos_flujo_a,
+                        adelantos_flujo_b: updatedTicket.adelantos_flujo_b ?? prev.adelantos_flujo_b
                     }));
                 }
             } catch (e) {
