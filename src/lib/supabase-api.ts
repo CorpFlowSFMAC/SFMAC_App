@@ -451,10 +451,19 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
-        /// ✅ Función ultra-ligera V2 - incluye todos los ticketsexcepto cancelados
+        /// ✅ Funciones de fallback si v2 no existe
+        try {
+            // Intentar v2 primero
+            const { data, error } = await supabase
+                .rpc('get_payment_tickets_ultra_light_v2');
+            if (!error && data) return data;
+        } catch (e) {
+            console.log('[getForPayments] v2 no existe, usando fallback');
+        }
+        
+        // Fallback: función original
         const { data, error } = await supabase
-            .rpc('get_payment_tickets_ultra_light_v2');
-
+            .rpc('get_payment_tickets_ultra_light');
         if (error) throw error;
         return data;
     },
