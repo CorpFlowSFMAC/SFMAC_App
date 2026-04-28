@@ -152,6 +152,13 @@ export const queryKeys = {
     clients: {
         all: ["clients"] as const,
     },
+    branches: {
+        all: ["branches"] as const,
+        byClient: (clientId: string) => [...queryKeys.branches.all, "byClient", clientId] as const,
+    },
+    zonas: {
+        all: ["zonas"] as const,
+    },
     technicians: {
         all: ["technicians"] as const,
     },
@@ -211,7 +218,7 @@ export function usePaymentTickets() {
 }
 
 // ─────────────────────────────────────────────
-// useClients — Hook para clientes
+// useClients — Hook para clientes (CACHÉ 24h)
 // ─────────────────────────────────────────────
 export function useClients() {
     return useQuery({
@@ -220,12 +227,13 @@ export function useClients() {
             const data = await clientsAPI.getAll();
             return data || [];
         },
-        staleTime: 1000 * 60 * 5, // 5 min - Clientes son estáticos
+        staleTime: 1000 * 60 * 60 * 24, // 24 horas - Clientes casi nunca cambian
+        gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
     });
 }
 
 // ─────────────────────────────────────────────
-// useTechnicians — Hook para técnicos
+// useTechnicians — Hook para técnicos (CACHÉ 24h)
 // ─────────────────────────────────────────────
 export function useTechnicians() {
     return useQuery({
@@ -234,12 +242,13 @@ export function useTechnicians() {
             const data = await techniciansAPI.getAll();
             return data || [];
         },
-        staleTime: 1000 * 60 * 5, // 5 min - Técnicos son estáticos
+        staleTime: 1000 * 60 * 60 * 24, // 24 horas - Técnicos son estables
+        gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
     });
 }
 
 // ─────────────────────────────────────────────
-// useGestoras — Hook para gestoras
+// useGestoras — Hook para gestoras (CACHÉ 24h)
 // ─────────────────────────────────────────────
 export function useGestoras() {
     return useQuery({
@@ -248,12 +257,13 @@ export function useGestoras() {
             const data = await gestorasAPI.getAll();
             return data || [];
         },
-        staleTime: 1000 * 60 * 10, // 10 min - Gestoras casi nunca cambian
+        staleTime: 1000 * 60 * 60 * 24, // 24 horas - Gestoras casi nunca cambian
+        gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
     });
 }
 
 // ─────────────────────────────────────────────
-// useGestorasTargets — Hook para metas y bonos
+// useGestorasTargets — Hook para metas y bonos (CACHÉ 1h)
 // ─────────────────────────────────────────────
 export function useGestorasTargets() {
     return useQuery({
@@ -262,7 +272,47 @@ export function useGestorasTargets() {
             const data = await gestorasTargetsAPI.getAll();
             return data || [];
         },
-        staleTime: 1000 * 60 * 5, // 5 min
+        staleTime: 1000 * 60 * 60, // 1 hora - Metas cambian mensual
+        gcTime: 1000 * 60 * 60, // Mantener en caché 1h
+    });
+}
+
+// ─────────────────────────────────────────────
+// useBranches — Hook para sedes/agencias (CACHÉ 24h)
+// ─────────────────────────────────────────────
+export function useBranches(clientId?: string) {
+    return useQuery({
+        queryKey: queryKeys.branches.byClient(clientId || "all"),
+        queryFn: async () => {
+            if (!clientId) {
+                // Si no hay clientId, traer todas las branches
+                const { branchesAPI } = await import("@/lib/supabase-api");
+                const data = await branchesAPI.getAll();
+                return data || [];
+            }
+            const { branchesAPI } = await import("@/lib/supabase-api");
+            const data = await branchesAPI.getByClient(clientId);
+            return data || [];
+        },
+        enabled: !!clientId,
+        staleTime: 1000 * 60 * 60 * 24, // 24 horas - Sedes casi nunca cambian
+        gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
+    });
+}
+
+// ─────────────────────────────────────────────
+// useZonas — Hook para zonas (CACHÉ 24h)
+// ─────────────────────────────────────────────
+export function useZonas(clientId?: string) {
+    return useQuery({
+        queryKey: [...queryKeys.zonas.all, clientId || "all"],
+        queryFn: async () => {
+            const { zonasAPI } = await import("@/lib/routing-api");
+            const data = await zonasAPI.getAll();
+            return data || [];
+        },
+        staleTime: 1000 * 60 * 60 * 24, // 24 horas - Zonas son muy estables
+        gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
     });
 }
 

@@ -451,9 +451,9 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
-        // Usar función completa para traer TODOS los datos
+        // Usar función completa para traer TODOS los datos (sin sufijos)
         const { data, error } = await supabase
-            .rpc('get_payment_tickets_ultra_light_full');
+            .rpc('get_payment_tickets_ultra_light');
         if (error) throw error;
         return data;
     },
