@@ -42,6 +42,8 @@ interface PaymentTicketGroup {
     ticketNum: string;
     cliente: string;
     sede: string;
+    statusId?: string; // ★ NUEVO: estado del ticket para filtro
+    isOpen?: boolean; // ★ NUEVO: si el ticket está abierto
     tecnico: {
         nombre: string;
         id?: string;
@@ -808,6 +810,8 @@ export default function PaymentsPage() {
                         ticketNum,
                         cliente: ticket.cliente?.nombre || 'Cliente',
                         sede: ticket.sede?.nombre || 'Sede',
+                        statusId: ticket.estadoId,
+                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(ticket.estadoId), // ★ NUEVO
                         tecnico: techData,
                         // Total pactado = MO + Materiales (para el técnico esto representa el costo total de ejecución)
                         // El saldo pendiente es: pactado - pagos de rescate/adelanto
@@ -844,6 +848,8 @@ export default function PaymentsPage() {
                         ticketNum,
                         cliente: ticket.cliente?.nombre || 'Cliente',
                         sede: ticket.sede?.nombre || 'Sede',
+                        statusId: ticket.estadoId,
+                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(ticket.estadoId), // ★ NUEVO
                         tecnico: specData,
                         montoPactado: 0, // Especialistas no tienen pactado total del ticket
                         montoAdelantado: 0,

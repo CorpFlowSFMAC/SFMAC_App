@@ -34,6 +34,13 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     
     // ✅ FIX 2026-04-28: SEPARAR SOLICITADO DE PAGADO
     // Solo contar como "Pagado/Confirmado" los costos con estado explícito 'pagado' o 'adelanto'
+    const feeCategories = [
+        'mano de obra', 'Mano de Obra', 'MANO DE OBRA',
+        'adelanto', 'Adelanto', 'adelanto operativo', 'Adelanto Operativo',
+        'rescate financiero', 'Rescate Financiero', 'rescate', 'Rescate',
+        'honorarios', 'Honorarios'
+    ].map(s => s.toLowerCase()); // Todas a minúsculas para comparar
+    
     const technicianFeesArr = (costs || []).filter(c => {
         const catLower = (c.categoria || '').toLowerCase();
         const estadoLower = (c.estado_pago || '').toLowerCase();
