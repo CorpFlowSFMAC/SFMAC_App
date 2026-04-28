@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, MapPin, Zap, DollarSign, RefreshCw, CheckCircle2, AlertTriangle, Phone } from "lucide-react";
+import { User, MapPin, Zap, RefreshCw, CheckCircle2, AlertTriangle, Phone } from "lucide-react";
 import styles from "./TechnicianAssignment.module.css";
 import { useAppData } from "@/lib/AppDataContext";
 import { getServiceById, SKILL_ICONS } from "@/lib/serviceTypes";
@@ -14,7 +14,6 @@ interface TechnicianAssignmentProps {
 export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAssignmentProps) {
     const { technicians, loadingTechnicians: loading } = useAppData();
     const [selectedTech, setSelectedTech] = useState<any>(ticket.tecnicoAsignado || null);
-    const [costoPasaje, setCostoPasaje] = useState<number>(ticket.costoPasaje || 0);
     const [showReassign, setShowReassign] = useState(false);
     const [motivoReasignacion, setMotivoReasignacion] = useState("");
 
@@ -55,7 +54,6 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
 
         const assignmentData = {
             tecnicoAsignado: selectedTech,
-            costoPasaje: costoPasaje,
             fechaAsignacion: new Date().toISOString(),
             estado: "En Inspección",
             estadoId: "visita_programada"
@@ -77,7 +75,6 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
 
         const reassignmentData = {
             tecnicoAsignado: selectedTech,
-            costoPasaje: costoPasaje,
             fechaReasignacion: new Date().toISOString(),
             motivoReasignacion: motivoReasignacion,
             tecnicoAnterior: ticket.tecnicoAsignado
@@ -241,27 +238,7 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
                 </>
             )}
 
-            {/* Costo de Pasaje (Opcional) */}
-            <div className={styles.formGroup}>
-                <label className={styles.label}>
-                    <DollarSign size={16} />
-                    Costo de Pasajes (Opcional)
-                </label>
-                <div className={styles.moneyInput}>
-                    <span className={styles.currency}>S/.</span>
-                    <input
-                        type="number"
-                        min="0"
-                        step="0.50"
-                        value={costoPasaje}
-                        onChange={(e) => setCostoPasaje(Number(e.target.value))}
-                        placeholder="0.00"
-                    />
-                </div>
-                <small className={styles.hint}>
-                    💡 Este costo afectará la rentabilidad en la liquidación final
-                </small>
-            </div>
+            
 
             {/* Botones de Acción */}
             <div className={styles.actions}>
