@@ -2,6 +2,9 @@
 // Forced redeploy: v1.2 - Sincronizado con Flujo de Cotización y Borrado Inteligente
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+
+// 🚧 DEBUG: Mostrar logs de gestión de tickets en pantalla
+const DEBUG_GESTION = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
