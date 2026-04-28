@@ -122,8 +122,11 @@ export function useBranches(clientId?: string) {
     const [error, setError] = useState<Error | null>(null);
 
     const fetchBranches = useCallback(async () => {
-        // Optimización: No cargar si el clientId es un string vacío (comportamiento de Wizard)
-        if (clientId === "") {
+        // 🚧 FIX: Normalizar clientId - nunca undefined
+        const cid = clientId ?? "";
+        
+        // Optimización: No cargar si el clientId es un string vacío
+        if (!cid || cid === "") {
             setBranches([]);
             setLoading(false);
             return;
@@ -131,20 +134,29 @@ export function useBranches(clientId?: string) {
 
         try {
             setLoading(true);
-            setBranches([]); // Limpiar sedes anteriores para evitar confusión
-            const data = clientId
-                ? await branchesAPI.getByClient(clientId)
-                : await branchesAPI.getAll();
+            setBranches([]); // Limpiar sedes anteriores
+            
+            // Timeout de seguridad: 10 segundos max
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error("Timeout: más de 10 segundos")), 10000)
+            );
+            
+            const fetchPromise = branchesAPI.getByClient(cid);
+            const data: any = await Promise.race([fetchPromise, timeoutPromise]);
+            
             setBranches(data || []);
             setError(null);
-        } catch (err) {
+        } catch (err: any) {
             setError(err as Error);
-            console.error('Error fetching branches:', err);
-            setBranches([]); // Asegurar que no queden datos inconsistentes
+            console.error('[useBranches] Error fetching branches:', err.message || err);
+            // Si es timeout, igual mostrar vacío para que usuario pueda seleccionar otro cliente
+            if (err.message?.includes("Timeout")) {
+                setBranches([]);
+            }
         } finally {
             setLoading(false);
         }
-    }, [clientId]);
+    }, [clientId]); // clientId en dependencias
 
     useEffect(() => {
         fetchBranches();
