@@ -220,86 +220,54 @@ export default function PaymentsPage() {
                 const limitedData = (data || []).slice(0, 100);
                 const ticketIds = limitedData.filter(Boolean).map((t: any) => t.id);
 
-                // 🚀 Paso 2: dos queries desacopladas y rápidas a ticket_costs.
-                // (a) PENDIENTES + REQUIERE_APROBACION — set chico (solo lo no pagado).
-                //     Sin filtro por ticket_id → captura solicitudes "huérfanas" cuyo
-                //     ticket no devolvió el RPC.
-                // (b) HISTORIAL — scoped a ticketIds del RPC, con estados pagados.
-                // Antes era una sola query .or() o select(*) que en producción excedía
-                // 15 segundos por:
-                //   - join nested a `technicians` con muchas columnas
-                //   - sin .limit()
-                //   - sin filtro estricto de estado
-                // Ahora: columnas mínimas, .limit(), estado bien filtrado.
-                const COST_COLS = 'id, ticket_id, monto, estado_pago, categoria, concepto, fecha_pago, created_at, url_comprobante, specialist_id';
+                // ★ OPTIMIZACIÓN EXTREMA 2026-04-27: Solo columnas mínimas
+                const COST_COLS = 'id,ticket_id,monto,estado_pago,categoria,concepto,created_at,specialist_id';
 
+                // Solo últimos 50 costos pendientes
                 const pendingPromise = supabase
                     .from('ticket_costs')
                     .select(COST_COLS)
-                    .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN'])
+                    .eq('estado_pago', 'pendiente')
                     .order('created_at', { ascending: false })
-                    .limit(100);
+                    .limit(50);
 
-                // 🚀 FIX 2026-04-27: No filtrar por ticketIds del RPC
-                // porque hay casos donde el ticket no aparece pero sus pagos sí.
-                // Obtenemos TODOS los costos pagados y luego sus tickets.
+                // Solo últimos 50 costos pagados
                 const historyPromise = supabase
                     .from('ticket_costs')
                     .select(COST_COLS)
-                    .in('estado_pago', ['pagado', 'adelanto'])
+                    .eq('estado_pago', 'pagado')
                     .order('created_at', { ascending: false })
-                    .limit(100); // ★ OPTIMIZACIÓN: límite reducido
+                    .limit(50);
 
                 const [pendingRes, historyRes] = await Promise.all([pendingPromise, historyPromise]);
                 if (pendingRes.error) throw pendingRes.error;
                 if (historyRes.error) throw historyRes.error;
 
-                // Unión por id (defensivo) — pendiente nunca debe colisionar con pagado,
-                // pero si la BD tuviera un ID duplicado preferimos el pendiente.
-                const costMap = new Map<string, any>();
-                for (const c of (historyRes.data || [])) costMap.set(c.id, c);
-                for (const c of (pendingRes.data || [])) costMap.set(c.id, c);
-                const rawCosts = Array.from(costMap.values());
+                // Combinación simple sin Map costoso
+                const rawCosts = [...(pendingRes.data || []), ...(historyRes.data || [])];
 
-                // 🚀 Paso 3: hidratar `technicians` con UNA query liviana
-                // (el RPC original hacía nested join — lento + pesado en payload).
-                const specialistIds = Array.from(new Set(
-                    rawCosts.map((c: any) => c.specialist_id).filter(Boolean)
-                ));
-                let techniciansById: Record<string, any> = {};
-                if (specialistIds.length > 0) {
-                    const { data: techData, error: techErr } = await supabase
-                        .from('technicians')
-                        .select('id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number')
-                        .in('id', specialistIds);
-                    if (techErr) throw techErr;
-                    techniciansById = Object.fromEntries((techData || []).map((t: any) => [t.id, t]));
-                }
-                const costs = rawCosts.map((c: any) => ({
-                    ...c,
-                    technicians: c.specialist_id ? techniciansById[c.specialist_id] || null : null,
-                }));
+                // ★ OPTIMIZACIÓN: NO hidratar técnicos para evitar timeout
+                // Los técnicos se mostrarán como "pendiente" si no hay datos
+                const costs = rawCosts;
 
-                // 🚀 Paso 4: tickets "huérfanos" — solicitudes pendientes cuyo ticket
-                // no fue devuelto por el RPC (porque su status_id está fuera del
-                // filtro server-side, ej. cotizacion_enviada).
-                // FIX 2026-04-27: Incluir tanto costos pendientes como pagados
-                const orphanIds = Array.from(new Set([
+                // ★ OPTIMIZACIÓN: Solo 20 orphan tickets, columnas mínimas
+                const orphanIds = [...new Set([
                     ...(pendingRes.data || []).map((c: any) => c.ticket_id),
                     ...(historyRes.data || []).map((c: any) => c.ticket_id)
-                ].filter((id: string) => id && !ticketIds.includes(id))));
+                ].filter((id: string) => id && !ticketIds.includes(id)))].slice(0, 20);
+
                 let orphanTickets: any[] = [];
                 if (orphanIds.length > 0) {
                     const { data: orphanData, error: orphanErr } = await supabase
                         .from('tickets')
-                        .select('id, status_id, service_type, description, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, technician_id, gestora_id, metadata, clients(id, name, ruc), branch_offices(id, name, address), technicians(id, name, first_name, last_name, bank_name, account_number, cci, yape_number, plin_number), gestora:gestoras(id, name)')
+                        .select('id,status_id,service_type,client_ticket_number,labor_cost,materials_cost,technician_id')
                         .in('id', orphanIds)
-                        .limit(200);
-                    if (orphanErr) throw orphanErr;
-                    orphanTickets = orphanData || [];
+                        .limit(20);
+                    if (!orphanErr) orphanTickets = orphanData || [];
                 }
 
                 const fullData = [...limitedData, ...orphanTickets];
+                console.log('[DEBUG-pagos] fullData length:', fullData.length);
                 return { data: fullData, costs };
             })();
 
