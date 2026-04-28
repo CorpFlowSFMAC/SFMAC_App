@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Search, MapPin, Phone, Star, DollarSign, CheckCircle, RefreshCw, Building2, Globe } from "lucide-react";
+import { X, Search, MapPin, Phone, Star, DollarSign, CheckCircle, RefreshCw, Building2 } from "lucide-react";
 import { useAppData } from "@/lib/AppDataContext";
 import { SKILL_ICONS, getServiceById } from "@/lib/serviceTypes";
 import { normalizeZone, getZoneFullName, ZONES } from "@/lib/zones";
@@ -16,18 +16,10 @@ interface TechnicianDrawerProps {
     onShowToast?: (title: string, message: string, type: 'success' | 'error' | 'info') => void;
 }
 
-const MAX_VISITA_COST = 50;
-
 export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, onShowToast }: TechnicianDrawerProps) {
     const { technicians, loadingTechnicians: loading } = useAppData();
     const [selectedTechnician, setSelectedTechnician] = useState<any>(null);
-    const [costoVisita, setCostoVisita] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
-
-    // State for microzonification-filtered technicians
-    const [microzonTechs, setMicrozonTechs] = useState<any[] | null>(null);
-    const [loadingMicrozon, setLoadingMicrozon] = useState(false);
-    const [microzonError, setMicrozonError] = useState(false);
 
     // The branch ID of the ticket
     const branchId = ticket?.branch_id || ticket?.sede?.id || null;
@@ -36,21 +28,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
     const ticketZone = normalizeZone(ticket?.sede?.zona || ticket?.sede?.zone || ticket?.branch_offices?.zone);
     const ticketZoneDisplay = getZoneFullName(ticketZone);
     const ticketBranchName = ticket?.sede?.nombre || ticket?.sede?.name || ticket?.branch_offices?.name || 'Agencia del ticket';
-
-    // Load microzonification-aware technicians when branch is known
-    useEffect(() => {
-        if (!isOpen || !branchId) return;
-        setLoadingMicrozon(true);
-        setMicrozonError(false);
-        techniciansAPI.getAvailableForBranch(branchId)
-            .then(data => setMicrozonTechs(data || []))
-            .catch(err => {
-                console.error('[TechnicianDrawer] Error loading microzon techs:', err);
-                setMicrozonError(true);
-                setMicrozonTechs(null); // fallback to local filter
-            })
-            .finally(() => setLoadingMicrozon(false));
-    }, [isOpen, branchId]);
 
     // Get standardized skill name for matching
     const getStandardizedSkill = () => {
@@ -63,52 +40,39 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
 
     const requiredSkill = getStandardizedSkill();
 
-    // Build the pool of technicians to show:
-    // - If microzonification data loaded → use it (already filtered by branch coverage)
-    // - If no branch or error → fallback to zone-based filter
-    const techPool = (() => {
-        const base = microzonTechs !== null ? microzonTechs : (technicians || []).filter((tech: any) => {
-            const techZones: string[] = tech.assigned_zones?.length
-                ? tech.assigned_zones
-                : (tech.zone ? [tech.zone] : []);
-            return techZones.some(z => normalizeZone(z) === ticketZone);
-        });
+    // Build the pool of technicians - optimizado para evitar latencia:
+    // - SIEMPRE usar técnicos de useAppData directamente (cargados al iniciar app)
+    // - Filtrar localmente por zona + skill (sin llamada extra a BD)
+    const techPool = technicians?.filter((tech: any) => {
+        // Filtro por zona
+        const techZones: string[] = tech.assigned_zones?.length
+            ? tech.assigned_zones
+            : (tech.zone ? [tech.zone] : []);
+        const matchesZone = techZones.some(z => normalizeZone(z) === ticketZone);
 
-        return base.filter((tech: any) => {
-            // Apply skill filter
-            const specialties = tech.specialties || tech.especialidades || [];
-            const techSkills = specialties.map((s: string) => s.toUpperCase());
-            const matchesSkill = requiredSkill === "" || techSkills.includes(requiredSkill);
+        // Filtro por skill
+        const specialties = tech.specialties || tech.especialidades || [];
+        const techSkills = specialties.map((s: string) => s.toUpperCase());
+        const matchesSkill = requiredSkill === "" || techSkills.includes(requiredSkill);
 
-            // Apply search filter
-            const firstName = tech.first_name || tech.nombre || '';
-            const lastName = tech.last_name || tech.apellido || '';
-            const fullName = (tech.name || `${firstName} ${lastName}`).toLowerCase();
-            const docNumber = tech.document_number || tech.numeroDoc || '';
-            const matchesSearch = searchTerm === "" ||
-                fullName.includes(searchTerm.toLowerCase()) ||
-                docNumber.includes(searchTerm);
+        // Filtro por búsqueda
+        const firstName = tech.first_name || tech.nombre || '';
+        const lastName = tech.last_name || tech.apellido || '';
+        const fullName = (tech.name || `${firstName} ${lastName}`).toLowerCase();
+        const docNumber = tech.document_number || tech.numeroDoc || '';
+        const matchesSearch = searchTerm === "" ||
+            fullName.includes(searchTerm.toLowerCase()) ||
+            docNumber.includes(searchTerm);
 
-            // Status
-            const status = (tech.status || tech.estado || '').toLowerCase();
-            const isActive = status === 'active' || status === 'activo';
+        // Solo activos
+        const status = (tech.status || tech.estado || '').toLowerCase();
+        const isActive = status === 'active' || status === 'activo';
 
-            return matchesSkill && matchesSearch && isActive;
-        });
-    })();
+        return matchesZone && matchesSkill && matchesSearch && isActive;
+    }) || [];
 
     const handleAssign = () => {
         if (!selectedTechnician) return;
-
-        const visita = costoVisita ? parseFloat(costoVisita) : 0;
-        if (visita > MAX_VISITA_COST) {
-            if (onShowToast) {
-                onShowToast("Costo Excesivo", `El costo máximo de visita técnica es de S/ ${MAX_VISITA_COST}.00`, "error");
-            } else {
-                alert(`El costo máximo de visita técnica es de S/ ${MAX_VISITA_COST}.00`);
-            }
-            return;
-        }
 
         const assignmentData = {
             tecnico: {
@@ -126,7 +90,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                 yape: selectedTechnician.yape_number || selectedTechnician.yape,
                 plin: selectedTechnician.plin_number || selectedTechnician.plin
             },
-            costoVisita: visita,
             fechaAsignacion: new Date().toISOString()
         };
 
@@ -135,12 +98,12 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
 
     if (!isOpen) return null;
 
-    if (loading || loadingMicrozon) {
+    if (loading) {
         return (
             <div className={styles.loadingOverlay}>
                 <div className={styles.loadingContent}>
                     <RefreshCw className={styles.spin} size={40} />
-                    <p>{loadingMicrozon ? 'Calculando técnicos para esta agencia...' : 'Cargando técnicos autorizados...'}</p>
+                    <p>Cargando técnicos autorizados...</p>
                 </div>
             </div>
         );
@@ -179,17 +142,6 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                         <span className={styles.label}>Servicio</span>
                         <span className={styles.value}>⚙️ {ticket?.tipoServicioNombre || ticket?.tipoServicio}</span>
                     </div>
-                    {!microzonError && microzonTechs !== null && (
-                        <div className={styles.microzonBadge}>
-                            <Globe size={12} />
-                            Microzonificación activa · {techPool.length} técnico{techPool.length !== 1 ? 's' : ''} habilitado{techPool.length !== 1 ? 's' : ''}
-                        </div>
-                    )}
-                    {microzonError && (
-                        <div className={styles.microzonFallback}>
-                            ⚠️ Filtro por zona general (microzonificación no disponible)
-                        </div>
-                    )}
                 </div>
 
                 <div className={styles.searchBox}>
@@ -282,28 +234,7 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                     )}
                 </div>
 
-                {selectedTechnician && (
-                    <div className={styles.costoSection}>
-                        <div className={styles.costItem}>
-                    <label htmlFor="costoVisita">
-                        <MapPin size={14} />
-                        Costo de Visita (Máx. S/ {MAX_VISITA_COST})
-                    </label>
-                    <div className={styles.inputGroup}>
-                        <span className={styles.currency}>S/.</span>
-                        <input
-                            id="costoVisita"
-                            type="number"
-                            placeholder="0.00"
-                            max={MAX_VISITA_COST}
-                            value={costoVisita}
-                            onChange={(e) => setCostoVisita(e.target.value)}
-                        />
-                    </div>
-                        </div>
-                        <small>Este costo técnico se descontará de la utilidad bruta del ticket.</small>
-                    </div>
-                )}
+                
 
                 <div className={styles.footer}>
                     <button

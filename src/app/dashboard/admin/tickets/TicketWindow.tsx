@@ -865,22 +865,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
 
     const handleAssignment = async (assignmentData: any) => {
-        const visitaCost = parseFloat(assignmentData.costoVisita || 0);
-        const hasVisitCost = visitaCost > 0;
-
-        const PRE_ASSIGNMENT_STATES = ['nuevo', 'borrador', 'pendiente', 'tecnico_asignado'];
-        const newEstadoId = PRE_ASSIGNMENT_STATES.includes(ticketData.estadoId)
-            ? (hasVisitCost ? 'esperando_pago_visita' : 'en_inspeccion')
-            : ticketData.estadoId;
+        // Sin costo de visita en asignación - siempre va a en_inspeccion
+        const newEstadoId = 'en_inspeccion';
 
         const dbUpdates: any = {
             technician_id: assignmentData.tecnico?.id || null,
-            visit_cost: visitaCost,
+            visit_cost: null,
             status_id: newEstadoId,
             metadata: {
                 ...ticketData.metadata,
                 tecnico: assignmentData.tecnico,
-                costoVisita: visitaCost,
                 fechaAsignacion: assignmentData.fechaAsignacion,
                 estadoId: newEstadoId
             }
@@ -892,21 +886,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             } else {
                 await ticketsAPI.update(ticketData.id, dbUpdates);
             }
-
-            // Unificación: Si hay costo de visita, insertamos registro estándar en ticket_costs
-            if (hasVisitCost) {
-                await ticketCostsAPI.create({
-                    ticket_id: ticketData.id,
-                    monto: visitaCost,
-                    categoria: 'Viáticos / Movilidad',
-                    concepto: 'Costo por Visita Técnica (Asignación)',
-                    specialist_id: assignmentData.tecnico?.id,
-                    proveedor: (assignmentData.tecnico?.nombre || '') + ' ' + (assignmentData.tecnico?.apellido || ''),
-                    estado_pago: 'pendiente',
-                    solicitado_por: myProfileId || undefined
-                });
-                await loadCosts();
-            }
         } catch (err) {
             console.error('Error persisting assignment to Supabase:', err);
         }
@@ -915,8 +894,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             ...prev,
             ...assignmentData,
             estadoId: newEstadoId,
-            status_id: newEstadoId,
-            costoVisita: visitaCost
+            status_id: newEstadoId
         }));
         setShowAssignmentDrawer(false);
     };
