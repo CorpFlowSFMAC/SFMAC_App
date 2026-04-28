@@ -32,21 +32,33 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         }
     }
     
-    // ✅ FIX 2026-04-27: Calcular pagos directamente desde costs
-    const feeCategories = [
-        'mano de obra', 'Mano de Obra', 'MANO DE OBRA',
-        'adelanto', 'Adelanto', 'adelanto operativo', 'Adelanto Operativo',
-        'rescate financiero', 'Rescate Financiero', 'rescate', 'Rescate',
-        'honorarios', 'Honorarios'
-    ].map(s => s.toLowerCase()); // Todas a minúsculas para comparar
-    
+    // ✅ FIX 2026-04-28: SEPARAR SOLICITADO DE PAGADO
+    // Solo contar como "Pagado/Confirmado" los costos con estado explícito 'pagado' o 'adelanto'
     const technicianFeesArr = (costs || []).filter(c => {
         const catLower = (c.categoria || '').toLowerCase();
-        return feeCategories.includes(catLower) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
+        const estadoLower = (c.estado_pago || '').toLowerCase();
+        return feeCategories.includes(catLower) && 
+               c.estado_pago !== 'ANULADO' && 
+               c.estado_pago !== 'RECHAZADO';
     });
     
-    // Calcular suma directa de costs (más confiable que columna del backend)
-    const totalPaidFromCosts = technicianFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+    // ✅ NUEVO: Filtrar SOLO los pagos confirmados (para显示 separado)
+    const confirmedFeesArr = technicianFeesArr.filter(c => {
+        const estado = (c.estado_pago || '').toLowerCase();
+        return estado === 'pagado' || estado === 'adelanto' || estado === 'abonado';
+    });
+    
+    // ✅ NUEVO: Filtrar solicitudes pendientes (no pagadas aún)
+    const pendingFeesArr = technicianFeesArr.filter(c => {
+        const estado = (c.estado_pago || '').toLowerCase();
+        return estado === 'pendiente' || estado === 'requiere_aprobacion_admin' || estado === 'solicitado';
+    });
+    
+    // Calcular suma de confirmados (más confiable que columna del backend)
+    const totalPaidFromCosts = confirmedFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+    
+    // Calcular suma de solicitados (pendientes)
+    const totalPendingFromCosts = pendingFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
     
     // Fallback: si no hay costs, usar columna del backend
     const totalPaidCalculated = totalPaidFromCosts > 0 ? totalPaidFromCosts : (hasCosts ? 0 : adelantosDB);
@@ -60,8 +72,9 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     return {
         totalPactedDebt: pactedMO, // El monto base pactado
-        totalPaidCalculated, // ✅ Ahora calcula desde costs directamente
+        totalPaidCalculated, // ✅ Ahorasubesolo confirmados
         totalConfirmed: totalPaidCalculated,
+        totalRequested: totalPendingFromCosts, // ✅ NUEVO:Total de solicitudes pendientes
         totalInProcess: 0,
         balance: saldoDB, // Saldo inmutable desde la BD
         grossMargin: utilidadDB,
@@ -70,7 +83,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         pactedMO,
         pactedMat: 0,
         extraCosts,
-        paidModernArr: technicianFeesArr, 
+        paidModernArr: confirmedFeesArr, // ✅ Ahorasolo confirmados
+        paidModernPendingArr: pendingFeesArr, // ✅ NUEVO: Array de solicitados pendientes
         legacyPaymentsFiltered: [],
         operationalCostsArr
     };

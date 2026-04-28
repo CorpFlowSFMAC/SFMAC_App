@@ -314,6 +314,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         grossMargin,
         marginPercent: pctReal,
         paidModernArr,
+        paidModernPendingArr = [], // ✅ NUEVO:pendientes
+        totalRequested = 0, // ✅ NUEVO:total solicitado pendiente
         legacyPaymentsFiltered,
         extraCosts: extraPactedCosts,
         totalInvestment: totalTicketCosts,
@@ -3251,9 +3253,17 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         </div>
 
                                                         <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '12px' }}>
-                                                            <span className={styles.rowLabel} style={{ fontWeight: 800 }}>Total Depósitos Previos</span>
+                                                            <span className={styles.rowLabel} style={{ fontWeight: 800 }}>Total Pagado (Confirmado)</span>
                                                             <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
+                                                        
+                                                        {/* ✅ NUEVO:Mostrar solicitudes pendientes separately */}
+                                                        {totalRequested > 0 && (
+                                                        <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '8px' }}>
+                                                            <span className={styles.rowLabel} style={{ fontWeight: 600, color: '#D97706' }}>Total Solicitado (Pendiente)</span>
+                                                            <span className={styles.rowValue} style={{ color: '#D97706', fontSize: '16px' }}>S/ {totalRequested.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                        )}
 
                                                         {(paymentsSummary > 0 || legacyPaymentsFiltered.length > 0 || visitPayment > 0 || classicAdvance > 0) && (
                                                             <div className={styles.depositsListPremium}>
