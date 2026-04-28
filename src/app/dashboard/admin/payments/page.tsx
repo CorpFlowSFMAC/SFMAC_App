@@ -674,9 +674,15 @@ export default function PaymentsPage() {
                 // Usar el saldo correcto basado en pagos al técnico (no todas las compras)
                 const saldoReal = saldoPendienteTecnico;
 
-                // Relaxed condition: Process tickets that are not closed, even if formal saldo is 0
-                // (This allows material requests and early advances to show up before the quote is approved)
-                if (ticket.estadoId !== 'ticket_cerrado') {
+                // ★ FIX 2026-04-27: Mostrar tickets si:
+                // 1. No están cerrados, O
+                // 2. Tienen costos pendientes de pago (de ticket_costs)
+                // 3. Tienen historial de pagos (mostrar para referencia)
+                const hasPendingCosts = ticket.pendingCosts && ticket.pendingCosts.length > 0;
+                const hasHistory = allHistory.length > 0;
+                const shouldProcess = ticket.estadoId !== 'ticket_cerrado' || hasPendingCosts || hasHistory;
+                
+                if (shouldProcess) {
                     const jobCostBase = round2(costoManoObra + costoMateriales);
 
                     // 1. Adelanto (Metadata Legacy)
@@ -801,8 +807,21 @@ export default function PaymentsPage() {
                     }
                 });
 
-                // A: Añadir fila del Técnico Principal (si tiene items o historial)
-                if (techItems.length > 0 || (allHistory.length > 0 && techItems.length === 0 && pagasParaEsteBeneficiario(allHistory, 'técnico'))) {
+                // A: Añadir fila del Técnico Principal (siempre que tenga items o historial o costos pendientes)
+                if (techItems.length > 0 || hasHistory || hasPendingCosts) {
+                    
+                    // ★ FIX 2026-04-27: Si no hay items pendientes pero hay historial o costos pendientes,
+                    // añadir un item de "referencia" para que se muestre el grupo
+                    if (techItems.length === 0 && hasHistory) {
+                        const lastPayment = allHistory[0];
+                        techItems.push({
+                            id: `${ticket.id}_historial_ref`,
+                            tipo: `Referencia: ${lastPayment?.tipo || 'Historial'}`,
+                            monto: lastPayment?.monto || 0,
+                            estado: 'pagado',
+                            fecha: lastPayment?.fecha || ticket.created_at
+                        });
+                    }
                     allGroups.push({
                         ticketId: ticket.id,
                         realTicketId: ticket.id,
