@@ -1146,8 +1146,21 @@ export default function PaymentsPage() {
         // ★ UX FIX: Si el usuario está buscando, ignoramos el filtro de estado
         if (searchTerm && matchesSearch) return true;
 
+        // ★ ARQUITECTURA FINANCIERA: 
+        // - Bandeja Activa: Tickets abiertos (no cerrados) siempre visibles
+        // - Los adelantos/rescates pagados siguen visibles pero marcados como "Pagado"
+        // - Solo desaparecen cuando el ticket está cerrado (estado: 'cerrado')
+        
+        const isTicketClosed = g.statusId === 'cerrado';
+        
+        // Los tickets cerrados NO aparecen en la bandeja activa
+        if (isTicketClosed) return false;
+        
+        // Los tickets abiertos siempre aparecen, sin importar el estado de pago
+        // El filtro 'pendiente' ahora muestra tickets abiertos (adelanto puede estar pagado o no)
+        // El filtro 'pagado' muestra tickets con historial de depósitos
         const matchesStatus = filter === 'todos' ||
-                            (filter === 'pendiente' && g.items.some(i => i.estado === 'pendiente')) ||
+                            (filter === 'pendiente' && !isTicketClosed) ||  // Todos los tickets abiertos
                             (filter === 'pagado' && g.historialDepositos.length > 0);
         
         return matchesSearch && matchesStatus;
