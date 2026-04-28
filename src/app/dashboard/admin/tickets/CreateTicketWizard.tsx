@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import imageCompression from "browser-image-compression";
 import {
     X, ChevronLeft, ChevronRight, Check, Search, MapPin, Building2,
     Upload, Image as ImageIcon, FileText, Trash2, CheckCircle, Wrench, Users, Monitor, Sparkles,
@@ -227,48 +228,23 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
 
         // 🚀 OPTIMIZACIÓN: Si no hay archivos, saltamos toda la fase de
         // procesamiento/compresión. Si hay imágenes, las comprimimos en cliente
-        // (Canvas, sin dependencias extras) para no saturar JSONB en Supabase.
-        // - Imágenes → redimensionar a 1600px lado largo + JPEG calidad 0.75
-        // - Otros archivos (PDF, docs) → base64 directo, sin alterar
-        const compressImage = (file: File): Promise<string> =>
-            new Promise((resolve, reject) => {
-                const url = URL.createObjectURL(file);
-                const img = new Image();
-                img.onload = () => {
-                    try {
-                        const MAX_SIDE = 1600;
-                        let { width, height } = img;
-                        if (width > MAX_SIDE || height > MAX_SIDE) {
-                            if (width >= height) {
-                                height = Math.round((height * MAX_SIDE) / width);
-                                width = MAX_SIDE;
-                            } else {
-                                width = Math.round((width * MAX_SIDE) / height);
-                                height = MAX_SIDE;
-                            }
-                        }
-                        const canvas = document.createElement('canvas');
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) throw new Error('Canvas 2D no disponible');
-                        ctx.drawImage(img, 0, 0, width, height);
-                        // PNG con transparencia → mantener PNG; resto → JPEG comprimido
-                        const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-                        const dataUrl = canvas.toDataURL(outType, 0.75);
-                        URL.revokeObjectURL(url);
-                        resolve(dataUrl);
-                    } catch (err) {
-                        URL.revokeObjectURL(url);
-                        reject(err);
-                    }
+        // ★ NEW: Usar browser-image-compression para comprimir a máximo 1MB
+        const compressImage = async (file: File): Promise<string> => {
+            try {
+                const options = {
+                    maxSizeMB: 1,        // ★ Límite máximo de 1MB
+                    maxWidthOrHeight: 1600, // Resoluciones máxima
+                    useWebWorker: true,
+                    fileType: file.type === 'image/png' ? 'image/png' : 'image/jpeg' as const,
                 };
-                img.onerror = () => {
-                    URL.revokeObjectURL(url);
-                    reject(new Error('No se pudo cargar la imagen para comprimir'));
-                };
-                img.src = url;
-            });
+                const compressedFile = await imageCompression(file, options);
+                return await fileToBase64(compressedFile);
+            } catch (err) {
+                console.error('[CreateTicket] Compresión falló:', err);
+                // Fallback: usar original
+                return await fileToBase64(file);
+            }
+        };
 
         const fileToBase64 = (file: File): Promise<string> =>
             new Promise((resolve, reject) => {
