@@ -531,6 +531,7 @@ export default function PaymentsPage() {
     });
 
     useEffect(() => {
+        console.log('[DEBUG-useEffect tickets] tickets.length:', tickets.length, 'loading:', loading);
         if (tickets.length > 0) {
             processTicketsToGroups(tickets);
         } else if (!loading) {
@@ -586,6 +587,7 @@ export default function PaymentsPage() {
     };
 
     const processTicketsToGroups = (allTickets: any[]) => {
+        console.log('[DEBUG-processTickets] Recibidos:', allTickets?.length, 'tickets para procesar');
         const allGroups: PaymentTicketGroup[] = [];
 
         allTickets.forEach(ticket => {
