@@ -1294,6 +1294,11 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                         <Wallet size={16} color="#3B82F6" style={{ filter: 'drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3))' }} />
                     )}
                 </div>
+                {montoSaldo > 0 && pactadoLaborBase > 0 && (
+                    <span style={{ fontSize: '9px', color: '#3B82F6', fontStyle: 'italic', marginTop: '2px', display: 'block', fontWeight: 600 }}>
+                        Mano de obra pactada con el técnico
+                    </span>
+                )}
             </div>
 
             {onOpenMaterials && ticket.estadoId !== 'ticket_cerrado' && (

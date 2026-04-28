@@ -13,7 +13,17 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const utilidadDB = parseFloat(ticket.utilidad_neta || 0);
     const inversionDB = parseFloat(ticket.total_costs_agg || 0);
     const ingresosDB = parseFloat(ticket.ingresos_reales || 0);
-    const pactedMO = parseFloat(ticket.monto_pactado_mo || ticketData.labor_cost || ticketData.costoManoObra || 0);
+    // CRITICAL FIX: Read pactedMO from root ticket fields first (labor_cost, costoManoObra are
+    // mapped to the root by normalizeTicket), then fall back to metadata. This prevents S/0.00
+    // when ticketData === ticket.metadata (which lacks the root-level DB columns).
+    const pactedMO = parseFloat(
+        ticket.monto_pactado_mo ||
+        ticket.labor_cost ||
+        ticket.costoManoObra ||
+        ticketData.labor_cost ||
+        ticketData.costoManoObra ||
+        0
+    );
     const extraCosts = parseFloat(ticket.gastos_flujo_a || 0);
     
     // Categorizar costos para visualización (solo lectura)
