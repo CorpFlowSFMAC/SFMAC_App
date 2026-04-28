@@ -451,19 +451,9 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
-        /// ✅ Funciones de fallback si v2 no existe
-        try {
-            // Intentar v2 primero
-            const { data, error } = await supabase
-                .rpc('get_payment_tickets_ultra_light_v2');
-            if (!error && data) return data;
-        } catch (e) {
-            console.log('[getForPayments] v2 no existe, usando fallback');
-        }
-        
-        // Fallback: función original
+        // Usar función completa para traer TODOS los datos
         const { data, error } = await supabase
-            .rpc('get_payment_tickets_ultra_light');
+            .rpc('get_payment_tickets_ultra_light_full');
         if (error) throw error;
         return data;
     },
