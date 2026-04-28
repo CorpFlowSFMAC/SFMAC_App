@@ -1317,10 +1317,10 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                         marginRight: '8px'
                     }}
                     disabled={availableRescue <= 0}
-                    title={availableRescue > 0 ? "Solicitar Rescate Financiero (Adelanto)" : "Tope de mano de obra pactada alcanzado"}
+                    title={availableRescue > 0 ? "Solicitar Rescate Financiero (Adelanto)" : "No hay monto disponible para Rescate"}
                 >
                     <Coins size={16} color={availableRescue > 0 ? "#F59E0B" : "#94A3B8"} />
-                    <span>{availableRescue > 0 ? "Rescate" : "Tope"}</span>
+                    <span>Rescate</span>
                 </button>
             )}
 
