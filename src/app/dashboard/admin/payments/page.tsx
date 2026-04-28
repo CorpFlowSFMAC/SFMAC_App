@@ -208,7 +208,7 @@ export default function PaymentsPage() {
 
             // Timeout extendido a 30s; con conexión lenta 15s no alcanzaba.
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout de conexión')), 30000)
+                setTimeout(() => reject(new Error('Timeout de conexión')), 15000)
             );
 
             const fetchPromise = (async () => {
@@ -217,7 +217,8 @@ export default function PaymentsPage() {
                 const data = await ticketsAPI.getForPayments();
                 console.log('[DEBUG-pagos] getForPayments retornó:', data?.length, 'tickets');
                 
-                const ticketIds = (data || []).filter(Boolean).map((t: any) => t.id);
+                const limitedData = (data || []).slice(0, 100);
+                const ticketIds = limitedData.filter(Boolean).map((t: any) => t.id);
 
                 // 🚀 Paso 2: dos queries desacopladas y rápidas a ticket_costs.
                 // (a) PENDIENTES + REQUIERE_APROBACION — set chico (solo lo no pagado).
@@ -237,7 +238,7 @@ export default function PaymentsPage() {
                     .select(COST_COLS)
                     .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN'])
                     .order('created_at', { ascending: false })
-                    .limit(500);
+                    .limit(100);
 
                 // 🚀 FIX 2026-04-27: No filtrar por ticketIds del RPC
                 // porque hay casos donde el ticket no aparece pero sus pagos sí.
@@ -247,7 +248,7 @@ export default function PaymentsPage() {
                     .select(COST_COLS)
                     .in('estado_pago', ['pagado', 'adelanto'])
                     .order('created_at', { ascending: false })
-                    .limit(2000); // Límite mayor para asegurar cobertura
+                    .limit(100); // ★ OPTIMIZACIÓN: límite reducido
 
                 const [pendingRes, historyRes] = await Promise.all([pendingPromise, historyPromise]);
                 if (pendingRes.error) throw pendingRes.error;
@@ -298,7 +299,7 @@ export default function PaymentsPage() {
                     orphanTickets = orphanData || [];
                 }
 
-                const fullData = [...(data || []), ...orphanTickets];
+                const fullData = [...limitedData, ...orphanTickets];
                 return { data: fullData, costs };
             })();
 
