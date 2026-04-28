@@ -13,7 +13,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     let utilidadDB = parseFloat(ticket.utilidad_neta || ticketData.utilidad_neta || 0);
     let inversionDB = parseFloat(ticket.total_costs_agg || ticketData.total_costs_agg || 0);
     let ingresosDB = parseFloat(ticket.ingresos_reales || ticketData.ingresos_reales || 0);
-    let pactedMO = parseFloat(ticket.monto_pactado_mo || ticketData.monto_pactado_mo || ticketData.labor_cost || ticketData.costoManoObra || 0);
+    let pactedMO = parseFloat(ticketData.costoManoObra || ticket.monto_pactado_mo || ticketData.monto_pactado_mo || ticketData.labor_cost || ticket.labor_cost || 0);
     let extraCosts = parseFloat(ticket.gastos_flujo_a || ticketData.gastos_flujo_a || 0);
     let adelantosDB = parseFloat(ticket.adelantos_flujo_b || ticketData.adelantos_flujo_b || 0);
     

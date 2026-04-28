@@ -3232,6 +3232,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <div className={styles.mainFinancialRow}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                 <span className={styles.rowLabel}>{["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId) ? "Presupuesto Proyectado" : "Monto Pactado Trabajo"}</span>
+                                                                {ticketData.fechaCotización && (
+                                                                    <span style={{ fontSize: '10px', color: '#64748B', marginLeft: '4px' }}>
+                                                                        • {new Date(ticketData.fechaCotización).toLocaleDateString('es-PE')}
+                                                                    </span>
+                                                                )}
                                                                 {availableRescue > 0 && ticketData.estadoId !== "ticket_cerrado" && (
                                                                     <button 
                                                                         onClick={handleOpenRescue}
@@ -3253,7 +3258,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
                                                         <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '12px' }}>
                                                             <span className={styles.rowLabel} style={{ fontWeight: 800 }}>Total Depósitos Previos</span>
-                                                            <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })} <sup>[DEBUG: costs={ticketCosts?.length}]</sup></span>
+                                                            <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
 
                                                         {(paymentsSummary > 0 || legacyPaymentsFiltered.length > 0 || visitPayment > 0 || classicAdvance > 0) && (
