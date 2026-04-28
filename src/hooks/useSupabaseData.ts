@@ -136,23 +136,14 @@ export function useBranches(clientId?: string) {
             setLoading(true);
             setBranches([]); // Limpiar sedes anteriores
             
-            // Timeout de seguridad: 10 segundos max
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error("Timeout: más de 10 segundos")), 10000)
-            );
-            
-            const fetchPromise = branchesAPI.getByClient(cid);
-            const data: any = await Promise.race([fetchPromise, timeoutPromise]);
+            // Consulta directa - Sin timeout artificial
+            const data: any = await branchesAPI.getByClient(cid);
             
             setBranches(data || []);
             setError(null);
         } catch (err: any) {
             setError(err as Error);
             console.error('[useBranches] Error fetching branches:', err.message || err);
-            // Si es timeout, igual mostrar vacío para que usuario pueda seleccionar otro cliente
-            if (err.message?.includes("Timeout")) {
-                setBranches([]);
-            }
         } finally {
             setLoading(false);
         }
