@@ -455,29 +455,41 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     ? 'en_inspeccion'
                     : rawEstadoId;
 
-                    // --- RESTAURACIÓN SELECTIVA DEL CACHE LOCAL ---
+                    // Restaurar desde cache local O использовать el más avanzado entre cache y servidor
                     const savedState = localStorage.getItem(`ticket_state_${ticket.id}`);
                     let cachedMetadata: any = {};
+                    let cachedEstadoId: string | undefined;
                     if (savedState) {
                         try {
                             const parsed = JSON.parse(savedState);
-                            // Filtramos campos críticos que NUNCA deben sobreescribir al servidor si el ticket ya está activo
-                            const { estadoId: _, status_id: __, ...safe } = parsed;
+                            cachedEstadoId = parsed.estadoId;
+                            // Para tickets activos, preservar el estado local cacheado para evitar regresiones
                             const isTriage = !fullTicket.status_id || ['nuevo', 'borrador', 'pendiente'].includes(fullTicket.status_id);
                             if (isTriage) {
                                 cachedMetadata = parsed;
                             } else {
+                                // Para tickets ya avanzados, usar metadata del cache pero NO perder el estado más avanzado
+                                const { estadoId: _, status_id: __, ...safe } = parsed;
                                 cachedMetadata = safe;
                             }
                         } catch(e) {}
                     }
 
+                    // DETERMINAR EL ESTADO FINAL: Nunca retroceder
+                    const serverStateOrder = TICKET_STATE_ORDER[corregidoEstadoId] ?? 0;
+                    const cachedStateOrder = TICKET_STATE_ORDER[cachedEstadoId] ?? 0;
+                    // GANA el más avanzado
+                    const finalEstadoId = cachedStateOrder >= serverStateOrder 
+                        ? (cachedEstadoId || corregidoEstadoId) 
+                        : corregidoEstadoId;
+                    const finalStatusId = finalEstadoId;
+
                     setTicketData((prev: any) => {
                         const merged = {
                             ...prev, ...fullTicket, ...meta, ...cachedMetadata,
                             metadata: { ...meta, ...cachedMetadata },
-                            estadoId: corregidoEstadoId,
-                            status_id: corregidoEstadoId,
+                            estadoId: finalEstadoId,
+                            status_id: finalStatusId,
                             adelantoPagado: meta.adelantoPagado ?? false,
                             visitPaymentConfirmed: visitConfirmed,
                             solicitudAdelanto: meta.solicitudAdelanto ?? null,
@@ -538,7 +550,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             // PREVENIR PARPADEO Y REGRESIONES: Comparar el avance del flujo
             const serverStatusOrder = TICKET_STATE_ORDER[corregidoEstadoId] ?? 0;
             const prevStatusOrder = TICKET_STATE_ORDER[prev.estadoId] ?? 0;
-            const shouldPreservePrevState = prevStatusOrder > serverStatusOrder;
+            // SIEMPRE gana el más avanzado (nunca retroceder)
+            const shouldPreservePrevState = prevStatusOrder >= serverStatusOrder;
 
             return {
                 ...prev,
