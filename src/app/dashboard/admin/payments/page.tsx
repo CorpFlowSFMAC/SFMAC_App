@@ -98,9 +98,11 @@ function getCurrentMonthKey(): string {
 function flattenTicketForPayments(t: any) {
     if (!t) return t;
     let meta = t.metadata || {};
-    while (meta.metadata && typeof meta.metadata === "object") {
+    let iterations = 0;
+    while (meta.metadata && typeof meta.metadata === "object" && iterations < 5) {
         meta = { ...meta, ...meta.metadata };
         delete meta.metadata;
+        iterations++;
     }
     
     // Unificar historial y asegurar que adelantos/visitas clásicos sean contados
@@ -218,8 +220,14 @@ export default function PaymentsPage() {
             const fetchPromise = (async () => {
                 // 🚀 Paso 1: tickets vía RPC (filtra por estados de pago server-side).
                 console.log('[DEBUG-pagos] Iniciando fetchPaymentTickets...');
-                const data = await ticketsAPI.getForPayments();
-                console.log('[DEBUG-pagos] getForPayments retornó:', data?.length, 'tickets');
+                // 🚀 Paso 1: tickets vía RPC. Intentamos v2 si está disponible para aligerar metadata
+                console.log('[DEBUG-pagos] Iniciando fetchPaymentTickets...');
+                let { data, error: rpcErr } = await supabase.rpc('get_payment_tickets_ultra_light_v2');
+                if (rpcErr) {
+                    console.warn('[Payments] RPC v2 no disponible, usando v1...');
+                    data = await ticketsAPI.getForPayments();
+                }
+                console.log('[DEBUG-pagos] RPC retornó:', data?.length, 'tickets');
                 // Debug: verificar si hay tickets con solicitudAdelanto
                 const ticketsConAdelanto = data?.filter((t: any) => t.metadata?.solicitudAdelanto);
                 console.log('[DEBUG-pagos] Tickets con solicitudAdelanto:', ticketsConAdelanto?.length);
@@ -227,24 +235,26 @@ export default function PaymentsPage() {
                     console.log('[DEBUG-pagos] Primer ticket con Adelanto:', ticketsConAdelanto[0]?.id, ticketsConAdelanto[0]?.metadata?.solicitudAdelanto);
                 }
                 
-                const limitedData = (data || []).slice(0, 100);
+                // ★ OPTIMIZACIÓN 2026-04-29: Solo los últimos 50 tickets para aligerar la carga inicial
+                const limitedData = (data || []).slice(0, 50);
                 const ticketIds = limitedData.filter(Boolean).map((t: any) => t.id);
 
-                // ★ OPTIMIZACIÓN EXTREMA 2026-04-27: Solo columnas mínimas
+                // ★ OPTIMIZACIÓN EXTREMA: Solo columnas mínimas y FILTRADO POR TICKET_ID
+                // Esto permite que PostgreSQL use el índice de ticket_id y no escanee toda la tabla
                 const COST_COLS = 'id,ticket_id,monto,estado_pago,categoria,concepto,created_at,specialist_id';
 
-                // Solo últimos 50 costos pendientes
                 const pendingPromise = supabase
                     .from('ticket_costs')
                     .select(COST_COLS)
+                    .in('ticket_id', ticketIds)
                     .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN'])
                     .order('created_at', { ascending: false })
                     .limit(100);
 
-                // Solo últimos 50 costos pagados
                 const historyPromise = supabase
                     .from('ticket_costs')
                     .select(COST_COLS)
+                    .in('ticket_id', ticketIds)
                     .eq('estado_pago', 'pagado')
                     .order('created_at', { ascending: false })
                     .limit(50);
@@ -1424,7 +1434,7 @@ export default function PaymentsPage() {
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                                 letterSpacing: '0.05em'
                             }}>
-                                SINFIMAC CORP - TESORERÍA v2.3.1
+                                SINFIMAC CORP - TESORERÍA v2.3.2
                             </span>
                         Peticiones de Fondos
                         <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>

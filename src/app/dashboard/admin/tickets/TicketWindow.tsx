@@ -1985,7 +1985,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                 : `Ticket #${ticketData.id.slice(-6)}`)
                                         }
                                     </h3>
-                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.3.3 - Sincronizado</span></span>
+                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.3.4 - Sincronizado</span></span>
                                 </div>
                             </>
                         ) : (
@@ -3563,6 +3563,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)'
                                                             }}
                                                         >
+                                                            SINFIMAC CORP - TESORERÍA v1.3.4
                                                             CONFIRMAR CIERRE DEFINITIVO (SALDO 0)
                                                         </button>
                                                     )}
