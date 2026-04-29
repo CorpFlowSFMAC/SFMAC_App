@@ -247,8 +247,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                         const statusId = pNew.status_id || t.status_id;
                                         const incomingMeta = pNew.metadata || {};
                                         const existingMeta = t.metadata || {};
-                                        // Merge metadata: el payload nuevo gana EXCEPTO en campos
-                                        // criticos donde el cache local puede estar mas actualizado
+                                        
+                                        // Merge metadata: el payload nuevo gana.
+                                        // Solo protegemos campos si el incoming es explícitamente undefined
+                                        // (lo que indicaría un payload parcial corrupto).
                                         const mergedMeta = {
                                             ...existingMeta,
                                             ...incomingMeta,
@@ -483,7 +485,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                             const mergedMeta = {
                                 ...existingMeta,
                                 ...newMeta,
-                                // Campos criticos: si el nuevo valor es null/undefined, conservar el existente
+                                // Campos criticos: si el nuevo valor es null/undefined, y no es una limpieza intencional, conservar el existente.
+                                // Pero si el admin está limpiando (set a null), debemos respetarlo.
                                 solicitudAdelanto: newMeta.solicitudAdelanto !== undefined
                                     ? newMeta.solicitudAdelanto
                                     : existingMeta.solicitudAdelanto,
@@ -496,15 +499,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 solicitudLiquidacion: newMeta.solicitudLiquidacion !== undefined
                                     ? newMeta.solicitudLiquidacion
                                     : existingMeta.solicitudLiquidacion,
-                                historialPagosTecnico: (() => {
-                                    const prev = existingMeta.historialPagosTecnico || existingMeta.historialPagosTécnico || [];
-                                    const next = newMeta.historialPagosTecnico || newMeta.historialPagosTécnico || [];
-                                    if (next.length >= prev.length) return next;
-                                    return prev; // No retroceder el historial
-                                })(),
+                                // Eliminamos la restricción de historialPagosTecnico para permitir borrados
                             };
                             return {
-                                ...t,
+                                ...t, // Preservar campos locales como paidCosts, pendingCosts
                                 ...normalized,
                                 metadata: mergedMeta,
                                 // Propagar a nivel raiz para que TicketWindow los detecte
