@@ -337,25 +337,28 @@ export default function PaymentsPage() {
                 .eq('id', costId);
             
             if (error) throw error;
-            fetchPaymentTickets();
+            showToast('✅ Solicitud aprobada y enviada a Tesorería');
+            refresh();
         } catch (err) {
-            console.error('Error approving exceedance:', err);
-            alert('Error al aprobar el excedente');
+            console.error('[Payments] Error approving exceedance:', err);
+            alert('No se pudo aprobar la solicitud.');
         }
     };
 
     const handleRejectExceedance = async (costId: string) => {
+        if (!confirm('¿Desea denegar permanentemente esta solicitud de excedente?')) return;
         try {
             const { error } = await supabase
                 .from('ticket_costs')
-                .update({ estado_pago: 'RECHAZADO' })
+                .update({ estado_pago: 'rechazado' })
                 .eq('id', costId);
             
             if (error) throw error;
-            fetchPaymentTickets();
+            showToast('❌ Solicitud denegada');
+            refresh();
         } catch (err) {
-            console.error('Error rejecting exceedance:', err);
-            alert('Error al rechazar el excedente');
+            console.error('[Payments] Error rejecting exceedance:', err);
+            alert('No se pudo denegar la solicitud.');
         }
     };
 
@@ -1011,39 +1014,6 @@ export default function PaymentsPage() {
             alert('Error al denegar el pago.');
         } finally {
             executingRef.current = false;
-        }
-    };
-
-    const handleApproveExceedance = async (costId: string) => {
-        try {
-            const { error } = await supabase
-                .from('ticket_costs')
-                .update({ estado_pago: 'pendiente' })
-                .eq('id', costId);
-
-            if (error) throw error;
-            showToast('✅ Solicitud aprobada y enviada a Tesorería');
-            refresh();
-        } catch (err) {
-            console.error('[Payments] Error approving exceedance:', err);
-            alert('No se pudo aprobar la solicitud.');
-        }
-    };
-
-    const handleRejectExceedance = async (costId: string) => {
-        if (!confirm('¿Desea denegar permanentemente esta solicitud de excedente?')) return;
-        try {
-            const { error } = await supabase
-                .from('ticket_costs')
-                .update({ estado_pago: 'rechazado' })
-                .eq('id', costId);
-
-            if (error) throw error;
-            showToast('❌ Solicitud denegada');
-            refresh();
-        } catch (err) {
-            console.error('[Payments] Error rejecting exceedance:', err);
-            alert('No se pudo denegar la solicitud.');
         }
     };
 
