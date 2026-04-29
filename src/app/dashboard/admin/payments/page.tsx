@@ -1372,7 +1372,7 @@ export default function PaymentsPage() {
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                                 letterSpacing: '0.05em'
                             }}>
-                                SINFIMAC CORP - TESORERÍA v2.3.2
+                                SINFIMAC CORP - TESORERÍA v2.3.5 - FIXED
                             </span>
                         Peticiones de Fondos
                         <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
