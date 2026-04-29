@@ -50,9 +50,6 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const feeKeywords = ['mano de obra', 'adelanto', 'rescate', 'honorarios', 'pago', 'mo', 'comisión'];
     const operationalKeywords = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'gasto', 'compra'];
     
-    // Estados que consideramos como "dinero ya entregado o por entregar confirmado"
-    const validStates = ['pagado', 'adelanto', 'abonado', 'completado', 'autorizado', 'aprobado', 'transferido', 'confirmado', 'auditado', 'ejecutado'];
-
     const isConfirmed = (status: string | null | undefined) => {
         const st = (status || '').toLowerCase().trim();
         const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'auditado', 'ejecutado', 'autorizado admin', 'autorizado', 'aprobado', 'transferido', 'completado'];
@@ -75,7 +72,6 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const modernOps = confirmedModernPayments.filter(c => isOp(c.categoria || c.concepto || ''));
 
     // NUEVO: Filtrar solicitudes pendientes (no pagadas aún)
-    // Incluimos REQUIERE_APROBACION_ADMIN como pendiente para que el saldo baje preventivamente
     const pendingModernPayments = safeCosts.filter(c => {
         const st = (c.estado_pago || c.estado || '').toLowerCase();
         return st === 'pendiente' || st === 'requiere_aprobacion_admin';
@@ -109,17 +105,14 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const totalPendingFromCosts = pendingFeesArr.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
 
     // 6. RESULTADOS FINALES
-    // El balance inmutable de la DB se usa como base, pero el calculado es el que manda en UI para reactividad
     const realBalance = Math.max(0, round2(pactedMO - totalFeesOnlySum));
 
-    // Rentabilidad Dinámica (Soles)
     const totalInvestmentModern = safeCosts.reduce((acc: number, c: any) => {
         const st = (c.estado_pago || c.estado || '').toLowerCase();
         return (!st.includes('anulado') && !st.includes('rechazado')) ? acc + toNum(c.monto) : acc;
     }, 0);
     const totalInvestmentReal = round2(totalInvestmentModern + totalLegacyFeesSum);
 
-    // Si el backend no tiene utilidad, calculamos dinámicamente
     const currentGrossMargin = (utilidadDB > 0) ? utilidadDB : Math.max(0, round2(montoFinal - totalInvestmentReal));
     const currentMarginPercent = (margenDB > 0) ? (margenDB * 100) : (montoFinal > 0 ? (currentGrossMargin / montoFinal) * 100 : 0);
 
@@ -127,7 +120,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         totalPactedDebt: pactedMO,
         totalPaidCalculated: totalConfirmedSum,
         totalConfirmed: totalConfirmedSum,
-        totalRequested: totalPendingFromCosts, // Requerido por main
+        totalRequested: totalPendingFromCosts,
         totalInProcess: totalPendingFromCosts,
         balance: realBalance,
         grossMargin: currentGrossMargin,
@@ -137,7 +130,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         pactedMat: 0,
         extraCosts: toNum(ticket.gastos_flujo_a || 0),
         paidModernArr: modernFees,
-        paidModernPendingArr: pendingFeesArr, // Requerido por main
+        paidModernPendingArr: pendingFeesArr,
         legacyPaymentsFiltered: legacyFees,
         operationalCostsArr: [...modernOps, ...legacyOps]
     };
