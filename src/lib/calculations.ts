@@ -54,8 +54,9 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const validStates = ['pagado', 'adelanto', 'abonado', 'completado', 'autorizado', 'aprobado', 'transferido', 'confirmado', 'auditado', 'ejecutado'];
 
     const isConfirmed = (status: string | null | undefined) => {
-        const st = (status || '').toLowerCase();
-        return validStates.some(v => st.includes(v));
+        const st = (status || '').toLowerCase().trim();
+        const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'auditado', 'ejecutado', 'autorizado admin', 'autorizado', 'aprobado', 'transferido', 'completado'];
+        return valid.some(v => st.includes(v));
     };
 
     const confirmedModernPayments = safeCosts.filter(c => isConfirmed(c.estado_pago || c.estado));

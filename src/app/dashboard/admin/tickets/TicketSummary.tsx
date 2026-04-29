@@ -1385,8 +1385,9 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
 
     // Fuente Moderna
     const paidModernArr = (costos || []).filter(c => {
-        const st = (c.estado_pago || '').toLowerCase();
-        return st === 'pagado' || st === 'adelanto' || st === 'abonado';
+        const st = (c.estado_pago || c.estado || '').toLowerCase().trim();
+        const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'autorizado admin', 'autorizado', 'aprobado'];
+        return valid.some(v => st.includes(v));
     });
     
     // Fuente Legacy con Deduplicación
