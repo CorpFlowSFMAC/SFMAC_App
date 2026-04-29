@@ -137,6 +137,15 @@ export const normalizeTicket = (t: any) => {
         ...(t.adelantos_flujo_b !== undefined ? { adelantos_flujo_b: t.adelantos_flujo_b } : {}),
 
         metadata: realMetadata, // Objeto de metadata limpio (sin anidamiento excesivo)
+        
+        // --- PROPAGACIÓN DE SOLICITUDES A LA RAÍZ ---
+        // Esto evita el parpadeo en la UI al asegurar que el objeto ticket siempre
+        // tenga estas propiedades disponibles para los componentes que las consumen.
+        solicitudAdelanto: realMetadata.solicitudAdelanto,
+        adelantoPagado: realMetadata.adelantoPagado,
+        solicitudPagoVisita: realMetadata.solicitudPagoVisita,
+        solicitudLiquidacion: realMetadata.solicitudLiquidacion,
+        pagoRechazado: realMetadata.pagoRechazado,
     };
 };
 

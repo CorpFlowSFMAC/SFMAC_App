@@ -278,10 +278,41 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     : old
                         );
                         
-                        // Marcar detalle como stale pero NO disparar fetch inmediato
+                        // Actualizar Detalle en caché (si existe) con el MISMO MERGE
+                        queryClient.setQueryData(
+                            queryKeys.tickets.detail(ticketId),
+                            (old: any) => {
+                                if (!old) return old;
+                                const incomingMeta = pNew.metadata || {};
+                                const existingMeta = old.metadata || {};
+                                const mergedMeta = {
+                                    ...existingMeta,
+                                    ...incomingMeta,
+                                    solicitudAdelanto: incomingMeta.solicitudAdelanto !== undefined
+                                        ? incomingMeta.solicitudAdelanto
+                                        : existingMeta.solicitudAdelanto,
+                                    adelantoPagado: incomingMeta.adelantoPagado !== undefined
+                                        ? incomingMeta.adelantoPagado
+                                        : existingMeta.adelantoPagado,
+                                    solicitudPagoVisita: incomingMeta.solicitudPagoVisita !== undefined
+                                        ? incomingMeta.solicitudPagoVisita
+                                        : existingMeta.solicitudPagoVisita,
+                                };
+                                return {
+                                    ...old,
+                                    ...pNew,
+                                    metadata: mergedMeta,
+                                    solicitudAdelanto: mergedMeta.solicitudAdelanto,
+                                    adelantoPagado: mergedMeta.adelantoPagado ?? old.adelantoPagado,
+                                };
+                            }
+                        );
+
+                        // Marcar como stale pero ya tenemos los datos frescos y fusionados
                         queryClient.invalidateQueries({ 
                             queryKey: queryKeys.tickets.detail(ticketId),
-                            refetchType: 'none'
+                            exact: true,
+                            refetchType: 'none' 
                         });
                     } else if (payload.eventType === "DELETE") {
                         queryClient.setQueryData(
