@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
+import { compressImage } from "@/lib/imageCompression";
 import styles from "./TicketWindow.module.css";
 
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
@@ -357,8 +358,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             ? Math.min(availableRescue, computed)
             : computed;
     }
-    // REFUERZO LEGACY: Emergencias sin pactado definido aún
-    if (pactedMO <= 0 && (ticketData.estadoId === 'en_ejecucion' || ticketData.estadoId === 'visita_realizada')) {
+    // REFUERZO: Emergencias o estados activos sin pactado definido aún (para permitir solicitud base)
+    if (pactedMO <= 0 && ['visita_realizada', 'en_cotizacion', 'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion'].includes(ticketData.estadoId)) {
         if (availableRescue <= 0) availableRescue = 100;
     }
     const isVisitPaid = ticketData.visitPaymentConfirmed || ticketCosts.some(c => 
@@ -535,6 +536,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // Efecto de sincronización con el prop 'ticket' (viene del contexto global realtime)
     useEffect(() => {
         if (!ticket || !isInitialLoadComplete) return;
+        // Si hay una transacción de adelanto en curso, ignorar el update del prop
+        // para evitar el parpadeo entre pantallas por race condition
+        if (isProcessingAdvance.current) return;
 
         // Solo actualizar si el estado o metadata importante cambió en el prop
         setTicketData((prev: any) => {
@@ -623,6 +627,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isSyncing = useRef(false);
+    // Bloqueo durante transacciones de adelanto para evitar parpadeo por race condition
+    const isProcessingAdvance = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -905,10 +911,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setShowAssignmentDrawer(true);
     };
 
-    const handleFieldEvidenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFieldEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            const newfiles = Array.from(e.target.files);
-            const promises = newfiles.map(file => {
+            const rawFiles = Array.from(e.target.files);
+            
+            // Compresión de imágenes
+            const compressedFiles = await Promise.all(
+                rawFiles.map(file => compressImage(file))
+            );
+
+            const promises = compressedFiles.map(file => {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.readAsDataURL(file);
@@ -1284,6 +1296,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
 
         setIsConfirmingPayment(true);
+        isProcessingAdvance.current = true;
         try {
             // 1. Registro Financiero Inmutable
             await ticketCostsAPI.create({
@@ -1349,8 +1362,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             showToast("Error de Conexión", "No se pudo registrar el adelanto correctamente.", "error");
         } finally {
             setIsConfirmingPayment(false);
-            // ✅ Limpiar flag execution
+            // ✅ Limpiar flags
             confirmAdvanceRef.current = false;
+            setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }
     };
     const handleRequestAdvance = async () => {
@@ -1385,6 +1399,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
 
+        // Bloquear actualizaciones del prop durante la transacción para evitar parpadeo
+        isProcessingAdvance.current = true;
         try {
             const updated = {
                 ...ticketData,
@@ -1408,8 +1424,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             console.error("Error al solicitar adelanto:", err);
             showToast("Error de Conexión", "No se pudo registrar la solicitud.", "error");
         } finally {
-            // ✅ Limpiar flag execution
+            // ✅ Limpiar flags
             requestAdvanceRef.current = false;
+            setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }
     };
 
@@ -1506,19 +1523,41 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         setIsSavingNegotiation(true);
         setShowExceedApprovalConfirm(false);
         try {
+            // 1. Preparar metadata correcta (Evitar bug de updated.metadata || updated)
+            const newMetadata = {
+                ...(ticketData.metadata || {}),
+                excepcionPresupuestoAprobada: true,
+                fechaAprobacionExcepcion: new Date().toISOString(),
+                aprobadoPor: myProfileId,
+                is_frozen: false // Asegurar limpieza de bandera si existe
+            };
+
             const updated = {
                 ...ticketData,
                 estadoId: "por_liquidar",
                 status_id: "por_liquidar",
-                excepcionPresupuestoAprobada: true,
-                fechaAprobacionExcepcion: new Date().toISOString(),
-                aprobadoPor: myProfileId
+                metadata: newMetadata
             };
+
+            // 2. Actualización local inmediata para respuesta instantánea de la UI
             setTicketData(updated);
-            await onUpdate?.(ticketData.id, { 
-                status_id: "por_liquidar",
-                metadata: updated.metadata || updated
-            });
+
+            // 3. Persistencia en Servidor
+            if (onUpdate) {
+                const result = await onUpdate(ticketData.id, { 
+                    status_id: "por_liquidar",
+                    metadata: newMetadata
+                });
+                
+                // 4. Sincronización final con el resultado del servidor y recarga de costos
+                if (result) {
+                    setTicketData((prev: any) => ({ ...prev, ...result, estadoId: "por_liquidar" }));
+                }
+                
+                // Forzar recarga de costos para asegurar que los cálculos financieros se actualicen
+                await loadCosts();
+            }
+
             showToast("Excepción Aprobada", "El ticket ha sido liberado para liquidación final.", "success");
         } catch (err) {
             console.error("Error approving budget exceed:", err);
@@ -1589,11 +1628,18 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     };
 
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files) return;
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const rawFiles = e.target.files;
+        if (!rawFiles) return;
 
-        Array.from(files).forEach(file => {
+        const files = Array.from(rawFiles);
+        
+        // Compresión paralela
+        const compressedFiles = await Promise.all(
+            files.map(file => compressImage(file))
+        );
+
+        compressedFiles.forEach(file => {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const url = event.target?.result as string;

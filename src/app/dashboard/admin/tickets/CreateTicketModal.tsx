@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, MapPin, Building2, Upload, FileImage, Unlock, Lock } from "lucide-react";
 import styles from "./createTicketModal.module.css";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { compressImage } from "@/lib/imageCompression";
 
 interface CreateTicketModalProps {
     isOpen: boolean;
@@ -98,11 +99,13 @@ export default function CreateTicketModal({ isOpen, onClose, onSave }: CreateTic
                 if (items[i].type.indexOf('image') !== -1) {
                     const blob = items[i].getAsFile();
                     if (blob) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            setFormData(prev => ({ ...prev, evidenciaFoto: event.target?.result as string }));
-                        };
-                        reader.readAsDataURL(blob);
+                        compressImage(blob).then(compressed => {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                setFormData(prev => ({ ...prev, evidenciaFoto: event.target?.result as string }));
+                            };
+                            reader.readAsDataURL(compressed);
+                        });
                     }
                 }
             }
@@ -130,14 +133,15 @@ export default function CreateTicketModal({ isOpen, onClose, onSave }: CreateTic
         setFormData({ ...formData, sedeId: sede.id });
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            const compressed = await compressImage(file);
             const reader = new FileReader();
             reader.onloadend = () => {
                 setFormData({ ...formData, evidenciaFoto: reader.result as string });
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(compressed);
         }
     };
 

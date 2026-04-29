@@ -5,94 +5,127 @@ import { round2 } from "./formatters";
  * Esta función unifica el cálculo de pagos (Legacy + Moderno) y costos pactados.
  */
 export function calculateTicketFinances(ticket: any, costs: any[] = []) {
-    const ticketData = ticket.metadata || ticket;
+    // 1. NORMALIZACIÓN DE METADATA
+    const rawMetadata = ticket.metadata || {};
+    const safeCosts = Array.isArray(costs) ? costs : [];
     
-    // 1. Intentar obtener valores pre-calculados desde el backend
-    let saldoDB = parseFloat(ticket.saldo_tecnico || ticketData.saldo_tecnico || 0);
-    let margenDB = parseFloat(ticket.margen_real || ticketData.margen_real || 0);
-    let utilidadDB = parseFloat(ticket.utilidad_neta || ticketData.utilidad_neta || 0);
-    let inversionDB = parseFloat(ticket.total_costs_agg || ticketData.total_costs_agg || 0);
-    let ingresosDB = parseFloat(ticket.ingresos_reales || ticketData.ingresos_reales || 0);
-    let pactedMO = parseFloat(ticketData.costoManoObra || ticket.monto_pactado_mo || ticketData.monto_pactado_mo || ticketData.labor_cost || ticket.labor_cost || 0);
-    let extraCosts = parseFloat(ticket.gastos_flujo_a || ticketData.gastos_flujo_a || 0);
-    let adelantosDB = parseFloat(ticket.adelantos_flujo_b || ticketData.adelantos_flujo_b || 0);
-    
-    // ✅ FALLBACK: Si los valores del backend están en cero pero hay costs, calcular desde costos
-    const hasCosts = costs && costs.length > 0;
-    
-    // Si el margen está en cero pero hay presupuesto y costos, calcular localmente
-    const presupuesto = parseFloat(ticket.total_quoted_amount || ticketData.total_quoted_amount || ticketData.montoFinal || 0);
-    if (hasCosts && (margenDB === 0 || utilidadDB === 0) && presupuesto > 0) {
-        // Calcular depuis costs
-        const totalCost = costs.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-        if (totalCost > 0) {
-            inversionDB = totalCost;
-            utilidadDB = round2(presupuesto - totalCost);
-            margenDB = presupuesto > 0 ? round2((utilidadDB / presupuesto) * 100) : 0;
+    // Función auxiliar para parseo ultra-seguro
+    const toNum = (val: any) => {
+        if (typeof val === 'number') return val;
+        if (typeof val === 'string') {
+            const clean = val.replace(/[^0-9.-]/g, '');
+            return parseFloat(clean) || 0;
         }
-    }
-    
-    // ✅ FIX 2026-04-28: SEPARAR SOLICITADO DE PAGADO
-    // Solo contar como "Pagado/Confirmado" los costos con estado explícito 'pagado' o 'adelanto'
-    const feeCategories = [
-        'mano de obra', 'Mano de Obra', 'MANO DE OBRA',
-        'adelanto', 'Adelanto', 'adelanto operativo', 'Adelanto Operativo',
-        'rescate financiero', 'Rescate Financiero', 'rescate', 'Rescate',
-        'honorarios', 'Honorarios'
-    ].map(s => s.toLowerCase()); // Todas a minúsculas para comparar
-    
-    const technicianFeesArr = (costs || []).filter(c => {
-        const catLower = (c.categoria || '').toLowerCase();
-        const estadoLower = (c.estado_pago || '').toLowerCase();
-        return feeCategories.includes(catLower) && 
-               c.estado_pago !== 'ANULADO' && 
-               c.estado_pago !== 'RECHAZADO';
-    });
-    
-    // ✅ NUEVO: Filtrar SOLO los pagos confirmados (para显示 separado)
-    const confirmedFeesArr = technicianFeesArr.filter(c => {
-        const estado = (c.estado_pago || '').toLowerCase();
-        return estado === 'pagado' || estado === 'adelanto' || estado === 'abonado';
-    });
-    
-    // ✅ NUEVO: Filtrar solicitudes pendientes (no pagadas aún)
-    const pendingFeesArr = technicianFeesArr.filter(c => {
-        const estado = (c.estado_pago || '').toLowerCase();
-        return estado === 'pendiente' || estado === 'requiere_aprobacion_admin' || estado === 'solicitado';
-    });
-    
-    // Calcular suma de confirmados (más confiable que columna del backend)
-    const totalPaidFromCosts = confirmedFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-    
-    // Calcular suma de solicitados (pendientes)
-    const totalPendingFromCosts = pendingFeesArr.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
-    
-    // Fallback: si no hay costs, usar columna del backend
-    const totalPaidCalculated = totalPaidFromCosts > 0 ? totalPaidFromCosts : (hasCosts ? 0 : adelantosDB);
+        return 0;
+    };
 
-    // Categorizar costos para visualización (solo lectura)
-    const operationalCategories = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'viáticos / movilidad'];
-    const operationalCostsArr = (costs || []).filter(c => {
-        const cat = (c.categoria || '').toLowerCase();
-        return operationalCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
+    // 2. DETECCIÓN DE MONTOS PACTADOS (Blindaje contra nulos y ceros)
+    const pactedMO = [
+        ticket.monto_pactado_mo,
+        ticket.labor_cost,
+        ticket.costoManoObra,
+        rawMetadata.monto_pactado_mo,
+        rawMetadata.labor_cost,
+        rawMetadata.costoManoObra
+    ].map(v => toNum(v)).find(v => v > 0) || 0;
+    
+    const montoFinal = [
+        ticket.total_quoted_amount,
+        ticket.montoFinal,
+        ticket.montoTotalCotizado,
+        rawMetadata.total_quoted_amount,
+        rawMetadata.montoFinal,
+        rawMetadata.montoTotalCotizado
+    ].map(v => toNum(v)).find(v => v > 0) || 0;
+
+    const ingresosReales = toNum(ticket.ingresos_reales || 0);
+    const utilidadDB = toNum(ticket.utilidad_neta || 0);
+    const margenDB = toNum(ticket.margen_real || 0);
+
+    // 3. CATEGORIZACIÓN Y ESTADOS (Expansión de estados válidos)
+    const feeKeywords = ['mano de obra', 'adelanto', 'rescate', 'honorarios', 'pago', 'mo', 'comisión'];
+    const operationalKeywords = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'gasto', 'compra'];
+    
+    // Estados que consideramos como "dinero ya entregado o por entregar confirmado"
+    const validStates = ['pagado', 'adelanto', 'abonado', 'completado', 'autorizado', 'aprobado', 'transferido', 'confirmado'];
+
+    const confirmedModernPayments = safeCosts.filter(c => {
+        const st = (c.estado_pago || c.estado || '').toLowerCase();
+        return validStates.some(v => st.includes(v));
     });
+
+    const isFee = (cat: string) => {
+        const c = (cat || '').toLowerCase();
+        return feeKeywords.some(key => c.includes(key));
+    };
+    
+    const isOp = (cat: string) => {
+        const c = (cat || '').toLowerCase();
+        return operationalKeywords.some(key => c.includes(key));
+    };
+
+    const modernFees = confirmedModernPayments.filter(c => isFee(c.categoria));
+    const modernOps = confirmedModernPayments.filter(c => isOp(c.categoria));
+
+    // NUEVO: Filtrar solicitudes pendientes (no pagadas aún)
+    const pendingFeesArr = safeCosts.filter(c => {
+        const cat = (c.categoria || '').toLowerCase();
+        const st = (c.estado_pago || c.estado || '').toLowerCase();
+        return isFee(cat) && (st.includes('pendiente') || st.includes('requiere') || st.includes('solicitado'));
+    });
+
+    // 4. PAGOS LEGACY (Deduplicación mejorada)
+    const legacyHistory = 
+        (Array.isArray(ticket.historialPagosTecnico) ? ticket.historialPagosTecnico : null) ||
+        (Array.isArray(ticket.historialPagosTécnico) ? ticket.historialPagosTécnico : null) ||
+        (Array.isArray(rawMetadata.historialPagosTecnico) ? rawMetadata.historialPagosTecnico : null) ||
+        [];
+
+    const legacyPaymentsFiltered = legacyHistory.filter((h: any) => {
+        const hMonto = toNum(h.monto);
+        if (hMonto <= 0 || h.estado === 'anulado') return false;
+        // No contar si ya está en modernFees
+        return !modernFees.some(m => Math.abs(hMonto - toNum(m.monto)) < 0.01);
+    });
+
+    // 5. CÁLCULO DE TOTALES
+    const totalModernFeesSum = modernFees.reduce((acc, c) => acc + toNum(c.monto), 0);
+    const totalLegacyFeesSum = legacyPaymentsFiltered.reduce((acc: number, h: any) => acc + toNum(h.monto), 0);
+    const totalConfirmedSum = round2(totalModernFeesSum + totalLegacyFeesSum);
+
+    const totalPendingFromCosts = pendingFeesArr.reduce((acc, c) => acc + toNum(c.monto), 0);
+
+    // 6. RESULTADOS FINALES
+    // El balance inmutable de la DB se usa como base, pero el calculado es el que manda en UI para reactividad
+    const realBalance = Math.max(0, round2(pactedMO - totalConfirmedSum));
+
+    // Rentabilidad Dinámica (Soles)
+    const totalInvestmentModern = safeCosts.reduce((acc, c) => {
+        const st = (c.estado_pago || c.estado || '').toLowerCase();
+        return (!st.includes('anulado') && !st.includes('rechazado')) ? acc + toNum(c.monto) : acc;
+    }, 0);
+    const totalInvestmentReal = round2(totalInvestmentModern + totalLegacyFeesSum);
+
+    // Si el backend no tiene utilidad, calculamos dinámicamente
+    const currentGrossMargin = (utilidadDB > 0) ? utilidadDB : Math.max(0, round2(montoFinal - totalInvestmentReal));
+    const currentMarginPercent = (margenDB > 0) ? (margenDB * 100) : (montoFinal > 0 ? (currentGrossMargin / montoFinal) * 100 : 0);
 
     return {
-        totalPactedDebt: pactedMO, // El monto base pactado
-        totalPaidCalculated, // ✅ Ahorasubesolo confirmados
-        totalConfirmed: totalPaidCalculated,
-        totalRequested: totalPendingFromCosts, // ✅ NUEVO:Total de solicitudes pendientes
-        totalInProcess: 0,
-        balance: saldoDB, // Saldo inmutable desde la BD
-        grossMargin: utilidadDB,
-        marginPercent: margenDB,
-        totalInvestment: inversionDB,
+        totalPactedDebt: pactedMO,
+        totalPaidCalculated: totalConfirmedSum,
+        totalConfirmed: totalConfirmedSum,
+        totalRequested: totalPendingFromCosts, // Requerido por main
+        totalInProcess: totalPendingFromCosts,
+        balance: realBalance,
+        grossMargin: currentGrossMargin,
+        marginPercent: currentMarginPercent,
+        totalInvestment: totalInvestmentReal,
         pactedMO,
         pactedMat: 0,
-        extraCosts,
-        paidModernArr: confirmedFeesArr, // ✅ Ahorasolo confirmados
-        paidModernPendingArr: pendingFeesArr, // ✅ NUEVO: Array de solicitados pendientes
-        legacyPaymentsFiltered: [],
-        operationalCostsArr
+        extraCosts: toNum(ticket.gastos_flujo_a || 0),
+        paidModernArr: modernFees,
+        paidModernPendingArr: pendingFeesArr, // Requerido por main
+        legacyPaymentsFiltered,
+        operationalCostsArr: modernOps
     };
 }

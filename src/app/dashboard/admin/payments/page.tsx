@@ -13,6 +13,7 @@ import { ticketsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
 import { round2, formatSoles } from "@/lib/formatters";
+import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
 
 interface PaymentItem {
@@ -1744,15 +1745,17 @@ export default function PaymentsPage() {
                                                                         <Upload size={11} />
                                                                         Ya pagué · Subir voucher
                                                                         <input type="file" accept="image/*" style={{ display: 'none' }}
-                                                                            onChange={(e) => {
-                                                                                if (e.target.files?.[0]) {
+                                                                            onChange={async (e) => {
+                                                                                const file = e.target.files?.[0];
+                                                                                if (file) {
+                                                                                    const compressed = await compressImage(file);
                                                                                     const reader = new FileReader();
                                                                                     reader.onloadend = () => setPendingConfirmation({
                                                                                         group, item,
                                                                                         voucher: reader.result as string,
                                                                                         message: `¿Confirmar depósito de S/ ${formatSoles(item.monto)} para ${item.tipo}?`
                                                                                     });
-                                                                                    reader.readAsDataURL(e.target.files[0]);
+                                                                                    reader.readAsDataURL(compressed);
                                                                                 }
                                                                             }} />
                                                                     </label>
@@ -1917,8 +1920,10 @@ export default function PaymentsPage() {
                                         type="file"
                                         accept="image/*"
                                         style={{ display: 'none' }}
-                                        onChange={(e) => {
-                                            if (e.target.files?.[0]) {
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const compressed = await compressImage(file);
                                                 const reader = new FileReader();
                                                 reader.onloadend = () => {
                                                     const capturedWaiting = waitingVoucher!;
@@ -1930,7 +1935,7 @@ export default function PaymentsPage() {
                                                     );
                                                     showToast('🎉 ¡Pago registrado y cerrado!');
                                                 };
-                                                reader.readAsDataURL(e.target.files[0]);
+                                                reader.readAsDataURL(compressed);
                                             }
                                         }}
                                     />

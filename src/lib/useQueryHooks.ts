@@ -123,19 +123,29 @@ export const normalizeTicket = (t: any) => {
             t.diagnosis || t.diagnostico || realMetadata.diagnostico,
             
         // --- IMMUTABLE FINANCIAL FIELDS FROM BACKEND ---
-        // Ensure these always come from the root `t` object (vw_ticket_financials)
-        // and are not overwritten by stale legacy values in `realMetadata`.
-        saldo_tecnico: t.saldo_tecnico,
-        margen_real: t.margen_real,
-        utilidad_neta: t.utilidad_neta,
-        inversion_ejecutada: t.inversion_ejecutada ?? t.total_costs_agg,
-        total_costs_agg: t.total_costs_agg,
-        ingresos_reales: t.ingresos_reales,
-        monto_pactado_mo: t.monto_pactado_mo,
-        gastos_flujo_a: t.gastos_flujo_a,
-        adelantos_flujo_b: t.adelantos_flujo_b,
+        // Solo incluirlos si están presentes en 't' para no sobreescribir el caché local con undefined
+        // (ya que update() devuelve un SELECT simple sin estos campos calculados de la vista)
+        ...(t.saldo_tecnico !== undefined ? { saldo_tecnico: t.saldo_tecnico } : {}),
+        ...(t.margen_real !== undefined ? { margen_real: t.margen_real } : {}),
+        ...(t.utilidad_neta !== undefined ? { utilidad_neta: t.utilidad_neta } : {}),
+        ...(t.inversion_ejecutada !== undefined ? { inversion_ejecutada: t.inversion_ejecutada } : 
+           (t.total_costs_agg !== undefined ? { inversion_ejecutada: t.total_costs_agg } : {})),
+        ...(t.total_costs_agg !== undefined ? { total_costs_agg: t.total_costs_agg } : {}),
+        ...(t.ingresos_reales !== undefined ? { ingresos_reales: t.ingresos_reales } : {}),
+        ...(t.monto_pactado_mo !== undefined ? { monto_pactado_mo: t.monto_pactado_mo } : {}),
+        ...(t.gastos_flujo_a !== undefined ? { gastos_flujo_a: t.gastos_flujo_a } : {}),
+        ...(t.adelantos_flujo_b !== undefined ? { adelantos_flujo_b: t.adelantos_flujo_b } : {}),
 
         metadata: realMetadata, // Objeto de metadata limpio (sin anidamiento excesivo)
+        
+        // --- PROPAGACIÓN DE SOLICITUDES A LA RAÍZ ---
+        // Esto evita el parpadeo en la UI al asegurar que el objeto ticket siempre
+        // tenga estas propiedades disponibles para los componentes que las consumen.
+        solicitudAdelanto: realMetadata.solicitudAdelanto,
+        adelantoPagado: realMetadata.adelantoPagado,
+        solicitudPagoVisita: realMetadata.solicitudPagoVisita,
+        solicitudLiquidacion: realMetadata.solicitudLiquidacion,
+        pagoRechazado: realMetadata.pagoRechazado,
     };
 };
 

@@ -1180,7 +1180,7 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
 
     if (!visibleStates.includes(ticket.estadoId)) return null;
 
-    const availableRescue = finances.balance;
+    const availableRescue = propRescue !== undefined ? propRescue : Math.max(finances.balance, finances.pactedMO - finances.totalPaidCalculated);
 
     return (
         <div
@@ -1294,6 +1294,11 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                         <Wallet size={16} color="#3B82F6" style={{ filter: 'drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3))' }} />
                     )}
                 </div>
+                {montoSaldo > 0 && pactadoLaborBase > 0 && (
+                    <span style={{ fontSize: '9px', color: '#3B82F6', fontStyle: 'italic', marginTop: '2px', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>
+                        * Pendiente de Mano de Obra Pactada
+                    </span>
+                )}
             </div>
 
             {onOpenMaterials && ticket.estadoId !== 'ticket_cerrado' && (
@@ -1317,10 +1322,13 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                         marginRight: '8px'
                     }}
                     disabled={availableRescue <= 0}
-                    title={availableRescue > 0 ? "Solicitar Rescate Financiero (Adelanto)" : "No hay monto disponible para Rescate"}
+                    title={availableRescue > 0 ? "Solicitar Adelanto de Mano de Obra (Rescate)" : "Se ha alcanzado el tope de la mano de obra pactada"}
                 >
                     <Coins size={16} color={availableRescue > 0 ? "#F59E0B" : "#94A3B8"} />
-                    <span>Rescate</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 900 }}>{availableRescue > 0 ? "Rescate" : "Tope"}</span>
+                        <span style={{ fontSize: '8px', opacity: 0.8 }}>Adelanto M.O.</span>
+                    </div>
                 </button>
             )}
 

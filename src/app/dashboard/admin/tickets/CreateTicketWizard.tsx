@@ -12,6 +12,7 @@ import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { useAppData } from "@/lib/AppDataContext";
 import { useBranches } from "@/hooks/useSupabaseData";
 import { gestorasAPI } from "@/lib/routing-api";
+import { compressImage } from "@/lib/imageCompression";
 
 interface CreateTicketWizardProps {
     onClose: () => void;
@@ -779,10 +780,13 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                         type="file"
                                         multiple
                                         accept="image/*,video/*,.pdf"
-                                        onChange={(e) => {
+                                        onChange={async (e) => {
                                             if (e.target.files) {
                                                 const newFiles = Array.from(e.target.files);
-                                                setFormData({ ...formData, evidencias: [...formData.evidencias, ...newFiles] });
+                                                const compressed = await Promise.all(
+                                                    newFiles.map(file => compressImage(file))
+                                                );
+                                                setFormData({ ...formData, evidencias: [...formData.evidencias, ...compressed] });
                                             }
                                         }}
                                         style={{ display: 'none' }}
