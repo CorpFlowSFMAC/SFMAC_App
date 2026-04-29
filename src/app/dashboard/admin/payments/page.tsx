@@ -35,6 +35,7 @@ interface PaymentItem {
     specialistYape?: string;
     specialistPlin?: string;
     hasVoucher?: boolean; // Flag para carga diferida de base64
+    isReference?: boolean; // Marca ítems usados como referencia histórica
 }
 
 interface PaymentTicketGroup {
