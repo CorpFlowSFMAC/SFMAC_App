@@ -53,8 +53,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     // Estados que consideramos como "dinero ya entregado o por entregar confirmado"
     const validStates = ['pagado', 'adelanto', 'abonado', 'completado', 'autorizado', 'aprobado', 'transferido', 'confirmado', 'auditado', 'ejecutado'];
 
-    const isConfirmed = (status: string) => {
-        const st = (status || '').toLowerCase();
+    const isConfirmed = (status: string | null | undefined) => {
+        const st = (status || 'pagado').toLowerCase();
         return validStates.some(v => st.includes(v));
     };
 
