@@ -210,9 +210,9 @@ export default function PaymentsPage() {
             if (!isSilent) setLoading(true);
             setFetchError(null);
 
-            // Timeout extendido a 30s; con conexión lenta 15s no alcanzaba.
+            // Timeout extendido a 60s; con conexión lenta 15s no alcanzaba.
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout de conexión')), 15000)
+                setTimeout(() => reject(new Error('Timeout de conexión')), 60000)
             );
 
             const fetchPromise = (async () => {
@@ -281,7 +281,9 @@ export default function PaymentsPage() {
                 return { data: fullData, costs };
             })();
 
+            console.time('[DEBUG-pagos] fetchRace');
             const { data, costs } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+            console.timeEnd('[DEBUG-pagos] fetchRace');
 
             // 🚀 Pre-indexar costs por ticket_id para evitar O(N×M) en el filtrado posterior.
             const costsByTicket = new Map<string, any[]>();
@@ -1422,7 +1424,7 @@ export default function PaymentsPage() {
                                 boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                                 letterSpacing: '0.05em'
                             }}>
-                                SINFIMAC CORP - TESORERÍA v2.3
+                                SINFIMAC CORP - TESORERÍA v2.3.1
                             </span>
                         Peticiones de Fondos
                         <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
