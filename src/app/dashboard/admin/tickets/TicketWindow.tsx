@@ -1921,7 +1921,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const handleRejectRescueAdmin = async (costId: string) => {
         if (!confirm("¿Está seguro de que desea DENEGAR esta solicitud de rescate?")) return;
         try {
-            await ticketCostsAPI.update(costId, { estado_pago: 'rechazado' });
+            await ticketCostsAPI.update(costId, { estado_pago: 'RECHAZADO' });
             showToast("Solicitud Denegada", "El rescate ha sido denegado y el registro se mantiene para historial.", "info");
             loadCosts();
         } catch (err) {

@@ -351,7 +351,7 @@ export default function PaymentsPage() {
         try {
             const { error } = await supabase
                 .from('ticket_costs')
-                .update({ estado_pago: 'rechazado' })
+                .update({ estado_pago: 'RECHAZADO' })
                 .eq('id', costId);
             
             if (error) throw error;
