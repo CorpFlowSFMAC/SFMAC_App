@@ -1295,8 +1295,8 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                     )}
                 </div>
                 {montoSaldo > 0 && pactadoLaborBase > 0 && (
-                    <span style={{ fontSize: '9px', color: '#3B82F6', fontStyle: 'italic', marginTop: '2px', display: 'block', fontWeight: 600 }}>
-                        Mano de obra pactada con el técnico
+                    <span style={{ fontSize: '9px', color: '#3B82F6', fontStyle: 'italic', marginTop: '2px', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>
+                        * Pendiente de Mano de Obra Pactada
                     </span>
                 )}
             </div>
@@ -1322,10 +1322,13 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                         marginRight: '8px'
                     }}
                     disabled={availableRescue <= 0}
-                    title={availableRescue > 0 ? "Solicitar Rescate Financiero (Adelanto)" : "Tope de mano de obra pactada alcanzado"}
+                    title={availableRescue > 0 ? "Solicitar Adelanto de Mano de Obra (Rescate)" : "Se ha alcanzado el tope de la mano de obra pactada"}
                 >
                     <Coins size={16} color={availableRescue > 0 ? "#F59E0B" : "#94A3B8"} />
-                    <span>{availableRescue > 0 ? "Rescate" : "Tope"}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: '1' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 900 }}>{availableRescue > 0 ? "Rescate" : "Tope"}</span>
+                        <span style={{ fontSize: '8px', opacity: 0.8 }}>Adelanto M.O.</span>
+                    </div>
                 </button>
             )}
 

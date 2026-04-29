@@ -9,13 +9,11 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     
     // 1. REGLA INMUTABLE: Los valores vienen pre-calculados desde el backend (vw_ticket_financials)
     const saldoDB = parseFloat(ticket.saldo_tecnico || 0);
-    const margenDB = parseFloat(ticket.margen_real || 0) * 100;
+    const margenDB = parseFloat(ticket.margen_real || 0);
     const utilidadDB = parseFloat(ticket.utilidad_neta || 0);
     const inversionDB = parseFloat(ticket.total_costs_agg || 0);
     const ingresosDB = parseFloat(ticket.ingresos_reales || 0);
-    // CRITICAL FIX: Read pactedMO from root ticket fields first (labor_cost, costoManoObra are
-    // mapped to the root by normalizeTicket), then fall back to metadata. This prevents S/0.00
-    // when ticketData === ticket.metadata (which lacks the root-level DB columns).
+    
     const pactedMO = parseFloat(
         ticket.monto_pactado_mo ||
         ticket.labor_cost ||
@@ -25,42 +23,78 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         0
     );
     const extraCosts = parseFloat(ticket.gastos_flujo_a || 0);
+    const montoFinal = parseFloat(ticket.total_quoted_amount || ticket.montoFinal || ticketData.montoFinal || 0);
     
-    // Categorizar costos para visualización (solo lectura)
+    // 2. UNIFICACIÓN DE PAGOS (Modernos + Legacy)
+    // Fuente Moderna (ticket_costs)
     const operationalCategories = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'viáticos / movilidad'];
-    const operationalCostsArr = (costs || []).filter(c => {
-        const cat = (c.categoria || '').toLowerCase();
-        return operationalCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
-    });
-
     const feeCategories = ['mano de obra', 'adelanto', 'adelanto operativo', 'rescate financiero', 'rescate', 'honorarios'];
-    const technicianFeesArr = (costs || []).filter(c => {
-        const cat = (c.categoria || '').toLowerCase();
-        return feeCategories.includes(cat) && c.estado_pago !== 'ANULADO' && c.estado_pago !== 'RECHAZADO';
+
+    const paidModernArr = (costs || []).filter(c => {
+        const st = (c.estado_pago || c.estado || '').toLowerCase();
+        return ['pagado', 'adelanto', 'abonado', 'completado'].includes(st);
     });
 
-    // 2. CÁLCULO EN TIEMPO REAL (Reactividad inmediata ante nuevos registros)
-    const confirmedFees = technicianFeesArr.reduce((sum, c) => {
+    const technicianFeesArr = paidModernArr.filter(c => {
+        const cat = (c.categoria || '').toLowerCase();
+        return feeCategories.includes(cat);
+    });
+
+    const operationalCostsArr = paidModernArr.filter(c => {
+        const cat = (c.categoria || '').toLowerCase();
+        return operationalCategories.includes(cat);
+    });
+
+    // Fuente Legacy (historialPagosTecnico)
+    const legacyHistory = ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || [];
+    const legacyPaymentsFiltered = legacyHistory.filter((h: any) => {
+        const hMonto = round2(parseFloat(h.monto || 0));
+        if (hMonto <= 0 || h.estado === 'anulado') return false;
+        
+        // Evitar duplicados: Si ya existe en modern (por ID o por monto/fecha aproximada)
+        const isAlreadyInModern = technicianFeesArr.some((m: any) => {
+            const mMonto = round2(parseFloat(m.monto || 0));
+            const hTipo = (h.tipo || '').toLowerCase();
+            const mCat = (m.categoria || '').toLowerCase();
+            const isSameAmount = Math.abs(hMonto - mMonto) < 0.01;
+            const isSameType = hTipo === mCat || hTipo === `gasto: ${mCat}` || (hTipo === 'adelanto' && mCat === 'rescate financiero');
+            return isSameAmount && isSameType;
+        });
+        return !isAlreadyInModern;
+    });
+
+    // Sumar confirmados
+    const confirmedModernFees = technicianFeesArr.reduce((sum, c) => sum + round2(parseFloat(c.monto || 0)), 0);
+    const confirmedLegacyFees = legacyPaymentsFiltered.reduce((sum: number, h: any) => sum + round2(parseFloat(h.monto || 0)), 0);
+    
+    const totalConfirmedSum = round2(confirmedModernFees + confirmedLegacyFees);
+    
+    // Pagos en proceso (Pendientes)
+    const totalInProcessSum = (costs || []).reduce((sum, c) => {
         const st = (c.estado_pago || c.estado || '').toLowerCase();
-        // Solo sumamos lo efectivamente pagado/abonado
-        if (['pagado', 'adelanto', 'abonado', 'completado'].includes(st)) {
+        const cat = (c.categoria || '').toLowerCase();
+        if (feeCategories.includes(cat) && ['pendiente', 'requiere_aprobacion', 'requiere_aprobacion_admin'].includes(st)) {
             return sum + round2(parseFloat(c.monto || 0));
         }
         return sum;
     }, 0);
 
-    // El total confirmado es lo mayor entre lo que dice la DB (vía view) y lo que tenemos localmente en el array de costos
-    const totalConfirmedSum = Math.max(parseFloat(ticket.adelantos_flujo_b || 0), confirmedFees);
-    const totalInProcessSum = technicianFeesArr.reduce((sum, c) => {
-        const st = (c.estado_pago || c.estado || '').toLowerCase();
-        if (['pendiente', 'requiere_aprobacion', 'requiere_aprobacion_admin'].includes(st)) {
-            return sum + round2(parseFloat(c.monto || 0));
-        }
-        return sum;
-    }, 0);
-
-    // El saldo real es el pactado menos lo que ya se pagó (confirmado)
+    // 3. CÁLCULO DE SALDO Y RENTABILIDAD
     const realBalance = Math.max(0, round2(pactedMO - totalConfirmedSum));
+    
+    // Rentabilidad Dinámica (Frontend) para casos donde el backend no ha actualizado la vista
+    // Rentabilidad = (Ingresos - Gastos Totales)
+    const totalModernCosts = (costs || []).reduce((sum, c) => {
+        const st = (c.estado_pago || c.estado || '').toLowerCase();
+        if (st !== 'anulado' && st !== 'rechazado') {
+            return sum + round2(parseFloat(c.monto || 0));
+        }
+        return sum;
+    }, 0);
+    
+    // Usar la utilidad del backend si existe (>0), si no, calcularla
+    const calculatedUtilidad = Math.max(utilidadDB, round2(montoFinal - totalModernCosts - confirmedLegacyFees));
+    const calculatedMargenPercent = ingresosDB > 0 ? (calculatedUtilidad / ingresosDB) * 100 : (montoFinal > 0 ? (calculatedUtilidad / montoFinal) * 100 : 0);
 
     return {
         totalPactedDebt: pactedMO,
@@ -68,14 +102,14 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         totalConfirmed: totalConfirmedSum,
         totalInProcess: totalInProcessSum,
         balance: realBalance, 
-        grossMargin: utilidadDB,
-        marginPercent: margenDB,
-        totalInvestment: inversionDB,
+        grossMargin: calculatedUtilidad,
+        marginPercent: margenDB > 0 ? margenDB * 100 : calculatedMargenPercent,
+        totalInvestment: Math.max(inversionDB, totalModernCosts + confirmedLegacyFees),
         pactedMO,
         pactedMat: 0,
         extraCosts,
         paidModernArr: technicianFeesArr, 
-        legacyPaymentsFiltered: [],
+        legacyPaymentsFiltered,
         operationalCostsArr
     };
 }
