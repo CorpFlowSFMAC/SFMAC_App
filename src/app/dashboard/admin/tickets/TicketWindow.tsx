@@ -482,6 +482,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     // Efecto de sincronización con el prop 'ticket' (viene del contexto global realtime)
     useEffect(() => {
         if (!ticket || !isInitialLoadComplete) return;
+        // Si hay una transacción de adelanto en curso, ignorar el update del prop
+        // para evitar el parpadeo entre pantallas por race condition
+        if (isProcessingAdvance.current) return;
 
         // Solo actualizar si el estado o metadata importante cambió en el prop
         setTicketData((prev: any) => {
@@ -569,6 +572,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isSyncing = useRef(false);
+    // Bloqueo durante transacciones de adelanto para evitar parpadeo por race condition
+    const isProcessingAdvance = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -1245,6 +1250,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
 
         setIsConfirmingPayment(true);
+        isProcessingAdvance.current = true;
         try {
             // 1. Registro Financiero Inmutable
             await ticketCostsAPI.create({
@@ -1291,6 +1297,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             showToast("Error de Conexión", "No se pudo registrar el adelanto correctamente.", "error");
         } finally {
             setIsConfirmingPayment(false);
+            setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }
     };
     const handleRequestAdvance = async () => {
@@ -1321,6 +1328,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             return;
         }
 
+        // Bloquear actualizaciones del prop durante la transacción para evitar parpadeo
+        isProcessingAdvance.current = true;
         try {
             const updated = {
                 ...ticketData,
@@ -1339,6 +1348,9 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         } catch (err) {
             console.error("Error al solicitar adelanto:", err);
             showToast("Error de Conexión", "No se pudo registrar la solicitud.", "error");
+        } finally {
+            // Liberar bloqueo con un delay para dar tiempo al prop a actualizarse
+            setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }
     };
 
