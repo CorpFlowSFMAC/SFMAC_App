@@ -95,18 +95,18 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const legacyOps = confirmedLegacyPayments.filter((p: any) => isOp(p.tipo || p.concepto || ''));
 
     // 5. CÁLCULO DE TOTALES
-    const totalModernFeesSum = modernFees.reduce((acc, c) => acc + toNum(c.monto), 0);
-    const totalLegacyFeesSum = legacyFees.reduce((acc, p) => acc + toNum(p.monto), 0);
+    const totalModernFeesSum = modernFees.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
+    const totalLegacyFeesSum = legacyFees.reduce((acc: number, p: any) => acc + toNum(p.monto), 0);
     const totalConfirmedSum = round2(totalModernFeesSum + totalLegacyFeesSum);
 
-    const totalPendingFromCosts = pendingFeesArr.reduce((acc, c) => acc + toNum(c.monto), 0);
+    const totalPendingFromCosts = pendingFeesArr.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
 
     // 6. RESULTADOS FINALES
     // El balance inmutable de la DB se usa como base, pero el calculado es el que manda en UI para reactividad
     const realBalance = Math.max(0, round2(pactedMO - totalConfirmedSum));
 
     // Rentabilidad Dinámica (Soles)
-    const totalInvestmentModern = safeCosts.reduce((acc, c) => {
+    const totalInvestmentModern = safeCosts.reduce((acc: number, c: any) => {
         const st = (c.estado_pago || c.estado || '').toLowerCase();
         return (!st.includes('anulado') && !st.includes('rechazado')) ? acc + toNum(c.monto) : acc;
     }, 0);
@@ -131,7 +131,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         extraCosts: toNum(ticket.gastos_flujo_a || 0),
         paidModernArr: modernFees,
         paidModernPendingArr: pendingFeesArr, // Requerido por main
-        legacyPaymentsFiltered,
+        legacyPaymentsFiltered: filteredLegacy,
         operationalCostsArr: modernOps
     };
 }
