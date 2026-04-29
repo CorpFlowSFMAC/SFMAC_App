@@ -219,75 +219,18 @@ export default function PaymentsPage() {
 
             const fetchPromise = (async () => {
                 // 🚀 Paso 1: tickets vía RPC (filtra por estados de pago server-side).
+                // ✅ OPTIMIZACIÓN: get_payment_tickets_ultra_light YA incluye costos打包ados
                 console.log('[DEBUG-pagos] Iniciando fetchPaymentTickets...');
-                // 🚀 Paso 1: tickets vía RPC. Intentamos v2 si está disponible para aligerar metadata
-                console.log('[DEBUG-pagos] Iniciando fetchPaymentTickets...');
-                let { data, error: rpcErr } = await supabase.rpc('get_payment_tickets_ultra_light_v2');
-                if (rpcErr) {
-                    console.warn('[Payments] RPC v2 no disponible, usando v1...');
-                    data = await ticketsAPI.getForPayments();
-                }
-                console.log('[DEBUG-pagos] RPC retornó:', data?.length, 'tickets');
-                // Debug: verificar si hay tickets con solicitudAdelanto
-                const ticketsConAdelanto = data?.filter((t: any) => t.metadata?.solicitudAdelanto);
-                console.log('[DEBUG-pagos] Tickets con solicitudAdelanto:', ticketsConAdelanto?.length);
-                if (ticketsConAdelanto?.length > 0) {
-                    console.log('[DEBUG-pagos] Primer ticket con Adelanto:', ticketsConAdelanto[0]?.id, ticketsConAdelanto[0]?.metadata?.solicitudAdelanto);
-                }
+                const data = await ticketsAPI.getForPayments();
+                console.log('[DEBUG-pagos] getForPayments retornó: ', data?.length, ' tickets');
                 
-                // ★ OPTIMIZACIÓN 2026-04-29: Solo los últimos 50 tickets para aligerar la carga inicial
-                const limitedData = (data || []).slice(0, 50);
-                const ticketIds = limitedData.filter(Boolean).map((t: any) => t.id);
-
-                // ★ OPTIMIZACIÓN EXTREMA: Solo columnas mínimas y FILTRADO POR TICKET_ID
-                // Esto permite que PostgreSQL use el índice de ticket_id y no escanee toda la tabla
-                const COST_COLS = 'id,ticket_id,monto,estado_pago,categoria,concepto,created_at,specialist_id';
-
-                const pendingPromise = supabase
-                    .from('ticket_costs')
-                    .select(COST_COLS)
-                    .in('ticket_id', ticketIds)
-                    .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN'])
-                    .order('created_at', { ascending: false })
-                    .limit(100);
-
-                const historyPromise = supabase
-                    .from('ticket_costs')
-                    .select(COST_COLS)
-                    .in('ticket_id', ticketIds)
-                    .eq('estado_pago', 'pagado')
-                    .order('created_at', { ascending: false })
-                    .limit(50);
-
-                const [pendingRes, historyRes] = await Promise.all([pendingPromise, historyPromise]);
-                if (pendingRes.error) throw pendingRes.error;
-                if (historyRes.error) throw historyRes.error;
-
-                // Combinación simple sin Map costoso
-                const rawCosts = [...(pendingRes.data || []), ...(historyRes.data || [])];
-
-                // ★ OPTIMIZACIÓN: NO hidratar técnicos para evitar timeout
-                // Los técnicos se mostrarán como "pendiente" si no hay datos
-                const costs = rawCosts;
-
-                // ★ OPTIMIZACIÓN: Solo 20 orphan tickets, columnas mínimas
-                const orphanIds = [...new Set([
-                    ...(pendingRes.data || []).map((c: any) => c.ticket_id),
-                    ...(historyRes.data || []).map((c: any) => c.ticket_id)
-                ].filter((id: string) => id && !ticketIds.includes(id)))].slice(0, 20);
-
-                let orphanTickets: any[] = [];
-                if (orphanIds.length > 0) {
-                    const { data: orphanData, error: orphanErr } = await supabase
-                        .from('tickets')
-                        .select('id,status_id,service_type,client_ticket_number,labor_cost,materials_cost,technician_id')
-                        .in('id', orphanIds)
-                        .limit(20);
-                    if (!orphanErr) orphanTickets = orphanData || [];
-                }
-
-                const fullData = [...limitedData, ...orphanTickets];
-                console.log('[DEBUG-pagos] fullData length:', fullData.length);
+                // ✅ DATOS UNIFICADOS: Los costos ya vienen incluidos en ticket.costos desde la RPC
+                const fullData = (data || []).slice(0, 100);
+                
+                // ✅ NO consultamos ticket_costs por separado
+                const costs: any[] = [];
+                
+                console.log('[DEBUG-pagos] fullData length: ', fullData.length);
                 return { data: fullData, costs };
             })();
 
@@ -295,19 +238,14 @@ export default function PaymentsPage() {
             const { data, costs } = await Promise.race([fetchPromise, timeoutPromise]) as any;
             console.timeEnd('[DEBUG-pagos] fetchRace');
 
-            // 🚀 Pre-indexar costs por ticket_id para evitar O(N×M) en el filtrado posterior.
-            const costsByTicket = new Map<string, any[]>();
-            for (const c of (costs || [])) {
-                if (!c?.ticket_id) continue;
-                const arr = costsByTicket.get(c.ticket_id);
-                if (arr) arr.push(c); else costsByTicket.set(c.ticket_id, [c]);
-            }
-
+            // ✅ DATOS UNIFICADOS: Los costos vienen en ticket.costos desde la RPC
+            // No necesitamos costsByTicket - leemos directamente de cada ticket
+            
             const processed = (data || []).filter(Boolean).map((t: any) => {
                 try {
                     const flat = flattenTicketForPayments(t);
-                    const relatedCosts = costsByTicket.get(t.id) || [];
-
+                    // ✅ LEER DIRECTAMENTE DESDE ticket.costos
+                    const relatedCosts = t.costos || [];
                     flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
                     flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
                     flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
