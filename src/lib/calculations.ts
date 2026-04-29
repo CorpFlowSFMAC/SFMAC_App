@@ -70,8 +70,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         return operationalKeywords.some(key => c.includes(key));
     };
 
-    const modernFees = confirmedModernPayments.filter(c => isFee(c.categoria));
-    const modernOps = confirmedModernPayments.filter(c => isOp(c.categoria));
+    const modernFees = confirmedModernPayments.filter(c => isFee(c.categoria || c.concepto || ''));
+    const modernOps = confirmedModernPayments.filter(c => isOp(c.categoria || c.concepto || ''));
 
     // NUEVO: Filtrar solicitudes pendientes (no pagadas aún)
     // Incluimos REQUIERE_APROBACION_ADMIN como pendiente para que el saldo baje preventivamente
@@ -94,16 +94,22 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const legacyFees = confirmedLegacyPayments.filter((p: any) => isFee(p.tipo || p.concepto || ''));
     const legacyOps = confirmedLegacyPayments.filter((p: any) => isOp(p.tipo || p.concepto || ''));
 
-    // 5. CÁLCULO DE TOTALES
+    // 5. CÁLCULO DE TOTALES (Mano de Obra vs Operativos)
     const totalModernFeesSum = modernFees.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
     const totalLegacyFeesSum = legacyFees.reduce((acc: number, p: any) => acc + toNum(p.monto), 0);
-    const totalConfirmedSum = round2(totalModernFeesSum + totalLegacyFeesSum);
+    const totalModernOpsSum = modernOps.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
+    const totalLegacyOpsSum = legacyOps.reduce((acc: number, p: any) => acc + toNum(p.monto), 0);
+
+    // Suma global para el label "Total Transferido"
+    const totalConfirmedSum = round2(totalModernFeesSum + totalLegacyFeesSum + totalModernOpsSum + totalLegacyOpsSum);
+    // Suma solo de honorarios para el Saldo Pendiente de MO
+    const totalFeesOnlySum = round2(totalModernFeesSum + totalLegacyFeesSum);
 
     const totalPendingFromCosts = pendingFeesArr.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
 
     // 6. RESULTADOS FINALES
     // El balance inmutable de la DB se usa como base, pero el calculado es el que manda en UI para reactividad
-    const realBalance = Math.max(0, round2(pactedMO - totalConfirmedSum));
+    const realBalance = Math.max(0, round2(pactedMO - totalFeesOnlySum));
 
     // Rentabilidad Dinámica (Soles)
     const totalInvestmentModern = safeCosts.reduce((acc: number, c: any) => {
@@ -131,7 +137,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         extraCosts: toNum(ticket.gastos_flujo_a || 0),
         paidModernArr: modernFees,
         paidModernPendingArr: pendingFeesArr, // Requerido por main
-        legacyPaymentsFiltered: filteredLegacy,
-        operationalCostsArr: modernOps
+        legacyPaymentsFiltered: legacyFees,
+        operationalCostsArr: [...modernOps, ...legacyOps]
     };
 }
