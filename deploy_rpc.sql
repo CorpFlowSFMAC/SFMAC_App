@@ -1,10 +1,4 @@
--- ============================================================
--- SINFIMAC - RPC CORREGIDA PARA TESORERÍA (FINAL)
--- SIN COLUMNAS INEXISTENTES
--- ============================================================
-
 DROP FUNCTION IF EXISTS get_payment_tickets_ultra_light();
-
 CREATE FUNCTION get_payment_tickets_ultra_light() RETURNS SETOF jsonb LANGUAGE plpgsql AS $$ 
 BEGIN 
     RETURN QUERY 
@@ -28,7 +22,18 @@ BEGIN
         'priority', t.priority, 
         'sede_reportada_cliente', t.sede_reportada_cliente, 
         'metadata', t.metadata, 
-        'costos', '[]'::jsonb, 
+        'costos', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object(
+                'id', tc.id, 
+                'ticket_id', tc.ticket_id, 
+                'monto', tc.monto, 
+                'estado_pago', tc.estado_pago, 
+                'categoria', tc.categoria, 
+                'concepto', tc.concepto
+            )) 
+            FROM ticket_costs tc 
+            WHERE tc.ticket_id = t.id
+        ), '[]'::jsonb), 
         'clients', jsonb_build_object('id', c.id, 'name', c.name, 'ruc', c.ruc), 
         'branch_offices', jsonb_build_object('id', b.id, 'name', b.name), 
         'technicians', jsonb_build_object('id', tech.id, 'name', tech.name), 

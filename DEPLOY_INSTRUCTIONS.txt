@@ -1,0 +1,14 @@
+-- ============================================================
+-- INSTRUCCIONES DE DESPLIEGUE MANUAL
+-- ============================================================
+-- 1. Conectarse al Supabase Dashboard
+-- 2. Ir a SQL Editor
+-- 3. Ejecutar el contenido de get_payment_tickets_ultra_light_FIXED.sql
+--
+-- También disponible en la base de datos de producción:
+-- Host: 87.99.137.96
+-- Puerto: 5432
+-- Database: postgres
+-- Usuario: postgres
+-- Password: (usar credenciales de Supabase)
+-- ============================================================
