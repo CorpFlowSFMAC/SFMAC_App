@@ -54,7 +54,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const validStates = ['pagado', 'adelanto', 'abonado', 'completado', 'autorizado', 'aprobado', 'transferido', 'confirmado', 'auditado', 'ejecutado'];
 
     const isConfirmed = (status: string | null | undefined) => {
-        const st = (status || 'pagado').toLowerCase();
+        const st = (status || '').toLowerCase();
         return validStates.some(v => st.includes(v));
     };
 

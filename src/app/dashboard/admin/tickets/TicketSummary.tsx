@@ -1432,7 +1432,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
     };
 
     const getStatusStyle = (p: any) => {
-        const st = (p.estado_pago || p.estado || 'pagado').toLowerCase();
+        const st = (p.estado_pago || p.estado || 'borrador').toLowerCase();
         if (st === 'rechazado' || st === 'anulado') {
             return { opacity: 0.6, textDecoration: 'line-through', color: '#94A3B8' };
         }
@@ -1478,6 +1478,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                 {combinedPagos.map((p: any, idx: number) => {
                     const badge = getTipoBadge(p);
                     const voucherSrc = resolveVoucher(p);
+                    const st = (p.estado_pago || p.estado || 'borrador').toLowerCase();
                     return (
                         <div
                             key={p.id || idx}
@@ -1509,13 +1510,12 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                             </span>
 
                             {/* Monto */}
-                            <span style={{ fontSize: '12px', fontWeight: 900, color: (p.estado_pago || p.estado || 'pagado').toLowerCase() === 'rechazado' ? '#94A3B8' : '#065F46' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 900, color: st === 'rechazado' ? '#94A3B8' : '#065F46' }}>
                                 S/ {formatSoles(p.monto)}
                             </span>
 
                             {/* Etiquetas de Estado */}
                             {(() => {
-                                const st = (p.estado_pago || p.estado || 'pagado').toLowerCase();
                                 if (st === 'rechazado' || st === 'anulado') return (
                                     <span style={{ fontSize: '9px', fontWeight: 800, color: '#EF4444', background: '#FEF2F2', padding: '1px 6px', borderRadius: '4px' }}>❌ Denegado</span>
                                 );
@@ -1568,11 +1568,11 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                             )}
 
                             {/* Sin voucher */}
-                            {!voucherSrc && (p.estado_pago || p.estado || 'pagado').toLowerCase() === 'pagado' && (
+                            {!voucherSrc && st === 'pagado' && (
                                 <span style={{ fontSize: '9px', color: '#CBD5E1', fontStyle: 'italic' }}>sin comprobante</span>
                             )}
 
-                            {(p.estado_pago || p.estado || 'pagado').toLowerCase() === 'pagado' && <CheckCircle2 size={12} color="#10B981" style={{ flexShrink: 0 }} />}
+                            {st === 'pagado' && <CheckCircle2 size={12} color="#10B981" style={{ flexShrink: 0 }} />}
                         </div>
                     );
                 })}
