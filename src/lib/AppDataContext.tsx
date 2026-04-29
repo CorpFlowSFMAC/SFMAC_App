@@ -234,7 +234,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                         const ticketId = pNew.id;
                         if (!ticketId) return;
 
-                        // Actualizar Summary en caché local usando el payload
+                        // Actualizar Summary en caché con MERGE PROFUNDO
+                        // El payload Realtime incluye todos los campos de la tabla pero
+                        // puede llegar con metadata desactualizada durante race conditions.
+                        // Usamos merge para preservar campos críticos del caché local.
                         queryClient.setQueryData(
                             queryKeys.tickets.summary(),
                             (old: any[] | undefined) =>
@@ -242,11 +245,32 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     ? old.map((t) => {
                                         if (t.id !== ticketId) return t;
                                         const statusId = pNew.status_id || t.status_id;
+                                        const incomingMeta = pNew.metadata || {};
+                                        const existingMeta = t.metadata || {};
+                                        // Merge metadata: el payload nuevo gana EXCEPTO en campos
+                                        // criticos donde el cache local puede estar mas actualizado
+                                        const mergedMeta = {
+                                            ...existingMeta,
+                                            ...incomingMeta,
+                                            solicitudAdelanto: incomingMeta.solicitudAdelanto !== undefined
+                                                ? incomingMeta.solicitudAdelanto
+                                                : existingMeta.solicitudAdelanto,
+                                            adelantoPagado: incomingMeta.adelantoPagado !== undefined
+                                                ? incomingMeta.adelantoPagado
+                                                : existingMeta.adelantoPagado,
+                                            solicitudPagoVisita: incomingMeta.solicitudPagoVisita !== undefined
+                                                ? incomingMeta.solicitudPagoVisita
+                                                : existingMeta.solicitudPagoVisita,
+                                        };
                                         return {
                                             ...t,
                                             ...pNew,
                                             status_id: statusId,
                                             estadoId: normalizeStateId(statusId),
+                                            metadata: mergedMeta,
+                                            // Propagar campos clave a nivel raiz
+                                            solicitudAdelanto: mergedMeta.solicitudAdelanto,
+                                            adelantoPagado: mergedMeta.adelantoPagado ?? t.adelantoPagado,
                                         };
                                     })
                                     : old
@@ -445,15 +469,52 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         async (id: string, updates: any) => {
             const updated = await ticketsAPI.update(id, updates);
             const normalized = normalizeTicket(updated);
-            // Update en caché TanStack inmediato
+            // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
+            // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()
             queryClient.setQueryData(
                 queryKeys.tickets.summary(),
                 (old: any[] | undefined) =>
                     old
-                        ? old.map((t) => (t.id === id ? normalized : t))
+                        ? old.map((t) => {
+                            if (t.id !== id) return t;
+                            // Merge: preservar metadata critica del cache que el API no devuelve
+                            const existingMeta = t.metadata || {};
+                            const newMeta = normalized?.metadata || {};
+                            const mergedMeta = {
+                                ...existingMeta,
+                                ...newMeta,
+                                // Campos criticos: si el nuevo valor es null/undefined, conservar el existente
+                                solicitudAdelanto: newMeta.solicitudAdelanto !== undefined
+                                    ? newMeta.solicitudAdelanto
+                                    : existingMeta.solicitudAdelanto,
+                                adelantoPagado: newMeta.adelantoPagado !== undefined
+                                    ? newMeta.adelantoPagado
+                                    : existingMeta.adelantoPagado,
+                                solicitudPagoVisita: newMeta.solicitudPagoVisita !== undefined
+                                    ? newMeta.solicitudPagoVisita
+                                    : existingMeta.solicitudPagoVisita,
+                                solicitudLiquidacion: newMeta.solicitudLiquidacion !== undefined
+                                    ? newMeta.solicitudLiquidacion
+                                    : existingMeta.solicitudLiquidacion,
+                                historialPagosTecnico: (() => {
+                                    const prev = existingMeta.historialPagosTecnico || existingMeta.historialPagosTécnico || [];
+                                    const next = newMeta.historialPagosTecnico || newMeta.historialPagosTécnico || [];
+                                    if (next.length >= prev.length) return next;
+                                    return prev; // No retroceder el historial
+                                })(),
+                            };
+                            return {
+                                ...t,
+                                ...normalized,
+                                metadata: mergedMeta,
+                                // Propagar a nivel raiz para que TicketWindow los detecte
+                                solicitudAdelanto: mergedMeta.solicitudAdelanto,
+                                adelantoPagado: mergedMeta.adelantoPagado ?? t.adelantoPagado,
+                            };
+                        })
                         : old
             );
-            // También actualizar detalle si está cacheado
+            // Tambien actualizar detalle si está cacheado
             queryClient.setQueryData(
                 queryKeys.tickets.detail(id),
                 normalized
