@@ -20,7 +20,7 @@ interface PaymentItem {
     id: string;
     tipo: string;
     monto: number;
-    estado: 'pendiente' | 'pagado';
+    estado: 'pendiente' | 'pagado' | 'requiere_aprobacion';
     fecha: string;
     voucherRef?: string | null;
     concepto?: string;    // Para solicitudes de gestora
@@ -236,9 +236,9 @@ export default function PaymentsPage() {
                 const pendingPromise = supabase
                     .from('ticket_costs')
                     .select(COST_COLS)
-                    .eq('estado_pago', 'pendiente')
+                    .in('estado_pago', ['pendiente', 'REQUIERE_APROBACION_ADMIN'])
                     .order('created_at', { ascending: false })
-                    .limit(50);
+                    .limit(100);
 
                 // Solo últimos 50 costos pagados
                 const historyPromise = supabase
@@ -742,6 +742,22 @@ export default function PaymentsPage() {
                         });
                     }
 
+                    // 3c. NUEVO: Solicitudes de Excedente que requieren revisión administrativa
+                    if (ticket.exceedanceRequests && ticket.exceedanceRequests.length > 0) {
+                        ticket.exceedanceRequests.forEach((c: any) => {
+                            items.push({
+                                id: c.id,
+                                tipo: `Rescate (Excedente)`,
+                                monto: c.monto,
+                                estado: 'requiere_aprobacion',
+                                fecha: c.created_at,
+                                concepto: `AUTORIZACIÓN REQUERIDA: ${c.concepto}`,
+                                isTableCost: true,
+                                costId: c.id
+                            });
+                        });
+                    }
+
                     // 4. Liquidación Final
                     const hasFinalPaid = !!(ticket.fechaPagoFinal || pagosLegacy.some((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)'));
                     const finalRef = ticket.solicitudLiquidacion || pagosLegacy.find((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
@@ -799,10 +815,11 @@ export default function PaymentsPage() {
                         const lastPayment = allHistory[0];
                         techItems.push({
                             id: `${ticket.id}_historial_ref`,
-                            tipo: `Referencia: ${lastPayment?.tipo || 'Historial'}`,
+                            tipo: `Pago Previo: ${lastPayment?.tipo || 'Historial'}`,
                             monto: lastPayment?.monto || 0,
                             estado: 'pagado',
-                            fecha: lastPayment?.fecha || ticket.created_at
+                            fecha: lastPayment?.fecha || ticket.created_at,
+                            isReference: true
                         });
                     }
                     allGroups.push({
@@ -994,6 +1011,39 @@ export default function PaymentsPage() {
             alert('Error al denegar el pago.');
         } finally {
             executingRef.current = false;
+        }
+    };
+
+    const handleApproveExceedance = async (costId: string) => {
+        try {
+            const { error } = await supabase
+                .from('ticket_costs')
+                .update({ estado_pago: 'pendiente' })
+                .eq('id', costId);
+
+            if (error) throw error;
+            showToast('✅ Solicitud aprobada y enviada a Tesorería');
+            refresh();
+        } catch (err) {
+            console.error('[Payments] Error approving exceedance:', err);
+            alert('No se pudo aprobar la solicitud.');
+        }
+    };
+
+    const handleRejectExceedance = async (costId: string) => {
+        if (!confirm('¿Desea denegar permanentemente esta solicitud de excedente?')) return;
+        try {
+            const { error } = await supabase
+                .from('ticket_costs')
+                .update({ estado_pago: 'rechazado' })
+                .eq('id', costId);
+
+            if (error) throw error;
+            showToast('❌ Solicitud denegada');
+            refresh();
+        } catch (err) {
+            console.error('[Payments] Error rejecting exceedance:', err);
+            alert('No se pudo denegar la solicitud.');
         }
     };
 
@@ -1654,9 +1704,10 @@ export default function PaymentsPage() {
                                                             const cfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F8FAFC', label: item.tipo };
                                                             return (
                                                                 <div key={item.id} style={{
-                                                                    background: item.tipo === 'Solicitud Gestora' ? '#FEF2F2' : (item.estado === 'pendiente' ? '#FFFBEB' : '#F0FDF4'),
-                                                                    border: `1px solid ${item.tipo === 'Solicitud Gestora' ? '#FECACA' : (item.estado === 'pendiente' ? '#FCD34D' : '#86EFAC')}`,
-                                                                    borderRadius: '8px', padding: '7px 9px'
+                                                                    background: item.isReference ? '#F8FAFC' : (item.tipo === 'Solicitud Gestora' ? '#FEF2F2' : (item.estado === 'pendiente' ? '#FFFBEB' : (item.estado === 'requiere_aprobacion' ? '#FFF1F2' : '#F0FDF4'))),
+                                                                    border: `1px solid ${item.isReference ? '#E2E8F0' : (item.tipo === 'Solicitud Gestora' ? '#FECACA' : (item.estado === 'pendiente' ? '#FCD34D' : (item.estado === 'requiere_aprobacion' ? '#FDA4AF' : '#86EFAC')))}`,
+                                                                    borderRadius: '8px', padding: '7px 9px',
+                                                                    opacity: item.isReference ? 0.75 : 1
                                                                 }}>
                                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
                                                                         <span style={{ background: cfg.bg, color: cfg.color, fontSize: '0.65rem', fontWeight: 800, padding: '2px 7px', borderRadius: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -1677,11 +1728,11 @@ export default function PaymentsPage() {
                                                                         </span>
                                                                         <span style={{
                                                                             fontSize: '0.62rem', fontWeight: 800,
-                                                                            color: item.estado === 'pendiente' ? '#D97706' : '#166534',
-                                                                            background: item.estado === 'pendiente' ? '#FEF3C7' : '#DCFCE7',
+                                                                            color: item.isReference ? '#64748B' : (item.estado === 'pendiente' ? '#D97706' : (item.estado === 'requiere_aprobacion' ? '#DC2626' : '#166534')),
+                                                                            background: item.isReference ? '#F1F5F9' : (item.estado === 'pendiente' ? '#FEF3C7' : (item.estado === 'requiere_aprobacion' ? '#FEF2F2' : '#DCFCE7')),
                                                                             padding: '1px 6px', borderRadius: '4px'
                                                                         }}>
-                                                                            {item.estado === 'pendiente' ? '⏳ PENDIENTE' : '✓ PAGADO'}
+                                                                            {item.isReference ? '✓ REFERENCIA' : (item.estado === 'pendiente' ? '⏳ PENDIENTE' : (item.estado === 'requiere_aprobacion' ? '🔔 REVISIÓN ADMIN' : '✓ PAGADO'))}
                                                                         </span>
                                                                     </div>
                                                                 </div>
@@ -1703,6 +1754,24 @@ export default function PaymentsPage() {
 
                                                             return (
                                                                 <div key={`action-${item.id}`} className={styles.zeroFeeActions}>
+                                                                    {/* ESTADO: REQUIERE APROBACIÓN ADMIN */}
+                                                                    {item.estado === 'requiere_aprobacion' && (
+                                                                        <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                                                                            <button
+                                                                                onClick={() => handleApproveExceedance(item.id)}
+                                                                                style={{ flex: 1, background: '#10B981', color: 'white', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                                                                            >
+                                                                                <CheckCircle2 size={12} /> APROBAR
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleRejectExceedance(item.id)}
+                                                                                style={{ flex: 1, background: '#EF4444', color: 'white', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                                                                            >
+                                                                                <X size={12} /> DENEGAR
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+
                                                                     {/* Botón YAPE — Deep Link */}
                                                                     {hasYape && (
                                                                         <button
@@ -1773,7 +1842,7 @@ export default function PaymentsPage() {
                                                             );
                                                         })}
                                                         {group.items.length > 0 ? (
-                                                            group.items.every(i => i.estado === 'pagado') && (
+                                                            group.items.every(i => i.estado === 'pagado' || i.isReference) && !group.items.every(i => i.isReference) && (
                                                                 <div style={{ textAlign: 'center', padding: '8px 4px' }}>
                                                                     <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
                                                                         <CheckCircle2 size={18} color="#22C55E" />

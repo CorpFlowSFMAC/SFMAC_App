@@ -557,10 +557,16 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 : rawEstadoId;
 
             // PREVENIR PARPADEO Y REGRESIONES: Comparar el avance del flujo
-            const serverStatusOrder = TICKET_STATE_ORDER[corregidoEstadoId] ?? 0;
-            const prevStatusOrder = TICKET_STATE_ORDER[prev.estadoId] ?? 0;
-            // SIEMPRE gana el más avanzado (nunca retroceder)
-            const shouldPreservePrevState = prevStatusOrder >= serverStatusOrder;
+            const serverStatusOrder = TICKET_STATE_ORDER[corregidoEstadoId] || 0;
+            const prevStatusOrder = TICKET_STATE_ORDER[prev.estadoId] || 0;
+            // SIEMPRE gana el más avanzado (nunca retroceder de estado automáticamente)
+            const shouldPreservePrevState = prevStatusOrder > serverStatusOrder;
+
+            // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
+            // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
+            const localSolicitud = prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto;
+            const serverSolicitud = meta.solicitudAdelanto;
+            const finalSolicitud = (localSolicitud && !serverSolicitud) ? localSolicitud : serverSolicitud;
 
             return {
                 ...prev,
@@ -571,9 +577,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 margen_real: prev.margen_real !== undefined ? prev.margen_real : ticket.margen_real,
                 ingresos_reales: prev.ingresos_reales !== undefined ? prev.ingresos_reales : ticket.ingresos_reales,
                 monto_pactado_mo: prev.monto_pactado_mo !== undefined ? prev.monto_pactado_mo : ticket.monto_pactado_mo,
-                gastos_flujo_a: prev.gastos_flujo_a !== undefined ? prev.gastos_flujo_a : ticket.gastos_flujo_a,
-                adelantos_flujo_b: prev.adelantos_flujo_b !== undefined ? prev.adelantos_flujo_b : ticket.adelantos_flujo_b,
-                total_costs_agg: prev.total_costs_agg !== undefined ? prev.total_costs_agg : ticket.total_costs_agg,
                 
                 // BLINDAJE DE EDICIÓN LOCAL: No permitir que el caché global borre lo que el usuario está escribiendo o cargó vía getById
                 partidas: prev.partidas || prev.metadata?.partidas || meta.partidas,
@@ -581,7 +584,6 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 costoManoObra: prev.costoManoObra || prev.metadata?.costoManoObra || meta.costoManoObra,
                 diagnostico: prev.diagnostico || prev.metadata?.diagnostico || meta.diagnostico,
                 evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || meta.evidenciasEjecucion,
-                evidenciasCampo: prev.evidenciasCampo || prev.metadata?.evidenciasCampo || meta.evidenciasCampo,
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || meta.documentosChecklist,
                 historialPagosTécnico: prev.historialPagosTécnico || prev.metadata?.historialPagosTécnico || meta.historialPagosTécnico,
                 gestora: prev.gestora || meta.gestora || ticket.gestora,
@@ -589,14 +591,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 metadata: {
                     ...meta,
                     ...prev.metadata, // La metadata local (con los cambios del usuario) GANA
-                    // EXCEPCIÓN: Si tesorería procesó o rechazó un pago, debemos aceptar el borrado de la solicitud para que no reaparezca
-                    solicitudAdelanto: meta.solicitudAdelanto !== undefined ? meta.solicitudAdelanto : (prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto),
+                    solicitudAdelanto: finalSolicitud,
                     solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
                     solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 },
                 
                 // Mapeo a nivel de raíz para que la UI lo detecte correctamente y no parpadee
-                solicitudAdelanto: meta.solicitudAdelanto !== undefined ? meta.solicitudAdelanto : (prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto),
+                solicitudAdelanto: finalSolicitud,
                 solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
                 solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 
@@ -1902,6 +1903,30 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             showToast("Error", `No se pudo registrar el rescate: ${detail}`, "error");
         } finally {
             setIsSavingRescue(false);
+        }
+    };
+
+    // ✅ ADMINISTRACIÓN: Aprobación/Denegación de Rescate Financiero
+    const handleApproveRescueAdmin = async (costId: string) => {
+        try {
+            await ticketCostsAPI.update(costId, { estado_pago: 'pendiente' });
+            showToast("Solicitud Aprobada", "El rescate ha sido aprobado y enviado a Tesorería.", "success");
+            loadCosts();
+        } catch (err) {
+            console.error("Error approving rescue:", err);
+            showToast("Error", "No se pudo aprobar la solicitud.", "error");
+        }
+    };
+
+    const handleRejectRescueAdmin = async (costId: string) => {
+        if (!confirm("¿Está seguro de que desea DENEGAR esta solicitud de rescate?")) return;
+        try {
+            await ticketCostsAPI.update(costId, { estado_pago: 'rechazado' });
+            showToast("Solicitud Denegada", "El rescate ha sido denegado y el registro se mantiene para historial.", "info");
+            loadCosts();
+        } catch (err) {
+            console.error("Error rejecting rescue:", err);
+            showToast("Error", "No se pudo denegar la solicitud.", "error");
         }
     };
 
@@ -3327,23 +3352,59 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                         const isPending = st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
                                                                         
                                                                         return (
-                                                                        <div key={`new-${i}`} className={styles.depositEntry} style={{ 
-                                                                            opacity: isPending ? 0.7 : (isRejected ? 0.5 : 1),
-                                                                            textDecoration: isRejected ? 'line-through' : 'none'
-                                                                        }}>
-                                                                            <div className={styles.depositLabel}>
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                    {isRejected ? <XCircle size={14} style={{ color: '#EF4444' }} /> : (isPending ? <Clock size={14} style={{ color: '#F59E0B' }} /> : <ArrowDownLeft size={14} style={{ color: '#10B981' }} />)}
-                                                                                    {p.categoria === 'Mano de Obra' ? 'PAGO M.O.' : p.categoria === 'Materiales' ? 'COMPRA MAT.' : p.categoria.toUpperCase()}
-                                                                                    {isRejected && <span style={{ fontSize: '9px', fontWeight: 800, color: '#EF4444', background: '#FEF2F2', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>DENIEGADO</span>}
-                                                                                    {isPending && <span style={{ fontSize: '9px', fontWeight: 800, color: '#F59E0B', background: '#FFFBEB', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>PENDIENTE</span>}
-                                                                                </div>
-                                                                                <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}</span>
-                                                                            </div>
-                                                                            <span className={styles.depositAmount} style={{ color: isRejected ? '#94A3B8' : (isPending ? '#F59E0B' : '#059669') }}>
-                                                                                - S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                                            </span>
-                                                                        </div>
+                                                                         <div key={`new-${i}`} className={styles.depositEntry} style={{ 
+                                                                             opacity: isPending ? 0.7 : (isRejected ? 0.5 : 1),
+                                                                             textDecoration: isRejected ? 'line-through' : 'none',
+                                                                             borderLeft: st === 'requiere_aprobacion_admin' ? '3px solid #6366f1' : 'none',
+                                                                             background: st === 'requiere_aprobacion_admin' ? '#f5f3ff' : 'transparent',
+                                                                             padding: st === 'requiere_aprobacion_admin' ? '8px' : '4px 0',
+                                                                             borderRadius: '6px'
+                                                                         }}>
+                                                                             <div className={styles.depositLabel}>
+                                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                                     {isRejected ? <XCircle size={14} style={{ color: '#EF4444' }} /> : (isPending ? <Clock size={14} style={{ color: '#F59E0B' }} /> : <ArrowDownLeft size={14} style={{ color: '#10B981' }} />)}
+                                                                                     <span style={{ fontWeight: 700 }}>
+                                                                                        {p.categoria === 'Mano de Obra' ? 'PAGO M.O.' : p.categoria === 'Materiales' ? 'COMPRA MAT.' : p.categoria.toUpperCase()}
+                                                                                     </span>
+                                                                                     
+                                                                                     {isRejected && <span style={{ fontSize: '9px', fontWeight: 800, color: '#EF4444', background: '#FEF2F2', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>DENIEGADO</span>}
+                                                                                     {st === 'pendiente' && <span style={{ fontSize: '9px', fontWeight: 800, color: '#F59E0B', background: '#FFFBEB', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>TESORERÍA (PENDIENTE)</span>}
+                                                                                     {st === 'requiere_aprobacion_admin' && (
+                                                                                        <span style={{ fontSize: '9px', fontWeight: 900, color: '#6366f1', background: '#eef2ff', border: '1px solid #c7d2fe', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>
+                                                                                            ESPERANDO APROBACIÓN ADMIN
+                                                                                        </span>
+                                                                                     )}
+                                                                                 </div>
+                                                                                 <span className={styles.depositMeta}>
+                                                                                    {new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}
+                                                                                    {p.motivo && <span style={{ display: 'block', fontStyle: 'italic', fontSize: '10px', color: '#64748b', marginTop: '2px' }}>"{p.motivo}"</span>}
+                                                                                 </span>
+                                                                             </div>
+                                                                             
+                                                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                                                                <span className={styles.depositAmount} style={{ color: isRejected ? '#94A3B8' : (isPending ? (st === 'requiere_aprobacion_admin' ? '#6366f1' : '#F59E0B') : '#059669') }}>
+                                                                                    - S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                                                </span>
+                                                                                
+                                                                                {/* ACCIONES DE ADMINISTRADOR PARA RESCATE EXCEDENTE */}
+                                                                                {isAdmin && st === 'requiere_aprobacion_admin' && (
+                                                                                    <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                                                                                        <button 
+                                                                                            onClick={() => handleRejectRescueAdmin(p.id)}
+                                                                                            style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
+                                                                                        >
+                                                                                            DENEGAR
+                                                                                        </button>
+                                                                                        <button 
+                                                                                            onClick={() => handleApproveRescueAdmin(p.id)}
+                                                                                            style={{ background: '#dcfce7', color: '#15803d', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
+                                                                                        >
+                                                                                            APROBAR
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                             </div>
+                                                                         </div>
                                                                         );
                                                                     })}
 

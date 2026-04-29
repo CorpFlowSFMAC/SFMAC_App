@@ -26,13 +26,17 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         ticket.costoManoObra,
         rawMetadata.monto_pactado_mo,
         rawMetadata.labor_cost,
-        rawMetadata.costoManoObra
+        rawMetadata.costoManoObra,
+        ticket.monto_acordado // Alias adicional
     ].map(v => toNum(v)).find(v => v > 0) || 0;
     
     const montoFinal = [
+        ticket.ingresos_reales, // Priorizar ingresos reales confirmados
+        ticket.monto_presupuesto,
         ticket.total_quoted_amount,
         ticket.montoFinal,
         ticket.montoTotalCotizado,
+        rawMetadata.ingresos_reales,
         rawMetadata.total_quoted_amount,
         rawMetadata.montoFinal,
         rawMetadata.montoTotalCotizado
@@ -47,12 +51,14 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const operationalKeywords = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'gasto', 'compra'];
     
     // Estados que consideramos como "dinero ya entregado o por entregar confirmado"
-    const validStates = ['pagado', 'adelanto', 'abonado', 'completado', 'autorizado', 'aprobado', 'transferido', 'confirmado'];
+    const validStates = ['pagado', 'adelanto', 'abonado', 'completado', 'autorizado', 'aprobado', 'transferido', 'confirmado', 'auditado', 'ejecutado'];
 
-    const confirmedModernPayments = safeCosts.filter(c => {
-        const st = (c.estado_pago || c.estado || '').toLowerCase();
+    const isConfirmed = (status: string) => {
+        const st = (status || '').toLowerCase();
         return validStates.some(v => st.includes(v));
-    });
+    };
+
+    const confirmedModernPayments = safeCosts.filter(c => isConfirmed(c.estado_pago || c.estado));
 
     const isFee = (cat: string) => {
         const c = (cat || '').toLowerCase();
@@ -68,29 +74,29 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const modernOps = confirmedModernPayments.filter(c => isOp(c.categoria));
 
     // NUEVO: Filtrar solicitudes pendientes (no pagadas aún)
-    const pendingFeesArr = safeCosts.filter(c => {
-        const cat = (c.categoria || '').toLowerCase();
+    // Incluimos REQUIERE_APROBACION_ADMIN como pendiente para que el saldo baje preventivamente
+    const pendingModernPayments = safeCosts.filter(c => {
         const st = (c.estado_pago || c.estado || '').toLowerCase();
-        return isFee(cat) && (st.includes('pendiente') || st.includes('requiere') || st.includes('solicitado'));
+        return st === 'pendiente' || st === 'requiere_aprobacion_admin';
     });
 
-    // 4. PAGOS LEGACY (Deduplicación mejorada)
-    const legacyHistory = 
-        (Array.isArray(ticket.historialPagosTecnico) ? ticket.historialPagosTecnico : null) ||
-        (Array.isArray(ticket.historialPagosTécnico) ? ticket.historialPagosTécnico : null) ||
-        (Array.isArray(rawMetadata.historialPagosTecnico) ? rawMetadata.historialPagosTecnico : null) ||
-        [];
+    const pendingFeesArr = pendingModernPayments.filter(c => isFee(c.categoria));
 
-    const legacyPaymentsFiltered = legacyHistory.filter((h: any) => {
-        const hMonto = toNum(h.monto);
-        if (hMonto <= 0 || h.estado === 'anulado') return false;
-        // No contar si ya está en modernFees
-        return !modernFees.some(m => Math.abs(hMonto - toNum(m.monto)) < 0.01);
-    });
+    const legacyPayments = (rawMetadata.historialPagosTécnico || rawMetadata.historialPagosTecnico || []);
+    
+    // Filtrar pagos duplicados entre Legacy y Modern (por ID)
+    const filteredLegacy = legacyPayments.filter((lp: any) => 
+        !safeCosts.some(mc => mc.id === lp.id)
+    );
+
+    const confirmedLegacyPayments = filteredLegacy.filter((p: any) => isConfirmed(p.estado));
+
+    const legacyFees = confirmedLegacyPayments.filter((p: any) => isFee(p.tipo || p.concepto || ''));
+    const legacyOps = confirmedLegacyPayments.filter((p: any) => isOp(p.tipo || p.concepto || ''));
 
     // 5. CÁLCULO DE TOTALES
     const totalModernFeesSum = modernFees.reduce((acc, c) => acc + toNum(c.monto), 0);
-    const totalLegacyFeesSum = legacyPaymentsFiltered.reduce((acc: number, h: any) => acc + toNum(h.monto), 0);
+    const totalLegacyFeesSum = legacyFees.reduce((acc, p) => acc + toNum(p.monto), 0);
     const totalConfirmedSum = round2(totalModernFeesSum + totalLegacyFeesSum);
 
     const totalPendingFromCosts = pendingFeesArr.reduce((acc, c) => acc + toNum(c.monto), 0);

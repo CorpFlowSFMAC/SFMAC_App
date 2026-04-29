@@ -1230,11 +1230,21 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px' }}>
                     {/* Gastos Pendientes (Alerta Visual) */}
-                    {(costos || []).filter(c => c.estado_pago === 'pendiente').length > 0 && (
+                    {(costos || []).filter(c => (c.estado_pago || '').toLowerCase() === 'pendiente').length > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FEF2F2', padding: '2px 8px', borderRadius: '6px', border: '1px solid #FCA5A5', marginBottom: '2px' }}>
                             <AlertTriangle size={10} color="#B91C1C" />
                             <span style={{ fontSize: '9px', fontWeight: 800, color: '#B91C1C' }}>
-                                {(costos || []).filter(c => c.estado_pago === 'pendiente').length} GASTO(S) PENDIENTE(S)
+                                {(costos || []).filter(c => (c.estado_pago || '').toLowerCase() === 'pendiente').length} GASTO(S) PENDIENTE(S)
+                            </span>
+                        </div>
+                    )}
+                    
+                    {/* Excedentes REQUIEREN APROBACIÓN ADMIN (Alerta Visual) */}
+                    {(costos || []).filter(c => (c.estado_pago || '').toLowerCase() === 'requiere_aprobacion_admin').length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F5F3FF', padding: '2px 8px', borderRadius: '6px', border: '1px solid #C7D2FE', marginBottom: '2px' }}>
+                            <ShieldAlert size={10} color="#4F46E5" />
+                            <span style={{ fontSize: '9px', fontWeight: 900, color: '#4F46E5' }}>
+                                {(costos || []).filter(c => (c.estado_pago || '').toLowerCase() === 'requiere_aprobacion_admin').length} RESCATE(S) REQUIEREN APROBACIÓN ADMIN
                             </span>
                         </div>
                     )}
@@ -1509,8 +1519,11 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
                                 if (st === 'rechazado' || st === 'anulado') return (
                                     <span style={{ fontSize: '9px', fontWeight: 800, color: '#EF4444', background: '#FEF2F2', padding: '1px 6px', borderRadius: '4px' }}>❌ Denegado</span>
                                 );
-                                if (st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin') return (
+                                if (st === 'pendiente' || st === 'requiere_aprobacion') return (
                                     <span style={{ fontSize: '9px', fontWeight: 800, color: '#F59E0B', background: '#FFFBEB', padding: '1px 6px', borderRadius: '4px' }}>⏳ Pendiente Tesorería</span>
+                                );
+                                if (st === 'requiere_aprobacion_admin') return (
+                                    <span style={{ fontSize: '9px', fontWeight: 900, color: '#6366f1', background: '#EEF2FF', border: '1px solid #C7D2FE', padding: '1px 6px', borderRadius: '4px' }}>🛡️ Esperando Aprobación Admin</span>
                                 );
                                 return null;
                             })()}
