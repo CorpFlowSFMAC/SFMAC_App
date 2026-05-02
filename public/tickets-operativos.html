@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tickets Operativos - SINFIMAC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .stats {
+            display: flex;
+            gap: 16px;
+        }
+        .stat-badge {
+            background: #3b82f6;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: #f1f5f9;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            color: #475569;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+        }
+        tr:hover {
+            background: #f8fafc;
+        }
+        .ticket-id {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+        .ticket-number {
+            font-size: 12px;
+            color: #64748b;
+        }
+        .estado {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .estado-nuevo { background: #dbeafe; color: #1d4ed8; }
+        .estado-asignado { background: #fef3c7; color: #b45309; }
+        .estado-en_proceso { background: #d1fae5; color: #047857; }
+        .estado-cerrado { background: #e2e8f0; color: #475569; }
+        .estado-default { background: #f1f5f9; color: #64748b; }
+        .cliente {
+            font-weight: 500;
+        }
+        .sede {
+            font-size: 13px;
+            color: #64748b;
+        }
+        .monto {
+            font-weight: 600;
+            color: #059669;
+        }
+        .costo {
+            font-weight: 600;
+            color: #dc2626;
+        }
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #64748b;
+        }
+        .error {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Tickets Operativos</h1>
+            <div class="stats">
+                <span class="stat-badge" id="stat-total">Total: 0</span>
+            </div>
+        </div>
+        
+        <div id="content">
+            <div class="loading">Cargando tickets...</div>
+        </div>
+    </div>
+
+    <script>
+        // Función para obtener el color del estado
+        function getEstadoClass(estado) {
+            if (!estado) return 'estado-default';
+            const s = estado.toLowerCase();
+            if (s === 'nuevo' || s === 'creado') return 'estado-nuevo';
+            if (s === 'asignado' || s === 'asignado_a_tecnico') return 'estado-asignado';
+            if (s.includes('proceso') || s.includes('atencion') || s.includes('reparado')) return 'estado-en_proceso';
+            if (s.includes('cerrado') || s.includes('cobrado')) return 'estado-cerrado';
+            return 'estado-default';
+        }
+
+        // Cargar tickets desde la API
+        async function loadTickets() {
+            const content = document.getElementById('content');
+            
+            try {
+                const response = await fetch('/api/v3/tickets-operativos');
+                
+                if (!response.ok) {
+                    throw new Error('Error al cargar tickets: ' + response.status);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+                
+                const tickets = result.data || [];
+                const total = result.count || tickets.length;
+                
+                // Actualizar stats
+                document.getElementById('stat-total').textContent = `Total: ${total}`;
+                
+                if (tickets.length === 0) {
+                    content.innerHTML = '<div class="loading">No se encontraron tickets</div>';
+                    return;
+                }
+                
+                // Generar tabla
+                let html = '<div class="table-container"><table><thead><tr>';
+                html += '<th>ID / Fecha</th>';
+                html += '<th>Cliente / Sede</th>';
+                html += '<th>Estado</th>';
+                html += '<th>Descripción</th>';
+                html += '<th>Servicio</th>';
+                html += '<th>Gestora</th>';
+                html += '<th>Técnico</th>';
+                html += '<th>Monto</th>';
+                html += '</tr></thead><tbody>';
+                
+                tickets.forEach(ticket => {
+                    const estado = ticket.estado || 'nuevo';
+                    const description = ticket.description || '';
+                    const cliente = ticket.cliente?.nombre || ticket.cliente?.name || '---';
+                    const sede = ticket.sede?.nombre || '---';
+                    const gestora = ticket.gestora?.nombre || '---';
+                    const tecnico = ticket.tecnico?.nombre || '---';
+                    const monto = ticket.montoFinal || 0;
+                    const fecha = ticket.fechaCreacion ? new Date(ticket.fechaCreacion).toLocaleDateString('es-PE') : '---';
+                    const numero = ticket.numeroTicketCliente || ticket.client_ticket_number || ticket.id?.slice(-6);
+                    const servicio = ticket.service_type || '---';
+                    
+                    html += '<tr>';
+                    html += `<td><div class="ticket-id">#${numero}</div><div class="ticket-number">${fecha}</div></td>`;
+                    html += `<td><div class="cliente">${cliente}</div><div class="sede">${sede}</div></td>`;
+                    html += `<td><span class="estado ${getEstadoClass(estado)}">${estado}</span></td>`;
+                    html += `<td>${description.substring(0, 60)}${description.length > 60 ? '...' : ''}</td>`;
+                    html += `<td>${servicio}</td>`;
+                    html += `<td>${gestora}</td>`;
+                    html += `<td>${tecnico}</td>`;
+                    html += `<td class="monto">S/ ${monto.toFixed(2)}</td>`;
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table></div>';
+                content.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading tickets:', error);
+                content.innerHTML = `<div class="error">${error.message}</div>`;
+            }
+        }
+        
+        // Cargar al inicio
+        loadTickets();
+    </script>
+</body>
+</html>

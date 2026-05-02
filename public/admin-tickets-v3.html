@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Tickets V3 - SINFIMAC</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f4f8; color: #1a202c; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 20px 30px; border-radius: 12px; margin-bottom: 24px; }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header .subtitle { font-size: 14px; opacity: 0.9; }
+        .stats-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+        .stat-card { background: white; padding: 16px 24px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); min-width: 140px; }
+        .stat-card .label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; color: #1e293b; margin-top: 4px; }
+        .filters { background: white; padding: 16px; border-radius: 10px; margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+        .filters select, .filters input { padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-width: 150px; }
+        .filters input { flex: 1; min-width: 200px; }
+        .table-container { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #475569; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        tr:hover { background: #f8fafc; }
+        .ticket-num { font-weight: 600; color: #2563eb; }
+        .estado { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .estado-nuevo { background: #dbeafe; color: #1d4ed8; }
+        .estado-asignado { background: #fef3c7; color: #b45309; }
+        .estado-proceso { background: #d1fae5; color: #047857; }
+        .estado-cerrado { background: #e2e8f0; color: #475569; }
+        .estado-default { background: #f1f5f9; color: #64748b; }
+        .monto { font-weight: 600; color: #059669; }
+        .empty { text-align: center; padding: 60px; color: #64748b; }
+        .error-msg { background: #fef2f2; color: #dc2626; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+        .loading { text-align: center; padding: 40px; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎫 Tickets Operativos</h1>
+            <div class="subtitle">Panel de gestión de tickets operativos - SINFIMAC</div>
+        </div>
+        
+        <div class="stats-row">
+            <div class="stat-card"><div class="label">Total Tickets</div><div class="value" id="stat-total">0</div></div>
+            <div class="stat-card"><div class="label">En Proceso</div><div class="value" id="stat-proceso">0</div></div>
+            <div class="stat-card"><div class="label">Cerrados</div><div class="value" id="stat-cerrado">0</div></div>
+            <div class="stat-card"><div class="label">Monto Total</div><div class="value" id="stat-monto">S/ 0</div></div>
+        </div>
+        
+        <div class="filters">
+            <select id="filter-estado">
+                <option value="">Todos los estados</option>
+            </select>
+            <select id="filter-cliente">
+                <option value="">Todos los clientes</option>
+            </select>
+            <input type="text" id="search" placeholder="Buscar ticket..." />
+        </div>
+        
+        <div class="table-container">
+            <div id="content"><div class="loading">Cargando tickets...</div></div>
+        </div>
+    </div>
+
+    <script>
+        // API endpoint - usar la ruta correcta
+        const API_URL = '/api/v3/tickets-operativos';
+        
+        let allTickets = [];
+        
+        // Función para obtener clase de estado
+        function getEstadoClass(estado) {
+            if (!estado) return 'estado-default';
+            const s = estado.toLowerCase();
+            if (s === 'nuevo' || s === 'creado') return 'estado-nuevo';
+            if (s === 'asignado') return 'estado-asignado';
+            if (s.includes('proceso') || s.includes('atencion') || s.includes('ejecucion') || s.includes('cotizacion') || s.includes('reparado') || s.includes('inspeccion')) return 'estado-proceso';
+            if (s.includes('cerrado') || s.includes('cobrado')) return 'estado-cerrado';
+            return 'estado-default';
+        }
+        
+        // Cargar tickets
+        async function loadTickets() {
+            const content = document.getElementById('content');
+            content.innerHTML = '<div class="loading">Cargando tickets...</div>';
+            
+            try {
+                const response = await fetch(API_URL);
+                
+                if (!response.ok) {
+                    throw new Error('Error HTTP: ' + response.status);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                allTickets = result.data || [];
+                renderTickets(allTickets);
+                updateStats(allTickets);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                content.innerHTML = '<div class="error-msg">⚠️ Error al cargar tickets: ' + error.message + '</div>';
+            }
+        }
+        
+        // Renderizar tabla
+        function renderTickets(tickets) {
+            const content = document.getElementById('content');
+            
+            if (!tickets || tickets.length === 0) {
+                content.innerHTML = '<div class="empty">No se encontraron tickets</div>';
+                return;
+            }
+            
+            let html = '<table><thead><tr>';
+            html += '<th>N° Ticket</th>';
+            html += '<th>Cliente</th>';
+            html += '<th>Sede</th>';
+            html += '<th>Gestora</th>';
+            html += '<th>Técnico</th>';
+            html += '<th>Estado</th>';
+            html += '<th>Descripción</th>';
+            html += '<th>Monto</th>';
+            html += '<th>Fecha</th>';
+            html += '</tr></thead><tbody>';
+            
+            tickets.forEach(t => {
+                // Usar los campos correctos del endpoint: estado y description
+                const num = t.numeroTicketCliente || t.client_ticket_number || t.id?.slice(-6) || '-';
+                const cliente = t.cliente?.nombre || t.clients?.name || '-';
+                const sede = t.sede?.nombre || t.branch_offices?.name || '-';
+                const gestora = t.gestora?.nombre || t.gestoras?.name || '-';
+                const tecnico = t.tecnico?.nombre || t.technicians?.name || '-';
+                const estado = t.estado || 'nuevo';
+                const description = t.description || '-';
+                const monto = t.montoFinal || t.total_quoted_amount || 0;
+                const fecha = t.fechaCreacion || t.created_at ? new Date(t.fechaCreacion || t.created_at).toLocaleDateString('es-PE') : '-';
+                
+                html += '<tr>';
+                html += `<td><span class="ticket-num">#${num}</span></td>`;
+                html += `<td>${cliente}</td>`;
+                html += `<td>${sede}</td>`;
+                html += `<td>${gestora}</td>`;
+                html += `<td>${tecnico}</td>`;
+                html += `<td><span class="estado ${getEstadoClass(estado)}">${estado}</span></td>`;
+                html += `<td>${description.substring(0, 50)}${description.length > 50 ? '...' : ''}</td>`;
+                html += `<td class="monto">S/ ${parseFloat(monto).toFixed(2)}</td>`;
+                html += `<td>${fecha}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            content.innerHTML = html;
+        }
+        
+        // Actualizar stats
+        function updateStats(tickets) {
+            document.getElementById('stat-total').textContent = tickets.length;
+            
+            let proceso = 0, cerrado = 0, montoTotal = 0;
+            tickets.forEach(t => {
+                const e = (t.estado || '').toLowerCase();
+                const m = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
+                montoTotal += m;
+                if (e.includes('cerrado') || e.includes('cobrado')) {
+                    cerrado++;
+                } else if (e !== 'nuevo' && e !== 'creado') {
+                    proceso++;
+                }
+            });
+            
+            document.getElementById('stat-proceso').textContent = proceso;
+            document.getElementById('stat-cerrado').textContent = cerrado;
+            document.getElementById('stat-monto').textContent = 'S/ ' + montoTotal.toFixed(2);
+        }
+        
+        // Filtros
+        document.getElementById('filter-estado').addEventListener('change', applyFilters);
+        document.getElementById('search').addEventListener('input', applyFilters);
+        
+        function applyFilters() {
+            let filtered = allTickets;
+            const estadoFilter = document.getElementById('filter-estado').value;
+            const search = document.getElementById('search').value.toLowerCase();
+            
+            if (estadoFilter) {
+                filtered = filtered.filter(t => (t.estado || '').toLowerCase() === estadoFilter.toLowerCase());
+            }
+            if (search) {
+                filtered = filtered.filter(t => 
+                    (t.numeroTicketCliente || '').toLowerCase().includes(search) ||
+                    (t.description || '').toLowerCase().includes(search) ||
+                    (t.cliente?.nombre || '').toLowerCase().includes(search)
+                );
+            }
+            
+            renderTickets(filtered);
+            updateStats(filtered);
+        }
+        
+        // Cargar al inicio
+        loadTickets();
+    </script>
+</body>
+</html>
