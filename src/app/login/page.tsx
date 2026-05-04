@@ -27,37 +27,59 @@ export default function LoginPage() {
         // Random quote on mount
         const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
         setQuote(randomQuote);
+        
+        // Check if already logged in
+        const checkSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                // Already has session, redirect to dashboard
+                router.push('/dashboard');
+            }
+        };
+        checkSession();
     }, [router]);
+
+    // Cleanup old sessions - runs on mount
+    useEffect(() => {
+        // Force clear any old/corrupted session data
+        const cookies = document.cookie.split(";");
+        cookies.forEach((cookie) => {
+            const cookieName = cookie.split("=")[0].trim();
+            document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        });
+        localStorage.clear();
+    }, []);
 
     const handleMicrosoftLogin = async () => {
         setIsLoading(true);
-        
-        // Cleanup: Force clear any old/corrupted session cookies before login
-        const cookiesToClear = ['sb-access-token', 'sb-refresh-token', 'userRole', 'nextauth.session-token'];
-        cookiesToClear.forEach(cookieName => {
-            document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
-            document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict; secure`;
-        });
-        
-        // Also clear localStorage
-        localStorage.removeItem('userRole');
-        localStorage.removeItem('supabase.auth.token');
+        setError("");
         
         try {
-            const { error } = await supabase.auth.signInWithOAuth({
+            console.log('[Login] Starting Azure AD OAuth...');
+            
+            const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
                 provider: 'azure', 
                 options: {
-                    scopes: 'openid profile email',
-                    // Force redirect to /dashboard after Azure AD success
-                    redirectTo: `${window.location.origin}/dashboard`,
+                    scopes: 'openid profile email User.Read',
+                    redirectTo: `${window.location.origin}/auth/callback`,
                 }
             });
-            if (error) throw error;
             
-            // signInWithOAuth will automatically redirect to Azure AD
-            // After Azure authentication, redirects to /dashboard with hash
+            if (oauthError) {
+                console.error('[Login] OAuth Error:', oauthError);
+                throw oauthError;
+            }
+            
+            if (!data?.url) {
+                console.error('[Login] No URL returned');
+                throw new Error("No se recibió URL de autenticación");
+            }
+            
+            console.log('[Login] Redirecting to Azure AD...');
+            // Browser will redirect to Azure AD
         } catch (err: any) {
-            setError(err.message || "Error al conectar con Microsoft.");
+            console.error('[Login] Error completo:', err);
+            setError(err.message || "Error al conectar con Microsoft Azure AD");
             setIsLoading(false);
         }
     };

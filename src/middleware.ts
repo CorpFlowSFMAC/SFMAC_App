@@ -5,7 +5,22 @@ export function middleware(request: NextRequest) {
     const userRole = request.cookies.get('userRole')?.value;
     const { pathname } = request.nextUrl;
 
-    // 0. Permitir acceso al gateway /dashboard (sin subruta) para procesar OAuth callback
+    // 0. Allow auth callback to process OAuth
+    if (pathname === '/auth/callback') {
+        return NextResponse.next();
+    }
+    
+    // 0b. Allow access to static files and api
+    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) {
+        return NextResponse.next();
+    }
+
+    // 0c. Allow login page
+    if (pathname === '/login') {
+        return NextResponse.next();
+    }
+
+    // 1. Permitir acceso al gateway /dashboard (sin subruta) para procesar OAuth callback
     if (pathname === '/dashboard') {
         // Si ya tiene rol, redirigir directamente al dashboard correcto
         if (userRole && userRole !== 'sin_acceso') {
@@ -63,5 +78,5 @@ export function middleware(request: NextRequest) {
 // Configurar en qué rutas se debe ejecutar el middleware
 // Incluir /dashboard para procesar OAuth callback desde Microsoft
 export const config = {
-    matcher: ['/dashboard/:path*', '/dashboard'],
+    matcher: ['/dashboard/:path*', '/dashboard', '/auth/callback', '/login'],
 };
