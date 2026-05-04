@@ -26,14 +26,15 @@ export async function GET(request: NextRequest) {
     let userRole = 'gestor'; // Default role
     
     if (code) {
-        // Intentar trocar el código por un token para obtener el email
+        console.log('[Azure AD Callback] Has auth code, attempting token exchange');
+        // Intentar trocar el código por un token
         try {
             const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
-            const clientSecret = process.env.AZURE_CLIENT_SECRET;
+            // Use correct env variable name from Vercel
+            const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
             const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
             const redirectUri = 'https://corpflow.sinfimac.pe/api/auth/callback/azure-ad';
             
-            // Intercambiar código por token
             const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
             const tokenData = new URLSearchParams({
                 client_id: clientId,
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
             });
             
             const tokenResult = await tokenResponse.json();
+            console.log('[Azure AD Callback] Token response:', tokenResult.error || 'success');
             
             if (tokenResult.access_token) {
                 // Obtener información del usuario con el token
