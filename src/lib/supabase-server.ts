@@ -2,7 +2,7 @@
  * Supabase Server Client - Usa Service Role Key para evitar RLS
  * Versión resiliente: No crashea si faltan variables
  */
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
 
 let supabaseServerInstance: ReturnType<typeof createClient> | null = null;
 
@@ -80,4 +80,98 @@ export async function getTicketsCount() {
     }
     
     return count || 0;
+}
+
+/**
+ * Obtener TODOS los tickets usando service role (ignora RLS)
+ * Versión ligera para evitar payload masivo
+ */
+export async function getAllTicketsLite(gestorId?: string) {
+    const client = getSupabaseServerClient();
+    if (!client) {
+        return [];
+    }
+    
+    let query = client
+        .from('tickets')
+        .select('id, status_id, estadoId, service_type, description, descripcionProblema, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, gestora_id, metadata')
+        .order('created_at', { ascending: false })
+        .limit(200);
+    
+    if (gestorId) {
+        query = query.eq('gestora_id', gestorId);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) {
+        console.error('[Supabase Server] Error fetching tickets:', error.message);
+        return [];
+    }
+    
+    return data || [];
+}
+
+/**
+ * Obtener resumen de tickets (con join mínimos)
+ * Útil para dashboard
+ */
+export async function getTicketsSummary() {
+    const client = getSupabaseServerClient();
+    if (!client) {
+        return [];
+    }
+    
+    // Intentar usar RPC primero (más eficiente)
+    try {
+        const { data, error } = await client.rpc('get_tickets_summary_light');
+        if (!error && data) {
+            return data;
+        }
+    } catch (e) {
+        console.log('[Supabase Server] RPC not available, using fallback');
+    }
+    
+    // Fallback: consulta directa
+    const { data, error } = await client
+        .from('tickets')
+        .select('id, status_id, estadoId, service_type, client_ticket_number, created_at, priority')
+        .order('created_at', { ascending: false })
+        .limit(50);
+    
+    if (error) {
+        console.error('[Supabase Server] Error fetching tickets summary:', error.message);
+        return [];
+    }
+    
+    return data || [];
+}
+
+/**
+ * Keep-alive: consulta légère a la DB
+ * Usado para evitar pausa por inactividad en Supabase Free Tier
+ */
+export async function pingDatabase() {
+    const client = getSupabaseServerClient();
+    if (!client) {
+        return false;
+    }
+    
+    try {
+        // Consulta muy ligera: solo verificar conexión
+        const { error } = await client
+            .from('tickets')
+            .select('id')
+            .limit(1);
+        
+        if (error) {
+            console.error('[Supabase Server] Ping failed:', error.message);
+            return false;
+        }
+        
+        return true;
+    } catch (e) {
+        console.error('[Supabase Server] Ping exception:', e);
+        return false;
+    }
 }

@@ -184,15 +184,37 @@ export const queryKeys = {
 // ─────────────────────────────────────────────
 // useTickets — Hook principal para lista/kanban
 // ─────────────────────────────────────────────
+// Usa fallback: intenta primero la API, si falla usa server endpoint
 export function useTickets() {
     return useQuery({
         queryKey: queryKeys.tickets.summary(),
         queryFn: async () => {
-            const data = await ticketsAPI.getSummaryAll();
-            return (data || []).map(normalizeTicket).filter(Boolean);
+            try {
+                // Intentar método primario: RPC de Supabase
+                const data = await ticketsAPI.getSummaryAll();
+                return (data || []).map(normalizeTicket).filter(Boolean);
+            } catch (primaryError: any) {
+                console.log('[useTickets] Primary method failed, trying server fallback:', primaryError.message);
+                
+                try {
+                    // Fallback: endpoint del servidor (usa service role)
+                    const response = await fetch('/api/v3/tickets-server?summary=1');
+                    if (response.ok) {
+                        const result = await response.json();
+                        return (result.data || []).map(normalizeTicket).filter(Boolean);
+                    }
+                } catch (fallbackError: any) {
+                    console.log('[useTickets] Server fallback failed:', fallbackError.message);
+                }
+                
+                // Si todo falla, retornar array vacío (no throw)
+                return [];
+            }
         },
         staleTime: 1000 * 60, // 60s - Tickets no cambian tan rápido para vista general
         gcTime: 1000 * 60 * 5, // 5 min
+        // No mostrar errores al usuario - manejo silencioso
+        retry: 1, // Solo reintentar una vez
     });
 }
 
