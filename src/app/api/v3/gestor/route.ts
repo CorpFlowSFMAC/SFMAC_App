@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
         // Importar server client
         const { getClient } = await import('@/lib/supabase-server');
-        const client = getClient();
+        const client = getClient() as any;
         
         if (!client) {
             return NextResponse.json({
