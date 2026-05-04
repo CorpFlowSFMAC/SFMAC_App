@@ -1253,16 +1253,14 @@ export default function GestorDashboard() {
                 );
             })}
 
-            {/* ════════════════════════════════════════════════
-                REPORTES VIEW
-            ════════════════════════════════════════════════}
+            {/* REPORTES VIEW */}
             {activeView === "reportes" && (
                 <div style={{ padding: "1rem" }}>
                     <div style={{ textAlign: "center", padding: "3rem", background: "white", borderRadius: "12px", border: "1px solid #E2E8F0" }}>
                         <BarChart3 size={48} style={{ margin: "0 auto 1rem", color: "#4338CA" }} />
                         <h2 style={{ margin: "0 0 0.5rem", color: "#1E293B", fontSize: "1.25rem" }}>Reportes de Eficiencia</h2>
                         <p style={{ margin: 0, color: "#64748B" }}>
-                            Período: {dateFilter === 'today' ? 'Hoy' : dateFilter === 'week' ? 'Esta Semana' : dateFilter === 'month' ? 'Este Mes' : 'Todos'}
+                            Período: {dateFilter === "today" ? "Hoy" : dateFilter === "week" ? "Esta Semana" : dateFilter === "month" ? "Este Mes" : "Todos"}
                         </p>
                         
                         {/* KPI Summary */}
@@ -1281,17 +1279,17 @@ export default function GestorDashboard() {
                             </div>
                         </div>
                         
-                        {/* Stats adicionales */}
+                        {/* Stats detailed */}
                         <div style={{ marginTop: "1.5rem", textAlign: "left", padding: "1rem", background: "#EEF2FF", borderRadius: "8px" }}>
-                            <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#4338CA" }}>Métricas Detalladas</h3>
+                            <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#4338CA" }}>Metricas Detalladas</h3>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem" }}>
-                                <div><span style={{ color: "#64748B" }}>SLA Cumplimiento:</span></div>
+                                <div>SLA Cumplimiento:</div>
                                 <div style={{ fontWeight: 700 }}>{kpis.slaCompliance}%</div>
-                                <div><span style={{ color: "#64748B" }}>MTTR Promedio:</span></div>
-                                <div style={{ fontWeight: 700 }}>{kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : '-'}</div>
-                                <div><span style={{ color: "#64748B" }}>SLA Vencidos:</span></div>
+                                <div>MTTR Promedio:</div>
+                                <div style={{ fontWeight: 700 }}>{kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : "-"}</div>
+                                <div>SLA Vencidos:</div>
                                 <div style={{ fontWeight: 700, color: kpis.expiredOpen.length > 0 ? "#EF4444" : "#10B981" }}>{kpis.expiredOpen.length}</div>
-                                <div><span style={{ color: "#64748B" }}>Backlog ({'>'}24h):</span></div>
+                                <div>Backlog:</div>
                                 <div style={{ fontWeight: 700, color: kpis.backlog.length > 3 ? "#EF4444" : "#10B981" }}>{kpis.backlog.length}</div>
                             </div>
                         </div>
