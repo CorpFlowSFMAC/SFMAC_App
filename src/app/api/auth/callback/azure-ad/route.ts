@@ -11,9 +11,20 @@ const supabase = supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey)
     : createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJxxxxx');
 
+// APP_URL - usar variable o extraer del request
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://corpflow.sinfimac.pe';
+// También permitir override desde header si existe (para Vercel preview)
+const getBaseUrl = (req: NextRequest) => {
+    // En producción, usar APP_URL
+    if (APP_URL.includes('corpflow')) return APP_URL;
+    // En preview/dev, usar el host del request
+    const host = req.headers.get('host') || 'localhost:3000';
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+    return `${protocol}://${host}`;
+};
 
 console.log('[Azure Callback] 🔐 Service Key configured:', !!supabaseServiceKey);
+console.log('[Azure Callback] 🌐 APP_URL:', APP_URL);
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
@@ -108,19 +119,28 @@ export async function GET(request: NextRequest) {
     
     // Map roles to rutas
     const roleToPath: Record<string, string> = {
-        admin: '/dashboard/admin',
-       ADMIN: '/dashboard/admin',
-        gestora: '/dashboard/gestor',
-       GESTORA: '/dashboard/gestor',
-        espectador: '/dashboard/gestor',
-       ESPECTADOR: '/dashboard/gestor',
-        sin_acceso: '/dashboard/sin-acceso',
-        SIN_ACCESO: '/dashboard/sin-acceso',
+        'admin': '/dashboard/admin',
+        'ADMIN': '/dashboard/admin',
+        'gestora': '/dashboard/gestor',
+        'GESTORA': '/dashboard/gestor',
+        'espectador': '/dashboard/gestor',
+        'ESPECTADOR': '/dashboard/gestor',
+        'sin_acceso': '/dashboard/sin-acceso',
+        'SIN_ACCESO': '/dashboard/sin-acceso',
     };
     
-    // Normalize role
-    const finalRole = userRole.toUpperCase();
-    let destino = roleToPath[finalRole] || roleToPath[userRole] || '/dashboard/sin-acceso';
+    // DEBUG: Mostrar todo
+    console.log('[Azure Callback] 🔍 DEBUG userRole raw:', userRole);
+    console.log('[Azure Callback] 🔍 DEBUG roleToPath keys:', Object.keys(roleToPath));
+    
+    // Normalize role - ensure lowercase for lookup
+    const lookupRole = userRole.toLowerCase();
+    console.log('[Azure Callback] 🔍 DEBUG lookupRole:', lookupRole);
+    console.log('[Azure Callback] 🔍 DEBUG roleToPath[lookupRole]:', roleToPath[lookupRole]);
+    
+    let destino = roleToPath[lookupRole] || '/dashboard/sin-acceso';
+    console.log('[Azure Callback] 🔍 DEBUG mapped destino:', destino);
+    console.log('[Azure Callback] 🔍 DEBUG APP_URL for redirect:', APP_URL);
     
     // Sipieler perfil, siempre ir al dashboard correspondiente
     console.log('[Azure Callback] 🎯 Final decision:', {
