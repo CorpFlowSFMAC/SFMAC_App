@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer, getProfileByEmail } from "@/lib/supabase-server";
 import { perfilesAPI } from "@/lib/profiles-api";
 import { Loader } from "lucide-react";
 
@@ -111,40 +111,30 @@ export default function DashboardGateway() {
             
             setStatus(`¡Bienvenido/a, ${user.user_metadata?.full_name || userEmail}!`);
 
-            // ── RBAC: Consultar perfil desde la tabla perfiles con mapeo universal por email ──
+            // ── RBAC: Consultar perfil desde la tabla perfiles con Service Role ──
             setStatus("Verificando permisos de acceso...");
             
-            // Intentar primero por ID de auth
-            let perfil = await perfilesAPI.getById(user.id);
+            // Usar servidor para evitar RLS
+            let perfil = await getProfileByEmail(userEmail);
 
-            // Si no existe perfil por ID, intentar por email normalizado
-            if (!perfil) {
-                console.log("[Dashboard Gateway] Profile not found by ID, trying by email:", userEmail);
-                perfil = await perfilesAPI.getByEmail(userEmail);
-            }
-
-            // ── VALIDACIÓN DE SESIÓN: Si NO se encuentra perfil, Denegar Acceso ──
+            // Si no existe perfil, denegar acceso
             if (!perfil) {
                 console.log("[Dashboard Gateway] ❌ PERFIL NO ENCONTRADO para:", userEmail);
                 
-                // Limpiar cualquier sesión anterior y denegar acceso
-                document.cookie = `userRole=sin_acceso; path=/; max-age=86400; SameSite=Lax`;
-                localStorage.setItem("userRole", "sin_acceso");
-                localStorage.setItem("userEmail", userEmail);
-                localStorage.setItem("userName", user.user_metadata?.full_name || userEmail);
-                localStorage.setItem("rbacRole", "SIN_ACCESO");
+                // Limpiar sesión
+                localStorage.clear();
+                document.cookie = `userRole=sin_acceso; path=/; max-age=0`;
                 
-                setStatus("ACCESO DENEGADO - Su email no está registrado en el sistema");
-                // Redirigir a página de acceso denegado
+                setStatus("Su email no está registrado en el sistema");
                 router.push('/dashboard/sin-acceso');
                 return;
             }
 
-            // Determinar el rol desde el perfil RBAC
-            const rbacRole = perfil?.rol || 'SIN_ACCESO';
+            // Determinar el rol desde el perfil
+            const rbacRole = perfil.rol || 'SIN_ACCESO';
             const legacyRole = perfilesAPI.toLegacyRole(perfil);
 
-            console.log("[Dashboard Gateway] ✅ User:", userEmail, "RBAC Role:", rbacRole, "Legacy Role:", legacyRole);
+            console.log("[Dashboard Gateway] ✅ User:", userEmail, "Role:", rbacRole);
 
             // Establecer la cookie y localStorage para el middleware
             const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || userEmail || "";

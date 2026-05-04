@@ -1,63 +1,47 @@
 /**
  * API de Diagnóstico - Verifica conexión a DB y cuenta tickets
+ * Usa Service Role Key para evitar problemas de RLS
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { supabaseServer, getTicketsCount } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest) {
-    if (!supabaseUrl || !supabaseAnonKey) {
-        return NextResponse.json({
-            error: 'Faltan variables de entorno',
-            supabaseUrl: supabaseUrl || 'NO CONFIGURADA',
-            supabaseAnonKey: supabaseAnonKey ? 'CONFIGURADA' : 'NO CONFIGURADA'
-        }, { status: 500 });
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
     try {
-        // Test de conexión
-        const { data: testData, error: testError } = await supabase
-            .from('tickets')
-            .select('id', { count: 'exact', head: true })
-            .limit(1);
+        // Obtener conteo de tickets
+        const ticketsCount = await getTicketsCount();
 
-        const { count, error: countError } = await supabase
-            .from('tickets')
-            .select('id', { count: 'exact', head: true });
-
-        // Obtener perfiles
-        const { data: perfiles } = await supabase
+        // Obtener perfiles usando service role
+        const { data: perfiles } = await supabaseServer
             .from('perfiles')
-            .select('email, rol');
+            .select('id, email, rol, nombre_completo');
 
-        // Obtener algunos tickets si hay
-        const { data: sampleTickets } = await supabase
+        // Obtener algunos tickets
+        const { data: sampleTickets } = await supabaseServer
             .from('tickets')
-            .select('id, estado, description, service_type')
+            .select('id, estado, description')
             .limit(5);
+
+        // Calcular estadísticas
+        const adminCount = perfiles?.filter(p => p.rol === 'ADMIN').length || 0;
+        const gestoraCount = perfiles?.filter(p => p.rol === 'GESTORA').length || 0;
 
         return NextResponse.json({
             success: true,
-            connection: !!supabaseUrl,
-            supabaseUrl: supabaseUrl,
+            connection: true,
             tickets: {
-                count: count || 0,
+                count: ticketsCount,
                 sample: sampleTickets || []
             },
             perfiles: perfiles || [],
-            errors: {
-                testError: testError?.message || null,
-                countError: countError?.message || null
+            detalle_perfiles: {
+                count: perfiles?.length || 0,
+                admin_count: adminCount,
+                gestora_count: gestoraCount
             }
         });
     } catch (err: any) {
         return NextResponse.json({
-            error: err.message,
-            supabaseUrl: supabaseUrl
+            error: err.message
         }, { status: 500 });
     }
 }
