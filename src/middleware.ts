@@ -26,8 +26,8 @@ export function middleware(request: NextRequest) {
     if (pathname === '/dashboard') {
         // Si tiene auth de Azure, establecer rol por defecto y redirigir
         if (authStatus === 'azure_logged_in' || azureCode) {
-            const defaultRole = 'gestor'; // Default role for Azure users
-            const response = NextResponse.redirect(new URL('/dashboard/gestor', request.url));
+            const defaultRole = 'gestor';
+            const response = NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
             response.cookies.set('userRole', defaultRole, {
                 path: '/',
                 maxAge: 60 * 60 * 24 * 7,
@@ -40,7 +40,7 @@ export function middleware(request: NextRequest) {
         
         // Si ya tiene rol, redirigir directamente al dashboard correcto
         if (userRole && userRole !== 'sin_acceso') {
-            const dest = userRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
+            const dest = userRole === 'admin' ? 'https://corpflow.sinfimac.pe/dashboard/admin' : 'https://corpflow.sinfimac.pe/dashboard/gestor';
             return NextResponse.redirect(new URL(dest, request.url));
         }
         // Si no tiene rol o es sin_acceso, dejar pasar para que el gateway procese
@@ -51,7 +51,7 @@ export function middleware(request: NextRequest) {
     if (pathname === '/dashboard/sin-acceso') {
         // Si tiene un rol asignado (no sin_acceso), redirigir al dashboard correcto
         if (userRole && userRole !== 'sin_acceso') {
-            const dest = userRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
+            const dest = userRole === 'admin' ? 'https://corpflow.sinfimac.pe/dashboard/admin' : 'https://corpflow.sinfimac.pe/dashboard/gestor';
             return NextResponse.redirect(new URL(dest, request.url));
         }
         return NextResponse.next();
@@ -61,7 +61,7 @@ export function middleware(request: NextRequest) {
     if (pathname.startsWith('/dashboard')) {
         // Si tiene auth de Azure pero no userRole, establecer rol por defecto
         if (!userRole && (authStatus === 'azure_logged_in' || azureCode)) {
-            const response = NextResponse.redirect(new URL('/dashboard/gestor', request.url));
+            const response = NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
             response.cookies.set('userRole', 'gestor', {
                 path: '/',
                 maxAge: 60 * 60 * 24 * 7,
@@ -74,7 +74,7 @@ export function middleware(request: NextRequest) {
         
         // Si no tiene ningún tipo de auth, redirigir a login
         if (!userRole && !authStatus && !azureCode) {
-            return NextResponse.redirect(new URL('/login', request.url));
+            return NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/login', request.url));
         }
         
         // 3. Si tiene rol SIN_ACCESO, redirigir a la sala de espera
@@ -86,17 +86,17 @@ export function middleware(request: NextRequest) {
         if (pathname.startsWith('/dashboard/admin')) {
             // La ruta de Usuarios y Accesos es SOLO para admins
             if (pathname.startsWith('/dashboard/admin/usuarios') && userRole !== 'admin') {
-                return NextResponse.redirect(new URL('/dashboard/gestor', request.url));
+                return NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
             }
 
-            // Las rutas admin-only (clients, payments, routing, usuarios) requieren rol admin
+            // Las rutas admin-only requieren rol admin
             if (userRole !== 'admin') {
                 const isAllowedPath = pathname.startsWith('/dashboard/admin/tickets') ||
                     pathname.startsWith('/dashboard/admin/technicians') ||
                     pathname.startsWith('/dashboard/admin/reportes');
 
                 if (!isAllowedPath) {
-                    return NextResponse.redirect(new URL('/dashboard/gestor', request.url));
+                    return NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
                 }
             }
         }

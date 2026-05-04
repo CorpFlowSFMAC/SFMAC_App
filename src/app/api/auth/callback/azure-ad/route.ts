@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
         console.log('[Azure AD Callback] No code from corpflow.sinfimac.pe, allowing demo access');
     }
     
-    // Use dynamic origin for redirect
-    const origin = new URL(request.url).origin;
+    // Use OFFICIAL domain for redirect
+    const origin = 'https://corpflow.sinfimac.pe';
     const response = NextResponse.redirect(new URL(`${origin}/dashboard`, request.url));
     response.cookies.set('auth_status', 'azure_logged_in', {
         path: '/',
