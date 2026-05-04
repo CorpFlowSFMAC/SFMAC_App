@@ -58,7 +58,8 @@ export default function LoginPage() {
             const origin = 'https://corpflow.sinfimac.pe';
             const redirectUri = encodeURIComponent(`${origin}/api/auth/callback/azure-ad`);
             
-            const azureAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=openid%20profile%20email%20User.Read&response_mode=query`;
+            // FORCE login every time - prompt: "login" required by Azure
+            const azureAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=openid%20profile%20email%20User.Read&response_mode=query&prompt=login`;
             
             console.log('[Login] Azure URL:', azureAuthUrl);
             window.location.href = azureAuthUrl;
