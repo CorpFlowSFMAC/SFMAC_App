@@ -5,6 +5,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProfileByEmail } from '@/lib/supabase-server';
 
+interface PerfilDB {
+    id: string;
+    email: string;
+    nombre_completo: string | null;
+    rol: string;
+}
+
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const email = searchParams.get('email');
@@ -16,7 +23,7 @@ export async function GET(request: NextRequest) {
     try {
         const normalizedEmail = email.toLowerCase().trim();
         
-        const perfil = await getProfileByEmail(normalizedEmail);
+        const perfil = await getProfileByEmail(normalizedEmail) as PerfilDB | null;
 
         if (!perfil) {
             console.log('[API Profile] No encontrado:', normalizedEmail);
