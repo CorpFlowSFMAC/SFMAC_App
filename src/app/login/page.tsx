@@ -56,6 +56,13 @@ export default function LoginPage() {
         
         try {
             console.log('[Login] Starting Azure AD OAuth...');
+            console.log('[Login] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+            
+            // Force clear any remaining cookies
+            document.cookie.split(";").forEach((c) => { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            localStorage.clear();
             
             const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
                 provider: 'azure', 
@@ -71,15 +78,15 @@ export default function LoginPage() {
             }
             
             if (!data?.url) {
-                console.error('[Login] No URL returned');
-                throw new Error("No se recibió URL de autenticación");
+                console.error('[Login] No URL returned from Supabase');
+                throw new Error("Supabase no retornó URL de autenticación");
             }
             
-            console.log('[Login] Redirecting to Azure AD...');
-            // Browser will redirect to Azure AD
+            console.log('[Login] Redirecting to:', data.url);
+            window.location.href = data.url;
         } catch (err: any) {
             console.error('[Login] Error completo:', err);
-            setError(err.message || "Error al conectar con Microsoft Azure AD");
+            setError(err.message || "Error al conectar con Azure AD. Verifica la configuración.");
             setIsLoading(false);
         }
     };
