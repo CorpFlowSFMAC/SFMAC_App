@@ -1,39 +1,41 @@
+/**
+ * Azure AD Callback - Procesa autenticación de Azure AD
+ * Usa Service Role Key para evitar RLS al buscar perfil
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxx.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJxxxxx';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const supabase = supabaseServiceKey 
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJxxxxx');
 
-// APP_URL para redirects - configurable por entorno
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://corpflow.sinfimac.pe';
+
+console.log('[Azure Callback] 🔐 Service Key configured:', !!supabaseServiceKey);
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description') || searchParams.get('error_message');
-    const state = searchParams.get('state');
+    const errorDescription = searchParams.get('error_description');
     
-    console.log('[Azure AD Callback] Full URL:', request.url);
-    console.log('[Azure AD Callback] Code present:', !!code);
-    console.log('[Azure AD Callback] Error:', error);
-    
+    console.log('[Azure Callback] 📥 Request received, code present:', !!code);
+    console.log('[Azure Callback] 🌐 APP_URL:', APP_URL);
+
     if (error) {
-        console.error('[Azure AD Callback] Azure Error:', error, errorDescription);
+        console.error('[Azure Callback] ❌ Azure error:', error, errorDescription);
         return NextResponse.redirect(new URL('/login?error=azure_denied', request.url));
     }
     
-    // Variable para almacenar el email del usuario
     let userEmail = '';
-    let userRole = 'sin_acceso'; // Default: DENEGAR acceso hasta verificar
+    let userRole = 'sin_acceso';
+    let perfilEncontrado = false;
     
     if (code) {
-        console.log('[Azure AD Callback] Has auth code, attempting token exchange');
-        // Intentar trocar el código por un token
         try {
             const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
-            // Use correct env variable name from Vercel
             const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
             const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
             const redirectUri = `${APP_URL}/api/auth/callback/azure-ad`;
@@ -48,6 +50,8 @@ export async function GET(request: NextRequest) {
                 scope: 'openid profile email User.Read',
             });
             
+            console.log('[Azure Callback] 🔄 Exchanging code for token...');
+            
             const tokenResponse = await fetch(tokenUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -55,14 +59,15 @@ export async function GET(request: NextRequest) {
             });
             
             const tokenResult = await tokenResponse.json();
-            console.log('[Azure AD Callback] Token response status:', tokenResponse.status, 'has_error:', !!tokenResult.error);
+            console.log('[Azure Callback] 📬 Token response status:', tokenResponse.status);
             
             if (tokenResult.error) {
-                console.error('[Azure AD Callback] Token error:', tokenResult.error_description || tokenResult.error);
+                console.error('[Azure Callback] ❌ Token error:', tokenResult.error_description || tokenResult.error);
             }
             
             if (tokenResult.access_token) {
-                // Obtener información del usuario con el token
+                console.log('[Azure Callback] ✅ Token obtained, fetching user info...');
+                
                 const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
                     headers: { 'Authorization': `Bearer ${tokenResult.access_token}` },
                 });
@@ -70,56 +75,64 @@ export async function GET(request: NextRequest) {
                 if (userResponse.ok) {
                     const userData = await userResponse.json();
                     userEmail = userData.mail || userData.userPrincipalName;
-                    console.log('[Azure AD Callback] User email:', userEmail);
+                    console.log('[Azure Callback] 👤 User email from Azure:', userEmail);
                     
-                    // Buscar el perfil en la tabla perfiles con mapeo universal
                     if (userEmail) {
-                        try {
-                            const normalizedEmail = userEmail.toLowerCase().trim();
-                            console.log('[Azure AD Callback] Looking up perfil for:', normalizedEmail);
-                            
-                            const { data: perfil, error: perfilError } = await supabase
-                                .from('perfiles')
-                                .select('rol, email')
-                                .eq('email', normalizedEmail)
-                                .single();
-                            
-                            console.log('[Azure AD Callback] Perfil result:', perfil, 'error:', perfilError);
-                            
-                            if (perfil && perfil.rol) {
-                                userRole = perfil.rol.toLowerCase();
-                                console.log('[Azure AD Callback] User role from DB:', userRole);
-                            } else {
-                                console.log('[Azure AD Callback] ❌ PERFIL NO ENCONTRADO para:', normalizedEmail);
-                                // No crear perfil aquí - dejar que el gateway decida (denegará acceso)
-                                userRole = 'sin_acceso'; // Forzar denegación si no hay perfil
-                            }
-                        } catch (dbError) {
-                            console.error('[Azure AD Callback] DB Error:', dbError);
-                            userRole = 'sin_acceso'; // Forzar denegación en caso de error
+                        const normalizedEmail = userEmail.toLowerCase().trim();
+                        console.log('[Azure Callback] 🔍 Looking up perfil for:', normalizedEmail);
+                        
+                        // Usar service role para evitar RLS
+                        const { data: perfil, error: perfilError } = await supabase
+                            .from('perfiles')
+                            .select('rol, email, nombre_completo')
+                            .eq('email', normalizedEmail)
+                            .single();
+                        
+                        console.log('[Azure Callback] 📊 Perfil lookup result:', { perfil, error: perfilError?.message });
+                        
+                        if (perfil && perfil.rol) {
+                            userRole = perfil.rol.toLowerCase();
+                            perfilEncontrado = true;
+                            console.log('[Azure Callback] ✅ PERFIL ENCONTRADO - Rol:', userRole);
+                        } else {
+                            console.log('[Azure Callback] ❌ PERFIL NO ENCONTRADO en DB para:', normalizedEmail);
+                            console.log('[Azure Callback] 💡 DEBUG - Buscando perfil con service role key:', !!supabaseServiceKey);
                         }
                     }
                 }
             }
-        } catch (err) {
-            console.error('[Azure AD Callback] Error getting user info:', err);
+        } catch (err: any) {
+            console.error('[Azure Callback] ❌ Exception:', err?.message || err);
         }
     }
     
-    // Map roles to paths
+    // Map roles to rutas
     const roleToPath: Record<string, string> = {
         admin: '/dashboard/admin',
+       ADMIN: '/dashboard/admin',
         gestora: '/dashboard/gestor',
+       GESTORA: '/dashboard/gestor',
         espectador: '/dashboard/gestor',
+       ESPECTADOR: '/dashboard/gestor',
         sin_acceso: '/dashboard/sin-acceso',
+        SIN_ACCESO: '/dashboard/sin-acceso',
     };
     
-    // Si el rol no es reconocido, usar sin_acceso para seguridad
-    const finalRole = roleToPath[userRole] ? userRole : 'sin_acceso';
-    const destino = roleToPath[finalRole] || '/dashboard/sin-acceso';
+    // Normalize role
+    const finalRole = userRole.toUpperCase();
+    let destino = roleToPath[finalRole] || roleToPath[userRole] || '/dashboard/sin-acceso';
+    
+    // Sipieler perfil, siempre ir al dashboard correspondiente
+    console.log('[Azure Callback] 🎯 Final decision:', {
+        userEmail,
+        userRole,
+        perfilEncontrado,
+        destino
+    });
     
     const response = NextResponse.redirect(new URL(`${APP_URL}${destino}`, request.url));
     
+    // cookies para sesión
     response.cookies.set('auth_status', 'azure_logged_in', {
         path: '/',
         httpOnly: false,
@@ -132,14 +145,18 @@ export async function GET(request: NextRequest) {
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
     });
-    // Establecer el rol correcto del usuario - session cookie
     response.cookies.set('userRole', userRole, {
         path: '/',
         httpOnly: false,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
     });
+    response.cookies.set('userEmail', userEmail, {
+        path: '/',
+        httpOnly: false,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+    });
     
-    console.log('[Azure AD Callback] Redirecting to', destino, 'with role:', userRole);
     return response;
 }
