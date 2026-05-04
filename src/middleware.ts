@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // 0. Allow auth callback to process OAuth
-    if (pathname === '/auth/callback') {
+    if (pathname === '/auth/callback' || pathname.startsWith('/api/auth')) {
         return NextResponse.next();
     }
     
@@ -78,5 +78,5 @@ export function middleware(request: NextRequest) {
 // Configurar en qué rutas se debe ejecutar el middleware
 // Incluir /dashboard para procesar OAuth callback desde Microsoft
 export const config = {
-    matcher: ['/dashboard/:path*', '/dashboard', '/auth/callback', '/login'],
+    matcher: ['/dashboard/:path*', '/dashboard', '/auth/callback', '/login', '/api/auth/:path*'],
 };

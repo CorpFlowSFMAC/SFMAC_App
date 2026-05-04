@@ -51,35 +51,15 @@ export default function LoginPage() {
         setError("");
         
         try {
-            // Get origin safely
-            const origin = typeof window !== 'undefined' ? window.location.origin : 'https://sfmac-1tx41yriv-sfmacorp.vercel.app';
+            // Direct Azure AD OAuth - bypass Supabase
+            const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
+            const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
+            const redirectUri = encodeURIComponent('https://corpflow.sinfimac.pe/api/auth/callback');
             
-            const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-                provider: 'azure', 
-                options: {
-                    scopes: 'openid profile email User.Read',
-                    redirectTo: `${origin}/auth/callback`,
-                }
-            });
+            const azureAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=openid%20profile%20email%20User.Read&response_mode=query`;
             
-            if (oauthError) {
-                console.error('[Login] OAuth Error:', oauthError);
-                setError(oauthError.message || "Error de Azure AD");
-                setIsLoading(false);
-                return;
-            }
-            
-            console.log('[Login] Data:', data);
-            
-            if (!data?.url) {
-                console.error('[Login] No URL returned');
-                setError("Error: No se recibió URL");
-                setIsLoading(false);
-                return;
-            }
-            
-            console.log('[Login] Redirect to:', data.url);
-            window.location.href = data.url;
+            console.log('[Login] Direct Azure URL:', azureAuthUrl);
+            window.location.href = azureAuthUrl;
         } catch (err: any) {
             console.error('[Login] Error:', err);
             setError(err.message || "Error de conexión");
