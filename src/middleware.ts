@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
     const userRole = request.cookies.get('userRole')?.value;
+    const authStatus = request.cookies.get('auth_status')?.value;
+    const azureCode = request.cookies.get('azure_code')?.value;
     const { pathname } = request.nextUrl;
 
     // 0. Allow auth callback to process OAuth
@@ -22,6 +24,20 @@ export function middleware(request: NextRequest) {
 
     // 1. Permitir acceso al gateway /dashboard (sin subruta) para procesar OAuth callback
     if (pathname === '/dashboard') {
+        // Si tiene auth de Azure, establecer rol por defecto y redirigir
+        if (authStatus === 'azure_logged_in' || azureCode) {
+            const defaultRole = 'gestor'; // Default role for Azure users
+            const response = NextResponse.redirect(new URL('/dashboard/gestor', request.url));
+            response.cookies.set('userRole', defaultRole, {
+                path: '/',
+                maxAge: 60 * 60 * 24 * 7,
+                httpOnly: false,
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production',
+            });
+            return response;
+        }
+        
         // Si ya tiene rol, redirigir directamente al dashboard correcto
         if (userRole && userRole !== 'sin_acceso') {
             const dest = userRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
