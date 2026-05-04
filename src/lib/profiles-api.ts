@@ -45,6 +45,22 @@ export const perfilesAPI = {
     },
 
     /**
+     * Get a profile by email (for Azure AD authentication)
+     */
+    async getByEmail(email: string): Promise<Perfil | null> {
+        const { data, error } = await supabase
+            .from('perfiles')
+            .select('*')
+            .eq('email', email.toLowerCase())
+            .single();
+        if (error) {
+            if (error.code === 'PGRST116') return null; // Not found
+            throw error;
+        }
+        return data as Perfil;
+    },
+
+    /**
      * Get the current user's profile
      */
     async getCurrentProfile(): Promise<Perfil | null> {
