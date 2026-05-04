@@ -65,17 +65,23 @@ export async function GET(request: NextRequest) {
                     
                     // Buscar el perfil en la tabla perfiles
                     if (userEmail) {
-                        const { data: perfil } = await supabase
-                            .from('perfiles')
-                            .select('rol')
-                            .eq('email', userEmail.toLowerCase())
-                            .single();
-                        
-                        if (perfil) {
-                            userRole = perfil.rol.toLowerCase();
-                            console.log('[Azure AD Callback] User role from DB:', userRole);
-                        } else {
-                            console.log('[Azure AD Callback] No perfil found for:', userEmail, '- using default gestor');
+                        try {
+                            const { data: perfil } = await supabase
+                                .from('perfiles')
+                                .select('rol')
+                                .eq('email', userEmail.toLowerCase())
+                                .single();
+                            
+                            console.log('[Azure AD Callback] Perfil query result:', perfil);
+                            
+                            if (perfil && perfil.rol) {
+                                userRole = perfil.rol.toLowerCase();
+                                console.log('[Azure AD Callback] User role from DB:', userRole);
+                            } else {
+                                console.log('[Azure AD Callback] No perfil found for:', userEmail, '- using default gestor');
+                            }
+                        } catch (dbError) {
+                            console.error('[Azure AD Callback] DB Error:', dbError);
                         }
                     }
                 }
