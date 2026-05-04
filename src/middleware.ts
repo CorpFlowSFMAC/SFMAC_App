@@ -57,12 +57,26 @@ export function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // 2. Si intenta acceder a subrutas del dashboard sin rol, redirigir a login
+    // 2. Si intenta acceder a subrutas del dashboard sin rol, primero verificar si tiene auth de Azure
     if (pathname.startsWith('/dashboard')) {
-        if (!userRole) {
+        // Si tiene auth de Azure pero no userRole, establecer rol por defecto
+        if (!userRole && (authStatus === 'azure_logged_in' || azureCode)) {
+            const response = NextResponse.redirect(new URL('/dashboard/gestor', request.url));
+            response.cookies.set('userRole', 'gestor', {
+                path: '/',
+                maxAge: 60 * 60 * 24 * 7,
+                httpOnly: false,
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production',
+            });
+            return response;
+        }
+        
+        // Si no tiene ningún tipo de auth, redirigir a login
+        if (!userRole && !authStatus && !azureCode) {
             return NextResponse.redirect(new URL('/login', request.url));
         }
-
+        
         // 3. Si tiene rol SIN_ACCESO, redirigir a la sala de espera
         if (userRole === 'sin_acceso') {
             return NextResponse.redirect(new URL('/dashboard/sin-acceso', request.url));
