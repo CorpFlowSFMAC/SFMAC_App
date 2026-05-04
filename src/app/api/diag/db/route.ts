@@ -3,35 +3,82 @@
  * Usa Service Role Key para evitar problemas de RLS
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getTicketsCount } from '@/lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const hasServiceKey = !!supabaseServiceKey;
+
+function getClient() {
+    if (supabaseServiceKey && supabaseUrl) {
+        return createClient(supabaseUrl, supabaseServiceKey);
+    }
+    return null;
+}
 
 export async function GET(request: NextRequest) {
-    try {
-        // Obtener conteo de tickets
-        const ticketsCount = await getTicketsCount();
+    const client = getClient();
+    
+    if (!client || !supabaseUrl) {
+        return NextResponse.json({
+            success: false,
+            error: 'Supabase no configurado',
+            hasServiceKey,
+            hasUrl: !!supabaseUrl
+        }, { status: 500 });
+    }
 
-        // Para perfiles, necesitamos hacer consulta directa
-        // Pero si falla, retornamos info limitada
-        let perfiles: any[] = [];
-        let hasServiceKey = !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY);
-        
+    try {
+        // Obtener perfiles
+        const { data: perfiles, error: profilesError } = await client
+            .from('perfiles')
+            .select('id, email, rol, nombre_completo')
+            .limit(10);
+
+        // Contar tickets
+        const { count: ticketsCount, error: ticketsError } = await client
+            .from('tickets')
+            .select('id', { count: 'exact', head: true });
+
+        // Buscar admin específico
+        const admin = perfiles?.find(p => 
+            p.email?.toLowerCase() === 'acubas@sinfimac.pe'
+        );
+
+        let adminStatus = 'NO_ENCONTRADO';
+        if (admin) {
+            adminStatus = `ENCONTRADO - Rol: ${admin.rol}`;
+        }
+
         return NextResponse.json({
             success: true,
-            connection: true,
+            connection: 'ACTIVE_HEALTHY',
             hasServiceKey,
-            tickets: {
-                count: ticketsCount
+            admin: {
+                email: 'acubas@sinfimac.pe',
+                status: adminStatus,
+                found: !!admin,
+                role: admin?.rol || null
             },
-            perfiles: [],
-            detalle_perfiles: {
-                count: 0,
-                admin_count: 0,
-                gestora_count: 0
+            profiles: {
+                count: perfiles?.length || 0,
+                list: perfiles?.map(p => ({ email: p.email, rol: p.rol })) || [],
+                errors: profilesError?.message || null
+            },
+            tickets: {
+                count: ticketsCount || 0,
+                error: ticketsError?.message || null
+            },
+            config: {
+                url: supabaseUrl ? ' configurada' : ' FALTA',
+                serviceKey: hasServiceKey ? ' configurada' : ' FALTA'
             }
         });
     } catch (err: any) {
         return NextResponse.json({
-            error: err.message
+            success: false,
+            error: err.message,
+            hasServiceKey
         }, { status: 500 });
     }
 }
