@@ -151,7 +151,28 @@ export default function GestorDashboard() {
     const { tickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets } = useAppData();
     const [showWizard, setShowWizard] = useState(false);
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
-    const [activeView, setActiveView] = useState<"dashboard" | "tickets">("dashboard");
+    const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "reportes">("dashboard");
+
+    // Leer parámetro de vista desde URL
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const view = params.get('view');
+            if (view === 'tickets' || view === 'reportes') {
+                setActiveView(view);
+            }
+        }
+    }, []);
+
+    // Cambiar vista según parámetro
+    const switchView = (view: "dashboard" | "tickets" | "reportes") => {
+        setActiveView(view);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('view', view);
+            window.history.pushState({}, '', url.toString());
+        }
+    };
 
     // ── Filters ──
     const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all">("week");
@@ -571,6 +592,15 @@ export default function GestorDashboard() {
                         }}>
                             <Activity size={13} style={{ marginRight: "0.3rem", verticalAlign: "middle" }} />
                             Tickets ({filteredTickets.length})
+                        </button>
+                        <button onClick={() => setActiveView("reportes")} style={{
+                            padding: "0.45rem 1rem", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700,
+                            background: activeView === "reportes" ? "rgba(255,255,255,0.9)" : "transparent",
+                            color: activeView === "reportes" ? "#4338CA" : "rgba(255,255,255,0.7)",
+                            transition: "all 0.2s"
+                        }}>
+                            <BarChart3 size={13} style={{ marginRight: "0.3rem", verticalAlign: "middle" }} />
+                            Reportes
                         </button>
                     </div>
                     <button
@@ -1266,3 +1296,48 @@ function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
         </div>
     );
 }
+// ════════════════════════════════════════════════
+// REPORTES VIEW FOR GESTOR
+// ════════════════════════════════════════════════
+{activeView === "reportes" && (
+    <div style={{ padding: "1rem" }}>
+        <div style={{ textAlign: "center", padding: "3rem", background: "white", borderRadius: "12px", border: "1px solid #E2E8F0" }}>
+            <BarChart3 size={48} style={{ margin: "0 auto 1rem", color: "#4338CA" }} />
+            <h2 style={{ margin: "0 0 0.5rem", color: "#1E293B", fontSize: "1.25rem" }}>Reportes de Eficiencia</h2>
+            <p style={{ margin: 0, color: "#64748B" }}>
+                Período: {dateFilter === 'today' ? 'Hoy' : dateFilter === 'week' ? 'Esta Semana' : dateFilter === 'month' ? 'Este Mes' : 'Todos'}
+            </p>
+            
+            {/* KPI Summary */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginTop: "2rem" }}>
+                <div style={{ padding: "1rem", background: "#F8FAFC", borderRadius: "8px" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#4338CA" }}>{kpis.total}</div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Total Tickets</div>
+                </div>
+                <div style={{ padding: "1rem", background: "#F8FAFC", borderRadius: "8px" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#10B981" }}>{kpis.closed.length}</div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Cerrados</div>
+                </div>
+                <div style={{ padding: "1rem", background: "#F8FAFC", borderRadius: "8px" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#F59E0B" }}>{kpis.backlog.length}</div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>En Proceso</div>
+                </div>
+            </div>
+            
+            {/* Stats adicionales */}
+            <div style={{ marginTop: "1.5rem", textAlign: "left", padding: "1rem", background: "#EEF2FF", borderRadius: "8px" }}>
+                <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#4338CA" }}>Métricas Detalladas</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem" }}>
+                    <div><span style={{ color: "#64748B" }}>SLA Cumplimiento:</span></div>
+                    <div style={{ fontWeight: 700 }}>{kpis.slaCompliance}%</div>
+                    <div><span style={{ color: "#64748B" }}>MTTR Promedio:</span></div>
+                    <div style={{ fontWeight: 700 }}>{kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : '-'}</div>
+                    <div><span style={{ color: "#64748B" }}>SLA Vencidos:</span></div>
+                    <div style={{ fontWeight: 700, color: kpis.expiredOpen.length > 0 ? "#EF4444" : "#10B981" }}>{kpis.expiredOpen.length}</div>
+                    <div><span style={{ color: "#64748B" }}>Backlog ({'>'}24h):</span></div>
+                    <div style={{ fontWeight: 700, color: kpis.backlog.length > 3 ? "#EF4444" : "#10B981" }}>{kpis.backlog.length}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
