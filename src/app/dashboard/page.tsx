@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { supabaseServer, getProfileByEmail } from "@/lib/supabase-server";
 import { perfilesAPI } from "@/lib/profiles-api";
 import { Loader } from "lucide-react";
 
@@ -107,60 +106,86 @@ export default function DashboardGateway() {
         }
 
         async function processUserSession(user: any) {
-            const userEmail = user.email?.toLowerCase().trim() || '';
-            
-            setStatus(`¡Bienvenido/a, ${user.user_metadata?.full_name || userEmail}!`);
-
-            // ── RBAC: Consultar perfil desde la tabla perfiles con Service Role ──
-            setStatus("Verificando permisos de acceso...");
-            
-            // Usar servidor para evitar RLS
-            let perfil = await getProfileByEmail(userEmail);
-
-            // Si no existe perfil, denegar acceso
-            if (!perfil) {
-                console.log("[Dashboard Gateway] ❌ PERFIL NO ENCONTRADO para:", userEmail);
+            try {
+                const userEmail = user.email?.toLowerCase().trim() || '';
                 
-                // Limpiar sesión
-                localStorage.clear();
-                document.cookie = `userRole=sin_acceso; path=/; max-age=0`;
+                // Saludo seguro
+                const userName = user.user_metadata?.full_name || user.user_metadata?.name || 'Usuario';
+                setStatus(`¡Bienvenido/a, ${userName}!`);
+
+                // ── RBAC: Consultar perfil desde la tabla perfiles via API ──
+                setStatus("Verificando permisos de acceso...");
                 
-                setStatus("Su email no está registrado en el sistema");
-                router.push('/dashboard/sin-acceso');
-                return;
-            }
+                // Llamar a la API del servidor para buscar perfil (evita RLS)
+                let perfil = null;
+                try {
+                    const response = await fetch(`/api/profile?email=${encodeURIComponent(userEmail)}`);
+                    const data = await response.json();
+                    
+                    if (data.found && data.perfil) {
+                        perfil = data.perfil;
+                    }
+                } catch (dbError: any) {
+                    console.error("[Dashboard Gateway] Error de API:", dbError?.message);
+                    //Fallback: usar perfilesAPI normal
+                    perfil = await perfilesAPI.getByEmail(userEmail);
+                }
 
-            // Determinar el rol desde el perfil
-            const rbacRole = perfil.rol || 'SIN_ACCESO';
-            const legacyRole = perfilesAPI.toLegacyRole(perfil);
+                // Si no existe perfil, denegar acceso
+                if (!perfil) {
+                    console.log("[Dashboard Gateway] ❌ PERFIL NO ENCONTRADO para:", userEmail);
+                    
+                    // Limpiar sesión
+                    try { localStorage.clear(); } catch {}
+                    try { 
+                        document.cookie = 'userRole=sin_acceso; path=/; max-age=0'; 
+                    } catch {}
+                    
+                    setStatus("Su email no está registrado en el sistema");
+                    router.push('/dashboard/sin-acceso');
+                    return;
+                }
 
-            console.log("[Dashboard Gateway] ✅ User:", userEmail, "Role:", rbacRole);
+                // Determinar el rol desde el perfil (con默认值 segura)
+                const rbacRole = perfil?.rol || 'SIN_ACCESO';
+                const legacyRole = perfilesAPI.toLegacyRole(perfil);
 
-            // Establecer la cookie y localStorage para el middleware
-            const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || userEmail || "";
-            const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=f97316&color=fff&bold=true`;
-            
-            document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
-            localStorage.setItem("userRole", legacyRole);
-            localStorage.setItem("userEmail", userEmail);
-            localStorage.setItem("userName", finalName);
-            localStorage.setItem("userAvatar", avatarUrl);
-            localStorage.setItem("rbacRole", rbacRole);
+                console.log("[Dashboard Gateway] ✅ User:", userEmail, "Role:", rbacRole);
 
-            // Pequeña pausa para el mensaje de bienvenida
-            await new Promise(resolve => setTimeout(resolve, 800));
+                // Establecer la cookie y localStorage para el middleware (con null safety)
+                const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || perfil?.name || userEmail || "Usuario";
+                const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=f97316&color=fff&bold=true`;
+                
+                try {
+                    document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
+                    localStorage.setItem("userRole", legacyRole);
+                    localStorage.setItem("userEmail", userEmail);
+                    localStorage.setItem("userName", finalName);
+                    localStorage.setItem("userAvatar", avatarUrl);
+                    localStorage.setItem("rbacRole", rbacRole);
+                } catch (storageError) {
+                    console.error("[Dashboard Gateway] Storage error:", storageError);
+                }
 
-            // Redirigir según el rol RBAC
-            if (rbacRole === 'SIN_ACCESO') {
-                setStatus("Tu cuenta está pendiente de asignación de rol...");
-                router.push('/dashboard/sin-acceso');
-            } else if (rbacRole === 'ADMIN') {
-                setStatus("Redirigiendo a Panel Admin...");
-                router.push('/dashboard/admin');
-            } else {
-                // GESTORA, ESPECTADOR → gestor dashboard
-                setStatus("Redirigiendo a Panel Gestora...");
-                router.push('/dashboard/gestor');
+                // Pequeña pausa para el mensaje de bienvenida
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                // Redirigir según el rol RBAC
+                if (rbacRole === 'SIN_ACCESO') {
+                    setStatus("Tu cuenta está pendiente de asignación de rol...");
+                    router.push('/dashboard/sin-acceso');
+                } else if (rbacRole === 'ADMIN') {
+                    setStatus("Redirigiendo a Panel Admin...");
+                    router.push('/dashboard/admin');
+                } else {
+                    // GESTORA, ESPECTADOR → gestor dashboard
+                    setStatus("Redirigiendo a Panel Gestora...");
+                    router.push('/dashboard/gestor');
+                }
+            } catch (err: any) {
+                console.error("[Dashboard Gateway] Error en processUserSession:", err);
+                setError("Error: " + (err?.message || "Intenta de nuevo"));
+                setTimeout(() => router.push("/login"), 2000);
             }
         }
 
