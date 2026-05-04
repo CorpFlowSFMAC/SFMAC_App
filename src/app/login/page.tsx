@@ -51,14 +51,16 @@ export default function LoginPage() {
         setError("");
         
         try {
-            // Direct Azure AD OAuth with fixed domain
+            // Direct Azure AD OAuth - use dynamic origin
             const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
             const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
-            const redirectUri = encodeURIComponent('https://corpflow.sinfimac.pe/api/auth/callback/azure-ad');
+            // Use window.location.origin for dynamic URL
+            const origin = typeof window !== 'undefined' ? window.location.origin : 'https://sfmac-h9giduje6-sfmacorp.vercel.app';
+            const redirectUri = encodeURIComponent(`${origin}/api/auth/callback/azure-ad`);
             
             const azureAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=openid%20profile%20email%20User.Read&response_mode=query`;
             
-            console.log('[Login] Direct Azure URL:', azureAuthUrl);
+            console.log('[Login] Azure URL:', azureAuthUrl);
             window.location.href = azureAuthUrl;
         } catch (err: any) {
             console.error('[Login] Error:', err);

@@ -22,8 +22,9 @@ export async function GET(request: NextRequest) {
         console.log('[Azure AD Callback] No code from corpflow.sinfimac.pe, allowing demo access');
     }
     
-    // Set auth cookie and redirect to dashboard
-    const response = NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard', request.url));
+    // Use dynamic origin for redirect
+    const origin = new URL(request.url).origin;
+    const response = NextResponse.redirect(new URL(`${origin}/dashboard`, request.url));
     response.cookies.set('auth_status', 'azure_logged_in', {
         path: '/',
         maxAge: 60 * 60 * 24 * 7, // 7 days
