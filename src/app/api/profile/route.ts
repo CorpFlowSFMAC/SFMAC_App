@@ -3,7 +3,7 @@
  * Evita RLS buscando desde el servidor
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase-server';
+import { getProfileByEmail } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
@@ -16,18 +16,14 @@ export async function GET(request: NextRequest) {
     try {
         const normalizedEmail = email.toLowerCase().trim();
         
-        const { data: perfil, error } = await supabaseServer
-            .from('perfiles')
-            .select('*')
-            .eq('email', normalizedEmail)
-            .single();
+        const perfil = await getProfileByEmail(normalizedEmail);
 
-        if (error || !perfil) {
+        if (!perfil) {
             console.log('[API Profile] No encontrado:', normalizedEmail);
             return NextResponse.json({ 
                 found: false, 
                 email: normalizedEmail,
-                error: error?.message || 'Perfil no existe'
+                error: 'Perfil no existe en la base de datos'
             });
         }
 
