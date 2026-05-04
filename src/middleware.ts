@@ -7,6 +7,9 @@ export function middleware(request: NextRequest) {
     const azureCode = request.cookies.get('azure_code')?.value;
     const { pathname } = request.nextUrl;
 
+    // APP_URL para redirects (configurable por entorno)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://corpflow.sinfimac.pe';
+
     // 0. Allow auth callback to process OAuth
     if (pathname === '/auth/callback' || pathname.startsWith('/api/auth') || pathname.includes('azure-ad')) {
         return NextResponse.next();
@@ -23,58 +26,47 @@ export function middleware(request: NextRequest) {
     }
 
     // 1. Permitir acceso al gateway /dashboard (sin subruta) para procesar OAuth callback
+    // IMPORTANTE: Ya no forzamos rol aquí. El gateway (/dashboard/page.tsx) consultará la tabla perfiles.
     if (pathname === '/dashboard') {
-        // Si tiene auth de Azure, establecer rol por defecto y redirigir
+        // Si tiene auth de Azure, permitir que el gateway procese la sesión y consulte el rol desde la BD
         if (authStatus === 'azure_logged_in' || azureCode) {
-            const defaultRole = 'gestor';
-            const response = NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
-            response.cookies.set('userRole', defaultRole, {
-                path: '/',
-                maxAge: 60 * 60, // 1 hour
-                httpOnly: false,
-                sameSite: 'lax',
-                secure: process.env.NODE_ENV === 'production',
-            });
-            return response;
+            // NO establecemos rol por defecto aquí - el gateway lo hará correctamente
+            // Solo permitir que pase al gateway para que consulte perfiles
+            return NextResponse.next();
         }
         
-        // Si ya tiene rol, redirigir directamente al dashboard correcto
+        // Si ya tiene rol en cookie, redirigir directamente al dashboard correcto
         if (userRole && userRole !== 'sin_acceso') {
-            const dest = userRole === 'admin' ? 'https://corpflow.sinfimac.pe/dashboard/admin' : 'https://corpflow.sinfimac.pe/dashboard/gestor';
+            const dest = userRole === 'admin' ? `${appUrl}/dashboard/admin` : `${appUrl}/dashboard/gestor`;
             return NextResponse.redirect(new URL(dest, request.url));
         }
         // Si no tiene rol o es sin_acceso, dejar pasar para que el gateway procese
         return NextResponse.next();
     }
 
-    // 1. Permitir acceso a la página de "sin acceso" si tiene sesión (cualquiera)
+    // 1b. Permitir acceso a la página de "sin acceso" si tiene sesión (cualquiera)
     if (pathname === '/dashboard/sin-acceso') {
         // Si tiene un rol asignado (no sin_acceso), redirigir al dashboard correcto
         if (userRole && userRole !== 'sin_acceso') {
-            const dest = userRole === 'admin' ? 'https://corpflow.sinfimac.pe/dashboard/admin' : 'https://corpflow.sinfimac.pe/dashboard/gestor';
+            const dest = userRole === 'admin' ? `${appUrl}/dashboard/admin` : `${appUrl}/dashboard/gestor`;
             return NextResponse.redirect(new URL(dest, request.url));
         }
         return NextResponse.next();
     }
 
-    // 2. Si intenta acceder a subrutas del dashboard sin rol, primero verificar si tiene auth de Azure
+    // 2. Si intenta acceder a subrutas del dashboard sin rol, verificar si tiene auth de Azure
     if (pathname.startsWith('/dashboard')) {
-        // Si tiene auth de Azure pero no userRole, establecer rol por defecto
+        // Si tiene auth de Azure pero no userRole, dejar pasar al gateway para que procese correctamente
+        // El gateway consultará la tabla perfiles y obtendrá el rol correcto
         if (!userRole && (authStatus === 'azure_logged_in' || azureCode)) {
-            const response = NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
-            response.cookies.set('userRole', 'gestor', {
-                path: '/',
-                maxAge: 60 * 60 * 24 * 7,
-                httpOnly: false,
-                sameSite: 'lax',
-                secure: process.env.NODE_ENV === 'production',
-            });
-            return response;
+            // Permitir que pase al gateway - NO forzar 'gestor'
+            // El gateway (/dashboard/page.tsx) consultará la tabla perfiles y asignará el rol correcto
+            return NextResponse.next();
         }
         
         // Si no tiene ningún tipo de auth, redirigir a login
         if (!userRole && !authStatus && !azureCode) {
-            return NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/login', request.url));
+            return NextResponse.redirect(new URL(`${appUrl}/login`, request.url));
         }
         
         // 3. Si tiene rol SIN_ACCESO, redirigir a la sala de espera
@@ -86,7 +78,7 @@ export function middleware(request: NextRequest) {
         if (pathname.startsWith('/dashboard/admin')) {
             // La ruta de Usuarios y Accesos es SOLO para admins
             if (pathname.startsWith('/dashboard/admin/usuarios') && userRole !== 'admin') {
-                return NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
+                return NextResponse.redirect(new URL(`${appUrl}/dashboard/gestor`, request.url));
             }
 
             // Las rutas admin-only requieren rol admin
@@ -96,7 +88,7 @@ export function middleware(request: NextRequest) {
                     pathname.startsWith('/dashboard/admin/reportes');
 
                 if (!isAllowedPath) {
-                    return NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
+                    return NextResponse.redirect(new URL(`${appUrl}/dashboard/gestor`, request.url));
                 }
             }
         }

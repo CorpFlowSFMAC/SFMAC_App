@@ -46,12 +46,14 @@ export const perfilesAPI = {
 
     /**
      * Get a profile by email (for Azure AD authentication)
+     * Usa mapeo universal: .toLowerCase().trim() para evitar errores de coincidencia
      */
     async getByEmail(email: string): Promise<Perfil | null> {
+        const normalizedEmail = email.toLowerCase().trim();
         const { data, error } = await supabase
             .from('perfiles')
             .select('*')
-            .eq('email', email.toLowerCase())
+            .eq('email', normalizedEmail)
             .single();
         if (error) {
             if (error.code === 'PGRST116') return null; // Not found

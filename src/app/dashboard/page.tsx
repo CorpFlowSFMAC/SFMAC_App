@@ -33,6 +33,10 @@ export default function DashboardGateway() {
 
                 console.log("[Dashboard Gateway] URL:", currentUrl);
 
+                // 📊 DIAGNÓSTICO: Mostrar URL de Supabase
+                const supabaseUrl = (supabase as any).supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
+                console.log("🔌 [Dashboard Gateway] Supabase URL:", supabaseUrl);
+
                 if (errorParam) {
                     setError(`Error de autenticación: ${errorParam}`);
                     setTimeout(() => router.push("/login"), 3000);
@@ -103,33 +107,52 @@ export default function DashboardGateway() {
         }
 
         async function processUserSession(user: any) {
-            setStatus(`¡Bienvenido/a, ${user.user_metadata?.full_name || user.email}!`);
+            const userEmail = user.email?.toLowerCase().trim() || '';
+            
+            setStatus(`¡Bienvenido/a, ${user.user_metadata?.full_name || userEmail}!`);
 
-            // ── RBAC: Consultar perfil desde la tabla perfiles ──
+            // ── RBAC: Consultar perfil desde la tabla perfiles con mapeo universal por email ──
             setStatus("Verificando permisos de acceso...");
+            
+            // Intentar primero por ID de auth
             let perfil = await perfilesAPI.getById(user.id);
 
-            // Si no existe perfil (caso raro, el trigger debería haberlo creado),
-            // esperar un momento y reintentar
+            // Si no existe perfil por ID, intentar por email normalizado
             if (!perfil) {
-                console.log("[Dashboard Gateway] Profile not found, waiting for trigger...");
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                perfil = await perfilesAPI.getById(user.id);
+                console.log("[Dashboard Gateway] Profile not found by ID, trying by email:", userEmail);
+                perfil = await perfilesAPI.getByEmail(userEmail);
+            }
+
+            // ── VALIDACIÓN DE SESIÓN: Si NO se encuentra perfil, Denegar Acceso ──
+            if (!perfil) {
+                console.log("[Dashboard Gateway] ❌ PERFIL NO ENCONTRADO para:", userEmail);
+                
+                // Limpiar cualquier sesión anterior y denegar acceso
+                document.cookie = `userRole=sin_acceso; path=/; max-age=86400; SameSite=Lax`;
+                localStorage.setItem("userRole", "sin_acceso");
+                localStorage.setItem("userEmail", userEmail);
+                localStorage.setItem("userName", user.user_metadata?.full_name || userEmail);
+                localStorage.setItem("rbacRole", "SIN_ACCESO");
+                
+                setStatus("ACCESO DENEGADO - Su email no está registrado en el sistema");
+                // Redirigir a página de acceso denegado
+                router.push('/dashboard/sin-acceso');
+                return;
             }
 
             // Determinar el rol desde el perfil RBAC
             const rbacRole = perfil?.rol || 'SIN_ACCESO';
             const legacyRole = perfilesAPI.toLegacyRole(perfil);
 
-            console.log("[Dashboard Gateway] User:", user.email, "RBAC Role:", rbacRole, "Legacy Role:", legacyRole);
+            console.log("[Dashboard Gateway] ✅ User:", userEmail, "RBAC Role:", rbacRole, "Legacy Role:", legacyRole);
 
             // Establecer la cookie y localStorage para el middleware
-            const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || user.email || "";
+            const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || userEmail || "";
             const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=f97316&color=fff&bold=true`;
             
             document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
             localStorage.setItem("userRole", legacyRole);
-            localStorage.setItem("userEmail", user.email || "");
+            localStorage.setItem("userEmail", userEmail);
             localStorage.setItem("userName", finalName);
             localStorage.setItem("userAvatar", avatarUrl);
             localStorage.setItem("rbacRole", rbacRole);
