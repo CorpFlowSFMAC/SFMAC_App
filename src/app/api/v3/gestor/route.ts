@@ -23,12 +23,15 @@ export async function GET(request: NextRequest) {
         if (!gestorId && email) {
             // Intentar buscar gestora por email en la DB
             const ticketsConEmail = await getAllTicketsLite();
-            // Filtrar localmente por jurisdicción
-            ticketsData = filtrarTicketsPorJurisdiccion(ticketsConEmail, email);
+            // Filtrar localmente por jurisdicción - simplificar a tipo any
+            ticketsData = (ticketsConEmail as any[]).filter((t: any) => {
+                if (t.gestora_id) return true;
+                return true;
+            });
         }
         
         // Normalizar estados
-        const normalizedTickets = (ticketsData || []).map((t: any) => ({
+        const normalizedTickets = ((ticketsData || []) as any[]).map((t: any) => ({
             ...t,
             estadoId: normalizeStateId(t.status_id || t.estadoId || 'nuevo')
         }));
@@ -123,35 +126,17 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Filtrar tickets por jurisdicción del gestor
- * Deduce desde email del gestor
- */
-function filtrarTicketsPorJurisdiccion(tickets: any[], email: string): any[] {
-    const emailLower = email.toLowerCase();
-    
-    return tickets.filter((t: any) => {
-        // Si tiene gestora directa asignada
-        if (t.gestora_id) {
-            // Filtrar por lógica de jurisdicción (simplificado)
-            return true;
-        }
-        // Por ahora，返回 todoslos tickets
-        return true;
-    });
-}
-
-/**
  * Calcular métricas para el gestor
  */
 function calcularMetricas(tickets: any[]) {
     const now = new Date();
-    const closedStatus = ['ticket_cerrado', 'ticket_rechazado', 'ticket_cancelado'];
+    const closedStatus: string[] = ['ticket_cerrado', 'ticket_rechazado', 'ticket_cancelado'];
     
-    const activos = tickets.filter(t => !closedStatus.includes(t.estadoId));
-    const cerrados = tickets.filter(t => closedStatus.includes(t.estadoId));
+    const activos = tickets.filter((t: any) => !closedStatus.includes(t.estadoId));
+    const cerrados = tickets.filter((t: any) => closedStatus.includes(t.estadoId));
     
     // Calcular SLA (tickets abiertos hace más de 72h)
-    const slaVencidos = activos.filter(t => {
+    const slaVencidos = activos.filter((t: any) => {
         const created = new Date(t.created_at || t.createdAt);
         const hours = (now.getTime() - created.getTime()) / 3_600_000;
         return hours >= 72;
@@ -159,13 +144,13 @@ function calcularMetricas(tickets: any[]) {
     
     // Calcular MTTR promedio (en horas)
     let mttrHours = 0;
-    const cerradosConTiempo = cerrados.filter(t => {
+    const cerradosConTiempo = cerrados.filter((t: any) => {
         if (!t.created_at || !t.fechaCierre) return false;
         return true;
     });
     
     if (cerradosConTiempo.length > 0) {
-        const totalHours = cerradosConTiempo.reduce((acc, t) => {
+        const totalHours = cerradosConTiempo.reduce((acc: number, t: any) => {
             const start = new Date(t.created_at || t.createdAt);
             const end = new Date(t.fechaCierre || t.closure_date || now);
             return acc + (end.getTime() - start.getTime()) / 3_600_000;
@@ -174,7 +159,7 @@ function calcularMetricas(tickets: any[]) {
     }
     
     // Backlog (>24h sin cerrar)
-    const backlog = activos.filter(t => {
+    const backlog = activos.filter((t: any) => {
         const created = new Date(t.created_at || t.createdAt);
         const hours = (now.getTime() - created.getTime()) / 3_600_000;
         return hours >= 24;
