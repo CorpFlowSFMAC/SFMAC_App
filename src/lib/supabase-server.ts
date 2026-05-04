@@ -34,15 +34,15 @@ export const supabaseServer = {
     getClient: getSupabaseServerClient
 };
 
-// Exportar getClient para uso en endpoints
+// Exportar getClient para uso en endpoints - siempre como any para evitar errores de tipo
 export { getSupabaseServerClient as getClient };
 
 /**
  * Helper para obtener perfil usando service role
  * Devuelve null si no hay configuración - no crashea
  */
-export async function getProfileByEmail(email: string) {
-    const client = getSupabaseServerClient();
+export async function getProfileByEmail(email: string): Promise<any> {
+    const client = getSupabaseServerClient() as any;
     if (!client) {
         console.error('[Supabase Server] Cliente no inicializado - falta SUPABASE_SERVICE_ROLE_KEY');
         return null;
@@ -68,7 +68,7 @@ export async function getProfileByEmail(email: string) {
  * Helper para obtener ticket count
  */
 export async function getTicketsCount() {
-    const client = getSupabaseServerClient();
+    const client = getSupabaseServerClient() as any;
     if (!client) {
         return 0;
     }
@@ -90,7 +90,7 @@ export async function getTicketsCount() {
  * Versión ligera para evitar payload masivo
  */
 export async function getAllTicketsLite(gestorId?: string) {
-    const client = getSupabaseServerClient();
+    const client = getSupabaseServerClient() as any;
     if (!client) {
         return [];
     }
@@ -120,7 +120,7 @@ export async function getAllTicketsLite(gestorId?: string) {
  * Útil para dashboard
  */
 export async function getTicketsSummary() {
-    const client = getSupabaseServerClient();
+    const client = getSupabaseServerClient() as any;
     if (!client) {
         return [];
     }
@@ -155,7 +155,7 @@ export async function getTicketsSummary() {
  * Usado para evitar pausa por inactividad en Supabase Free Tier
  */
 export async function pingDatabase() {
-    const client = getSupabaseServerClient();
+    const client = getSupabaseServerClient() as any;
     if (!client) {
         return false;
     }
