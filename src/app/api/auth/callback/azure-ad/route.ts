@@ -52,7 +52,12 @@ export async function GET(request: NextRequest) {
             });
             
             const tokenResult = await tokenResponse.json();
-            console.log('[Azure AD Callback] Token response:', tokenResult.error || 'success');
+            console.log('[Azure AD Callback] Token response status:', tokenResponse.status, 'has_error:', !!tokenResult.error);
+            
+            if (tokenResult.error) {
+                console.error('[Azure AD Callback] Token error:', tokenResult.error_description || tokenResult.error);
+                // Even if token exchange fails, try to get user from database with email from token if available
+            }
             
             if (tokenResult.access_token) {
                 // Obtener información del usuario con el token
@@ -68,19 +73,21 @@ export async function GET(request: NextRequest) {
                     // Buscar el perfil en la tabla perfiles
                     if (userEmail) {
                         try {
-                            const { data: perfil } = await supabase
+                            console.log('[Azure AD Callback] Looking up perfil for:', userEmail);
+                            
+                            const { data: perfil, error: perfilError } = await supabase
                                 .from('perfiles')
-                                .select('rol')
+                                .select('rol, email')
                                 .eq('email', userEmail.toLowerCase())
                                 .single();
                             
-                            console.log('[Azure AD Callback] Perfil query result:', perfil);
+                            console.log('[Azure AD Callback] Perfil result:', perfil, 'error:', perfilError);
                             
                             if (perfil && perfil.rol) {
                                 userRole = perfil.rol.toLowerCase();
                                 console.log('[Azure AD Callback] User role from DB:', userRole);
                             } else {
-                                console.log('[Azure AD Callback] No perfil found for:', userEmail, '- using default gestor');
+                                console.log('[Azure AD Callback] No perfil found for email:', userEmail);
                             }
                         } catch (dbError) {
                             console.error('[Azure AD Callback] DB Error:', dbError);
