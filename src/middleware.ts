@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // 0. Allow auth callback to process OAuth
-    if (pathname === '/auth/callback' || pathname.startsWith('/api/auth')) {
+    if (pathname === '/auth/callback' || pathname.startsWith('/api/auth') || pathname.includes('azure-ad')) {
         return NextResponse.next();
     }
     
