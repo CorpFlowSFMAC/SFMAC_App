@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { User, Lock, ArrowRight, Loader } from "lucide-react";
 import styles from "./login.module.css";
@@ -22,71 +22,67 @@ export default function LoginPage() {
     const [quote, setQuote] = useState(QUOTES[0]);
     const [formData, setFormData] = useState({ username: "", password: "" });
     const [error, setError] = useState("");
+    const buttonRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
-        // Random quote on mount
         const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
         setQuote(randomQuote);
-        
-        // Check if already logged in
-        const checkSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                // Already has session, redirect to dashboard
-                router.push('/dashboard');
-            }
-        };
-        checkSession();
-    }, [router]);
+    }, []);
 
-    // Cleanup old sessions - runs on mount
+    // Cleanup old sessions
     useEffect(() => {
-        // Force clear any old/corrupted session data
-        const cookies = document.cookie.split(";");
-        cookies.forEach((cookie) => {
-            const cookieName = cookie.split("=")[0].trim();
-            document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        });
-        localStorage.clear();
+        try {
+            const cookies = document.cookie.split(";");
+            for (let i = 0; i < cookies.length; i++) {
+                const cookieName = cookies[i].split("=")[0]?.trim();
+                if (cookieName) {
+                    document.cookie = cookieName + "=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                }
+            }
+            localStorage.clear();
+        } catch (e) {
+            console.log('Cleanup error:', e);
+        }
     }, []);
 
     const handleMicrosoftLogin = async () => {
+        console.log('[Login] Starting Azure AD login...');
         setIsLoading(true);
         setError("");
         
         try {
-            console.log('[Login] Starting Azure AD OAuth...');
-            console.log('[Login] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-            
-            // Force clear any remaining cookies
-            document.cookie.split(";").forEach((c) => { 
-                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
-            });
-            localStorage.clear();
+            // Get origin safely
+            const origin = typeof window !== 'undefined' ? window.location.origin : 'https://sfmac-1tx41yriv-sfmacorp.vercel.app';
             
             const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
                 provider: 'azure', 
                 options: {
                     scopes: 'openid profile email User.Read',
-                    redirectTo: `${window.location.origin}/auth/callback`,
+                    redirectTo: `${origin}/auth/callback`,
                 }
             });
             
             if (oauthError) {
                 console.error('[Login] OAuth Error:', oauthError);
-                throw oauthError;
+                setError(oauthError.message || "Error de Azure AD");
+                setIsLoading(false);
+                return;
             }
+            
+            console.log('[Login] Data:', data);
             
             if (!data?.url) {
-                console.error('[Login] No URL returned from Supabase');
-                throw new Error("Supabase no retornó URL de autenticación");
+                console.error('[Login] No URL returned');
+                setError("Error: No se recibió URL");
+                setIsLoading(false);
+                return;
             }
             
-            console.log('[Login] Redirecting to:', data.url);
+            console.log('[Login] Redirect to:', data.url);
             window.location.href = data.url;
         } catch (err: any) {
-            console.error('[Login] Error completo:', err);
-            setError(err.message || "Error al conectar con Azure AD. Verifica la configuración.");
+            console.error('[Login] Error:', err);
+            setError(err.message || "Error de conexión");
             setIsLoading(false);
         }
     };
@@ -108,12 +104,9 @@ export default function LoginPage() {
             if (authError) throw authError;
 
             if (data.user) {
-                // Get role from user metadata (provided during sign up or admin managed)
                 const role = data.user.user_metadata?.role || (username.toLowerCase() === 'admin' ? 'admin' : 'gestor');
-
                 document.cookie = `userRole=${role}; path=/; max-age=86400; SameSite=Lax`;
                 localStorage.setItem("userRole", role);
-
                 router.push(role === 'admin' ? "/dashboard/admin" : "/dashboard/gestor");
             }
         } catch (err: any) {
@@ -124,13 +117,11 @@ export default function LoginPage() {
 
     return (
         <div className={styles.loginContainer}>
-            {/* Background Ambience */}
             <div className={`${styles.bgOrb} ${styles.bgOrb1}`} />
             <div className={`${styles.bgOrb} ${styles.bgOrb2}`} />
             <div className={`${styles.bgOrb} ${styles.bgOrb3}`} />
 
             <div className={styles.contentWrapper}>
-                {/* Visual Side (Left) */}
                 <div className={styles.visualSide}>
                     <div className={styles.logoWrapper}>
                         <Image
@@ -150,7 +141,6 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                {/* Form Side (Right) */}
                 <div className={styles.formSide}>
                     <div className={styles.loginCard}>
                         <div style={{ textAlign: "center" }}>
@@ -207,6 +197,7 @@ export default function LoginPage() {
                         </div>
 
                         <button
+                            ref={buttonRef}
                             type="button"
                             className={styles.microsoftBtn}
                             onClick={handleMicrosoftLogin}
