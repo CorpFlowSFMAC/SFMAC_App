@@ -137,18 +137,19 @@ export async function GET(request: NextRequest) {
         
         // FORZAR admin para acubas
         if (ADMIN_EMAILS.includes(userEmail)) {
-            // Actualizar a admin
+            // Actualizar a admin en DB
             await supabase
                 .from('perfiles')
                 .update({ rol: 'ADMIN' })
                 .eq('email', userEmail);
             
             userRole = 'admin';
+            console.log('[CB] ⭐ Forzado admin para:', userEmail);
         }
         
         console.log('[CB] 🎯 Rol final:', userRole);
         
-        // 6. Determinar destino
+        // 6. Determinar destino - NORMALIZAR A minúsculas
         let destino = '/dashboard/sin-acceso';
         if (userRole === 'admin') {
             destino = '/dashboard/admin';
@@ -158,8 +159,11 @@ export async function GET(request: NextRequest) {
         
         console.log('[CB] 🚀 Destino:', destino);
         
-        // 7. Crear respuesta con cookies
-        const respuesta = NextResponse.redirect(new URL(destino, request.url));
+        // 7. Crear respuesta con cookies - MOSTRAR URL completa
+        const redirectUrl = `${APP_URL}${destino}`;
+        console.log('[CB] 🌐 Redirect URL completa:', redirectUrl);
+        
+        const respuesta = NextResponse.redirect(new URL(redirectUrl, request.url));
         
         respuesta.cookies.set('auth_status', 'azure_logged_in', {
             path: '/',
@@ -192,6 +196,13 @@ export async function GET(request: NextRequest) {
             secure: process.env.NODE_ENV === 'production',
             maxAge: 86400
         });
+        
+        // También guardar en localStorage para el layout
+        // (el layout lee de ahí)
+        respuesta.headers.set('x-user-role', userRole);
+        respuesta.headers.set('x-user-email', userEmail);
+        
+        console.log('[CB] ✅ Cookies establecidas');
         
         return respuesta;
         
