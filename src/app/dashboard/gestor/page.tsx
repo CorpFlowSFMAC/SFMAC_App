@@ -6,7 +6,7 @@ import {
     MapPin, AlertCircle, TrendingUp, TrendingDown, Target, BarChart2,
     Activity, AlertTriangle, Flame, Timer, Trophy, Users, ChevronRight,
     Calendar, X, RefreshCw, Gauge, Star, Award, MessageCircle,
-    LogIn, LogOut, Bell, CheckCheck
+    LogIn, LogOut, Bell, CheckCheck, BarChart3
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
