@@ -44,12 +44,28 @@ export default function AdminLayout({
 
     useEffect(() => {
         setIsMounted(true);
-        const role = localStorage.getItem("userRole");
-        const storedName = localStorage.getItem("userName");
-        const storedAvatar = localStorage.getItem("userAvatar");
+        
+        // Primero intentarlocalStorage, luego cookies
+        let role = localStorage.getItem("userRole");
+        let name = localStorage.getItem("userName");
+        let avatar = localStorage.getItem("userAvatar");
+        
+        // Sino está enlocalStorage, leer cookies
+        if (!role) {
+            const cookies = document.cookie;
+            const roleMatch = cookies.match(/userRole=([^;]+)/);
+            role = roleMatch ? roleMatch[1] : null;
+            
+            const nameMatch = cookies.match(/userName=([^;]+)/);
+            if (nameMatch) name = decodeURIComponent(nameMatch[1]);
+            
+            const avatarMatch = cookies.match(/userAvatar=([^;]+)/);
+            if (avatarMatch) avatar = decodeURIComponent(avatarMatch[1]);
+        }
+        
         setUserRole(role);
-        setRealUserName(storedName);
-        setUserAvatar(storedAvatar);
+        setRealUserName(name);
+        setUserAvatar(avatar);
     }, []);
 
     const isAdmin = isMounted && userRole?.toLowerCase() === 'admin';
