@@ -101,22 +101,19 @@ export async function GET(request: NextRequest) {
     
     response.cookies.set('auth_status', 'azure_logged_in', {
         path: '/',
-        maxAge: 60 * 60 * 24 * 7,
         httpOnly: false,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
     });
     response.cookies.set('azure_code', code || 'demo', {
         path: '/',
-        maxAge: 60 * 60 * 24 * 7,
         httpOnly: false,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
     });
-    // Establecer el rol correcto del usuario
+    // Establecer el rol correcto del usuario - session cookie
     response.cookies.set('userRole', userRole, {
         path: '/',
-        maxAge: 60 * 60 * 24 * 7,
         httpOnly: false,
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',

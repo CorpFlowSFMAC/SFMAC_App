@@ -30,7 +30,7 @@ export function middleware(request: NextRequest) {
             const response = NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard/gestor', request.url));
             response.cookies.set('userRole', defaultRole, {
                 path: '/',
-                maxAge: 60 * 60 * 24 * 7,
+                maxAge: 60 * 60, // 1 hour
                 httpOnly: false,
                 sameSite: 'lax',
                 secure: process.env.NODE_ENV === 'production',

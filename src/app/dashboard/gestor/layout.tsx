@@ -21,14 +21,21 @@ export default function GestorLayout({
     const [isMounted, setIsMounted] = useState(false);
 
     const handleLogout = async () => {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) {
+            console.error('Logout error:', e);
+        }
         await supabase.auth.signOut({ scope: 'global' });
         document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+        document.cookie = "auth_status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+        document.cookie = "azure_code=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
         localStorage.removeItem("userRole");
         localStorage.removeItem("userEmail");
         localStorage.removeItem("userName");
         localStorage.removeItem("userAvatar");
         localStorage.removeItem("rbacRole");
-        router.push("/login");
+        window.location.href = "/login";
     };
 
     const [realUserName, setRealUserName] = useState<string | null>(null);
