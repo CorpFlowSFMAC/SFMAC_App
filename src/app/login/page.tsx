@@ -31,15 +31,31 @@ export default function LoginPage() {
 
     const handleMicrosoftLogin = async () => {
         setIsLoading(true);
+        
+        // Cleanup: Force clear any old/corrupted session cookies before login
+        const cookiesToClear = ['sb-access-token', 'sb-refresh-token', 'userRole', 'nextauth.session-token'];
+        cookiesToClear.forEach(cookieName => {
+            document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+            document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict; secure`;
+        });
+        
+        // Also clear localStorage
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('supabase.auth.token');
+        
         try {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'azure', 
                 options: {
                     scopes: 'openid profile email',
-                    redirectTo: `${window.location.origin}/dashboard`
+                    // Force redirect to /dashboard after Azure AD success
+                    redirectTo: `${window.location.origin}/dashboard`,
                 }
             });
             if (error) throw error;
+            
+            // signInWithOAuth will automatically redirect to Azure AD
+            // After Azure authentication, redirects to /dashboard with hash
         } catch (err: any) {
             setError(err.message || "Error al conectar con Microsoft.");
             setIsLoading(false);

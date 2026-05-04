@@ -61,6 +61,7 @@ export function middleware(request: NextRequest) {
 }
 
 // Configurar en qué rutas se debe ejecutar el middleware
+// Incluir /dashboard para procesar OAuth callback desde Microsoft
 export const config = {
-    matcher: ['/dashboard/:path*'],
+    matcher: ['/dashboard/:path*', '/dashboard'],
 };
