@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import { supabaseServer, getProfileByEmail } from "@/lib/supabase-server";
 import { perfilesAPI } from "@/lib/profiles-api";
 import { Loader } from "lucide-react";
@@ -82,7 +83,7 @@ export default function DashboardGateway() {
                         // Deep inspection
                         const hasHash = typeof window !== 'undefined' && window.location.hash.length > 0;
                         const storageKeys = typeof window !== 'undefined' ? Object.keys(localStorage).filter(k => k.includes('sb-')) : [];
-                        const supabaseConfigUrl = (supabase as any).supabaseUrl;
+                        const supabaseConfigUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
                         if (lastCheck?.user) {
                             await processUserSession(lastCheck.user);
