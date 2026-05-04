@@ -7,7 +7,6 @@ import { normalizeStateId } from '@/lib/ticketStates';
  * 
  * Endpoint específico para dashboard de gestores.
  * Usa Supabase Server Client (Service Role Key) para evitar bloqueos RLS.
- * Filtra tickets por gestora_id o deduce jurisdicción desde el email del gestor.
  */
 
 export async function GET(request: NextRequest) {
@@ -17,21 +16,11 @@ export async function GET(request: NextRequest) {
         const email = searchParams.get('email') || '';
 
         // Obtener tickets usando server client (ignora RLS)
-        let ticketsData = await getAllTicketsLite(gestorId);
-        
-        // Si hay email, intentar identificar gestora desde el perfil
-        if (!gestorId && email) {
-            // Intentar buscar gestora por email en la DB
-            const ticketsConEmail = await getAllTicketsLite();
-            // Filtrar localmente por jurisdicción - simplificar a tipo any
-            ticketsData = (ticketsConEmail as any[]).filter((t: any) => {
-                if (t.gestora_id) return true;
-                return true;
-            });
-        }
+        // Usar type any para evitar errores de inferencia
+        const rawTickets = await getAllTicketsLite(gestorId) as any;
         
         // Normalizar estados
-        const normalizedTickets = ((ticketsData || []) as any[]).map((t: any) => ({
+        const normalizedTickets = ((rawTickets || []) as any[]).map((t: any) => ({
             ...t,
             estadoId: normalizeStateId(t.status_id || t.estadoId || 'nuevo')
         }));
