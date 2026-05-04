@@ -252,6 +252,25 @@ export default function GestorDashboard() {
         setTurnoLoading(true);
         const email = localStorage.getItem('userEmail') || '';
         const nombre = localStorage.getItem('userName') || '';
+        
+        // Intentar endpoint V3 primero (usa service role key)
+        try {
+            const response = await fetch('/api/v3/gestor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'ingreso', email, nombre })
+            });
+            const result = await response.json();
+            if (result.success && result.turno) {
+                setTurnoActivo({ id: result.turno.id, hora_ingreso: result.turno.hora_ingreso });
+                setTurnoLoading(false);
+                return;
+            }
+        } catch (e) {
+            console.log('[Gestor] V3 ingreso failed, trying client:', e);
+        }
+        
+        // Fallback: cliente anónimo
         const { data, error } = await supabase
             .from('turnos')
             .insert({ usuario_email: email, usuario_nombre: nombre, fecha: new Date().toISOString().split('T')[0] })
@@ -264,6 +283,26 @@ export default function GestorDashboard() {
     const handleSalida = async () => {
         if (!turnoActivo) return;
         setTurnoLoading(true);
+        
+        // Intentar endpoint V3 primero (usa service role key)
+        try {
+            const response = await fetch('/api/v3/gestor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'salida', turnoId: turnoActivo.id })
+            });
+            const result = await response.json();
+            if (result.success) {
+                setTurnoActivo(null);
+                setShowBanner6PM(false);
+                setTurnoLoading(false);
+                return;
+            }
+        } catch (e) {
+            console.log('[Gestor] V3 salida failed, trying client:', e);
+        }
+        
+        // Fallback: cliente anónimo
         await supabase
             .from('turnos')
             .update({ hora_salida: new Date().toISOString(), estado: 'CERRADO' })
@@ -1192,6 +1231,10 @@ function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
     label: string; value: any; icon: React.ReactNode;
     iconBg: string; sub: string; trend: "up" | "down" | null; alert?: boolean;
 }) {
+    // Normalizar valor: mostrar "-" o "0" si es null/undefined
+    const displayValue = (value === null || value === undefined) ? "0" : String(value);
+    const isZero = displayValue === "0" || displayValue === "0.0";
+    
     return (
         <div style={{
             background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem",
@@ -1216,7 +1259,7 @@ function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
                 )}
             </div>
             <div>
-                <div style={{ fontSize: "1.6rem", fontWeight: 900, color: alert ? "#EF4444" : "#1E293B", lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: "1.6rem", fontWeight: 900, color: isZero ? "#94A3B8" : alert ? "#EF4444" : "#1E293B", lineHeight: 1 }}>{displayValue}</div>
                 <div style={{ fontSize: "0.73rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px", marginTop: "4px" }}>{label}</div>
             </div>
             <div style={{ fontSize: "0.71rem", color: "#94A3B8" }}>{sub}</div>

@@ -34,6 +34,9 @@ export const supabaseServer = {
     getClient: getSupabaseServerClient
 };
 
+// Exportar getClient para uso en endpoints
+export { getSupabaseServerClient as getClient };
+
 /**
  * Helper para obtener perfil usando service role
  * Devuelve null si no hay configuración - no crashea
