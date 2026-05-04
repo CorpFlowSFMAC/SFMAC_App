@@ -2,103 +2,71 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-    const userRole = request.cookies.get('userRole')?.value;
-    const authStatus = request.cookies.get('auth_status')?.value;
-    const azureCode = request.cookies.get('azure_code')?.value;
     const { pathname } = request.nextUrl;
-
-    // APP_URL para redirects (configurable por entorno)
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://corpflow.sinfimac.pe';
-
-    // 0. Allow auth callback to process OAuth
-    if (pathname === '/auth/callback' || pathname.startsWith('/api/auth') || pathname.includes('azure-ad')) {
+    
+    const userRole = request.cookies.get('userRole')?.value;
+    
+    // Rutas públicas - permitir todo
+    if (pathname === '/login' || 
+        pathname === '/' ||
+        pathname.startsWith('/_next') ||
+        pathname.startsWith('/api') ||
+        pathname.includes('.')) {
         return NextResponse.next();
     }
     
-    // 0b. Allow access to static files and api
-    if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) {
+    // Auth callback - permitir
+    if (pathname.includes('callback') || pathname.includes('azure')) {
         return NextResponse.next();
     }
-
-    // 0c. Allow login page
-    if (pathname === '/login') {
-        return NextResponse.next();
-    }
-
-    // 1. Permitir acceso al gateway /dashboard (sin subruta) para procesar OAuth callback
-    // IMPORTANTE: Ya no forzamos rol aquí. El gateway (/dashboard/page.tsx) consultará la tabla perfiles.
+    
+    // Dashboard base
     if (pathname === '/dashboard') {
-        // Si tiene auth de Azure, permitir que el gateway procese la sesión y consulte el rol desde la BD
-        if (authStatus === 'azure_logged_in' || azureCode) {
-            // NO establecemos rol por defecto aquí - el gateway lo hará correctamente
-            // Solo permitir que pase al gateway para que consulte perfiles
-            return NextResponse.next();
-        }
-        
-        // Si ya tiene rol en cookie, redirigir directamente al dashboard correcto
         if (userRole && userRole !== 'sin_acceso') {
-            const dest = userRole === 'admin' ? `${appUrl}/dashboard/admin` : `${appUrl}/dashboard/gestor`;
-            return NextResponse.redirect(new URL(dest, request.url));
+            const destino = userRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
+            return NextResponse.redirect(new URL(destino, request.url));
         }
-        // Si no tiene rol o es sin_acceso, dejar pasar para que el gateway procese
         return NextResponse.next();
     }
-
-    // 1b. Permitir acceso a la página de "sin acceso" si tiene sesión (cualquiera)
+    
+    // Panel Admin - solo admin
+    if (pathname.startsWith('/dashboard/admin')) {
+        if (userRole === 'admin') {
+            return NextResponse.next();
+        }
+        if (userRole === 'gestora' || userRole === 'espectador') {
+            return NextResponse.redirect(new URL('/dashboard/gestor', request.url));
+        }
+        return NextResponse.redirect(new URL('/login', request.url));
+    }
+    
+    // Panel Gestor
+    if (pathname.startsWith('/dashboard/gestor')) {
+        if (userRole === 'admin' || userRole === 'gestora' || userRole === 'espectador') {
+            return NextResponse.next();
+        }
+        return NextResponse.redirect(new URL('/login', request.url));
+    }
+    
+    // Sin acceso
     if (pathname === '/dashboard/sin-acceso') {
-        // Si tiene un rol asignado (no sin_acceso), redirigir al dashboard correcto
-        if (userRole && userRole !== 'sin_acceso') {
-            const dest = userRole === 'admin' ? `${appUrl}/dashboard/admin` : `${appUrl}/dashboard/gestor`;
-            return NextResponse.redirect(new URL(dest, request.url));
-        }
         return NextResponse.next();
     }
-
-    // 2. Si intenta acceder a subrutas del dashboard sin rol, verificar si tiene auth de Azure
+    
+    // Dashboard paths
     if (pathname.startsWith('/dashboard')) {
-        // Si tiene auth de Azure pero no userRole, dejar pasar al gateway para que procese correctamente
-        // El gateway consultará la tabla perfiles y obtendrá el rol correcto
-        if (!userRole && (authStatus === 'azure_logged_in' || azureCode)) {
-            // Permitir que pase al gateway - NO forzar 'gestor'
-            // El gateway (/dashboard/page.tsx) consultará la tabla perfiles y asignará el rol correcto
-            return NextResponse.next();
-        }
-        
-        // Si no tiene ningún tipo de auth, redirigir a login
-        if (!userRole && !authStatus && !azureCode) {
-            return NextResponse.redirect(new URL(`${appUrl}/login`, request.url));
-        }
-        
-        // 3. Si tiene rol SIN_ACCESO, redirigir a la sala de espera
-        if (userRole === 'sin_acceso') {
-            return NextResponse.redirect(new URL('/dashboard/sin-acceso', request.url));
-        }
-
-        // 4. Controlar acceso según el rol (seguridad RBAC)
-        if (pathname.startsWith('/dashboard/admin')) {
-            // La ruta de Usuarios y Accesos es SOLO para admins
-            if (pathname.startsWith('/dashboard/admin/usuarios') && userRole !== 'admin') {
-                return NextResponse.redirect(new URL(`${appUrl}/dashboard/gestor`, request.url));
-            }
-
-            // Las rutas admin-only requieren rol admin
-            if (userRole !== 'admin') {
-                const isAllowedPath = pathname.startsWith('/dashboard/admin/tickets') ||
-                    pathname.startsWith('/dashboard/admin/technicians') ||
-                    pathname.startsWith('/dashboard/admin/reportes');
-
-                if (!isAllowedPath) {
-                    return NextResponse.redirect(new URL(`${appUrl}/dashboard/gestor`, request.url));
-                }
-            }
-        }
+        return NextResponse.next();
     }
-
+    
     return NextResponse.next();
 }
 
-// Configurar en qué rutas se debe ejecutar el middleware
-// Incluir /dashboard para procesar OAuth callback desde Microsoft
 export const config = {
-    matcher: ['/dashboard/:path*', '/dashboard', '/auth/callback', '/login', '/api/auth/:path*'],
+    matcher: [
+        '/dashboard/:path*',
+        '/dashboard',
+        '/login',
+        '/auth/:path*',
+        '/api/:path*'
+    ],
 };

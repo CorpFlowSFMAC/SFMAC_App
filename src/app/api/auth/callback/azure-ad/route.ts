@@ -1,182 +1,202 @@
 /**
- * Azure AD Callback - Procesa autenticación de Azure AD
- * Usa Service Role Key para evitar RLS al buscar perfil
+ * Azure AD Callback - SOLUCIÓN DEFINITIVA
+ * Proceso completo de autenticación con fallback automático
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xxxxx.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-const supabase = supabaseServiceKey 
-    ? createClient(supabaseUrl, supabaseServiceKey)
-    : createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJxxxxx');
+// URLs de Supabase
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// APP_URL - usar variable o extraer del request
+// Determinar qué key usar
+const SERVICE_KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+
+// Crear cliente
+const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+// APP_URL
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://corpflow.sinfimac.pe';
-// También permitir override desde header si existe (para Vercel preview)
-const getBaseUrl = (req: NextRequest) => {
-    // En producción, usar APP_URL
-    if (APP_URL.includes('corpflow')) return APP_URL;
-    // En preview/dev, usar el host del request
-    const host = req.headers.get('host') || 'localhost:3000';
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-    return `${protocol}://${host}`;
-};
 
-console.log('[Azure Callback] 🔐 Service Key configured:', !!supabaseServiceKey);
-console.log('[Azure Callback] 🌐 APP_URL:', APP_URL);
+// Admin especial - estos emails SIEMPRE serán admin
+const ADMIN_EMAILS = ['acubas@sinfimac.pe', 'admin@sinfimac.pe'];
+
+console.log('[CB] 🔑 Keys:', { 
+    url: !!SUPABASE_URL, 
+    serviceKey: !!SUPABASE_SERVICE_KEY, 
+    anonKey: !!SUPABASE_ANON_KEY 
+});
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const error = searchParams.get('error');
-    const errorDescription = searchParams.get('error_description');
     
-    console.log('[Azure Callback] 📥 Request received, code present:', !!code);
-    console.log('[Azure Callback] 🌐 APP_URL:', APP_URL);
+    console.log('[CB] 📥 Code:', !!code, 'Error:', error);
 
     if (error) {
-        console.error('[Azure Callback] ❌ Azure error:', error, errorDescription);
         return NextResponse.redirect(new URL('/login?error=azure_denied', request.url));
+    }
+    
+    if (!code) {
+        return NextResponse.redirect(new URL('/login?error=no_code', request.url));
     }
     
     let userEmail = '';
     let userRole = 'sin_acceso';
-    let perfilEncontrado = false;
     
-    if (code) {
-        try {
-            const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
-            const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
-            const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
-            const redirectUri = `${APP_URL}/api/auth/callback/azure-ad`;
-            
-            const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
-            const tokenData = new URLSearchParams({
-                client_id: clientId,
-                client_secret: clientSecret || '',
-                code: code,
-                redirect_uri: redirectUri,
-                grant_type: 'authorization_code',
-                scope: 'openid profile email User.Read',
-            });
-            
-            console.log('[Azure Callback] 🔄 Exchanging code for token...');
-            
-            const tokenResponse = await fetch(tokenUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: tokenData.toString(),
-            });
-            
-            const tokenResult = await tokenResponse.json();
-            console.log('[Azure Callback] 📬 Token response status:', tokenResponse.status);
-            
-            if (tokenResult.error) {
-                console.error('[Azure Callback] ❌ Token error:', tokenResult.error_description || tokenResult.error);
-            }
-            
-            if (tokenResult.access_token) {
-                console.log('[Azure Callback] ✅ Token obtained, fetching user info...');
-                
-                const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
-                    headers: { 'Authorization': `Bearer ${tokenResult.access_token}` },
-                });
-                
-                if (userResponse.ok) {
-                    const userData = await userResponse.json();
-                    userEmail = userData.mail || userData.userPrincipalName;
-                    console.log('[Azure Callback] 👤 User email from Azure:', userEmail);
-                    
-                    if (userEmail) {
-                        const normalizedEmail = userEmail.toLowerCase().trim();
-                        console.log('[Azure Callback] 🔍 Looking up perfil for:', normalizedEmail);
-                        
-                        // Usar service role para evitar RLS
-                        const { data: perfil, error: perfilError } = await supabase
-                            .from('perfiles')
-                            .select('rol, email, nombre_completo')
-                            .eq('email', normalizedEmail)
-                            .single();
-                        
-                        console.log('[Azure Callback] 📊 Perfil lookup result:', { perfil, error: perfilError?.message });
-                        
-                        if (perfil && perfil.rol) {
-                            userRole = perfil.rol.toLowerCase();
-                            perfilEncontrado = true;
-                            console.log('[Azure Callback] ✅ PERFIL ENCONTRADO - Rol:', userRole);
-                        } else {
-                            console.log('[Azure Callback] ❌ PERFIL NO ENCONTRADO en DB para:', normalizedEmail);
-                            console.log('[Azure Callback] 💡 DEBUG - Buscando perfil con service role key:', !!supabaseServiceKey);
-                        }
-                    }
-                }
-            }
-        } catch (err: any) {
-            console.error('[Azure Callback] ❌ Exception:', err?.message || err);
+    try {
+        // 1. Intercambiar código por token
+        const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
+        const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
+        const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
+        const redirectUri = `${APP_URL}/api/auth/callback/azure-ad`;
+        
+        const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+        const tokenData = new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret || '',
+            code: code,
+            redirect_uri: redirectUri,
+            grant_type: 'authorization_code',
+            scope: 'openid profile email User.Read',
+        });
+        
+        const tokenResp = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: tokenData.toString(),
+        });
+        
+        const token = await tokenResp.json();
+        
+        if (token.error) {
+            console.log('[CB] ❌ Token error:', token.error_description);
+            return NextResponse.redirect(new URL('/login?error=token_failed', request.url));
         }
+        
+        // 2. Obtener email del usuario
+        const userResp = await fetch('https://graph.microsoft.com/v1.0/me', {
+            headers: { 'Authorization': `Bearer ${token.access_token}` },
+        });
+        
+        const userData = await userResp.json();
+        userEmail = (userData.mail || userData.userPrincipalName || '').toLowerCase().trim();
+        
+        console.log('[CB] 👤 Email:', userEmail);
+        
+        if (!userEmail) {
+            console.log('[CB] ❌ No email from Azure');
+            return NextResponse.redirect(new URL('/login?error=no_email', request.url));
+        }
+        
+        // 3. Buscar perfil en DB
+        let rol = null;
+        let perfilExiste = false;
+        
+        const { data: perfil } = await supabase
+            .from('perfiles')
+            .select('rol')
+            .eq('email', userEmail)
+            .single();
+        
+        if (perfil) {
+            rol = perfil.rol;
+            perfilExiste = true;
+            console.log('[CB] ✅ Perfil encontrado:', rol);
+        } else {
+            console.log('[CB] 📝 Perfil no existe, creando...');
+        }
+        
+        // 4. Si no existe perfil, crear uno
+        if (!perfilExiste) {
+            // Determinar rol inicial
+            const esAdmin = ADMIN_EMAILS.includes(userEmail);
+            rol = esAdmin ? 'ADMIN' : 'GESTORA';
+            
+            // Crear perfil
+            const { error: insertError } = await supabase
+                .from('perfiles')
+                .insert({
+                    email: userEmail,
+                    nombre_completo: userData.displayName || userData.name || userEmail,
+                    rol: rol
+                });
+            
+            if (insertError) {
+                console.log('[CB] ⚠️ Error creando perfil:', insertError.message);
+                // Continuar con el rol determinado
+            } else {
+                console.log('[CB] ✅ Perfil creado con rol:', rol);
+            }
+        }
+        
+        // 5. Determinar rol final
+        userRole = (rol || 'sin_acceso').toLowerCase();
+        
+        // FORZAR admin para acubas
+        if (ADMIN_EMAILS.includes(userEmail)) {
+            // Actualizar a admin
+            await supabase
+                .from('perfiles')
+                .update({ rol: 'ADMIN' })
+                .eq('email', userEmail);
+            
+            userRole = 'admin';
+        }
+        
+        console.log('[CB] 🎯 Rol final:', userRole);
+        
+        // 6. Determinar destino
+        let destino = '/dashboard/sin-acceso';
+        if (userRole === 'admin') {
+            destino = '/dashboard/admin';
+        } else if (userRole === 'gestora' || userRole === 'espectador') {
+            destino = '/dashboard/gestor';
+        }
+        
+        console.log('[CB] 🚀 Destino:', destino);
+        
+        // 7. Crear respuesta con cookies
+        const respuesta = NextResponse.redirect(new URL(destino, request.url));
+        
+        respuesta.cookies.set('auth_status', 'azure_logged_in', {
+            path: '/',
+            httpOnly: false,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 86400
+        });
+        
+        respuesta.cookies.set('azure_code', 'ok', {
+            path: '/',
+            httpOnly: false,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 86400
+        });
+        
+        respuesta.cookies.set('userRole', userRole, {
+            path: '/',
+            httpOnly: false,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 86400
+        });
+        
+        respuesta.cookies.set('userEmail', userEmail, {
+            path: '/',
+            httpOnly: false,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 86400
+        });
+        
+        return respuesta;
+        
+    } catch (err: any) {
+        console.log('[CB] ❌ Excepción:', err?.message || err);
+        return NextResponse.redirect(new URL('/login?error=exception', request.url));
     }
-    
-    // Map roles to rutas
-    const roleToPath: Record<string, string> = {
-        'admin': '/dashboard/admin',
-        'ADMIN': '/dashboard/admin',
-        'gestora': '/dashboard/gestor',
-        'GESTORA': '/dashboard/gestor',
-        'espectador': '/dashboard/gestor',
-        'ESPECTADOR': '/dashboard/gestor',
-        'sin_acceso': '/dashboard/sin-acceso',
-        'SIN_ACCESO': '/dashboard/sin-acceso',
-    };
-    
-    // DEBUG: Mostrar todo
-    console.log('[Azure Callback] 🔍 DEBUG userRole raw:', userRole);
-    console.log('[Azure Callback] 🔍 DEBUG roleToPath keys:', Object.keys(roleToPath));
-    
-    // Normalize role - ensure lowercase for lookup
-    const lookupRole = userRole.toLowerCase();
-    console.log('[Azure Callback] 🔍 DEBUG lookupRole:', lookupRole);
-    console.log('[Azure Callback] 🔍 DEBUG roleToPath[lookupRole]:', roleToPath[lookupRole]);
-    
-    let destino = roleToPath[lookupRole] || '/dashboard/sin-acceso';
-    console.log('[Azure Callback] 🔍 DEBUG mapped destino:', destino);
-    console.log('[Azure Callback] 🔍 DEBUG APP_URL for redirect:', APP_URL);
-    
-    // Sipieler perfil, siempre ir al dashboard correspondiente
-    console.log('[Azure Callback] 🎯 Final decision:', {
-        userEmail,
-        userRole,
-        perfilEncontrado,
-        destino
-    });
-    
-    const response = NextResponse.redirect(new URL(`${APP_URL}${destino}`, request.url));
-    
-    // cookies para sesión
-    response.cookies.set('auth_status', 'azure_logged_in', {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-    });
-    response.cookies.set('azure_code', code || 'demo', {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-    });
-    response.cookies.set('userRole', userRole, {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-    });
-    response.cookies.set('userEmail', userEmail, {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-    });
-    
-    return response;
 }
