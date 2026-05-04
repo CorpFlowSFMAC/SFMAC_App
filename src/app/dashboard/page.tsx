@@ -34,8 +34,7 @@ export default function DashboardGateway() {
                 console.log("[Dashboard Gateway] URL:", currentUrl);
 
                 // 📊 DIAGNÓSTICO: Mostrar URL de Supabase
-                const supabaseUrl = (supabase as any).supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
-                console.log("🔌 [Dashboard Gateway] Supabase URL:", supabaseUrl);
+                console.log("🔌 [Dashboard Gateway] Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
 
                 if (errorParam) {
                     setError(`Error de autenticación: ${errorParam}`);
