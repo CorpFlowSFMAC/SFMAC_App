@@ -4,7 +4,6 @@
  * Este cliente se usa en el servidor (API routes) para operaciones
  * que requieren acceso completo a la base de datos sin restricciones de RLS.
  */
-
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
