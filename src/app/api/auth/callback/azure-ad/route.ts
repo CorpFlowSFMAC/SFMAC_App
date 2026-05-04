@@ -19,11 +19,11 @@ export async function GET(request: NextRequest) {
     if (!code && !state) {
         // No code and no state - this is probably a direct access without authentication
         // For demo purposes, allow access to dashboard
-        console.log('[Azure AD Callback] No code, allowing demo access');
+        console.log('[Azure AD Callback] No code from corpflow.sinfimac.pe, allowing demo access');
     }
     
     // Set auth cookie and redirect to dashboard
-    const response = NextResponse.redirect(new URL('/dashboard', request.url));
+    const response = NextResponse.redirect(new URL('https://corpflow.sinfimac.pe/dashboard', request.url));
     response.cookies.set('auth_status', 'azure_logged_in', {
         path: '/',
         maxAge: 60 * 60 * 24 * 7, // 7 days
