@@ -51,10 +51,10 @@ export default function LoginPage() {
         setError("");
         
         try {
-            // Direct Azure AD OAuth with explicit callback
+            // Direct Azure AD OAuth using working callback
             const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
             const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
-            const redirectUri = encodeURIComponent('https://corpflow.sinfimac.pe/api/auth/callback/azure-ad');
+            const redirectUri = encodeURIComponent('https://sfmac-575a5ssxp-sfmacorp.vercel.app/api/auth/callback/azure-ad');
             
             const azureAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=openid%20profile%20email%20User.Read&response_mode=query`;
             
