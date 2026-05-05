@@ -51,11 +51,14 @@ export default function TechniciansPage() {
 
     const handleSave = async (techData: any) => {
         try {
+            console.log('[handleSave] techData:', techData);
+            
             // Extract branch assignments from the hidden field
             const agenciasAsignadas: string[] = techData._agenciasAsignadas || [];
             const { _agenciasAsignadas, ...cleanData } = techData;
 
             if (editingTech) {
+                console.log('[handleSave] Updating:', editingTech.id);
                 const updated = await updateTechnician(editingTech.id, cleanData);
                 // Sync branch assignments
                 await techniciansAPI.syncBranchAssignments(editingTech.id, agenciasAsignadas);
