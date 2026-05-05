@@ -183,19 +183,13 @@ export async function GET(request: NextRequest) {
         
         const respuesta = NextResponse.redirect(destUrl);
         
+        // Cookie con dominio exacto y más opciones
         respuesta.cookies.set('auth_status', 'azure_logged_in', {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: false, // Allow HTTP for testing
-            maxAge: 86400
-        });
-        
-        respuesta.cookies.set('azure_code', 'ok', {
-            path: '/',
-            httpOnly: false,
-            sameSite: 'lax',
-            secure: false, // Allow HTTP for testing
+            secure: true, // Secure para producción
+            domain: '.corpflow.sinfimac.pe',
             maxAge: 86400
         });
         
@@ -203,7 +197,8 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: false, // Allow HTTP for testing
+            secure: true,
+            domain: '.corpflow.sinfimac.pe',
             maxAge: 86400
         });
         
@@ -211,7 +206,8 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: false, // Allow HTTP for testing
+            secure: true,
+            domain: '.corpflow.sinfimac.pe',
             maxAge: 86400
         });
         

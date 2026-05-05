@@ -12,13 +12,31 @@ export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const fullUrl = request.url; // Usar la URL completa como cadena
     
+    // HARD LOGGING: Verificar cada acceso
+    const userRole = request.cookies.get('userRole')?.value;
+    const userEmail = request.cookies.get('userEmail')?.value;
+    const authStatus = request.cookies.get('auth_status')?.value;
+    
+    // También leer query params
+    const urlParams = new URL(request.url).searchParams;
+    const queryRole = urlParams.get('role');
+    const queryEmail = urlParams.get('email');
+    const queryAuth = urlParams.get('auth');
+    
+    console.log('[Middleware] 🚀 Intentando acceso para el correo:', queryEmail || userEmail || 'ninguno');
+    console.log('[Middleware] 🎫 Estado de la sesión - Cookie role:', userRole, '| Auth status:', authStatus);
+    console.log('[Middleware] 🎫 Query params - role:', queryRole, '| auth:', queryAuth);
+    console.log('[Middleware] 📍 Path:', pathname);
+    
     // BLOCK any redirect to old domain
     if (fullUrl.includes(OLD_DOMAIN)) {
         console.log('[Middleware] BLOCKED redirect to old domain:', fullUrl);
         return NextResponse.redirect(new URL('/login', request.url));
     }
     
-    const userRole = request.cookies.get('userRole')?.value;
+    // Si hay query params de auth, usar esos
+    const effectiveRole = queryRole || userRole;
+    const effectiveEmail = queryEmail || userEmail;
     
     // DEV MODE: Permitir acceso ohne autenticación
     if (isDevMode && (pathname.startsWith('/dashboard'))) {
@@ -42,8 +60,9 @@ export function middleware(request: NextRequest) {
     
     // Dashboard base
     if (pathname === '/dashboard') {
-        if (userRole && userRole !== 'sin_acceso') {
-            const destino = userRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
+        if (effectiveRole && effectiveRole !== 'sin_acceso') {
+            const destino = effectiveRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
+            console.log('[Middleware] 📍 Redirect a:', destino);
             return NextResponse.redirect(new URL(destino, request.url));
         }
         return NextResponse.next();
@@ -51,11 +70,11 @@ export function middleware(request: NextRequest) {
     
     // Panel Admin - solo admin tiene acceso completo
     if (pathname.startsWith('/dashboard/admin')) {
-        if (userRole === 'admin') {
+        if (effectiveRole === 'admin') {
             return NextResponse.next();
         }
         // Admin puede acceder pero gestores no
-        if (userRole === 'gestora' || userRole === 'espectador') {
+        if (effectiveRole === 'gestora' || effectiveRole === 'espectador') {
             return NextResponse.redirect(new URL('/dashboard/gestor', request.url));
         }
         return NextResponse.redirect(new URL('/login', request.url));
@@ -64,10 +83,9 @@ export function middleware(request: NextRequest) {
     // Panel Gestor - gestores tienen acceso limitado
     if (pathname.startsWith('/dashboard/gestor')) {
         // Gestores y espectadores pueden acceder
-        if (userRole === 'admin' || userRole === 'gestora' || userRole === 'espectador') {
+        if (effectiveRole === 'admin' || effectiveRole === 'gestora' || effectiveRole === 'espectador') {
             // RESTRINGIR rutas específicas del admin para gestores
-            // /dashboard/gestor/clients, /dashboard/gestor/routing, etc NO son accesibles para gestores
-            if (userRole !== 'admin') {
+            if (effectiveRole !== 'admin') {
                 // Rutas que SOLO admin puede acceder desde el panel gestor
                 const adminOnlyRoutesGestor = ['/clients', '/routing', '/usuarios', '/asistencia', '/closing'];
                 for (const route of adminOnlyRoutesGestor) {
