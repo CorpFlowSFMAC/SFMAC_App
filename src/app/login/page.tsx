@@ -102,10 +102,9 @@ export default function LoginPage() {
         setError("");
         
         try {
-            // Dynamic origin from NEXT_PUBLIC_SITE_URL or window location
-            // This now uses the configured domain (corpflow.sinfimac.pe)
-            // IMPORTANT: Using NEXT_PUBLIC_SITE_URL for proper redirect URI
-            const origin = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://corpflow.sinfimac.pe');
+            // Dynamic origin - USE HARDCODED VALUE for production stability
+            // This ensures consistent redirect URI regardless of edge caches
+            const origin = 'https://corpflow.sinfimac.pe';
             const redirectUri = encodeURIComponent(`${origin}/api/auth/callback/azure-ad`);
             
             // Azure AD config
