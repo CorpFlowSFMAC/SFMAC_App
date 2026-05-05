@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 // EMERGENCY: Prohibit redirects to old domain
 const OLD_DOMAIN = 'sinfimac.pe';
-const ALLOWED_DOMAINS = ['work-1-nmyrzygswczqzcbk.prod-runtime.all-hands.dev', 'work-2-nmyrzygswczqzcbk.prod-runtime.all-hands.dev', 'localhost'];
+const ALLOWED_DOMAINS = ['corpflow.sinfimac.pe', 'localhost', 'work-1-nmyrzygswczqzcbk.prod-runtime.all-hands.dev', 'work-2-nmyrzygswczqzcbk.prod-runtime.all-hands.dev'];
 
 // Modo desarrollo - permitir acceso sin autenticación
 const isDevMode = process.env.NODE_ENV !== 'production';
@@ -99,8 +99,6 @@ export const config = {
     matcher: [
         '/dashboard/:path*',
         '/dashboard',
-        '/login',
-        '/auth/:path*',
-        '/api/:path*'
+        '/auth/:path*'
     ],
 };
