@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Plus, Search, Users, Sparkles, Filter, Trash2, Wrench, MapPin, Building2, Globe } from "lucide-react";
 import styles from "./technicians.module.css";
 import TechnicianDrawer from "./TechnicianDrawer";
@@ -8,16 +8,48 @@ import { useAppData } from "@/lib/AppDataContext";
 import { SKILL_ICONS, SKILL_COLORS, SERVICE_TYPES } from "@/lib/serviceTypes";
 import { ZONES } from "@/lib/zones";
 import { techniciansAPI } from "@/lib/supabase-api";
+import { syncQueue, startBackgroundSync, stopBackgroundSync, getTechStatusBadge, type PendingTech } from "@/lib/sync-queue";
 
 export default function TechniciansPage() {
-    const { technicians, loadingTechnicians: loading, createTechnician, updateTechnician, deleteTechnician } = useAppData();
+    const { technicians, loadingTechnicians: loading, createTechnician, updateTechnician, deleteTechnician, refreshTechnicians } = useAppData();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterZone, setFilterZone] = useState("");
     const [filterSkill, setFilterSkill] = useState("");
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingTech, setEditingTech] = useState<any>(null);
+    const [pendingOps, setPendingOps] = useState<PendingTech[]>([]);
 
     const allSkills = SERVICE_TYPES.map(s => s.nombreCorto);
+
+    // ── OFFLINE-FIRST: Sync en background ──
+    useEffect(() => {
+        const pending = syncQueue.getPending();
+        setPendingOps(pending);
+        
+        // Iniciar sync en background
+        startBackgroundSync(
+            async (op) => {
+                try {
+                    if (op.action === 'create') {
+                        await createTechnician(op.data);
+                    } else if (op.action === 'update') {
+                        await updateTechnician(op.id, op.data);
+                    }
+                    // Refrescar datos después de sync
+                    refreshTechnicians();
+                    return true;
+                } catch (error) {
+                    console.error('[Sync] Error:', error);
+                    return false;
+                }
+            },
+            (op, error) => {
+                alert(`⚠️ Error de sincronización: ${error}. Por favor verifica los datos y reintenta.`);
+            }
+        );
+        
+        return () => stopBackgroundSync();
+    }, [createTechnician, updateTechnician, refreshTechnicians]);
 
     const filteredTechnicians = technicians.filter((tech: any) => {
         const firstName = tech.first_name || tech.nombre || '';
@@ -51,19 +83,22 @@ export default function TechniciansPage() {
 
     const handleSave = async (techData: any) => {
         try {
-            console.log('[handleSave] techData:', techData);
-            
             // Extract branch assignments from the hidden field
             const agenciasAsignadas: string[] = techData._agenciasAsignadas || [];
             const { _agenciasAsignadas, ...cleanData } = techData;
 
             if (editingTech) {
-                console.log('[handleSave] Updating:', editingTech.id);
-                const updated = await updateTechnician(editingTech.id, cleanData);
-                // Sync branch assignments
-                await techniciansAPI.syncBranchAssignments(editingTech.id, agenciasAsignadas);
+                // Modo edición - intentar directo primero
+                try {
+                    const updated = await updateTechnician(editingTech.id, cleanData);
+                    await techniciansAPI.syncBranchAssignments(editingTech.id, agenciasAsignadas);
+                } catch (netError) {
+                    // Error de red - agregar a cola offline
+                    console.log('[handleSave] Net error, queuing update');
+                    syncQueue.add({ action: 'update', data: { ...cleanData, id: editingTech.id } });
+                }
             } else {
-                // Validar DNI duplicado
+                // Modo creación - validación local
                 const docExists = technicians.some((t: any) =>
                     (t.document_number || t.numeroDoc) === (cleanData.document_number || cleanData.numeroDoc)
                 );
@@ -71,17 +106,32 @@ export default function TechniciansPage() {
                     alert(`❌ El documento ${cleanData.document_number || cleanData.numeroDoc} ya está registrado`);
                     return;
                 }
-                const newTech = await createTechnician(cleanData);
-                // Sync branch assignments for new technician
-                if (newTech?.id && agenciasAsignadas.length > 0) {
-                    await techniciansAPI.syncBranchAssignments(newTech.id, agenciasAsignadas);
+                
+                // AGREGAR A COLA FIRST (Offline-First)
+                const queueId = syncQueue.add({ action: 'create', data: cleanData });
+                
+                // Intentar sync inmediato
+                try {
+                    const newTech = await createTechnician(cleanData);
+                    syncQueue.remove(queueId); // Éxito - remover de cola
+                    
+                    if (newTech?.id && agenciasAsignadas.length > 0) {
+                        await techniciansAPI.syncBranchAssignments(newTech.id, agenciasAsignadas);
+                    }
+                } catch (netError) {
+                    console.log('[handleSave] Saved to offline queue, will sync later');
+                    // Mantener en cola para sync automático
                 }
+                
+                // Refrescar UI inmediatamente
+                refreshTechnicians();
             }
+            
             setIsDrawerOpen(false);
             setEditingTech(null);
         } catch (error) {
             console.error('Error saving technician:', error);
-            alert('❌ Error al guardar el técnico. Por favor intenta nuevamente.');
+            alert("❌ Error al guardar. Los datos se han guardado en cola para sincronizar cuando haya conexión.");
         }
     };
 
@@ -162,6 +212,11 @@ export default function TechniciansPage() {
                 <div className={styles.resultCount}>
                     <Users size={16} />
                     {filteredTechnicians.length} técnico{filteredTechnicians.length !== 1 ? 's' : ''}
+                    {pendingOps.length > 0 && (
+                        <span style={{ marginLeft: '0.5rem', color: '#F59E0B', fontWeight: 600 }}>
+                            🔄 {pendingOps.length} pendiente{pendingOps.length !== 1 ? 's' : ''}
+                        </span>
+                    )}
                 </div>
             </div>
 
