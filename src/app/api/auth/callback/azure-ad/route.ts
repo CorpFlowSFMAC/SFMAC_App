@@ -16,11 +16,12 @@ const SERVICE_KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
 // Crear cliente
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// APP_URL - Usar variable configurada o dominio por defecto
-const getAppUrl = () => {
-    return process.env.NEXT_PUBLIC_SITE_URL || 'https://corpflow.sinfimac.pe';
+// APP_URL - Usar dominio dinámico baseado en request
+const getAppUrl = (requestUrl: string) => {
+    const urlObj = new URL(requestUrl);
+    return `${urlObj.protocol}//${urlObj.host}`;
 };
-const APP_URL = getAppUrl();
+const APP_URL = getAppUrl(request.url);
 
 // Admin especial - estos emails SIEMPRE serán admin
 const ADMIN_EMAILS = ['acubas@sinfimac.pe', 'admin@sinfimac.pe'];
@@ -55,7 +56,12 @@ export async function GET(request: NextRequest) {
         const tenantId = process.env.AZURE_AD_TENANT_ID || '7b359926-1313-48e4-a459-1f7a9f5c63aa';
         const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
         
-        const redirectUri = `${APP_URL}/api/auth/callback/azure-ad`;
+        // Usar redirect_uri del request para que coincida exactamente
+        const requestUrlObj = new URL(request.url);
+        const baseUrl = `${requestUrlObj.protocol}//${requestUrlObj.host}`;
+        const redirectUri = `${baseUrl}/api/auth/callback/azure-ad`;
+        
+        console.log('[CB] 🔧 redirectUri:', redirectUri);
         
         const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
         const tokenData = new URLSearchParams({
