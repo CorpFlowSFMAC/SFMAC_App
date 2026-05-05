@@ -40,7 +40,7 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
     
-    // Panel Gestor - gestores
+    // Panel Gestor - gestores y admin también pueden acceder
     if (pathname.startsWith('/dashboard/gestor')) {
         if (userRole === 'gestora' || userRole === 'espectador' || userRole === 'admin') {
             return NextResponse.next();
