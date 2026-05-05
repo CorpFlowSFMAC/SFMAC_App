@@ -2,22 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import { perfilesAPI } from "@/lib/profiles-api";
 import { Loader } from "lucide-react";
 
 /**
  * /dashboard — Gateway de Autenticación + RBAC
  * 
- * Flujo actualizado con perfiles:
- * 1. Supabase procesa el hash fragment de OAuth
- * 2. Se obtiene la sesión autenticada
- * 3. Se consulta la tabla `perfiles` para obtener el rol RBAC
- * 4. Se setea la cookie 'userRole' basada en el rol del perfil
- * 5. Se redirige según el rol:
- *    - ADMIN → /dashboard/admin
- *    - GESTORA → /dashboard/gestor  
- *    - SIN_ACCESO → /dashboard/sin-acceso
+ * Flujo con cookies de Azure AD:
+ * 1. Lee las cookies establecidas por el callback de Azure
+ * 2. Si existe cookie userRole, redirige según el rol
+ * 3. Si no, redirige al login
  */
 export default function DashboardGateway() {
     const router = useRouter();
@@ -33,8 +26,9 @@ export default function DashboardGateway() {
 
                 console.log("[Dashboard Gateway] URL:", currentUrl);
 
-                // 📊 DIAGNÓSTICO: Mostrar URL de Supabase
-                console.log("🔌 [Dashboard Gateway] Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+                // 📊 DIAGNÓSTICO: Mostrar cookies
+                const cookies = typeof window !== 'undefined' ? document.cookie : '';
+                console.log("[Dashboard Gateway] Cookies:", cookies);
 
                 if (errorParam) {
                     setError(`Error de autenticación: ${errorParam}`);
@@ -44,210 +38,59 @@ export default function DashboardGateway() {
 
                 setStatus("Procesando autenticación...");
 
-                // Supabase client handles hash automatically. Wait for it.
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // Obtener la sesión actual
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-                console.log("[Dashboard Gateway] Initial session attempt:", session ? "Found" : "Not found");
-
-                if (sessionError) {
-                    setError("Error al verificar la sesión: " + sessionError.message);
-                    setTimeout(() => router.push("/login"), 2000);
-                    return;
+                // 🚀 LEER COOKIES DE AZURE AD
+                const cookiesArray = cookies.split(';').map(c => c.trim().split('='));
+                const cookieObj: Record<string, string> = {};
+                for (const [name, value] of cookiesArray) {
+                    cookieObj[name] = decodeURIComponent(value);
                 }
 
-                if (!session?.user) {
-                    // No hay sesión — intentar escuchar el evento de auth
-                    setStatus("Esperando confirmación segura...");
+                console.log("[Dashboard Gateway] Cookie object:", cookieObj);
 
-                    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-                        async (event, newSession) => {
-                            console.log("[Dashboard Gateway] Auth event receipt:", event, newSession ? "WSession" : "NoSession");
+                const userRole = cookieObj['userRole'];
+                const userEmail = cookieObj['userEmail'];
+                const authStatus = cookieObj['auth_status'];
 
-                            if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') && newSession?.user) {
-                                subscription.unsubscribe();
-                                await processUserSession(newSession.user);
-                            }
-                        }
-                    );
+                console.log("[Dashboard Gateway] userRole:", userRole, "| userEmail:", userEmail, "| authStatus:", authStatus);
 
-                    // Timeout prolongado para Azure AD
-                    setTimeout(async () => {
-                        subscription.unsubscribe();
-                        const { data: { session: lastCheck } } = await supabase.auth.getSession();
-                        console.log("[Dashboard Gateway] Final fallback session check:", lastCheck ? "Found" : "Not found");
-                        
-                        // Deep inspection
-                        const hasHash = typeof window !== 'undefined' && window.location.hash.length > 0;
-                        const storageKeys = typeof window !== 'undefined' ? Object.keys(localStorage).filter(k => k.includes('sb-')) : [];
-                        const supabaseConfigUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-                        if (lastCheck?.user) {
-                            await processUserSession(lastCheck.user);
-                        } else {
-                            setError(`Falla de acceso. URL: ${currentUrl.split('#')[0]} | Hash: ${hasHash ? 'Preservado (Oculto x seguridad)' : 'VACÍO'} | Params: ${searchParams?.toString() || 'Ninguno'} | SB_Keys: ${storageKeys.length} | Client: ${supabaseConfigUrl}`);
-                            setTimeout(() => router.push("/login"), 15000);
-                        }
-                    }, 12000);
-
-                    return;
-                }
-
-                // Sesión encontrada — procesar
-                await processUserSession(session.user);
-
-            } catch (err: any) {
-                console.error("[Dashboard Gateway] Error:", err);
-                setError("Error inesperado: " + (err.message || "Intenta de nuevo"));
-                setTimeout(() => router.push("/login"), 2000);
-            }
-        }
-
-        async function processUserSession(user: any) {
-            try {
-                const userEmail = user.email?.toLowerCase().trim() || '';
-                
-                // Saludo seguro
-                const userName = user.user_metadata?.full_name || user.user_metadata?.name || 'Usuario';
-                setStatus(`¡Bienvenido/a, ${userName}!`);
-
-                // ── RBAC: Consultar perfil desde la tabla perfiles via API ──
-                setStatus("Verificando permisos de acceso...");
-                
-                // Llamar a la API del servidor para buscar perfil (evita RLS)
-                let perfil = null;
-                try {
-                    const response = await fetch(`/api/profile?email=${encodeURIComponent(userEmail)}`);
-                    const data = await response.json();
+                // Si hay authenticated status, procesar
+                if (authStatus === 'azure_logged_in' && userRole) {
+                    console.log("[Dashboard Gateway] ✅ Autenticación válida, rol:", userRole);
                     
-                    if (data.found && data.perfil) {
-                        perfil = data.perfil;
+                    // Redirigir según rol
+                    if (userRole === 'admin') {
+                        router.push('/dashboard/admin');
+                    } else if (userRole === 'gestora' || userRole === 'espectador') {
+                        router.push('/dashboard/gestor');
+                    } else {
+                        router.push('/dashboard/sin-acceso');
                     }
-                } catch (dbError: any) {
-                    console.error("[Dashboard Gateway] Error de API:", dbError?.message);
-                    //Fallback: usar perfilesAPI normal
-                    perfil = await perfilesAPI.getByEmail(userEmail);
-                }
-
-                // Si no existe perfil, denegar acceso
-                if (!perfil) {
-                    console.log("[Dashboard Gateway] ❌ PERFIL NO ENCONTRADO para:", userEmail);
-                    
-                    // Limpiar sesión
-                    try { localStorage.clear(); } catch {}
-                    try { 
-                        document.cookie = 'userRole=sin_acceso; path=/; max-age=0'; 
-                    } catch {}
-                    
-                    setStatus("Su email no está registrado en el sistema");
-                    router.push('/dashboard/sin-acceso');
                     return;
                 }
 
-                // Determinar el rol desde el perfil (con默认值 segura)
-                const rbacRole = perfil?.rol || 'SIN_ACCESO';
-                const legacyRole = perfilesAPI.toLegacyRole(perfil);
-
-                console.log("[Dashboard Gateway] ✅ User:", userEmail, "Role:", rbacRole);
-
-                // Establecer la cookie y localStorage para el middleware (con null safety)
-                const finalName = user.user_metadata?.full_name || perfil?.nombre_completo || perfil?.name || userEmail || "Usuario";
-                const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(finalName)}&background=f97316&color=fff&bold=true`;
-                
-                try {
-                    document.cookie = `userRole=${legacyRole}; path=/; max-age=86400; SameSite=Lax`;
-                    localStorage.setItem("userRole", legacyRole);
-                    localStorage.setItem("userEmail", userEmail);
-                    localStorage.setItem("userName", finalName);
-                    localStorage.setItem("userAvatar", avatarUrl);
-                    localStorage.setItem("rbacRole", rbacRole);
-                } catch (storageError) {
-                    console.error("[Dashboard Gateway] Storage error:", storageError);
-                }
-
-                // Pequeña pausa para el mensaje de bienvenida
-                await new Promise(resolve => setTimeout(resolve, 800));
-
-                // Redirigir según el rol RBAC
-                if (rbacRole === 'SIN_ACCESO') {
-                    setStatus("Tu cuenta está pendiente de asignación de rol...");
-                    router.push('/dashboard/sin-acceso');
-                } else if (rbacRole === 'ADMIN') {
-                    setStatus("Redirigiendo a Panel Admin...");
-                    router.push('/dashboard/admin');
-                } else {
-                    // GESTORA, ESPECTADOR → gestor dashboard
-                    setStatus("Redirigiendo a Panel Gestora...");
-                    router.push('/dashboard/gestor');
-                }
-            } catch (err: any) {
-                console.error("[Dashboard Gateway] Error en processUserSession:", err);
-                setError("Error: " + (err?.message || "Intenta de nuevo"));
+                // 🚨 No hay autenticación válida --ir a login
+                console.log("[Dashboard Gateway] ❌ No autenticado");
+                setError("Sesión no encontrada. Por favor inicie sesión.");
                 setTimeout(() => router.push("/login"), 2000);
+
+            } catch (err: any) {
+                console.log("[Dashboard Gateway] ❌ Excepción:", err?.message || err);
+                setError("Error al procesar la sesión");
+                setTimeout(() => router.push("/login"), 3000);
             }
         }
 
         handleAuth();
-    }, [router]);
+    }, []);
 
     return (
-        <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '100vh',
-            background: 'linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%)',
-            color: '#fff',
-            fontFamily: "'Inter', 'Segoe UI', sans-serif",
-            gap: '1.5rem',
-        }}>
-            {/* Logo */}
-            <img
-                src="/logo-final.png"
-                alt="SINFIMAC"
-                style={{ width: 80, height: 80, objectFit: 'contain', opacity: 0.9 }}
-            />
-
-            {/* Spinner */}
-            {!error && (
-                <div style={{
-                    animation: 'spin 1.5s linear infinite',
-                }}>
-                    <Loader size={36} color="#8B5CF6" />
-                </div>
-            )}
-
-            {/* Status message */}
-            <p style={{
-                fontSize: '1.1rem',
-                fontWeight: 600,
-                color: error ? '#EF4444' : 'rgba(255,255,255,0.8)',
-                textAlign: 'center',
-                maxWidth: 400,
-            }}>
-                {error || status}
-            </p>
-
-            {/* Subtle hint */}
-            {!error && (
-                <p style={{
-                    fontSize: '0.75rem',
-                    color: 'rgba(255,255,255,0.3)',
-                    marginTop: '1rem',
-                }}>
-                    SINFIMAC Ecosystem
-                </p>
-            )}
-
-            <style>{`
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+                <Loader className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-600" />
+                <h1 className="text-xl font-semibold text-gray-800 mb-2">SINFIMAC</h1>
+                <p className="text-gray-600">{status}</p>
+                {error && <p className="text-red-500 mt-2">{error}</p>}
+            </div>
         </div>
     );
 }
