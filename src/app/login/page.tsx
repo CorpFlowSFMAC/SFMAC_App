@@ -87,7 +87,8 @@ export default function LoginPage() {
             if (authError) throw authError;
 
             if (data.user) {
-                const role = data.user.user_metadata?.role || (username.toLowerCase() === 'admin' ? 'admin' : 'gestor');
+                // Usar 'gestora' para que coincida con middleware
+                const role = data.user.user_metadata?.role || (username.toLowerCase() === 'admin' ? 'admin' : 'gestora');
                 document.cookie = `userRole=${role}; path=/; max-age=86400; SameSite=Lax`;
                 localStorage.setItem("userRole", role);
                 router.push(role === 'admin' ? "/dashboard/admin" : "/dashboard/gestor");
