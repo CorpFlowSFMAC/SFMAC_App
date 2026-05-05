@@ -166,8 +166,8 @@ export default function GestorLayout({
                                 Inicio / Métricas
                             </Link>
 
-                            {/* Gestión Técnicos - accesible según rol */}
-                            <Link href="/dashboard/gestor" className={styles.navItem} onClick={(e) => { e.preventDefault(); alert('Gestión de Técnicos: Acceso según zona asignada'); }}>
+                            {/* Gestión Técnicos - ir a vista de técnicos del admin */}
+                            <Link href="/dashboard/admin/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
                                 <UserCog size={20} />
                                 Gestión Técnicos
                             </Link>

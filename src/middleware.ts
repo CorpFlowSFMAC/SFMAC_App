@@ -4,7 +4,11 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     
-    const userRole = request.cookies.get('userRole')?.value;
+    // Normalizar rol a minúsculas para evitar problemas de mayúsculas
+    const userRole = request.cookies.get('userRole')?.value?.toLowerCase() || '';
+    
+    // Debug: log requests
+    console.log(`[MIDDLEWARE] ${pathname} - userRole: "${userRole}"`);
     
     // Rutas públicas - permitir todo
     if (pathname === '/login' || 
@@ -29,9 +33,17 @@ export function middleware(request: NextRequest) {
         return NextResponse.next();
     }
     
-    // Panel Admin - solo admin
+    // Panel Admin - permitir acceso según rol
     if (pathname.startsWith('/dashboard/admin')) {
+        // Rutas permitidas para gestoras
+        const allowedForGestora = ['/technicians', '/tickets'];
+        const hasPermission = allowedForGestora.some(route => pathname.includes(route));
+        
         if (userRole === 'admin') {
+            return NextResponse.next();
+        }
+        // Gestora puede acceder a technicians y tickets
+        if ((userRole === 'gestora' || userRole === 'espectador') && hasPermission) {
             return NextResponse.next();
         }
         if (userRole === 'gestora' || userRole === 'espectador') {

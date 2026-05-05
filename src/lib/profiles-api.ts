@@ -121,7 +121,7 @@ export const perfilesAPI = {
         if (!perfil) return 'sin_acceso';
         switch (perfil.rol) {
             case 'ADMIN': return 'admin';
-            case 'GESTORA': return 'gestor';
+            case 'GESTORA': return 'gestora'; // Debe coincidir con middleware
             case 'ESPECTADOR': return 'espectador';
             default: return 'sin_acceso';
         }
