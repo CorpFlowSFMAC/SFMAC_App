@@ -191,28 +191,47 @@ export default function GestorDashboard() {
 
     const fetchGestora = useCallback(async () => {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            const email = user?.email || localStorage.getItem('userEmail');
+            // Leer email desde cookies de Azure AD
+            let email = localStorage.getItem('userEmail');
+            
+            if (!email) {
+                // Fallback: intentar cookie
+                const cookies = document.cookie.split(';').reduce((acc, c) => {
+                    const [k, v] = c.trim().split('=');
+                    acc[k] = v;
+                    return acc;
+                }, {} as Record<string, string>);
+                email = cookies['userEmail'];
+            }
 
-            if (!email) return;
-            if (user?.email) localStorage.setItem('userEmail', user.email);
+            if (!email) {
+                console.warn("[Gestor] Sin email de usuario");
+                return;
+            }
 
-            const userRole = localStorage.getItem('userRole')?.toUpperCase();
-            if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
+            const userRole = (localStorage.getItem('userRole') || '').toUpperCase();
+            if (userRole === 'ADMIN') {
                 setIsAdmin(true);
             }
 
+            // Buscar gestora por email
             const { data: g } = await supabase.from('gestoras').select('id, name').ilike('email', email).maybeSingle();
             if (g?.id) {
                 setMyGestoraId(g.id);
                 setMyGestoraNombre(g.name || null);
             } else {
+                // Buscar en perfiles
                 const { data: p } = await supabase.from('perfiles').select('id, rol, nombre').ilike('email', email).maybeSingle();
                 if (p) {
                     if (p.id) setMyGestoraId(p.id);
                     if (p.nombre) setMyGestoraNombre(p.nombre);
                     const normalizedRole = p.rol?.toUpperCase();
-                    if (normalizedRole === 'SUPERADMIN' || normalizedRole === 'ADMIN') setIsAdmin(true);
+                    if (normalizedRole === 'ADMIN') setIsAdmin(true);
+                } else {
+                    // Si es ADMIN pero no tiene gestora, usar null para ver todo
+                    if (userRole === 'ADMIN') {
+                        console.log("[Gestor] Admin sin gestora asignada - mostrar todo");
+                    }
                 }
             }
         } catch (error) {
