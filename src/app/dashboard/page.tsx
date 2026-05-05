@@ -26,9 +26,12 @@ export default function DashboardGateway() {
 
                 console.log("[Dashboard Gateway] URL:", currentUrl);
 
-                // 📊 DIAGNÓSTICO: Mostrar cookies
+                // 📊 DIAGNÓSTICO: Mostrar cookies y URL params
                 const cookies = typeof window !== 'undefined' ? document.cookie : '';
+                const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+                
                 console.log("[Dashboard Gateway] Cookies:", cookies);
+                console.log("[Dashboard Gateway] URL params:", urlParams?.toString());
 
                 if (errorParam) {
                     setError(`Error de autenticación: ${errorParam}`);
@@ -38,26 +41,49 @@ export default function DashboardGateway() {
 
                 setStatus("Procesando autenticación...");
 
-                // 🚀 LEER COOKIES DE AZURE AD
+                // 🚀 LEER QUERY PARAMS PRIMERO (del redirect), luego cookies
+                const roleParam = urlParams?.get('role');
+                const emailParam = urlParams?.get('email');
+                const authParam = urlParams?.get('auth');
+
+                console.log("[Dashboard Gateway] roleParam:", roleParam, "| emailParam:", emailParam, "| authParam:", authParam);
+
+                // Si hay authenticated status en params, procesar
+                if (authParam === 'azure' && roleParam) {
+                    console.log("[Dashboard Gateway] ✅ Autenticación válida, rol:", roleParam);
+                    
+                    // Guardar en localStorage para persistencia
+                    try {
+                        localStorage.setItem('userRole', roleParam);
+                        localStorage.setItem('userEmail', emailParam || '');
+                    } catch {}
+                    
+                    // Redirigir según rol
+                    if (roleParam === 'admin') {
+                        router.push('/dashboard/admin');
+                    } else if (roleParam === 'gestora' || roleParam === 'espectador') {
+                        router.push('/dashboard/gestor');
+                    } else {
+                        router.push('/dashboard/sin-acceso');
+                    }
+                    return;
+                }
+
+                // Fallback: intentar leer de cookies/localStorage
                 const cookiesArray = cookies.split(';').map(c => c.trim().split('='));
                 const cookieObj: Record<string, string> = {};
                 for (const [name, value] of cookiesArray) {
                     cookieObj[name] = decodeURIComponent(value);
                 }
 
-                console.log("[Dashboard Gateway] Cookie object:", cookieObj);
-
                 const userRole = cookieObj['userRole'];
                 const userEmail = cookieObj['userEmail'];
                 const authStatus = cookieObj['auth_status'];
 
-                console.log("[Dashboard Gateway] userRole:", userRole, "| userEmail:", userEmail, "| authStatus:", authStatus);
+                console.log("[Dashboard Gateway] userRole(from cookie):", userRole);
 
-                // Si hay authenticated status, procesar
                 if (authStatus === 'azure_logged_in' && userRole) {
-                    console.log("[Dashboard Gateway] ✅ Autenticación válida, rol:", userRole);
-                    
-                    // Redirigir según rol
+                    console.log("[Dashboard Gateway] ✅ Autenticación por cookie");
                     if (userRole === 'admin') {
                         router.push('/dashboard/admin');
                     } else if (userRole === 'gestora' || userRole === 'espectador') {
@@ -68,7 +94,7 @@ export default function DashboardGateway() {
                     return;
                 }
 
-                // 🚨 No hay autenticación válida --ir a login
+                // 🚨 No hay autenticación
                 console.log("[Dashboard Gateway] ❌ No autenticado");
                 setError("Sesión no encontrada. Por favor inicie sesión.");
                 setTimeout(() => router.push("/login"), 2000);

@@ -84,12 +84,12 @@ export async function GET(request: NextRequest) {
         
         if (token.error) {
             console.log('[CB] ❌ Token error:', JSON.stringify(token));
-            // Devolver json con el error para debugging
-            return NextResponse.json({
-                error: 'token_failed',
-                details: token.error,
-                error_description: token.error_description
-            }, { status: 400 });
+            // Devolver json con el error Y redirigir a login con error
+            const errorMsg = token.error_description || token.error;
+            const loginUrl = new URL('/login', request.url);
+            loginUrl.searchParams.set('error', 'azure_token');
+            loginUrl.searchParams.set('details', errorMsg.substring(0, 50));
+            return NextResponse.redirect(loginUrl);
         }
         
         // 2. Obtener email del usuario
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
         
         console.log('[CB] 🎯 Rol final:', userRole);
         
-        // 6. Determinar destino - NORMALIZAR A minúsculas
+        // 6. Determinar destino - Pasar datos como query params (cookies no persisten en redirect)
         let destino = '/dashboard/sin-acceso';
         if (userRole === 'admin') {
             destino = '/dashboard/admin';
@@ -173,13 +173,15 @@ export async function GET(request: NextRequest) {
             destino = '/dashboard/gestor';
         }
         
-        console.log('[CB] 🚀 Destino:', destino);
+        // Agregar datos como query params
+        const destUrl = new URL(destino, APP_URL);
+        destUrl.searchParams.set('role', userRole);
+        destUrl.searchParams.set('email', userEmail);
+        destUrl.searchParams.set('auth', 'azure');
         
-        // 7. Crear respuesta con cookies - MOSTRAR URL completa
-        const redirectUrl = `${APP_URL}${destino}`;
-        console.log('[CB] 🌐 Redirect URL completa:', redirectUrl);
+        console.log('[CB] 🚀 Destino:', destUrl.toString());
         
-        const respuesta = NextResponse.redirect(new URL(redirectUrl, request.url));
+        const respuesta = NextResponse.redirect(destUrl);
         
         respuesta.cookies.set('auth_status', 'azure_logged_in', {
             path: '/',
