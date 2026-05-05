@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
     const error = searchParams.get('error');
     
     console.log('[CB] 📥 Code:', !!code, 'Error:', error);
+        console.log('[CB] 🌍 Request URL:', request.url);
+        console.log('[CB] 🏠 APP_URL:', APP_URL);
 
     if (error) {
         return NextResponse.redirect(new URL('/login?error=azure_denied', request.url));
