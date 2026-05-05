@@ -166,54 +166,29 @@ export default function GestorLayout({
                                 Inicio / Métricas
                             </Link>
 
-                            {/* Gestión Técnicos - accesible según rol */}
-                            <Link href="/dashboard/gestor" className={styles.navItem} onClick={(e) => { e.preventDefault(); alert('Gestión de Técnicos: Acceso según zona asignada'); }}>
-                                <UserCog size={20} />
-                                Gestión Técnicos
-                            </Link>
-
-                            {/* Sistema Tickets - ir a vista de tickets del gestor */}
-                            <Link href="/dashboard/gestor?view=tickets" className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`}>
+                            {/* Sistema Tickets - accesible para gestor (crear y gestionar tickets de su zona) */}
+                            <Link href="/dashboard/gestor/tickets" className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`}>
                                 <Ticket size={20} />
                                 Sistema Tickets
                             </Link>
 
+                            {/* Gestión Técnicos - gestor gestiona técnicos de SU ZONA */}
+                            <Link href="/dashboard/gestor/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
+                                <UserCog size={20} />
+                               Mis Técnicos
+                            </Link>
+
+                            {/* Solicitudes de Pago - gestor puede CREAR pero NO autorizar pagos */}
+                            <Link href="/dashboard/gestor/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
+                                <DollarSign size={20} />
+                                Solicitar Pagos
+                            </Link>
+
                             {/* Reportes de Eficiencia */}
-                            <Link href="/dashboard/gestor?view=reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/gestor/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
                                 <BarChart3 size={20} />
                                 Reportes de Eficiencia
                             </Link>
-
-                            {/* Pagos - solo Admin */}
-                            {isMounted && userRole === 'admin' && (
-                                <Link href="/dashboard/gestor/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
-                                    <DollarSign size={20} />
-                                    Pagos y Tesorería
-                                </Link>
-                            )}
-
-                            {/* Asistencia - solo Admin */}
-                            {isMounted && userRole === 'admin' && (
-                                <Link href="/dashboard/gestor/asistencia" className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
-                                    <Clock size={20} />
-                                    Asistencia y Planillas
-                                </Link>
-                            )}
-
-                            {/* Clients - solo Admin */}
-                            {isMounted && userRole === 'admin' && (
-                                <Link href="/dashboard/gestor/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
-                                    <Users size={20} />
-                                    Gestión Clientes
-                                </Link>
-                            )}
-
-                            {isMounted && userRole === 'admin' && (
-                                <div className={styles.navItem}>
-                                    <Settings size={20} />
-                                    Configuración
-                                </div>
-                            )}
                         </nav>
 
                         <div style={{ marginTop: "auto" }}>

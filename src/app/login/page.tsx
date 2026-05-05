@@ -29,20 +29,71 @@ export default function LoginPage() {
         setQuote(randomQuote);
     }, []);
 
-    // Cleanup old sessions
+    // =====================================================
+    // EMERGENCY COOKIE CLEANUP - Force clear ALL cookies and localStorage
+    // This prevents redirect loops caused by stale sessions
+    // =====================================================
     useEffect(() => {
+        // Get current origin
+        const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+        
+        // List of cookie names to explicitly clear
+        const cookieNames = [
+            'userRole', 'sb-access-token', 'sb-refresh-token', 
+            'supabase-auth-token', 'appSession', 'authState',
+            // Any cookie containing sinfimac references
+            'sinfimac', 'corpflow', 'old-session'
+        ];
+        
+        // Clear specific cookies
+        cookieNames.forEach(name => {
+            try {
+                document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT;SameSite=Strict`;
+                document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT;SameSite=Lax`;
+                document.cookie = `${name}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+                document.cookie = `${name}=;path=/;domain=${currentOrigin};expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+            } catch (e) {
+                // Ignore errors for individual cookies
+            }
+        });
+        
+        // Clear ALL cookies using split method
         try {
             const cookies = document.cookie.split(";");
             for (let i = 0; i < cookies.length; i++) {
                 const cookieName = cookies[i].split("=")[0]?.trim();
-                if (cookieName) {
-                    document.cookie = cookieName + "=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                if (cookieName && !cookieName.startsWith('__')) {
+                    // Clear with all possible paths and domains
+                    const paths = ['/', '/dashboard', '/dashboard/admin', '/dashboard/gestor'];
+                    const domains = ['', currentOrigin, 'all-hands.dev', 'sinfimac.pe', 'corpflow.sinfimac.pe'];
+                    
+                    paths.forEach(path => {
+                        domains.forEach(domain => {
+                            const domainStr = domain ? `;domain=${domain}` : '';
+                            document.cookie = `${cookieName}=;path=${path}${domainStr};expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+                        });
+                    });
                 }
             }
+        } catch (e) {
+            console.log('[Cleanup] Error clearing cookies:', e);
+        }
+        
+        // Clear localStorage completely
+        try {
             localStorage.clear();
         } catch (e) {
-            console.log('Cleanup error:', e);
+            console.log('[Cleanup] Error clearing localStorage:', e);
         }
+        
+        // Clear sessionStorage
+        try {
+            sessionStorage.clear();
+        } catch (e) {
+            console.log('[Cleanup] Error clearing sessionStorage:', e);
+        }
+        
+        console.log('[Cleanup] Emergency cookie/localStorage cleanup completed');
     }, []);
 
     const handleMicrosoftLogin = async () => {
@@ -51,17 +102,19 @@ export default function LoginPage() {
         setError("");
         
         try {
-            // Direct Azure AD OAuth - OFFICIAL domain
-            const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
-            const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
-            // Use OFFICIAL domain: corpflow.sinfimac.pe
-            const origin = 'https://corpflow.sinfimac.pe';
+            // Dynamic origin from NEXT_PUBLIC_SITE_URL or window location
+            // This now uses the configured domain (corpflow.sinfimac.pe)
+            const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://corpflow.sinfimac.pe';
             const redirectUri = encodeURIComponent(`${origin}/api/auth/callback/azure-ad`);
+            
+            // Azure AD config
+            const clientId = '0aea9f85-9f1a-4787-b0a0-2cdea8ed3e6b';
+            const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
             
             // FORCE login every time - prompt: "login" required by Azure
             const azureAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=openid%20profile%20email%20User.Read&response_mode=query&prompt=login`;
             
-            console.log('[Login] Azure URL:', azureAuthUrl);
+            console.log('[Login] Azure Auth URL:', azureAuthUrl);
             window.location.href = azureAuthUrl;
         } catch (err: any) {
             console.error('[Login] Error:', err);

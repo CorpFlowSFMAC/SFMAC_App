@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// EMERGENCY: Use env var or calculate from request URL
+const getOrigin = (request: NextRequest) => {
+    return process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
+};
+
 export async function POST(request: NextRequest) {
-    const origin = 'https://corpflow.sinfimac.pe';
+    const origin = getOrigin(request);
     const response = NextResponse.redirect(new URL(`${origin}/login`, request.url));
     
     // Clear all auth cookies

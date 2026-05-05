@@ -1,71 +1,21 @@
-nohup: ignoring input
 
 > sfmac-platform@0.1.0 dev
-> next dev
+> next dev --hostname 0.0.0.0 --port 3000
 
 ▲ Next.js 16.1.4 (Turbopack)
 - Local:         http://localhost:3000
-- Network:       http://10.2.22.152:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
 
 ✓ Starting...
-Attention: Next.js now collects completely anonymous telemetry regarding usage.
-This information is used to shape Next.js' roadmap and prioritize features.
-You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
-https://nextjs.org/telemetry
-
 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-✓ Ready in 886ms
-⚠ Unsupported metadata themeColor is configured in metadata export in /. Please move it to viewport export instead.
-Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
- GET / 200 in 2.1s (compile: 2.0s, render: 127ms)
+✓ Ready in 750ms
 ⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
 Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
-⨯ Error: [Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.
-    at module evaluation (src/lib/supabase.ts:7:11)
-    at module evaluation (src/app/login/page.tsx:8:1)
-   5 |
-   6 | if (!supabaseUrl || !supabaseAnonKey) {
->  7 |     throw new Error('[Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.');
-     |           ^
-   8 | }
-   9 |
-  10 | export const supabase = createClient(supabaseUrl, supabaseAnonKey); {
-  digest: '3693204329'
-}
+Image with src "/logo-final.png" is using quality "100" which is not configured in images.qualities [75]. Please update your config to [100, 75].
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+ GET /login 200 in 436ms (compile: 216ms, proxy.ts: 55ms, render: 165ms)
 ⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
 Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
- GET /login 500 in 1248ms (compile: 804ms, render: 444ms)
-⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
-Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
-⨯ Error: [Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.
-    at module evaluation (src/lib/supabase.ts:7:11)
-    at module evaluation (src/app/login/page.tsx:8:1)
-   5 |
-   6 | if (!supabaseUrl || !supabaseAnonKey) {
->  7 |     throw new Error('[Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.');
-     |           ^
-   8 | }
-   9 |
-  10 | export const supabase = createClient(supabaseUrl, supabaseAnonKey); {
-  digest: '3693204329'
-}
-⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
-Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
- GET /login 500 in 299ms (compile: 4ms, render: 295ms)
-⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
-Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
-⨯ Error: [Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.
-    at module evaluation (src/lib/supabase.ts:7:11)
-    at module evaluation (src/app/login/page.tsx:8:1)
-   5 |
-   6 | if (!supabaseUrl || !supabaseAnonKey) {
->  7 |     throw new Error('[Supabase] Variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY son requeridas.');
-     |           ^
-   8 | }
-   9 |
-  10 | export const supabase = createClient(supabaseUrl, supabaseAnonKey); {
-  digest: '3693204329'
-}
-⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
-Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
- GET /login 500 in 303ms (compile: 4ms, render: 299ms)
+ GET /login 200 in 50ms (compile: 4ms, proxy.ts: 6ms, render: 40ms)
+[?25h

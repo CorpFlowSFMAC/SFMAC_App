@@ -16,8 +16,11 @@ const SERVICE_KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
 // Crear cliente
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// APP_URL
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://corpflow.sinfimac.pe';
+// APP_URL - Usar variable configurada o dominio por defecto
+const getAppUrl = () => {
+    return process.env.NEXT_PUBLIC_SITE_URL || 'https://corpflow.sinfimac.pe';
+};
+const APP_URL = getAppUrl();
 
 // Admin especial - estos emails SIEMPRE serán admin
 const ADMIN_EMAILS = ['acubas@sinfimac.pe', 'admin@sinfimac.pe'];
@@ -47,9 +50,14 @@ export async function GET(request: NextRequest) {
     let userRole = 'sin_acceso';
     
     try {
-        // 1. Intercambiar código por token
-        const clientId = '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
+        // Azure AD config - usar el App Registration Provided
+        const clientId = '0aea9f85-9f1a-4787-b0a0-2cdea8ed3e6b';
         const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
+        
+        if (!clientSecret) {
+            console.error('[CB] ❌ AZURE_AD_CLIENT_SECRET no está configurado');
+            return NextResponse.redirect(new URL('/login?error=azure_not_configured', request.url));
+        }
         const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
         const redirectUri = `${APP_URL}/api/auth/callback/azure-ad`;
         
@@ -72,8 +80,13 @@ export async function GET(request: NextRequest) {
         const token = await tokenResp.json();
         
         if (token.error) {
-            console.log('[CB] ❌ Token error:', token.error_description);
-            return NextResponse.redirect(new URL('/login?error=token_failed', request.url));
+            console.log('[CB] ❌ Token error:', JSON.stringify(token));
+            // Devolver json con el error para debugging
+            return NextResponse.json({
+                error: 'token_failed',
+                details: token.error,
+                error_description: token.error_description
+            }, { status: 400 });
         }
         
         // 2. Obtener email del usuario
