@@ -16,23 +16,22 @@ const SERVICE_KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
 // Crear cliente
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// APP_URL - Usar dominio dinámico baseado en request
-const getAppUrl = (requestUrl: string) => {
-    const urlObj = new URL(requestUrl);
-    return `${urlObj.protocol}//${urlObj.host}`;
-};
-const APP_URL = getAppUrl(request.url);
-
 // Admin especial - estos emails SIEMPRE serán admin
 const ADMIN_EMAILS = ['acubas@sinfimac.pe', 'admin@sinfimac.pe'];
 
 console.log('[CB] 🔑 Keys:', { 
     url: !!SUPABASE_URL, 
-    serviceKey: !!SUPABASE_SERVICE_KEY, 
+    serviceKey: !!SERVICE_KEY, 
     anonKey: !!SUPABASE_ANON_KEY 
 });
 
 export async function GET(request: NextRequest) {
+    // APP_URL dinámico - dentro de la función
+    const getAppUrl = (reqUrl: string) => {
+        const urlObj = new URL(reqUrl);
+        return `${urlObj.protocol}//${urlObj.host}`;
+    };
+    const APP_URL = getAppUrl(request.url);
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
     const error = searchParams.get('error');
