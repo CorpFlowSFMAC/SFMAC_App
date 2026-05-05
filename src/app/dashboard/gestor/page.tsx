@@ -6,15 +6,16 @@ import {
     MapPin, AlertCircle, TrendingUp, TrendingDown, Target, BarChart2,
     Activity, AlertTriangle, Flame, Timer, Trophy, Users, ChevronRight,
     Calendar, X, RefreshCw, Gauge, Star, Award, MessageCircle,
-    LogIn, LogOut, Bell, CheckCheck, BarChart3
+    LogIn, LogOut, Bell, CheckCheck, BarChart3, Wrench
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
 import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
 import { useAppData } from "@/lib/AppDataContext";
-import { getServiceById, SERVICE_TYPES } from "@/lib/serviceTypes";
+import { getServiceById, SERVICE_TYPES, SKILL_ICONS, SKILL_COLORS } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 import { formatSoles } from "@/lib/formatters";
+import { ZONES } from "@/lib/zones";
 import styles from "./gestor.module.css";
 
 // ── SLA Constants ─────────────────────────────
@@ -373,8 +374,8 @@ export default function GestorDashboard() {
         // REGLA 0: Admin ve TODO
         if (isAdmin) return true;
 
-        // REGLA 1: Identidad requerida
-        if (!myGestoraId) return false;
+        // REGLA 1: Identidad requerida - MOSTRAR TODO si no hay ID
+        if (!myGestoraId) return true;
 
         // EXCLUSIVIDAD: Si el ticket tiene una GESTORA DIRECTA ya asignada
         if (t.gestora_id || t.metadata?.gestora_id) {
@@ -395,7 +396,7 @@ export default function GestorDashboard() {
             return true;
         }
 
-        return false;
+        return true;
     }, [myGestoraId, isAdmin]);
 
     const isInDateRange = useCallback((dateStr: string) => {
@@ -1284,6 +1285,13 @@ export default function GestorDashboard() {
             {/* REPORTES VIEW */}
             {activeView === "technicians" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    {/* Header de técnicos */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                        <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#1E293B" }}>
+                            {technicians?.length || 0} Técnicos Activos
+                        </h2>
+                    </div>
+                    
                     {loading ? (
                         <div style={{ textAlign: "center", padding: "4rem", color: "#94A3B8" }}>
                             <div style={{ width: 40, height: 40, border: "4px solid #f97316", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 1rem" }} />
@@ -1295,39 +1303,109 @@ export default function GestorDashboard() {
                             <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>No hay técnicos registrados</p>
                         </div>
                     ) : (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
-                            {technicians.map((tech: any) => (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "1rem" }}>
+                            {technicians.map((tech: any) => {
+                                const fullName = tech.nombre || tech.name || tech.first_name || "Técnico sin nombre";
+                                const specialties = tech.especialidades || tech.specialties || [];
+                                const phone = tech.celular || tech.phone || tech.yape_number || tech.plin_number || "Sin teléfono";
+                                const docNumber = tech.numeroDoc || tech.document_number || "---";
+                                const docType = tech.tipoDoc || tech.document_type || "DNI";
+                                const rating = tech.calificacion || tech.rating || 5;
+                                const techZones = tech.zone ? [tech.zone] : (tech.zonas || []);
+                                
+                                return (
                                 <div key={tech.id} style={{
-                                    background: "white", borderRadius: "12px", padding: "1rem",
+                                    background: "white", borderRadius: "14px", padding: "1rem",
                                     border: "1px solid #E2E8F0",
-                                    display: "flex", alignItems: "center", gap: "0.75rem"
+                                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                                    transition: "all 0.2s"
                                 }}>
+                                    {/* Header con foto y estado */}
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                                        <div style={{
+                                            width: 52, height: 52, borderRadius: "50%",
+                                            background: tech.estado === 'ACTIVO' ? "linear-gradient(135deg, #10B981, #059669)" : "#94A3B8",
+                                            display: "flex", alignItems: "center", justifyContent: "center",
+                                            color: "white", fontWeight: 800, fontSize: "1.2rem",
+                                            boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)"
+                                        }}>
+                                            {fullName.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.95rem", color: "#1E293B" }}>
+                                                {fullName}
+                                            </p>
+                                            <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#64748B" }}>
+                                                {docType}: {docNumber}
+                                            </p>
+                                            {/* Rating */}
+                                            <div style={{ display: "flex", gap: "2px", marginTop: "0.25rem" }}>
+                                                {[1,2,3,4,5].map(s => (
+                                                    <Star key={s} size={12} fill={s <= rating ? "#F59E0B" : "transparent"} color={s <= rating ? "#F59E0B" : "#CBD5E1"} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div style={{
+                                            padding: "0.3rem 0.6rem", borderRadius: "20px",
+                                            background: tech.estado === 'ACTIVO' ? "#ECFDF5" : "#F1F5F9",
+                                            color: tech.estado === 'ACTIVO' ? "#059669" : "#64748B",
+                                            fontSize: "0.7rem", fontWeight: 700,
+                                            textTransform: "uppercase"
+                                        }}>
+                                            {tech.estado || "ACTIVO"}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Teléfono en recuadro verde */}
                                     <div style={{
-                                        width: 44, height: 44, borderRadius: "50%",
-                                        background: tech.estado === 'ACTIVO' ? "#10B981" : "#94A3B8",
-                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                        color: "white", fontWeight: 700, fontSize: "1rem"
+                                        background: "#ECFDF5", borderRadius: "8px", padding: "0.5rem 0.75rem",
+                                        display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem"
                                     }}>
-                                        {(tech.nombre || tech.name || "T").charAt(0).toUpperCase()}
+                                        <span style={{ fontSize: "0.8rem", color: "#059669" }}>📱</span>
+                                        <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#047857" }}>{phone}</span>
                                     </div>
-                                    <div style={{ flex: 1 }}>
-                                        <p style={{ margin: 0, fontWeight: 600, fontSize: "0.95rem" }}>
-                                            {tech.nombre || tech.name || "Técnico sin nombre"}
-                                        </p>
-                                        <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748B" }}>
-                                            {tech.telefono || tech.phone || "Sin teléfono"} • {tech.estado || tech.status || "Sin estado"}
-                                        </p>
+                                    
+                                    {/* Especialidades */}
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.75rem" }}>
+                                        {specialties.slice(0, 4).map((skill: string) => {
+                                            const color = SKILL_COLORS[skill] || "#64748B";
+                                            const Icon = SKILL_ICONS[skill] || Wrench;
+                                            return (
+                                                <div key={skill} style={{
+                                                    display: "flex", alignItems: "center", gap: "0.3rem",
+                                                    padding: "0.25rem 0.5rem", borderRadius: "20px",
+                                                    background: `${color}15`, border: `1px solid ${color}40`
+                                                }}>
+                                                    <Icon size={10} color={color} />
+                                                    <span style={{ fontSize: "0.7rem", fontWeight: 600, color }}>{skill}</span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                    <div style={{
-                                        padding: "0.25rem 0.5rem", borderRadius: "6px",
-                                        background: tech.estado === 'ACTIVO' ? "#ECFDF5" : "#F1F5F9",
-                                        color: tech.estado === 'ACTIVO' ? "#059669" : "#64748B",
-                                        fontSize: "0.75rem", fontWeight: 600
-                                    }}>
-                                        {tech.estado || tech.status || "DESCONOCIDO"}
-                                    </div>
+                                    
+                                    {/* Zonas */}
+                                    {techZones.length > 0 && (
+                                        <div style={{ display: "flex", gap: "0.4rem" }}>
+                                            {techZones.slice(0, 2).map((z: string) => {
+                                                const zone = ZONES.find(zona => zona.id === z);
+                                                return (
+                                                    <div key={z} style={{
+                                                        display: "flex", alignItems: "center", gap: "0.3rem",
+                                                        padding: "0.2rem 0.4rem", borderRadius: "6px",
+                                                        background: zone?.color ? `${zone.color}15` : "#F1F5F9",
+                                                        fontSize: "0.65rem", fontWeight: 600,
+                                                        color: zone?.color ? "#1E293B" : "#64748B"
+                                                    }}>
+                                                        <MapPin size={10} />
+                                                        {z}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
