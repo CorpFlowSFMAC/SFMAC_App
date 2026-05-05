@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
+            secure: false, // Allow HTTP for testing
             maxAge: 86400
         });
         
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
+            secure: false, // Allow HTTP for testing
             maxAge: 86400
         });
         
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
+            secure: false, // Allow HTTP for testing
             maxAge: 86400
         });
         
@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
+            secure: false, // Allow HTTP for testing
             maxAge: 86400
         });
         
