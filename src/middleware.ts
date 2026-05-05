@@ -1,53 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// EMERGENCY: Prohibit redirects to old domain
-const OLD_DOMAIN = 'sinfimac.pe';
-const ALLOWED_DOMAINS = ['corpflow.sinfimac.pe', 'localhost', 'work-1-nmyrzygswczqzcbk.prod-runtime.all-hands.dev', 'work-2-nmyrzygswczqzcbk.prod-runtime.all-hands.dev'];
-
-// Modo desarrollo - permitir acceso sin autenticación
-const isDevMode = process.env.NODE_ENV !== 'production';
-
+// Versión Básica: Solo proteger /dashboard
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
-    const fullUrl = request.url; // Usar la URL completa como cadena
-    
-    // HARD LOGGING: Verificar cada acceso
     const userRole = request.cookies.get('userRole')?.value;
-    const userEmail = request.cookies.get('userEmail')?.value;
-    const authStatus = request.cookies.get('auth_status')?.value;
     
-    // También leer query params
-    const urlParams = new URL(request.url).searchParams;
-    const queryRole = urlParams.get('role');
-    const queryEmail = urlParams.get('email');
-    const queryAuth = urlParams.get('auth');
-    
-    console.log('[Middleware] 🚀 Intentando acceso para el correo:', queryEmail || userEmail || 'ninguno');
-    console.log('[Middleware] 🎫 Estado de la sesión - Cookie role:', userRole, '| Auth status:', authStatus);
-    console.log('[Middleware] 🎫 Query params - role:', queryRole, '| auth:', queryAuth);
-    console.log('[Middleware] 📍 Path:', pathname);
-    
-    // BLOCK any redirect to old domain
-    if (fullUrl.includes(OLD_DOMAIN)) {
-        console.log('[Middleware] BLOCKED redirect to old domain:', fullUrl);
-        return NextResponse.redirect(new URL('/login', request.url));
-    }
-    
-    // Si hay query params de auth, usar esos
-    const effectiveRole = queryRole || userRole;
-    const effectiveEmail = queryEmail || userEmail;
-    
-    // 🚀 FORCE DASHBOARD: Si es acubas, forzar admin
-    if (effectiveEmail === 'acubas@sinfimac.pe') {
-        console.log('[Middleware] ⭐ FORCE ADMIN para acubas!');
-    }
-    
-    // DEV MODE: Permitir acceso ohne autenticación
-    if (isDevMode && (pathname.startsWith('/dashboard'))) {
-        console.log('[Middleware] DEV MODE - Allowing access without auth');
-        return NextResponse.next();
-    }
+    console.log('[Middleware] Path:', pathname, '| Role:', userRole);
     
     // Rutas públicas - permitir todo
     if (pathname === '/login' || 
@@ -58,48 +17,32 @@ export function middleware(request: NextRequest) {
         return NextResponse.next();
     }
     
-    // Auth callback - permitir
-    if (pathname.includes('callback') || pathname.includes('azure')) {
+    // callback de auth - permitir
+    if (pathname.includes('callback')) {
         return NextResponse.next();
     }
     
-    // Dashboard base
+    // Dashboard base - redirigir según rol
     if (pathname === '/dashboard') {
-        if (effectiveRole && effectiveRole !== 'sin_acceso') {
-            const destino = effectiveRole === 'admin' ? '/dashboard/admin' : '/dashboard/gestor';
-            console.log('[Middleware] 📍 Redirect a:', destino);
-            return NextResponse.redirect(new URL(destino, request.url));
-        }
-        return NextResponse.next();
-    }
-    
-    // Panel Admin - solo admin tiene acceso completo
-    if (pathname.startsWith('/dashboard/admin')) {
-        if (effectiveRole === 'admin') {
-            return NextResponse.next();
-        }
-        // Admin puede acceder pero gestores no
-        if (effectiveRole === 'gestora' || effectiveRole === 'espectador') {
+        if (userRole === 'admin') {
+            return NextResponse.redirect(new URL('/dashboard/admin', request.url));
+        } else if (userRole === 'gestora' || userRole === 'espectador') {
             return NextResponse.redirect(new URL('/dashboard/gestor', request.url));
         }
         return NextResponse.redirect(new URL('/login', request.url));
     }
     
-    // Panel Gestor - gestores tienen acceso limitado
+    // Panel Admin - solo admin
+    if (pathname.startsWith('/dashboard/admin')) {
+        if (userRole === 'admin') {
+            return NextResponse.next();
+        }
+        return NextResponse.redirect(new URL('/login', request.url));
+    }
+    
+    // Panel Gestor - gestores
     if (pathname.startsWith('/dashboard/gestor')) {
-        // Gestores y espectadores pueden acceder
-        if (effectiveRole === 'admin' || effectiveRole === 'gestora' || effectiveRole === 'espectador') {
-            // RESTRINGIR rutas específicas del admin para gestores
-            if (effectiveRole !== 'admin') {
-                // Rutas que SOLO admin puede acceder desde el panel gestor
-                const adminOnlyRoutesGestor = ['/clients', '/routing', '/usuarios', '/asistencia', '/closing'];
-                for (const route of adminOnlyRoutesGestor) {
-                    if (pathname.includes(route)) {
-                        console.log('[Middleware] Gestor blocked from:', pathname);
-                        return NextResponse.redirect(new URL('/dashboard/gestor', request.url));
-                    }
-                }
-            }
+        if (userRole === 'gestora' || userRole === 'espectador' || userRole === 'admin') {
             return NextResponse.next();
         }
         return NextResponse.redirect(new URL('/login', request.url));
@@ -110,19 +53,12 @@ export function middleware(request: NextRequest) {
         return NextResponse.next();
     }
     
-    // Dashboard paths
-    if (pathname.startsWith('/dashboard')) {
-        return NextResponse.next();
-    }
-    
     return NextResponse.next();
 }
 
 export const config = {
     matcher: [
-        // DESACTIVADO TEMPORALMENTE PARA DEBUG
-        // '/dashboard/:path*',
-        // '/dashboard',
-        // '/auth/:path*'
+        '/dashboard/:path*',
+        '/dashboard',
     ]
 };

@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
         
         console.log('[CB] 🎯 Rol final:', userRole);
         
-        // 6. Determinar destino - Pasar datos como query params (cookies no persisten en redirect)
+        // Determinar destino simple
         let destino = '/dashboard/sin-acceso';
         if (userRole === 'admin') {
             destino = '/dashboard/admin';
@@ -173,23 +173,18 @@ export async function GET(request: NextRequest) {
             destino = '/dashboard/gestor';
         }
         
-        // Agregar datos como query params
+        // Redirección simple SIN query params
         const destUrl = new URL(destino, APP_URL);
-        destUrl.searchParams.set('role', userRole);
-        destUrl.searchParams.set('email', userEmail);
-        destUrl.searchParams.set('auth', 'azure');
         
         console.log('[CB] 🚀 Destino:', destUrl.toString());
         
         const respuesta = NextResponse.redirect(destUrl);
         
-        // Cookie con dominio sin punto
+        // Cookie simple SIN dominio específico - Next.js gestiona automáticamente
         respuesta.cookies.set('auth_status', 'azure_logged_in', {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: true,
-            domain: 'corpflow.sinfimac.pe',
             maxAge: 86400
         });
         
@@ -197,8 +192,6 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: true,
-            domain: 'corpflow.sinfimac.pe',
             maxAge: 86400
         });
         
@@ -206,8 +199,6 @@ export async function GET(request: NextRequest) {
             path: '/',
             httpOnly: false,
             sameSite: 'lax',
-            secure: true,
-            domain: 'corpflow.sinfimac.pe',
             maxAge: 86400
         });
         
