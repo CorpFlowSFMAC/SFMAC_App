@@ -213,8 +213,8 @@ export default function TechniciansPage() {
                     <Users size={16} />
                     {filteredTechnicians.length} técnico{filteredTechnicians.length !== 1 ? 's' : ''}
                     {pendingOps.length > 0 && (
-                        <span style={{ marginLeft: '0.5rem', color: '#F59E0B', fontWeight: 600 }}>
-                            🔄 {pendingOps.length} pendiente{pendingOps.length !== 1 ? 's' : ''}
+                        <span style={{ marginLeft: '0.5rem', color: '#F59E0B', fontWeight: 600, fontSize: '0.85rem' }}>
+                            🔄 {pendingOps.length} sincronizando
                         </span>
                     )}
                 </div>
