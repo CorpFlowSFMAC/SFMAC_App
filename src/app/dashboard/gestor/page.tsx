@@ -148,24 +148,24 @@ function RelativeBar({ value, benchmark, label, color }: { value: number; benchm
 // MAIN DASHBOARD
 // ════════════════════════════════════════════════
 export default function GestorDashboard() {
-    const { tickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets } = useAppData();
+    const { tickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets, technicians } = useAppData();
     const [showWizard, setShowWizard] = useState(false);
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
-    const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "reportes">("dashboard");
+    const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "technicians" | "reportes">("dashboard");
 
     // Leer parámetro de vista desde URL
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const view = params.get('view');
-            if (view === 'tickets' || view === 'reportes') {
+            if (view === 'tickets' || view === 'reportes' || view === 'technicians') {
                 setActiveView(view);
             }
         }
     }, []);
 
     // Cambiar vista según parámetro
-    const switchView = (view: "dashboard" | "tickets" | "reportes") => {
+    const switchView = (view: "dashboard" | "tickets" | "technicians" | "reportes") => {
         setActiveView(view);
         if (typeof window !== 'undefined') {
             const url = new URL(window.location.href);
@@ -611,6 +611,15 @@ export default function GestorDashboard() {
                         }}>
                             <Activity size={13} style={{ marginRight: "0.3rem", verticalAlign: "middle" }} />
                             Tickets ({filteredTickets.length})
+                        </button>
+                        <button onClick={() => setActiveView("technicians")} style={{
+                            padding: "0.45rem 1rem", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700,
+                            background: activeView === "technicians" ? "rgba(255,255,255,0.9)" : "transparent",
+                            color: activeView === "technicians" ? "#4338CA" : "rgba(255,255,255,0.7)",
+                            transition: "all 0.2s"
+                        }}>
+                            <Users size={13} style={{ marginRight: "0.3rem", verticalAlign: "middle" }} />
+                            Técnicos ({technicians?.length || 0})
                         </button>
                         <button onClick={() => setActiveView("reportes")} style={{
                             padding: "0.45rem 1rem", borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "0.82rem", fontWeight: 700,
@@ -1273,6 +1282,57 @@ export default function GestorDashboard() {
             })}
 
             {/* REPORTES VIEW */}
+            {activeView === "technicians" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    {loading ? (
+                        <div style={{ textAlign: "center", padding: "4rem", color: "#94A3B8" }}>
+                            <div style={{ width: 40, height: 40, border: "4px solid #f97316", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 1rem" }} />
+                            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>Cargando técnicos...</p>
+                        </div>
+                    ) : !technicians || technicians.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "4rem", color: "#94A3B8" }}>
+                            <Users size={40} style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
+                            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>No hay técnicos registrados</p>
+                        </div>
+                    ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+                            {technicians.map((tech: any) => (
+                                <div key={tech.id} style={{
+                                    background: "white", borderRadius: "12px", padding: "1rem",
+                                    border: "1px solid #E2E8F0",
+                                    display: "flex", alignItems: "center", gap: "0.75rem"
+                                }}>
+                                    <div style={{
+                                        width: 44, height: 44, borderRadius: "50%",
+                                        background: tech.estado === 'ACTIVO' ? "#10B981" : "#94A3B8",
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        color: "white", fontWeight: 700, fontSize: "1rem"
+                                    }}>
+                                        {(tech.nombre || tech.name || "T").charAt(0).toUpperCase()}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <p style={{ margin: 0, fontWeight: 600, fontSize: "0.95rem" }}>
+                                            {tech.nombre || tech.name || "Técnico sin nombre"}
+                                        </p>
+                                        <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#64748B" }}>
+                                            {tech.telefono || tech.phone || "Sin teléfono"} • {tech.estado || tech.status || "Sin estado"}
+                                        </p>
+                                    </div>
+                                    <div style={{
+                                        padding: "0.25rem 0.5rem", borderRadius: "6px",
+                                        background: tech.estado === 'ACTIVO' ? "#ECFDF5" : "#F1F5F9",
+                                        color: tech.estado === 'ACTIVO' ? "#059669" : "#64748B",
+                                        fontSize: "0.75rem", fontWeight: 600
+                                    }}>
+                                        {tech.estado || tech.status || "DESCONOCIDO"}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {activeView === "reportes" && (
                 <div style={{ padding: "1rem" }}>
                     <div style={{ textAlign: "center", padding: "3rem", background: "white", borderRadius: "12px", border: "1px solid #E2E8F0" }}>
@@ -1358,4 +1418,12 @@ function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
             <div style={{ fontSize: "0.71rem", color: "#94A3B8" }}>{sub}</div>
         </div>
     );
+<style>{`
+@keyframes spin { to { transform: rotate(360deg); } }
+`}</style>
 }
+
+<style>{`
+@keyframes spin { to { transform: rotate(360deg); } }
+`}</style>
+
