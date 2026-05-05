@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   // Variable for emergency domain hardcode - TEMPORARY ALL-HANDS URL ONLY
   // TODO: Remove this after domain conflict is resolved
   env: {
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'https://work-1-nmyrzygswczqzcbk.prod-runtime.all-hands.dev',
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'https://corpflow.sinfimac.pe',
   },
   
   // PROHIBIT old domain redirects in production
