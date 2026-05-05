@@ -107,9 +107,9 @@ export default function LoginPage() {
             const origin = 'https://corpflow.sinfimac.pe';
             const redirectUri = encodeURIComponent(`${origin}/api/auth/callback/azure-ad`);
             
-            // Azure AD config
-            const clientId = '0aea9f85-9f1a-4787-b0a0-2cdea8ed3e6b';
-            const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
+            // Azure AD config - usar variables de entorno
+            const clientId = process.env.NEXT_PUBLIC_AZURE_AD_CLIENT_ID || '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
+            const tenantId = process.env.NEXT_PUBLIC_AZURE_AD_TENANT_ID || '7b359926-1313-48e4-a459-1f7a9f5c63aa';
             
             // FORCE login every time - prompt: "login" required by Azure
             const azureAuthUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=openid%20profile%20email%20User.Read&response_mode=query&prompt=login`;

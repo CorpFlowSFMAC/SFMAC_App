@@ -50,15 +50,15 @@ export async function GET(request: NextRequest) {
     let userRole = 'sin_acceso';
     
     try {
-        // Azure AD config - usar el App Registration Provided
-        const clientId = '0aea9f85-9f1a-4787-b0a0-2cdea8ed3e6b';
+        // Azure AD config - usar variables de entorno
+        const clientId = process.env.AZURE_AD_CLIENT_ID || '';
+        const tenantId = process.env.AZURE_AD_TENANT_ID || '7b359926-1313-48e4-a459-1f7a9f5c63aa';
         const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
         
         if (!clientSecret) {
             console.error('[CB] ❌ AZURE_AD_CLIENT_SECRET no está configurado');
             return NextResponse.redirect(new URL('/login?error=azure_not_configured', request.url));
         }
-        const tenantId = '7b359926-1313-48e4-a459-1f7a9f5c63aa';
         const redirectUri = `${APP_URL}/api/auth/callback/azure-ad`;
         
         const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
