@@ -51,14 +51,10 @@ export async function GET(request: NextRequest) {
     
     try {
         // Azure AD config - usar variables de entorno
-        const clientId = process.env.AZURE_AD_CLIENT_ID || '';
+        const clientId = process.env.AZURE_AD_CLIENT_ID || '18a47ee7-7ecc-4978-9e78-06fd4ea0b343';
         const tenantId = process.env.AZURE_AD_TENANT_ID || '7b359926-1313-48e4-a459-1f7a9f5c63aa';
         const clientSecret = process.env.AZURE_AD_CLIENT_SECRET;
         
-        if (!clientSecret) {
-            console.error('[CB] ❌ AZURE_AD_CLIENT_SECRET no está configurado');
-            return NextResponse.redirect(new URL('/login?error=azure_not_configured', request.url));
-        }
         const redirectUri = `${APP_URL}/api/auth/callback/azure-ad`;
         
         const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
