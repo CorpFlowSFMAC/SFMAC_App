@@ -2,7 +2,7 @@
 
 import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package, Truck, ShieldAlert } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
-import { useState } from "react";
+import React, { useState, useEffect, useCallback, memo } from "react";
 import { supabase } from "@/lib/supabase";
 import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances } from "@/lib/calculations";
@@ -349,6 +349,62 @@ export function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () 
     );
 }
 
+// ── OPTIMIZATION: ROW VIRTUALIZATION & DEBOUNCE ──
+const QuotationRow = memo(({ p, idx, onChange }: any) => {
+    const [local, setLocal] = useState(p);
+
+    // Sincronizar si cambia desde afuera (ej. regenerar cotización)
+    useEffect(() => {
+        setLocal(p);
+    }, [p]);
+
+    const handleFieldChange = (field: string, value: string) => {
+        setLocal((prev: any) => {
+            const updated = { 
+                ...prev, 
+                [field]: (field === 'titulo' || field === 'descripcion' || field === 'unidad') ? value : parseFloat(value) || 0 
+            };
+            if (field === 'precio_unitario') updated.precio_total = updated.precio_unitario * (updated.cantidad || 1);
+            if (field === 'cantidad') updated.precio_total = (updated.precio_unitario || 0) * updated.cantidad;
+            return updated;
+        });
+    };
+
+    // Debounce: Fluir al estado principal después de 300ms de inactividad
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (JSON.stringify(local) !== JSON.stringify(p)) {
+                onChange(idx, local);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [local, idx, onChange, p]);
+
+    return (
+        <div style={{ 
+            display: 'grid', gridTemplateColumns: '32px 1fr 52px 46px 78px', gap: '8px', padding: '8px 10px', 
+            borderTop: '1px solid #F3F4F6', background: idx % 2 === 0 ? 'white' : '#FAFBFF', alignItems: 'start',
+            contentVisibility: 'auto', containIntrinsicSize: '60px' // <--- Component Virtualization
+        }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#7C3AED', paddingTop: '3px' }}>{local.item}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <input value={local.titulo} onChange={(e) => handleFieldChange('titulo', e.target.value)}
+                    style={{ width: '100%', border: '1px solid transparent', borderRadius: '4px', padding: '2px 5px', fontSize: '11px', fontWeight: 700, color: '#1F2937', background: 'transparent', outline: 'none', cursor: 'text' }}
+                    onFocus={(e) => { e.target.style.background = 'white'; e.target.style.borderColor = '#C4B5FD'; }}
+                    onBlur={(e) => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }}
+                />
+                <textarea value={local.descripcion} onChange={(e) => handleFieldChange('descripcion', e.target.value)} rows={2}
+                    style={{ width: '100%', border: '1px solid transparent', borderRadius: '4px', padding: '2px 5px', fontSize: '10px', color: '#6B7280', background: 'transparent', resize: 'none', fontFamily: 'inherit', outline: 'none', lineHeight: '1.4', cursor: 'text' }}
+                    onFocus={(e) => { e.target.style.background = 'white'; e.target.style.borderColor = '#C4B5FD'; }}
+                    onBlur={(e) => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }}
+                />
+            </div>
+            <input value={local.unidad} onChange={(e) => handleFieldChange('unidad', e.target.value)} style={{ width: '100%', border: '1px solid #E9D5FF', borderRadius: '4px', padding: '3px 4px', fontSize: '10px', textAlign: 'center', color: '#374151', outline: 'none' }} />
+            <input type="number" value={local.cantidad} onChange={(e) => handleFieldChange('cantidad', e.target.value)} style={{ width: '100%', border: '1px solid #E9D5FF', borderRadius: '4px', padding: '3px 4px', fontSize: '10px', textAlign: 'center', color: '#374151', outline: 'none' }} />
+            <input type="number" step="0.01" value={(local.precio_unitario || 0).toFixed(2)} onChange={(e) => handleFieldChange('precio_unitario', e.target.value)} style={{ width: '100%', border: '1px solid #E9D5FF', borderRadius: '4px', padding: '3px 6px', fontSize: '12px', fontWeight: 700, textAlign: 'right', color: '#1F2937', outline: 'none' }} />
+        </div>
+    );
+});
 
 export function QuoteAssistantBar({ ticket }: { ticket: any }) {
     // ── CONDICIÓN DE VISIBILIDAD ──
@@ -460,14 +516,13 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
         }
     };
 
-    const handlePartidaChange = (idx: number, field: string, value: string) => {
-        setEditedPartidas(prev => prev.map((p, i) => {
-            if (i !== idx) return p;
-            const updated = { ...p, [field]: (field === 'titulo' || field === 'descripcion' || field === 'unidad') ? value : parseFloat(value) || 0 };
-            if (field === 'precio_unitario') updated.precio_total = updated.precio_unitario * (updated.cantidad || 1);
-            return updated;
-        }));
-    };
+    const handlePartidaChange = useCallback((idx: number, updatedPartida: any) => {
+        setEditedPartidas(prev => {
+            const next = [...prev];
+            next[idx] = updatedPartida;
+            return next;
+        });
+    }, []);
 
     const totalEditado = editedPartidas.reduce((s, p) => s + (p.precio_total || 0), 0);
     const isFromAlgorithm = draft?.fuente === "algoritmo";
@@ -752,24 +807,7 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
                                 <span>#</span><span>Descripción</span><span style={{ textAlign: 'center' }}>Und</span><span style={{ textAlign: 'center' }}>Cant</span><span style={{ textAlign: 'right' }}>P. Venta</span>
                             </div>
                             {editedPartidas.map((p, idx) => (
-                                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 52px 46px 78px', gap: '8px', padding: '8px 10px', borderTop: '1px solid #F3F4F6', background: idx % 2 === 0 ? 'white' : '#FAFBFF', alignItems: 'start' }}>
-                                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#7C3AED', paddingTop: '3px' }}>{p.item}</span>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                        <input value={p.titulo} onChange={(e) => handlePartidaChange(idx, 'titulo', e.target.value)}
-                                            style={{ width: '100%', border: '1px solid transparent', borderRadius: '4px', padding: '2px 5px', fontSize: '11px', fontWeight: 700, color: '#1F2937', background: 'transparent', outline: 'none', cursor: 'text' }}
-                                            onFocus={(e) => { e.target.style.background = 'white'; e.target.style.borderColor = '#C4B5FD'; }}
-                                            onBlur={(e) => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }}
-                                        />
-                                        <textarea value={p.descripcion} onChange={(e) => handlePartidaChange(idx, 'descripcion', e.target.value)} rows={2}
-                                            style={{ width: '100%', border: '1px solid transparent', borderRadius: '4px', padding: '2px 5px', fontSize: '10px', color: '#6B7280', background: 'transparent', resize: 'none', fontFamily: 'inherit', outline: 'none', lineHeight: '1.4', cursor: 'text' }}
-                                            onFocus={(e) => { e.target.style.background = 'white'; e.target.style.borderColor = '#C4B5FD'; }}
-                                            onBlur={(e) => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'transparent'; }}
-                                        />
-                                    </div>
-                                    <input value={p.unidad} onChange={(e) => handlePartidaChange(idx, 'unidad', e.target.value)} style={{ width: '100%', border: '1px solid #E9D5FF', borderRadius: '4px', padding: '3px 4px', fontSize: '10px', textAlign: 'center', color: '#374151', outline: 'none' }} />
-                                    <input type="number" value={p.cantidad} onChange={(e) => handlePartidaChange(idx, 'cantidad', e.target.value)} style={{ width: '100%', border: '1px solid #E9D5FF', borderRadius: '4px', padding: '3px 4px', fontSize: '10px', textAlign: 'center', color: '#374151', outline: 'none' }} />
-                                    <input type="number" step="0.01" value={(p.precio_unitario || 0).toFixed(2)} onChange={(e) => handlePartidaChange(idx, 'precio_unitario', e.target.value)} style={{ width: '100%', border: '1px solid #E9D5FF', borderRadius: '4px', padding: '3px 6px', fontSize: '12px', fontWeight: 700, textAlign: 'right', color: '#1F2937', outline: 'none' }} />
-                                </div>
+                                <QuotationRow key={idx} p={p} idx={idx} onChange={handlePartidaChange} />
                             ))}
                             <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 52px 46px 78px', gap: '8px', padding: '10px 10px', background: '#4C1D95', borderTop: '2px solid #6D28D9' }}>
                                 <span /><div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><TrendingUp size={13} color="#C4B5FD" /><span style={{ fontSize: '12px', fontWeight: 800, color: '#C4B5FD' }}>TOTAL AL CLIENTE</span></div>
