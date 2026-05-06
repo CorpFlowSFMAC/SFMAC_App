@@ -165,7 +165,10 @@ export default function TicketsPage() {
 
     const isVisibleForMe = useCallback((t: any) => {
         // REGLA 0: Admin ve TODO (Prioridad absoluta)
-        if (isAdminState) return true;
+        if (isAdminState) {
+            console.log('[isVisibleForMe] Admin siempre ve todo, tickets base:', t?.id);
+            return true;
+        }
 
         // REGLA 1: Identidad requerida para filtros no-admin
         if (!myGestoraId) return false;
