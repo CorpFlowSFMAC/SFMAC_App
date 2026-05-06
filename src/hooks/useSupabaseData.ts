@@ -416,7 +416,9 @@ const normalizeTicket = (t: any) => {
     } : null;
 
     return {
-        ...t,
+        ...realMetadata, // Campos de metadatos primero
+        ...t,            // Columnas de backend ganan si hay solapamiento (Preservation)
+        
         // Mapeo de campos raíz prioritarios
         estadoId: normalizeStateId(t.status_id || t.estadoId || realMetadata.estadoId || 'nuevo'),
         descripcionProblema: t.description || t.descripcionProblema || realMetadata.descripcionProblema || '',
@@ -433,9 +435,9 @@ const normalizeTicket = (t: any) => {
         creadoPor: t.created_by || t.creadoPor || realMetadata.creadoPor,
         diagnostico: t.diagnosis || t.diagnostico || realMetadata.diagnostico,
 
-        // Conservar metadatos limpios
+        // Conservar metadatos limpios en su objeto original
         metadata: realMetadata,
-        ...realMetadata,
+        
         // Forzar objetos normalizados
         cliente,
         sede,
@@ -480,7 +482,7 @@ export function useTickets(statusId?: string, technicianId?: string, fullData: b
         } finally {
             setLoading(false);
         }
-    }, [statusId, technicianId]);
+    }, [statusId, technicianId, fullData]);
 
     useEffect(() => {
         fetchTickets();
