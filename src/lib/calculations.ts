@@ -90,7 +90,18 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     const pendingFeesArr = pendingModernPayments.filter(c => isFee(c.categoria));
 
-    const legacyPayments = (rawMetadata.historialPagosTécnico || rawMetadata.historialPagosTecnico || ticket.historialPagosTécnico || ticket.historialPagosTecnico || []);
+    const arrs = [
+        rawMetadata.historialPagosTécnico, 
+        rawMetadata.historialPagosTecnico, 
+        ticket.historialPagosTécnico, 
+        ticket.historialPagosTecnico
+    ];
+    let legacyPayments: any[] = [];
+    for (const arr of arrs) {
+        if (Array.isArray(arr) && arr.length > legacyPayments.length) {
+            legacyPayments = arr;
+        }
+    }
     
     // Filtrar pagos duplicados entre Legacy y Modern (por ID)
     const filteredLegacy = legacyPayments.filter((lp: any) => 

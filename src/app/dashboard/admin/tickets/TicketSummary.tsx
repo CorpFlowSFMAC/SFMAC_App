@@ -1385,7 +1385,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
     // Fuente Moderna: estados confirmados (incluyendo compuestos como "Autorizado Admin; Adelanto")
     const paidModernArr = (costos || []).filter(c => {
         const rawSt = (c.estado_pago || c.estado || '').toLowerCase().trim();
-        const parts = rawSt.split(/[;,]+/).map((s: string) => s.trim());
+        const parts = rawSt.split(/[;:,]+/).map((s: string) => s.trim());
         const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'autorizado admin', 'autorizado', 'aprobado'];
         return parts.some((part: string) => valid.some(v => part.includes(v)));
     });
@@ -1393,7 +1393,18 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
     // Fuente Legacy con Deduplicación (CORREGIDA)
     // Un pago legacy se suprime SOLO si hay un moderno que tenga igual monto Y misma categoría/tipo
     // Evitar suprimir "Adelanto" legacy solo porque existe un moderno con el mismo monto pero distinto tipo
-    const history = ticket.historialPagosTecnico || [];
+    const arrs = [
+        ticket.metadata?.historialPagosTécnico, 
+        ticket.metadata?.historialPagosTecnico, 
+        ticket.historialPagosTécnico, 
+        ticket.historialPagosTecnico
+    ];
+    let history: any[] = [];
+    for (const arr of arrs) {
+        if (Array.isArray(arr) && arr.length > history.length) {
+            history = arr;
+        }
+    }
     const legacyPaymentsFiltered = history.filter((h: any) => {
         const hMonto = round2(h.monto || 0);
         if (hMonto <= 0) return false;
