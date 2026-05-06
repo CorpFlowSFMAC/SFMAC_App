@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle, FileEdit, AlertTriangle } from "lucide-react";
@@ -789,6 +789,14 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
         if (onTicketClick) onTicketClick(ticket);
     };
 
+    // Resolver cliente y sede desde multiples fuentes de JOIN
+    const clienteNombre = ticket.cliente?.nombre || ticket.clients?.name || ticket.clients?.nombre || 'Sin cliente';
+    const sedeNombre = ticket.sede?.nombre || ticket.branch_offices?.name || ticket.branch_offices?.nombre || 'Sin sede';
+    const sedeDireccion = ticket.sede?.direccion || ticket.branch_offices?.address || ticket.branch_offices?.direccion || 'Direccion no especificada';
+    const clienteLogo = ticket.cliente?.logo || ticket.clients?.logo_url;
+    const clienteInitials = clienteNombre.substring(0, 2).toUpperCase();
+    const ticketCode = ticket.numeroTicketCliente || `TK-${ticket.id.slice(-6).toUpperCase()}`;
+
     return (
         <div
             className={styles.ticketCard}
@@ -796,77 +804,123 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
             ref={provided?.innerRef}
             {...(isDraggable ? provided?.draggableProps : {})}
             {...(isDraggable ? provided?.dragHandleProps : {})}
-            style={{ 
+            style={{
                 ...provided?.draggableProps.style,
                 '--status-accent': statusAccent
             } as any}
         >
-            {/* Indicador de Estado Lateral */}
             <div className={styles.statusIndicator} />
 
-            {/* Cabecera GEOMÉTRICA (El número es el Centro) */}
-            <div className={styles.ticketHeader}>
-                <span className={styles.ticketStatusLabel}>
+            {/* Cabecera SINFIMAC: codigo dominante con gradiente */}
+            <div className={styles.ticketHeader} style={{
+                background: `linear-gradient(135deg, #0F172A 0%, #1E293B 60%, ${statusAccent}22 100%)`,
+                borderBottom: `2px solid ${statusAccent}`,
+                padding: '1.2rem 1.5rem',
+                textAlign: 'left',
+                position: 'relative',
+                overflow: 'hidden'
+            }}>
+                <div style={{
+                    position: 'absolute', top: -20, right: -20,
+                    width: 80, height: 80,
+                    background: `radial-gradient(circle, ${statusAccent}30, transparent)`,
+                    borderRadius: '50%'
+                }} />
+                <span className={styles.ticketStatusLabel} style={{
+                    background: `${statusAccent}20`,
+                    color: statusAccent,
+                    border: `1px solid ${statusAccent}50`,
+                    marginBottom: '0.5rem',
+                    backdropFilter: 'blur(4px)'
+                }}>
                     {stateName}
                 </span>
-                <h2 className={styles.ticketIdLarge}>
-                    {ticket.numeroTicketCliente || `TK-${ticket.id.slice(-6).toUpperCase()}`}
+                <h2 style={{
+                    margin: '0.3rem 0 0 0',
+                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+                    fontSize: ticketCode.length > 15 ? '1.05rem' : '1.4rem',
+                    fontWeight: 900,
+                    letterSpacing: '-0.5px',
+                    lineHeight: 1.1,
+                    background: `linear-gradient(135deg, #FFFFFF 0%, ${statusAccent} 100%)`,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    wordBreak: 'break-all',
+                    position: 'relative',
+                    zIndex: 1
+                }}>
+                    {ticketCode}
                 </h2>
             </div>
 
-            <div className={styles.ticketBody} style={{ padding: '1.2rem 1.5rem' }}>
-                {/* Cliente / Sede Minimal */}
-                <div className={styles.clienteInfo} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.2rem' }}>
-                    <div className={styles.clienteLogo} style={{ width: '32px', height: '32px' }}>
-                        {ticket.cliente?.logo ? (
-                            <img src={ticket.cliente.logo} alt={ticket.cliente.nombre} className={styles.clienteImg} />
+            <div className={styles.ticketBody} style={{ padding: '1rem 1.2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.9rem' }}>
+                    <div style={{
+                        width: '36px', height: '36px', borderRadius: '10px',
+                        background: clienteLogo ? 'white' : `linear-gradient(135deg, ${statusAccent}30, ${statusAccent}15)`,
+                        border: `1px solid ${statusAccent}30`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0, overflow: 'hidden',
+                        boxShadow: `0 2px 8px ${statusAccent}20`
+                    }}>
+                        {clienteLogo ? (
+                            <img src={clienteLogo} alt={clienteNombre} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                         ) : (
-                            <div className={styles.clienteLogoFallback} style={{ background: '#F1F5F9', color: '#64748B', fontSize: '0.6rem' }}>
-                                {ticket.cliente?.nombre?.substring(0, 2).toUpperCase() || 'TK'}
-                            </div>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 900, color: statusAccent }}>
+                                {clienteInitials}
+                            </span>
                         )}
                     </div>
-                    <div className={styles.clienteText}>
-                        <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0F172A' }}>{ticket.cliente?.nombre || 'Sin cliente'}</h4>
-                        <p style={{ fontSize: '0.7rem', color: '#64748B' }}>{ticket.sede?.nombre || 'Sin sede'}</p>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {clienteNombre}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {`📍 ${sedeNombre}`}
+                        </div>
                     </div>
                 </div>
 
-                {/* Info de Servicio Cruda y Limpia */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                         <MapPin size={12} color="#94A3B8" />
-                         <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 500 }}>
-                            {ticket.sede?.direccion || 'Dirección no especificada'}
-                         </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {ServiceIcon && <ServiceIcon size={12} color={service?.color} />}
-                        <span style={{ fontSize: '0.75rem', color: service?.color, fontWeight: 700 }}>
-                            {service?.nombre?.toUpperCase()}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MapPin size={11} color="#94A3B8" style={{ flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {sedeDireccion}
                         </span>
                     </div>
+                    {service && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start',
+                            background: `${service?.color}15`, border: `1px solid ${service?.color}30`,
+                            borderRadius: '6px', padding: '2px 8px' }}>
+                            {ServiceIcon && <ServiceIcon size={11} color={service?.color} />}
+                            <span style={{ fontSize: '0.7rem', color: service?.color, fontWeight: 800 }}>
+                                {service?.nombre?.toUpperCase()}
+                            </span>
+                        </div>
+                    )}
                 </div>
-                
-                <p className={styles.descripcion} style={{ marginTop: '1rem', borderLeft: '2px solid #F1F5F9', paddingLeft: '10px', fontStyle: 'italic', color: '#64748B' }}>
-                    {ticket.descripcionProblema?.substring(0, 85)}
-                    {ticket.descripcionProblema?.length > 85 && '...'}
-                </p>
+
+                {ticket.descripcionProblema && (
+                    <p style={{ margin: '0.8rem 0 0 0', fontSize: '0.73rem', color: '#64748B',
+                        borderLeft: '2px solid #E2E8F0', paddingLeft: '8px', fontStyle: 'italic',
+                        lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>
+                        {ticket.descripcionProblema}
+                    </p>
+                )}
             </div>
 
-            {/* Footer Minimalista */}
             <div className={styles.ticketFooter}>
                 <div className={styles.slaMinimal}>
-                    <div 
-                        className={styles.slaIndicatorCircle} 
+                    <div
+                        className={styles.slaIndicatorCircle}
                         style={{ '--indicator-color': slaColors[slaStatus] } as any}
                     />
                     <span className={styles.slaValueMinimal}>
                         SLA: {timeRemaining}
                     </span>
                 </div>
-                
                 <div style={{ display: 'flex', gap: '8px' }}>
                     {ticket.metadata?.solicitudModificacion?.pendiente && (
                         <FileEdit size={14} color="#8B5CF6" />
@@ -879,6 +933,7 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
         </div>
     );
 }
+
 
 // Componente de fila para el historial de tickets cerrados
 function TicketRow({ ticket, onTicketClick }: any) {
