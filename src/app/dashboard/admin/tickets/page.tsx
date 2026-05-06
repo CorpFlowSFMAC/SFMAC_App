@@ -166,7 +166,7 @@ export default function TicketsPage() {
     const isVisibleForMe = useCallback((t: any) => {
         // REGLA 0: Admin ve TODO (Prioridad absoluta)
         if (isAdminState) {
-            console.log('[isVisibleForMe] Admin siempre ve todo, tickets base:', t?.id);
+            
             return true;
         }
 
@@ -631,7 +631,7 @@ export default function TicketsPage() {
                             <div>👤 isAdminState: {isAdminState ? '✅' : '❌'}</div>
                             <div>🔑 myGestoraId: {myGestoraId || 'null'}</div>
                             <div>⏳ loading: {loadingTickets ? 'si' : 'no'}</div>
-                            <div>🔢 primer ticket: {tickets?.[0]?.id?.slice(0,8) || 'ninguno'}</div>
+                            
                         </div>
                         <div className={styles.emptyIcon}>
                             <Search size={40} />
