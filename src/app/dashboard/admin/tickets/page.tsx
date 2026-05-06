@@ -90,6 +90,9 @@ export default function TicketsPage() {
     });
     const [isAdminState, setIsAdminState] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
+        // Detectar admin directamente del localStorage del login
+        const storedRole = (localStorage.getItem('userRole') || '').toLowerCase();
+        if (storedRole === 'admin') return true;
         return sessionStorage.getItem('tickets_is_admin') === '1';
     });
     const [gestoraResolved, setGestoraResolved] = useState<boolean>(() => {
@@ -116,6 +119,7 @@ export default function TicketsPage() {
             if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
                 resolvedAdmin = true;
                 setIsAdminState(true);
+                if (typeof window !== 'undefined') sessionStorage.setItem('tickets_is_admin', '1');
             }
 
             // REVISIÓN DE GESTORAS
