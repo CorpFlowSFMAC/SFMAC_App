@@ -444,7 +444,7 @@ export const ticketsAPI = {
         const { data, error } = await supabase
             .from('tickets')
             .select('*')
-            .order('creado_el', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(200);
 
         console.log('[ticketsAPI.getSummaryAll] Count:', data?.length || 0, 'Error:', error?.message);
