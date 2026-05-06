@@ -126,9 +126,12 @@ export default function TicketsPage() {
             }
 
             // REVISIÓN DE ROL EN PERFILES (Independiente de si es gestora o no)
-            const { data: p } = await supabase.from('perfiles').select('id, rol').ilike('email', userEmail).maybeSingle();
+            // Dos pasos: primero ID, luego rol
+            const { data: p } = await supabase.from('perfiles').select('id').ilike('email', userEmail).maybeSingle();
             if (p) {
-                const normalizedRole = (p.rol || '').toUpperCase();
+                // Segunda consulta solo para rol
+                const { data: perfilData } = await supabase.from('perfiles').select('rol').eq('id', p.id).maybeSingle();
+                const normalizedRole = (perfilData?.rol || localStorage.getItem('userRole') || '').toUpperCase();
                 if (normalizedRole === 'SUPERADMIN' || normalizedRole === 'ADMIN') {
                     resolvedAdmin = true;
                     setIsAdminState(true);

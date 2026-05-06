@@ -221,12 +221,13 @@ export default function GestorDashboard() {
                 setMyGestoraId(g.id);
                 setMyGestoraNombre(g.name || null);
             } else {
-                // Buscar en perfiles
-                const { data: p } = await supabase.from('perfiles').select('id, rol, nombre').ilike('email', email).maybeSingle();
+                // Buscar en perfiles (dos pasos para evitar error 400)
+                const { data: p } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
                 if (p) {
+                    const { data: perfilData } = await supabase.from('perfiles').select('rol,nombre').eq('id', p.id).maybeSingle();
                     if (p.id) setMyGestoraId(p.id);
-                    if (p.nombre) setMyGestoraNombre(p.nombre);
-                    const normalizedRole = p.rol?.toUpperCase();
+                    if (perfilData?.nombre) setMyGestoraNombre(perfilData.nombre);
+                    const normalizedRole = perfilData?.rol?.toUpperCase();
                     if (normalizedRole === 'ADMIN') setIsAdmin(true);
                 } else {
                     // Si es ADMIN pero no tiene gestora, usar null para ver todo
