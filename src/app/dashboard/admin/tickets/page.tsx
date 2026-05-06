@@ -613,6 +613,19 @@ export default function TicketsPage() {
                 })()}
                 {filteredTickets.length === 0 && !loadingTickets && (gestoraResolved || isAdminState || myGestoraId) ? (
                     <div className={styles.emptyState}>
+                        {/* 🔍 DEBUG FIX: Mostrar info de diagnóstico */}
+                        <div style={{ 
+                            position: 'fixed', bottom: 80, right: 20, zIndex: 9999,
+                            background: '#1e293b', color: '#fff', padding: '12px 16px', 
+                            borderRadius: 8, fontSize: '12px', fontFamily: 'monospace',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)' 
+                        }}>
+                            <div>📊 tickets: {tickets?.length || 0}</div>
+                            <div>📋 filteredTickets: {filteredTickets.length}</div>
+                            <div>👤 isAdminState: {isAdminState ? '✅' : '❌'}</div>
+                            <div>🔑 myGestoraId: {myGestoraId || 'null'}</div>
+                            <div>⏳ loading: {loadingTickets ? 'si' : 'no'}</div>
+                        </div>
                         <div className={styles.emptyIcon}>
                             <Search size={40} />
                         </div>
