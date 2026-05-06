@@ -1383,23 +1383,32 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
 export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: any[] }) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
-    // Fuente Moderna
+    // Fuente Moderna: estados confirmados (incluyendo compuestos como "Autorizado Admin; Adelanto")
     const paidModernArr = (costos || []).filter(c => {
-        const st = (c.estado_pago || c.estado || '').toLowerCase().trim();
+        const rawSt = (c.estado_pago || c.estado || '').toLowerCase().trim();
+        const parts = rawSt.split(/[;,]+/).map((s: string) => s.trim());
         const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'autorizado admin', 'autorizado', 'aprobado'];
-        return valid.some(v => st.includes(v));
+        return parts.some((part: string) => valid.some(v => part.includes(v)));
     });
     
-    // Fuente Legacy con Deduplicación
+    // Fuente Legacy con Deduplicación (CORREGIDA)
+    // Un pago legacy se suprime SOLO si hay un moderno que tenga igual monto Y misma categoría/tipo
+    // Evitar suprimir "Adelanto" legacy solo porque existe un moderno con el mismo monto pero distinto tipo
     const history = ticket.historialPagosTecnico || [];
     const legacyPaymentsFiltered = history.filter((h: any) => {
         const hMonto = round2(h.monto || 0);
         if (hMonto <= 0) return false;
+        const hTipo = (h.tipo || h.concepto || '').toLowerCase().replace('gasto: ', '');
         const isMirrorOfModern = paidModernArr.some((m: any) => {
             const mMonto = round2(m.monto || 0);
-            const hTipo = (h.tipo || '').toLowerCase();
-            const mCat = (m.categoria || '').toLowerCase();
-            return Math.abs(hMonto - mMonto) < 0.01 && (hTipo === mCat || hTipo === `gasto: ${mCat}`);
+            const mCat = (m.categoria || m.concepto || '').toLowerCase();
+            // Requiere coincidencia de monto Y de tipo/categoria para considerar duplicado
+            return Math.abs(hMonto - mMonto) < 0.01 && (
+                hTipo === mCat ||
+                hTipo === `gasto: ${mCat}` ||
+                mCat === `gasto: ${hTipo}` ||
+                (hTipo.includes('adelanto') && mCat.includes('adelanto'))
+            );
         });
         return !isMirrorOfModern;
     });
@@ -1666,7 +1675,7 @@ export function TicketSummary({ ticket, onProceed, onOpenMaterials, onOpenRescue
                 onOpenRescue={onOpenRescue}
                 costos={costos} 
             />
-            <PaymentHistoryBar ticket={ticket} />
+            <PaymentHistoryBar ticket={ticket} costos={costos} />
             <UnifiedEvidenceBar ticket={ticket} />
             <DocumentationSummaryBar ticket={ticket} />
 

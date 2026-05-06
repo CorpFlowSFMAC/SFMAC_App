@@ -47,13 +47,24 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const margenDB = toNum(ticket.margen_real || 0);
 
     // 3. CATEGORIZACIÓN Y ESTADOS (Expansión de estados válidos)
-    const feeKeywords = ['mano de obra', 'adelanto', 'rescate', 'bono', 'honorarios', 'pago', 'mo', 'comisión'];
+    // ── Familia FEES: Mano de obra, adelantos, rescates (UNIFICADOS) ──────────
+    const feeKeywords = [
+        'mano de obra', 'adelanto', 'pago_mo', 'pago mo',
+        'rescate', 'rescate adelanto', 'rescate m.o',
+        'bono', 'honorarios', 'pago', 'mo', 'comisión'
+    ];
     const operationalKeywords = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'gasto', 'compra'];
     
     const isConfirmed = (status: string | null | undefined) => {
-        const st = (status || '').toLowerCase().trim();
-        const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'auditado', 'ejecutado', 'autorizado admin', 'autorizado', 'aprobado', 'transferido', 'completado'];
-        return valid.some(v => st.includes(v));
+        const rawSt = (status || '').toLowerCase().trim();
+        // Soportar estados compuestos como "Autorizado Admin; Adelanto"
+        const parts = rawSt.split(/[;,]+/).map(s => s.trim());
+        const valid = [
+            'pagado', 'adelanto', 'abonado', 'confirmado', 'auditado',
+            'ejecutado', 'autorizado admin', 'autorizado', 'aprobado',
+            'transferido', 'completado'
+        ];
+        return parts.some(part => valid.some(v => part.includes(v)));
     };
 
     const confirmedModernPayments = safeCosts.filter(c => isConfirmed(c.estado_pago || c.estado));
