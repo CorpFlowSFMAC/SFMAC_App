@@ -440,14 +440,30 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // Usar versión ligera sin metadata para evitar payload masivo
-        // La metadata puede pesar >2MB por ticket (historial de pagos, etc)
+        // V3: Consulta directa a tabla tickets - sin funciones RPC light
+        // Traer todas las columnas con relaciones
         const { data, error } = await supabase
-            .rpc('get_tickets_summary_light')
+            .from('tickets')
+            .select(`
+                *,
+                cliente:clients!tickets_client_id_fkey(
+                    id, name, logo
+                ),
+                sucursal:branch_offices!tickets_id_sucursal_fkey(
+                    id, nombre, direccion
+                ),
+                tecnico_asignado:technicians!tickets_technician_id_fkey(
+                    id, name, phone
+                ),
+                gestora:gestoras!tickets_gestora_id_fkey(
+                    id, name
+                )
+            `)
+            .order('creado_el', { ascending: false })
             .limit(200);
 
         if (error) throw error;
-        return data;
+        return data || [];
     },
 
     async getForPayments() {

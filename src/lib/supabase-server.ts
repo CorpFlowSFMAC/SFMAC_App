@@ -125,28 +125,18 @@ export async function getTicketsSummary() {
         return [];
     }
     
-    // Intentar usar RPC primero (más eficiente)
-    try {
-        const { data, error } = await client.rpc('get_tickets_summary_light');
-        if (!error && data) {
-            return data;
-        }
-    } catch (e) {
-        console.log('[Supabase Server] RPC not available, using fallback');
-    }
-    
-    // Fallback: consulta directa
+    // V3: Consulta directa sin RPC
     const { data, error } = await client
         .from('tickets')
-        .select('id, status_id, estadoId, service_type, client_ticket_number, created_at, priority')
-        .order('created_at', { ascending: false })
-        .limit(50);
-    
+        .select('*, cliente:clients(id, name, logo), sucursal:branch_offices(id, nombre), tecnico_asignado:technicians(id, name), gestora:gestoras(id, name)')
+        .order('creado_el', { ascending: false })
+        .limit(100);
+
     if (error) {
-        console.error('[Supabase Server] Error fetching tickets summary:', error.message);
+        console.log('[Supabase Server] Error fetching tickets:', error.message);
         return [];
     }
-    
+
     return data || [];
 }
 
