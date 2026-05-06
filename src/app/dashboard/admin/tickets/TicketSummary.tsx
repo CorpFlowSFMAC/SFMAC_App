@@ -133,11 +133,11 @@ interface TechnicianSchedulingBarProps {
 }
 
 export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
-    const techStatus = ticket.tecnico || ticket.tecnicoAsignado;
-    if (!ticket.technicianId && !techStatus) return null;
+    const techStatus = ticket.tecnico || ticket.tecnicoAsignado || ticket.technicians;
+    if (!ticket.technicianId && !techStatus && !ticket.technician_id) return null;
 
-    const techName = techStatus?.nombre || "Técnico Asignado";
-    const techPhone = techStatus?.celular || techStatus?.telefono || "---";
+    const techName = techStatus?.nombre || techStatus?.name || "Técnico Asignado";
+    const techPhone = techStatus?.celular || techStatus?.telefono || techStatus?.phone || "---";
     const hasScheduling = !!ticket.fechaVisita;
     const scheduleDate = hasScheduling ? new Date(ticket.fechaVisita) : null;
     const scheduleLabel = ticket.programacionLabel || "Visita Programada";
@@ -1256,8 +1256,7 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
                                 <div key={p.id || idx} style={{ 
                                     display: 'flex', alignItems: 'center', gap: '6px', 
                                     background: 'rgba(255, 255, 255, 0.6)', padding: '2px 8px', borderRadius: '6px',
-                                    border: '1px solid rgba(226, 232, 240, 0.8)', boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                    backdropFilter: 'blur(4px)'
+                                    border: '1px solid rgba(226, 232, 240, 0.8)', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
                                 } as any}>
                                     <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#10B981' }} />
                                     <span style={{ fontSize: '10px', color: '#475569', fontWeight: 600 }}>{p.tipo || p.categoria}:</span>

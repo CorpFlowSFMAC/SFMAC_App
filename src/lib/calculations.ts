@@ -57,8 +57,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     
     const isConfirmed = (status: string | null | undefined) => {
         const rawSt = (status || '').toLowerCase().trim();
-        // Soportar estados compuestos como "Autorizado Admin; Adelanto"
-        const parts = rawSt.split(/[;,]+/).map(s => s.trim());
+        // Soportar estados compuestos como "Autorizado Admin; Adelanto" o "Autorizado Admin: Adelanto"
+        const parts = rawSt.split(/[;:,]+/).map(s => s.trim());
         const valid = [
             'pagado', 'adelanto', 'abonado', 'confirmado', 'auditado',
             'ejecutado', 'autorizado admin', 'autorizado', 'aprobado',
@@ -90,7 +90,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     const pendingFeesArr = pendingModernPayments.filter(c => isFee(c.categoria));
 
-    const legacyPayments = (rawMetadata.historialPagosTécnico || rawMetadata.historialPagosTecnico || []);
+    const legacyPayments = (rawMetadata.historialPagosTécnico || rawMetadata.historialPagosTecnico || ticket.historialPagosTécnico || ticket.historialPagosTecnico || []);
     
     // Filtrar pagos duplicados entre Legacy y Modern (por ID)
     const filteredLegacy = legacyPayments.filter((lp: any) => 
