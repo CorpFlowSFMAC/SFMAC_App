@@ -440,14 +440,14 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // V3: Consulta simple sin relaciones complejas (evita errores de FK)
-        // Las relaciones se resuelven en el cliente si es necesario
+        // V3: Consulta simple sin relaciones complejas
         const { data, error } = await supabase
             .from('tickets')
             .select('*')
             .order('creado_el', { ascending: false })
             .limit(200);
 
+        console.log('[ticketsAPI.getSummaryAll] Count:', data?.length || 0, 'Error:', error?.message);
         if (error) throw error;
         return data || [];
     },

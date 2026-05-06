@@ -192,6 +192,7 @@ export function useTickets() {
             try {
                 // Intentar método primario: RPC de Supabase
                 const data = await ticketsAPI.getSummaryAll();
+                console.log('[useTickets] Raw data count:', data?.length || 0);
                 return (data || []).map(normalizeTicket).filter(Boolean);
             } catch (primaryError: any) {
                 console.log('[useTickets] Primary method failed, trying server fallback:', primaryError.message);

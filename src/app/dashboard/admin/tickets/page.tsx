@@ -628,6 +628,7 @@ export default function TicketsPage() {
                             <div>👤 isAdminState: {isAdminState ? '✅' : '❌'}</div>
                             <div>🔑 myGestoraId: {myGestoraId || 'null'}</div>
                             <div>⏳ loading: {loadingTickets ? 'si' : 'no'}</div>
+                            <div>🔢 primer ticket: {tickets?.[0]?.id?.slice(0,8) || 'ninguno'}</div>
                         </div>
                         <div className={styles.emptyIcon}>
                             <Search size={40} />
