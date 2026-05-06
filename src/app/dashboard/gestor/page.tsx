@@ -11,6 +11,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
 import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
+import AdminTicketsPage from "@/app/dashboard/admin/tickets/page";
 import { useAppData } from "@/lib/AppDataContext";
 import { getServiceById, SERVICE_TYPES, SKILL_ICONS, SKILL_COLORS } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
@@ -378,17 +379,20 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     };
 
     // ── Date and Gestora filter ──
+    // 🔒 La gestora solo debe ver tickets asignados a ella (directamente o vía cascada
+    // sede/zona/cliente). Si no se ha resuelto su identidad aún, no mostramos nada
+    // hasta que esté lista — así evitamos fugas de tickets ajenos.
     const isVisibleForMe = useCallback((t: any) => {
         // REGLA 0: Admin ve TODO
         if (isAdmin) return true;
 
-        // REGLA 1: Identidad requerida - MOSTRAR TODO si no hay ID
-        if (!myGestoraId) return true;
+        // REGLA 1: Identidad requerida - sin ID, NO mostrar (evita fuga)
+        if (!myGestoraId) return false;
 
         // EXCLUSIVIDAD: Si el ticket tiene una GESTORA DIRECTA ya asignada
-        if (t.gestora_id || t.metadata?.gestora_id) {
-            const finalGestoraId = t.gestora_id || t.metadata?.gestora_id;
-            return finalGestoraId === myGestoraId;
+        const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
+        if (assignedGestoraId) {
+            return assignedGestoraId === myGestoraId;
         }
 
         // CASCADA (Solo si no hay gestora directa): ¿A quién le toca tomarlo?
@@ -399,12 +403,13 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
 
         // 3. Asignación por Cliente o Sede-Cliente (Cascada 2)
-        if (t.clients?.gestora_asignada_id === myGestoraId || 
+        if (t.clients?.gestora_asignada_id === myGestoraId ||
             t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
             return true;
         }
 
-        return true;
+        // Sin match → ticket ajeno, NO mostrar
+        return false;
     }, [myGestoraId, isAdmin]);
 
     const isInDateRange = useCallback((dateStr: string) => {
@@ -720,7 +725,8 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                 </div>
             </div>
 
-            {/* ── DATE/FILTER BAR ───────────────────── */}
+            {/* ── DATE/FILTER BAR ─ solo para dashboard view ─ */}
+            {activeView === "dashboard" && (
             <div style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
                 background: "white", borderRadius: "12px", padding: "0.65rem 1.25rem",
@@ -784,6 +790,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                     </div>
                 </div>
             </div>
+            )}
 
             {/* ════════════════════════════════════════
                 DASHBOARD VIEW
@@ -1181,88 +1188,13 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             )}
 
             {/* ════════════════════════════════════════
-                TICKETS LIST VIEW
+                TICKETS LIST VIEW — Reutiliza el mismo formato visual
+                que la bandeja del admin (cards en grid, kanban, search global,
+                triage/activos/cerrados). El filtrado por gestora se aplica dentro
+                del propio componente vía isVisibleForMe.
             ════════════════════════════════════════ */}
             {activeView === "tickets" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                    {filteredTickets.length === 0 ? (
-                        <div style={{ textAlign: "center", padding: "4rem", color: "#94A3B8" }}>
-                            <Sparkles size={40} style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
-                            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>Sin tickets activos que coincidan con los filtros</p>
-                        </div>
-                    ) : (
-                        filteredTickets.map((ticket: any) => {
-                            const sla = getSlaStatus(ticket.createdAt || ticket.created_at || now.toISOString());
-                            const slaColors = { ok: "#10B981", warning: "#F59E0B", critical: "#EF4444", expired: "#7F1D1D" };
-                            const slaBg = { ok: "#ECFDF5", warning: "#FFF7ED", critical: "#FFF1F2", expired: "#fff5f5" };
-                            const service = getServiceById(ticket.tipoServicio);
-                            const estado = TICKET_STATES.find(s => s.id === normalizeStateId(ticket.estadoId));
-                            const Icon = estado?.icon || Activity;
-
-                            return (
-                                <div
-                                    key={ticket.id}
-                                    onClick={() => { if (!openTicketIds.includes(ticket.id)) setOpenTicketIds([...openTicketIds, ticket.id]); }}
-                                    style={{
-                                        background: "white", borderRadius: "12px", padding: "0.9rem 1.25rem",
-                                        border: `1px solid ${sla !== "ok" ? slaColors[sla] + "40" : "#E2E8F0"}`,
-                                        display: "flex", alignItems: "center", gap: "1rem", cursor: "pointer",
-                                        boxShadow: sla === "expired" || sla === "critical" ? `0 0 0 2px ${slaColors[sla]}20` : "0 1px 4px rgba(0,0,0,0.04)",
-                                        transition: "all 0.2s"
-                                    }}
-                                >
-                                    {/* SLA indicator */}
-                                    {sla !== "ok" && (
-                                        <div style={{ width: "4px", height: "42px", borderRadius: "999px", background: slaColors[sla], flexShrink: 0 }} />
-                                    )}
-
-                                    <div style={{
-                                        width: "38px", height: "38px", borderRadius: "10px",
-                                        background: `${estado?.color || "#8B5CF6"}15`,
-                                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
-                                    }}>
-                                        <Icon size={17} color={estado?.color || "#8B5CF6"} />
-                                    </div>
-
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", flexWrap: "wrap" }}>
-                                            <span style={{ fontWeight: 800, fontSize: "0.88rem", color: "#1E293B" }}>
-                                                {ticket.cliente?.nombre || "Sin cliente"}
-                                            </span>
-                                            {ticket.numeroTicketCliente && (
-                                                <span style={{ fontSize: "0.73rem", color: "#94A3B8" }}>#{ticket.numeroTicketCliente}</span>
-                                            )}
-                                        </div>
-                                        <div style={{ fontSize: "0.76rem", color: "#64748B", marginTop: "2px" }}>
-                                            {ticket.sede?.nombre || ticket.branch_offices?.name || "—"} · {estado?.nombreCorto}
-                                        </div>
-                                    </div>
-
-                                    {service && (
-                                        <span style={{
-                                            fontSize: "0.72rem", fontWeight: 700, padding: "3px 10px",
-                                            borderRadius: "999px", background: `${service.color}15`, color: service.color,
-                                            border: `1px solid ${service.color}30`, whiteSpace: "nowrap", flexShrink: 0
-                                        }}>
-                                            {service.nombreCorto}
-                                        </span>
-                                    )}
-
-                                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: slaColors[sla] }}>
-                                            {sla === "expired" ? "⚠ VENCIDO" : sla === "critical" ? "🔴 CRÍTICO" : sla === "warning" ? "🟡 ALERTA" : "✅ OK"}
-                                        </div>
-                                        <div style={{ fontSize: "0.7rem", color: "#94A3B8" }}>
-                                            {formatHours(hoursAgo(ticket.createdAt || ticket.created_at || now.toISOString()))} ago
-                                        </div>
-                                    </div>
-
-                                    <ChevronRight size={16} color="#CBD5E1" />
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
+                <AdminTicketsPage />
             )}
 
             {/* Modals */}

@@ -30,3 +30,21 @@ retorna `true` cuando no hay myGestoraId.
 ## Backlog / Next
 - Considerar centralizar la lectura de identidad (cookies + localStorage + supabase.auth)
   en un único hook `useAuthIdentity()` para evitar la duplicación de lógica.
+
+## Iteración 2 (Ene 2026) — Aislamiento gestora + unificación de bandeja
+**Reportado:** "bandeja de gestores solo deben visualizar sus tickets asignados.
+restructura la bandeja del gestor con el mismo formato de presentación de ticket
+al igual que la bandeja del administrador"
+
+**Cambios:**
+- `src/app/dashboard/gestor/page.tsx`:
+  - `isVisibleForMe`: ahora retorna `false` cuando no hay match. Antes retornaba
+    `true` cuando no había `myGestoraId` o cuando la cascada no aplicaba — eso
+    permitía que una gestora viera tickets ajenos.
+  - La vista "Tickets" del dashboard ahora renderiza `<AdminTicketsPage />` en lugar
+    de la lista horizontal anterior. Resultado: misma presentación de cards,
+    kanban operativo, búsqueda global, triage/activos/cerrados.
+  - La barra de filtros de fecha/prioridad/servicio sólo se muestra en la vista
+    "Métricas" (dashboard), no en "Tickets".
+
+**Validación:** `tsc --noEmit` OK.
