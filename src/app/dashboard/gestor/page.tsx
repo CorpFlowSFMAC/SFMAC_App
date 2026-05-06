@@ -214,8 +214,11 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                 return;
             }
 
-            const userRole = (localStorage.getItem('userRole') || '').toUpperCase();
-            if (userRole === 'ADMIN') {
+            const userRole = (localStorage.getItem('userRole') || (() => {
+                const m = document.cookie.match(/userRole=([^;]+)/);
+                return m ? decodeURIComponent(m[1]) : '';
+            })()).toUpperCase();
+            if (userRole === 'ADMIN' || userRole === 'SUPERADMIN') {
                 setIsAdmin(true);
             }
 

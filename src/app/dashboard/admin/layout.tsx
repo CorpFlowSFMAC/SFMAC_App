@@ -49,19 +49,34 @@ export default function AdminLayout({
         let role = localStorage.getItem("userRole");
         let name = localStorage.getItem("userName");
         let avatar = localStorage.getItem("userAvatar");
+        let email = localStorage.getItem("userEmail");
         
-        // Sino está enlocalStorage, leer cookies
+        // Sino está enlocalStorage, leer cookies (Azure AD callback solo escribe cookies)
+        const cookies = document.cookie;
         if (!role) {
-            const cookies = document.cookie;
             const roleMatch = cookies.match(/userRole=([^;]+)/);
-            role = roleMatch ? roleMatch[1] : null;
-            
+            role = roleMatch ? decodeURIComponent(roleMatch[1]) : null;
+        }
+        if (!name) {
             const nameMatch = cookies.match(/userName=([^;]+)/);
             if (nameMatch) name = decodeURIComponent(nameMatch[1]);
-            
+        }
+        if (!avatar) {
             const avatarMatch = cookies.match(/userAvatar=([^;]+)/);
             if (avatarMatch) avatar = decodeURIComponent(avatarMatch[1]);
         }
+        if (!email) {
+            const emailMatch = cookies.match(/userEmail=([^;]+)/);
+            if (emailMatch) email = decodeURIComponent(emailMatch[1]);
+        }
+
+        // 🔧 BUGFIX: Sincronizar cookies → localStorage para que todos los componentes hijos
+        // (e.g. admin/tickets/page.tsx) que leen localStorage funcionen correctamente.
+        // Sin esto, la bandeja del admin queda vacía porque isAdminState=false y myGestoraId=null.
+        if (role) localStorage.setItem("userRole", role);
+        if (name) localStorage.setItem("userName", name);
+        if (avatar) localStorage.setItem("userAvatar", avatar);
+        if (email) localStorage.setItem("userEmail", email);
         
         setUserRole(role);
         setRealUserName(name);

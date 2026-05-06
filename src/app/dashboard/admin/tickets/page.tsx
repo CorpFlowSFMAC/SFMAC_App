@@ -90,9 +90,15 @@ export default function TicketsPage() {
     });
     const [isAdminState, setIsAdminState] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
-        // Detectar admin directamente del localStorage del login
-        const storedRole = (localStorage.getItem('userRole') || '').toLowerCase();
-        if (storedRole === 'admin') return true;
+        // Detectar admin del localStorage; fallback a cookie (Azure AD callback solo
+        // escribe cookies — sin este fallback el admin queda con isAdminState=false
+        // y la bandeja sale vacía).
+        let storedRole = (localStorage.getItem('userRole') || '').toLowerCase();
+        if (!storedRole) {
+            const roleMatch = document.cookie.match(/userRole=([^;]+)/);
+            storedRole = roleMatch ? decodeURIComponent(roleMatch[1]).toLowerCase() : '';
+        }
+        if (storedRole === 'admin' || storedRole === 'superadmin') return true;
         return sessionStorage.getItem('tickets_is_admin') === '1';
     });
     const [gestoraResolved, setGestoraResolved] = useState<boolean>(() => {
@@ -103,8 +109,17 @@ export default function TicketsPage() {
 
     const fetchGestora = useCallback(async () => {
         try {
+            // 🔧 Helper: leer una cookie por nombre (Azure AD callback escribe en cookies)
+            const readCookie = (name: string): string | null => {
+                if (typeof document === 'undefined') return null;
+                const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
+                return m ? decodeURIComponent(m[1]) : null;
+            };
+
             const { data: { user } } = await supabase.auth.getUser();
-            const rawEmail = user?.email || localStorage.getItem('userEmail');
+            const rawEmail = user?.email
+                || localStorage.getItem('userEmail')
+                || readCookie('userEmail');
             if (!rawEmail) {
                 setGestoraResolved(true);
                 if (typeof window !== 'undefined') sessionStorage.setItem('tickets_gestora_resolved', '1');
@@ -112,7 +127,8 @@ export default function TicketsPage() {
             }
 
             const userEmail = rawEmail.toLowerCase();
-            const userRole = (localStorage.getItem('userRole') || '').toUpperCase();
+            const rawRole = localStorage.getItem('userRole') || readCookie('userRole') || '';
+            const userRole = rawRole.toUpperCase();
             let resolvedAdmin = false;
             let resolvedGestoraId: string | null = null;
 
@@ -135,7 +151,7 @@ export default function TicketsPage() {
             if (p) {
                 // Segunda consulta solo para rol
                 const { data: perfilData } = await supabase.from('perfiles').select('rol').eq('id', p.id).maybeSingle();
-                const normalizedRole = (perfilData?.rol || localStorage.getItem('userRole') || '').toUpperCase();
+                const normalizedRole = (perfilData?.rol || rawRole || '').toUpperCase();
                 if (normalizedRole === 'SUPERADMIN' || normalizedRole === 'ADMIN') {
                     resolvedAdmin = true;
                     setIsAdminState(true);
@@ -623,20 +639,6 @@ export default function TicketsPage() {
                 })()}
                 {filteredTickets.length === 0 && !loadingTickets && (gestoraResolved || isAdminState || myGestoraId) ? (
                     <div className={styles.emptyState}>
-                        {/* 🔍 DEBUG FIX: Mostrar info de diagnóstico */}
-                        <div style={{ 
-                            position: 'fixed', bottom: 80, right: 20, zIndex: 9999,
-                            background: '#1e293b', color: '#fff', padding: '12px 16px', 
-                            borderRadius: 8, fontSize: '12px', fontFamily: 'monospace',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)' 
-                        }}>
-                            <div>📊 tickets: {tickets?.length || 0}</div>
-                            <div>📋 filteredTickets: {filteredTickets.length}</div>
-                            <div>👤 isAdminState: {isAdminState ? '✅' : '❌'}</div>
-                            <div>🔑 myGestoraId: {myGestoraId || 'null'}</div>
-                            <div>⏳ loading: {loadingTickets ? 'si' : 'no'}</div>
-                            
-                        </div>
                         <div className={styles.emptyIcon}>
                             <Search size={40} />
                         </div>
