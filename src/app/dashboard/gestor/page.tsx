@@ -148,11 +148,15 @@ function RelativeBar({ value, benchmark, label, color }: { value: number; benchm
 // ════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ════════════════════════════════════════════════
-export default function GestorDashboard() {
+interface GestorPageProps {
+    tab?: 'dashboard' | 'tickets' | 'technicians' | 'reportes';
+}
+
+export default function GestorDashboard({ tab }: GestorPageProps) {
     const { tickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets, technicians } = useAppData();
     const [showWizard, setShowWizard] = useState(false);
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
-    const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "technicians" | "reportes">("dashboard");
+    const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "technicians" | "reportes">(() => { return (tab as any) || "dashboard"; });
 
     // Leer parámetro de vista desde URL
     useEffect(() => {
