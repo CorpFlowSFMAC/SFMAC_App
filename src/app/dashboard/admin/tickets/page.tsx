@@ -8,6 +8,7 @@ import styles from "./page.module.css";
 import { getServiceById } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId, getStateColor } from "@/lib/ticketStates";
 import { useAppData } from "@/lib/AppDataContext";
+import { ticketsCache } from "@/lib/tickets-cache";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { prefetchTickets } from "@/lib/useQueryHooks";
@@ -62,6 +63,21 @@ export default function TicketsPage() {
     const queryClient = useQueryClient();
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
+    
+    // 🎫 OFFLINE-FIRST: Cargar del cache primero para scroll instantáneo
+    useEffect(() => {
+        const cached = ticketsCache.get();
+        if (cached && cached.length > 0 && (!tickets || tickets.length === 0)) {
+            console.log('[TicketsPage] Loading from cache:', cached.length);
+        }
+    }, [tickets]);
+    
+    // Guardar en cache cuando llegan nuevos tickets
+    useEffect(() => {
+        if (tickets && tickets.length > 0) {
+            ticketsCache.set(tickets);
+        }
+    }, [tickets]);
     // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("active");
