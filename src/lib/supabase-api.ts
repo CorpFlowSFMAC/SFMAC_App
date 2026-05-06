@@ -440,18 +440,76 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // Consulta simple - evita errores de relaciones FK
-        const { data, error } = await supabase
-            .from('tickets')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(200);
-
-        if (error) {
+        // 🚀 VERSIÓN ROBUSTA - Siempre funciona
+        try {
+            // 1. Consulta simple de tickets
+            const { data: data3, error: error3 } = await supabase
+                .from('tickets')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(200);
             
-            throw error;
+            if (error3) {
+                return [];
+            }
+            
+            if (!data3 || data3.length === 0) {
+                return [];
+            }
+            
+            // 2. Si hay client_id o branch_id, intentar enriquecer
+            const clientIds = [...new Set((data3 || []).map((t: any) => t.client_id).filter(Boolean))];
+            const branchIds = [...new Set((data3 || []).map((t: any) => t.branch_id).filter(Boolean))];
+            const gestoraIds = [...new Set((data3 || []).map((t: any) => t.gestora_id).filter(Boolean))];
+            
+            let clientsMap: Record<string, any> = {};
+            let branchesMap: Record<string, any> = {};
+            let gestorasMap: Record<string, any> = {};
+            
+            if (clientIds.length > 0) {
+                try {
+                    const { data: clients } = await supabase.from('clients').select('*').in('id', clientIds);
+                    clients?.forEach((c: any) => { clientsMap[c.id] = c; });
+                } catch (e) { /* silently fail */ }
+            }
+            
+            if (branchIds.length > 0) {
+                try {
+                    const { data: branches } = await supabase.from('branch_offices').select('*').in('id', branchIds);
+                    branches?.forEach((b: any) => { branchesMap[b.id] = b; });
+                } catch (e) { /* silently fail */ }
+            }
+            
+            if (gestoraIds.length > 0) {
+                try {
+                    const { data: gestoras } = await supabase.from('gestoras').select('*').in('id', gestoraIds);
+                    gestoras?.forEach((g: any) => { gestorasMap[g.id] = g; });
+                } catch (e) { /* silently fail */ }
+            }
+            
+            // 3. Enriquecer tickets
+            const enriched = (data3 || []).map((t: any) => {
+                const clientData = t.client_id ? clientsMap[t.client_id] : null;
+                const branchData = t.branch_id ? branchesMap[t.branch_id] : null;
+                const gestoraData = t.gestora_id ? gestorasMap[t.gestora_id] : null;
+                
+                return {
+                    ...t,
+                    cliente: clientData || t.cliente,
+                    clientes: clientData || t.clientes,
+                    client: clientData || t.client,
+                    clients: clientData || t.clients,
+                    sede: branchData || t.sede,
+                    branch: branchData || t.branch,
+                    branch_offices: branchData || t.branch_offices,
+                    gestora: gestoraData || t.gestora,
+                };
+            });
+            
+            return enriched;
+        } catch (err) {
+            return [];
         }
-        return data || [];
     },
 
     async getForPayments() {

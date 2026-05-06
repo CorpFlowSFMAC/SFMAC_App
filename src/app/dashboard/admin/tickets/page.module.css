@@ -474,19 +474,29 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: #F8FAFC;
+    background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%);
     border-bottom: 1px solid #E2E8F0;
     text-align: center;
 }
 
 .ticketIdLarge {
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     font-weight: 900;
-    color: #0F172A;
-    letter-spacing: -1.5px;
+    color: #FFFFFF;
+    letter-spacing: -0.5px;
     margin: 0;
     line-height: 1;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3), 0 2px 4px -1px rgba(99, 102, 241, 0.15);
+    text-shadow: 0 0 0 rgba(255,255,255,0.5);
+    border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
 .ticketStatusLabel {
