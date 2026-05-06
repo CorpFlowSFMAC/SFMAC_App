@@ -1383,10 +1383,10 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
 export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: any[] }) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
-    // Fuente Moderna
+    // Fuente Moderna - INCLUYE todos los estados de pago confirmado/transferido
     const paidModernArr = (costos || []).filter(c => {
         const st = (c.estado_pago || c.estado || '').toLowerCase().trim();
-        const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'autorizado admin', 'autorizado', 'aprobado'];
+        const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'auditado', 'ejecutado', 'autorizado admin', 'autorizado', 'aprobado', 'transferido', 'completado'];
         return valid.some(v => st.includes(v));
     });
     

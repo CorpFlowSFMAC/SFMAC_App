@@ -47,7 +47,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const margenDB = toNum(ticket.margen_real || 0);
 
     // 3. CATEGORIZACIÓN Y ESTADOS (Expansión de estados válidos)
-    const feeKeywords = ['mano de obra', 'adelanto', 'rescate', 'bono', 'honorarios', 'pago', 'mo', 'comisión'];
+    // INCLUYE: Adelanto, Rescate Financiero = Adelanto de MO para efectos de cálculo
+    const feeKeywords = ['mano de obra', 'adelanto', 'rescate', 'bono', 'honorarios', 'pago', 'mo', 'comisión', 'rescate financiero'];
     const operationalKeywords = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'gasto', 'compra'];
     
     const isConfirmed = (status: string | null | undefined) => {
