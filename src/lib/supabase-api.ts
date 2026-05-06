@@ -440,25 +440,11 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // V3: Consulta directa a tabla tickets - sin funciones RPC light
-        // Traer todas las columnas con relaciones
+        // V3: Consulta simple sin relaciones complejas (evita errores de FK)
+        // Las relaciones se resuelven en el cliente si es necesario
         const { data, error } = await supabase
             .from('tickets')
-            .select(`
-                *,
-                cliente:clients!tickets_client_id_fkey(
-                    id, name, logo
-                ),
-                sucursal:branch_offices!tickets_id_sucursal_fkey(
-                    id, nombre, direccion
-                ),
-                tecnico_asignado:technicians!tickets_technician_id_fkey(
-                    id, name, phone
-                ),
-                gestora:gestoras!tickets_gestora_id_fkey(
-                    id, name
-                )
-            `)
+            .select('*')
             .order('creado_el', { ascending: false })
             .limit(200);
 

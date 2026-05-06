@@ -125,10 +125,10 @@ export async function getTicketsSummary() {
         return [];
     }
     
-    // V3: Consulta directa sin RPC
+    // Consulta simple sin relaciones complejas
     const { data, error } = await client
         .from('tickets')
-        .select('*, cliente:clients(id, name, logo), sucursal:branch_offices(id, nombre), tecnico_asignado:technicians(id, name), gestora:gestoras(id, name)')
+        .select('*')
         .order('creado_el', { ascending: false })
         .limit(100);
 
