@@ -455,11 +455,43 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
-        // Usar función completa para traer TODOS los datos (sin sufijos)
-        const { data, error } = await supabase
-            .rpc('get_payment_tickets_ultra_light');
-        if (error) throw error;
-        return data;
+        // 1) Intento primario: RPC server-side (más rápido, costos pre-empacados)
+        try {
+            const { data, error } = await supabase
+                .rpc('get_payment_tickets_ultra_light');
+            if (error) throw error;
+            if (data && Array.isArray(data) && data.length >= 0) return data;
+        } catch (rpcErr: any) {
+            console.warn('[getForPayments] RPC no disponible, usando fallback directo:', rpcErr?.message || rpcErr);
+        }
+
+        // 2) Fallback: consulta directa a la tabla tickets con joins.
+        // Devuelve la misma forma que la RPC para que el resto de la UI no necesite cambios.
+        // Trae también los ticket_costs relacionados (compras y MO) en un sólo round-trip
+        // a través de la relación foránea `ticket_costs(*)`.
+        const { data: ticketsData, error: tErr } = await supabase
+            .from('tickets')
+            .select(`
+                id, ticket_number, status_id, service_type, description,
+                client_ticket_number, created_at, labor_cost, materials_cost, visit_cost,
+                total_quoted_amount, client_id, branch_id, technician_id, gestora_id,
+                diagnosis, priority, sede_reportada_cliente, metadata,
+                clients(id, name, ruc),
+                branch_offices(id, name),
+                technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
+                gestoras(id, name),
+                costos:ticket_costs(*)
+            `)
+            .not('status_id', 'in', '(borrador,rechazado,cancelado)')
+            .order('created_at', { ascending: false })
+            .limit(150);
+
+        if (tErr) throw tErr;
+        // Asegurar que `costos` sea siempre un arreglo (Supabase devuelve [] si no hay)
+        return (ticketsData || []).map((t: any) => ({
+            ...t,
+            costos: Array.isArray(t.costos) ? t.costos : [],
+        }));
     },
 
     async getById(id: string) {

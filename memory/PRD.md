@@ -48,3 +48,28 @@ al igual que la bandeja del administrador"
     "Métricas" (dashboard), no en "Tickets".
 
 **Validación:** `tsc --noEmit` OK.
+
+## Iteración 3 (Ene 2026) — Restauración módulo Tesorería
+**Reportado:** "restaura el modulo de tesoreria, todas las peticiones de pagos
+de Mano de obra y compras deben registrarce en este modulo para que el
+administrador realice los pagos."
+
+**Causa:** La RPC `get_payment_tickets_ultra_light` no estaba desplegada en la
+base Supabase del entorno → toda llamada `getForPayments()` fallaba con
+"Could not find the function ... in the schema cache".
+
+**Fix:** `src/lib/supabase-api.ts → getForPayments()` ahora intenta primero el
+RPC (más rápido si está desplegado) y al fallar cae a una consulta directa
+sobre `tickets` con joins a `clients`, `branch_offices`, `technicians`,
+`gestoras` y `ticket_costs(*)` — devuelve el mismo shape, así la UI no necesita
+cambios. Filtra estados `borrador/rechazado/cancelado` server-side.
+
+**Cobertura confirmada en `/dashboard/admin/payments`:**
+- Adelantos de MO y adelantos extra (metadata.solicitudAdelanto*)
+- Pagos de visita/pasajes (metadata.solicitudPagoVisita)
+- Liquidaciones finales (metadata.solicitudLiquidacion)
+- Solicitudes de depósito de gestora (metadata.solicitudesDeposito)
+- Compras y MO extra (tabla `ticket_costs` con estado_pago='pendiente')
+- Excedentes que requieren aprobación admin (`REQUIERE_APROBACION_ADMIN`)
+
+**Validación:** `tsc --noEmit` OK.
