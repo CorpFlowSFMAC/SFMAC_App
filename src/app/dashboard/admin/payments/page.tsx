@@ -504,12 +504,18 @@ export default function PaymentsPage() {
                    t.includes('liquidación') || t.includes('saldo pendiente');
         };
 
+        // 🔍 DEPURADOR: Guardar detalle de cada pago
+        const debugPagos: any[] = [];
+        
         allTickets.forEach(ticket => {
+            const ticketNum = ticket.numeroTicketCliente || `#${ticket.id?.slice(-6)}`;
+            
             // 1️⃣ Incluir pagos legacy de historialPagosTecnico (solo si son para técnico)
             (ticket.historialPagosTecnico || []).forEach((p: any) => {
                 if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
                     const key = getMonthKey(p.fecha);
                     totals[key] = round2((totals[key] || 0) + round2(p.monto));
+                    debugPagos.push({ ticket: ticketNum, tipo: 'legacy', categoria: p.tipo, monto: p.monto, fecha: p.fecha, key });
                 }
             });
             // 2️⃣ Incluir pagos de ticket_costs (solo si son para técnico)
@@ -517,9 +523,22 @@ export default function PaymentsPage() {
                 if (c.monto && c.fecha_pago && isPagoParaTecnico(c.categoria)) {
                     const key = getMonthKey(c.fecha_pago);
                     totals[key] = round2((totals[key] || 0) + round2(c.monto));
+                    debugPagos.push({ ticket: ticketNum, tipo: 'cost', categoria: c.categoria, monto: c.monto, fecha: c.fecha_pago, key });
                 }
             });
         });
+        
+        // 🔍 Mostrar detalle en consola
+        const currentKey = getCurrentMonthKey();
+        const pagosDelMes = debugPagos.filter(p => p.key === currentKey);
+        console.log('🔍 DEPURADOR EGRESOS - Mes actual:', currentKey);
+        console.log('📋 Total de pagos encontrados:', pagosDelMes.length);
+        pagosDelMes.forEach((p, i) => {
+            console.log(`  ${i+1}. ${p.ticket} | ${p.tipo} | ${p.categoria} | S/ ${p.monto} | ${p.fecha}`);
+        });
+        const suma = pagosDelMes.reduce((s, p) => s + p.monto, 0);
+        console.log('💰 SUMA TOTAL:', suma);
+        
         setMonthlyTotals(totals);
     };
 
