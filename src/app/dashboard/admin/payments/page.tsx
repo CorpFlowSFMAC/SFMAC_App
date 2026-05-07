@@ -467,17 +467,19 @@ export default function PaymentsPage() {
         );
     }
 
-    // ★ FIX 2026-04-27: CORREGIR monthlyTotals - SOLO pagos al técnico (rescates/adelantos)
-    // Las compras (materiales/movilidad/logística) NO van al técnico, van a rentabilidad
     const calculateMonthlyTotalsFromGroups = (groups: PaymentTicketGroup[]) => {
         const totals: { [key: string]: number } = {};
+        const countedPaymentIds = new Set<string>();
         
         groups.forEach(group => {
             (group.historialDepositos || []).forEach((p: any) => {
-                // Sumamos TODO lo que no esté anulado (MO + Materiales + Compras)
-                if (p.monto && p.fecha && p.estado !== 'anulado') {
-                    const key = getMonthKey(p.fecha);
-                    totals[key] = round2((totals[key] || 0) + round2(p.monto));
+                const pId = p.id || `${group.realTicketId}_${p.monto}_${p.fecha}_${p.tipo}`;
+                if (!countedPaymentIds.has(pId)) {
+                    if (p.monto && p.fecha && p.estado !== 'anulado') {
+                        const key = getMonthKey(p.fecha);
+                        totals[key] = round2((totals[key] || 0) + round2(p.monto));
+                        countedPaymentIds.add(pId);
+                    }
                 }
             });
         });
@@ -487,25 +489,19 @@ export default function PaymentsPage() {
     const processTicketsToGroups = (allTickets: any[]) => {
         const allGroups: PaymentTicketGroup[] = [];
 
-        allTickets.forEach(ticket => {
+        allTickets.forEach(t => {
             try {
-                const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id.toString().slice(-6).toUpperCase()}`;
+                const ticketNum = t.client_ticket_number || `#${t.ticket_number}` || `#${t.id.toString().slice(-6).toUpperCase()}`;
 
-                const costoManoObra = round2(ticket.costoManoObra || 0);
-                const costoMateriales = round2(ticket.costoMateriales || 0);
-                const visitCost = round2(ticket.costoVisita || ticket.costoPasaje || ticket.solicitudPagoVisita?.monto || 0);
-
-                // ★ FIX: El total pactado (Costo Operativo) es lo acordado para el trabajo (MO + Mat).
-                // Si hay trabajo, el pactado es jobCostBase. Si solo es visita, el pactado es visitCost.
-                // Esto evita inflar el costo con la visita si el presupuesto de obra ya la contempla.
-                const jobCostBase = round2(costoManoObra + costoMateriales);
+                const jobCostBase = round2((t.labor_cost || 0) + (t.materials_cost || 0));
+                const visitCost = round2(t.visit_cost || 0);
                 const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
 
-                const pagosLegacy = ticket.historialPagosTecnico || [];
+                const meta = t.metadata || {};
+                const pagosLegacy = meta.historialPagosTecnico || meta.historialPagosTécnico || [];
                 
-                // ✅ UNIFICACIÓN: Incluir pagos de ticket_costs que no estén en legacy metadata
-                // Esto asegura que pagos realizados vía "Gastos/Compras" aparezcan en el historial de Tesorería.
-                const paidCostsArr = ticket.paidCosts || [];
+                // ✅ UNIFICACIÓN: Incluir pagos de ticket_costs
+                const paidCostsArr = (t.costos || []).filter((c: any) => c.estado_pago === 'pagado');
                 const costsAsHistory = paidCostsArr.map((c: any) => ({
                     id: c.id,
                     monto: c.monto,
@@ -520,9 +516,7 @@ export default function PaymentsPage() {
                 const uniqueHistory = [...pagosLegacy];
                 costsAsHistory.forEach((costPayment: any) => {
                     const alreadyPresent = uniqueHistory.some((p: any) => 
-                        // Deduplicación por ID (Si usamos el UUID del costo en la metadata)
                         p.id === costPayment.id || 
-                        // Deduplicación por Monto + Tipo + Fecha (Tolerancia de 1 hora para compensar desfases de servidor/cliente)
                         (Math.abs(p.monto - costPayment.monto) < 0.01 && 
                          (p.tipo || '').toLowerCase() === (costPayment.tipo || '').toLowerCase() &&
                          Math.abs(new Date(p.fecha).getTime() - new Date(costPayment.fecha).getTime()) < 3600000)
@@ -530,187 +524,118 @@ export default function PaymentsPage() {
                     if (!alreadyPresent) uniqueHistory.push(costPayment);
                 });
 
-                // ✅ FIX 2026-04-27: SEPARAR PAGOS PARA TÉCNICO vs COMPRAS
-                // SOLO los pagos de tipo "Rescate/Adelanto/Refuerzo/Liquidación Final" van al técnico
-                // Los pagos de "Materiales/Mano de Obra/Viáticos/Logística" son compras que afectan rentabilidad
                 const isPagoParaTecnico = (tipo: string): boolean => {
-                    const t = (tipo || '').toLowerCase();
-                    return t.includes('rescate') || t.includes('adelanto') || t.includes('refuerzo') || 
-                           t.includes('liquidación') || t.includes('saldo pendiente');
+                    const tp = (tipo || '').toLowerCase();
+                    return tp.includes('rescate') || tp.includes('adelanto') || tp.includes('refuerzo') || 
+                           tp.includes('liquidación') || tp.includes('saldo pendiente') || tp.includes('movilidad') || tp.includes('viático');
                 };
 
                 const pagosParaTecnico = uniqueHistory.filter(p => isPagoParaTecnico(p.tipo));
-                const pagosParaRentabilidad = uniqueHistory.filter(p => !isPagoParaTecnico(p.tipo));
-                
                 const totalPagadoParaTecnico = round2(pagosParaTecnico.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
-                const totalPagadoParaRentabilidad = round2(pagosParaRentabilidad.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
-                // ✅ FIX: Saldo del técnico = (MO + Visita) - pagos de Rescate/Adelanto/Liquidación
-                // NOTA: Los pagos de "compras" (materiales) van a rentabilidad y se saldan independientemente.
-                const costoManoObraPactado = costoManoObra; // Solo MO para el técnico
-                const montoBaseParaTecnico = costoManoObraPactado > 0 ? costoManoObraPactado : visitCost;
-                
-                // El saldo pendiente al técnico: Solo MO - pagos de rescate/adelanto
+                const montoBaseParaTecnico = (t.labor_cost || 0) > 0 ? round2(t.labor_cost || 0) : visitCost;
                 const saldoPendienteTecnico = round2(montoBaseParaTecnico - totalPagadoParaTecnico);
                 
-                const totalPagadoArray = totalPagadoParaTecnico + totalPagadoParaRentabilidad;
                 const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
                 const techData = {
-                    id: ticket.tecnico?.id,
-                    nombre: ticket.tecnico?.nombre || 'Sin asignar',
-                    banco: ticket.tecnico?.banco || '---',
-                    numeroCuenta: ticket.tecnico?.numeroCuenta || '---',
-                    cci: ticket.tecnico?.cci || '---',
-                    yape: ticket.tecnico?.yape,
-                    plin: ticket.tecnico?.plin
+                    id: t.technician_id,
+                    nombre: t.technicians?.name || 'Sin asignar',
+                    banco: t.technicians?.bank_name || '---',
+                    numeroCuenta: t.technicians?.account_number || '---',
+                    cci: t.technicians?.cci || '---',
+                    yape: t.technicians?.yape_number,
+                    plin: t.technicians?.plin_number
                 };
 
-                // 2026-04-10 13:20 - Treasury Fix: Solo mostrar solicitudes pendientes reales
                 const items: PaymentItem[] = [];
-                // Usar el saldo correcto basado en pagos de Mano de Obra al técnico
                 const saldoReal = saldoPendienteTecnico;
 
-                // ★ FIX 2026-04-27: Mostrar tickets si:
-                // 1. No están cerrados, O
-                // 2. Tienen costos pendientes de pago (de ticket_costs)
-                // 3. Tienen historial de pagos (mostrar para referencia)
-                const hasPendingCosts = ticket.pendingCosts && ticket.pendingCosts.length > 0;
+                const hasPendingCosts = (t.costos || []).some((c: any) => c.estado_pago === 'pendiente');
                 const hasHistory = allHistory.length > 0;
-                const shouldProcess = ticket.estadoId !== 'ticket_cerrado' || hasPendingCosts || hasHistory;
+                const shouldProcess = t.status_id !== 'cerrado' || hasPendingCosts || hasHistory;
                 
                 if (shouldProcess) {
-                    const jobCostBase = round2(costoManoObra + costoMateriales);
-
-                    // 1. Adelanto (Metadata Legacy)
-                    const hasAdelantoPaid = !!(ticket.adelantoPagado || pagosLegacy.some((p: any) => p.tipo === 'Adelanto'));
-                    const adelantoRef = ticket.solicitudAdelanto || pagosLegacy.find((p: any) => p.tipo === 'Adelanto');
+                    // 1. Adelantos pendientes en Metadata
+                    const hasAdelantoPaid = !!(meta.adelantoPagado || pagosLegacy.some((p: any) => p.tipo === 'Adelanto'));
+                    const adelantoRef = meta.solicitudAdelanto || pagosLegacy.find((p: any) => p.tipo === 'Adelanto');
                     if (!hasAdelantoPaid && adelantoRef) {
-                        const adelantoMonto = round2(adelantoRef?.monto || ticket.montoAdelanto || 0);
-                        if (adelantoMonto > 0.01) {
-                            items.push({
-                                id: `${ticket.id}_adelanto`,
-                                tipo: 'Adelanto',
-                                monto: adelantoMonto,
-                                estado: 'pendiente',
-                                fecha: adelantoRef?.fecha || ticket.fechaPagoAdelanto || ticket.created_at
-                            });
-                        }
-                    }
-
-                    // 2. Refuerzo (Extra)
-                    if (ticket.solicitudAdelantoExtra && !ticket.solicitudAdelantoExtra.pagado) {
-                        const refuerzoMonto = round2(ticket.solicitudAdelantoExtra.monto || 0);
-                        if (refuerzoMonto > 0.01) {
-                            items.push({
-                                id: `${ticket.id}_refuerzo`,
-                                tipo: 'Refuerzo',
-                                monto: refuerzoMonto,
-                                estado: 'pendiente',
-                                fecha: ticket.solicitudAdelantoExtra.fecha || new Date().toISOString()
-                            });
-                        }
-                    }
-
-                    // 3. Solicitudes de depósito de Gestora (Pendientes - Legacy Metadata)
-                    if (ticket.solicitudesDeposito && ticket.solicitudesDeposito.length > 0) {
-                        ticket.solicitudesDeposito.forEach((sol: any) => {
-                            if (sol.estado === 'pendiente') {
-                                items.push({
-                                    id: `${ticket.id}_solicitud_${sol.id}`,
-                                    tipo: sol.tipo || 'Solicitud Gestora (M)',
-                                    monto: sol.monto,
-                                    estado: 'pendiente',
-                                    fecha: sol.fecha,
-                                    concepto: sol.concepto,
-                                    solicitudId: sol.id,
-                                    isLegacy: true
-                                });
-                            }
+                        items.push({
+                            id: `${t.id}_adelanto`,
+                            tipo: 'Adelanto',
+                            monto: round2(adelantoRef.monto || 0),
+                            estado: 'pendiente',
+                            fecha: adelantoRef.fecha || t.created_at
                         });
                     }
 
-                    // 3b. NUEVO: Costos y Egresos (Tabla ticket_costs) — agrupados por especialista
-                    if (ticket.pendingCosts && ticket.pendingCosts.length > 0) {
-                        ticket.pendingCosts.forEach((c: any) => {
-                            const tech = c.technicians;
-                            const specialistName = tech
-                                ? (tech.name || `${tech.first_name || ''} ${tech.last_name || ''}`.trim())
-                                : undefined;
+                    // 2. Refuerzos pendientes
+                    if (meta.solicitudAdelantoExtra && !meta.solicitudAdelantoExtra.pagado) {
+                        items.push({
+                            id: `${t.id}_refuerzo`,
+                            tipo: 'Refuerzo',
+                            monto: round2(meta.solicitudAdelantoExtra.monto || 0),
+                            estado: 'pendiente',
+                            fecha: meta.solicitudAdelantoExtra.fecha || new Date().toISOString()
+                        });
+                    }
+
+                    // 3. Costos de Tabla Pendientes
+                    (t.costos || []).forEach((c: any) => {
+                        if (c.estado_pago === 'pendiente' || c.estado_pago === 'REQUIERE_APROBACION_ADMIN') {
+                            const isSpecialist = c.specialist_id && c.specialist_id !== t.technician_id;
+                            const specialistName = isSpecialist ? (c.technicians?.name || 'Especialista') : undefined;
+
                             items.push({
                                 id: c.id,
                                 tipo: `Gasto: ${c.categoria}`,
                                 monto: c.monto,
-                                estado: 'pendiente',
+                                estado: c.estado_pago === 'REQUIERE_APROBACION_ADMIN' ? 'requiere_aprobacion' : 'pendiente',
                                 fecha: c.created_at,
-                                concepto: specialistName ? `${c.concepto} · ${specialistName}` : c.concepto,
+                                concepto: c.concepto,
                                 isTableCost: true,
                                 costId: c.id,
-                                specialistName: (tech && tech.id !== ticket.tecnico?.id) ? specialistName : undefined,
-                                specialistBanco: tech?.bank_name,
-                                specialistCuenta: tech?.account_number,
-                                specialistCCI: tech?.cci,
-                                specialistYape: tech?.yape_number,
-                                specialistPlin: tech?.plin_number,
+                                specialistName,
+                                specialistBanco: c.technicians?.bank_name,
+                                specialistCuenta: c.technicians?.account_number,
+                                specialistCCI: c.technicians?.cci,
+                                specialistYape: c.technicians?.yape_number,
+                                specialistPlin: c.technicians?.plin_number,
                             });
-                        });
-                    }
+                        }
+                    });
 
-                    // 3c. NUEVO: Solicitudes de Excedente que requieren revisión administrativa
-                    if (ticket.exceedanceRequests && ticket.exceedanceRequests.length > 0) {
-                        ticket.exceedanceRequests.forEach((c: any) => {
-                            items.push({
-                                id: c.id,
-                                tipo: `Rescate (Excedente)`,
-                                monto: c.monto,
-                                estado: 'requiere_aprobacion',
-                                fecha: c.created_at,
-                                concepto: `AUTORIZACIÓN REQUERIDA: ${c.concepto}`,
-                                isTableCost: true,
-                                costId: c.id
-                            });
-                        });
-                    }
-
-                    // 4. Liquidación Final
-                    const hasFinalPaid = !!(ticket.fechaPagoFinal || pagosLegacy.some((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)'));
-                    const finalRef = ticket.solicitudLiquidacion || pagosLegacy.find((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
-                    
-                    if (!hasFinalPaid && (finalRef || ticket.estadoId === 'por_liquidar')) {
-                        const liqMonto = round2(finalRef?.monto ?? Math.max(0, saldoReal));
-                        
+                    // 4. Liquidación Final Pendiente
+                    const isPorLiquidar = t.status_id === 'por_liquidar' || t.status_id === 'esperando_pago_final';
+                    const hasFinalPaid = pagosLegacy.some((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
+                    if (isPorLiquidar && !hasFinalPaid) {
+                        const liqMonto = round2(meta.solicitudLiquidacion?.monto ?? Math.max(0, saldoReal));
                         if (liqMonto > 0.01) {
                             items.push({
-                                id: `${ticket.id}_final`,
-                                tipo: (finalRef?.tipo || 'Liquidación Final'),
+                                id: `${t.id}_final`,
+                                tipo: 'Liquidación Final',
                                 monto: liqMonto,
                                 estado: 'pendiente',
-                                fecha: finalRef?.fecha || ticket.fechaPagoFinal || new Date().toISOString(),
-                                concepto: (!finalRef) ? "Saldo detectado por el sistema" : undefined
+                                fecha: new Date().toISOString(),
+                                concepto: "Saldo de Mano de Obra"
                             });
                         }
                     }
 
-                    // 5. Movilidad / Visita
-                    // ★ FIX: Si hay costo de visita y no está pagado, mostrar siempre como pendiente,
-                    // incluso si la gestora no ha pulsado "Solicitar Pago" explícitamente.
-                    const hasVisitaPaid = !!(ticket.visitPaymentConfirmed || allHistory.some((p: any) => p.tipo === 'Movilidad / Visita' || p.tipo === 'Viáticos / Movilidad'));
-                    const visitaRef = ticket.solicitudPagoVisita || allHistory.find((p: any) => p.tipo === 'Movilidad / Visita' || p.tipo === 'Viáticos / Movilidad');
-                    if (!hasVisitaPaid && (visitaRef || visitCost > 0)) {
-                        const visitaMonto = round2(visitaRef?.monto || visitCost);
-                        if (visitaMonto > 0.01) {
-                            items.push({
-                                id: `${ticket.id}_visita`,
-                                tipo: 'Movilidad / Visita',
-                                monto: visitaMonto,
-                                estado: 'pendiente',
-                                fecha: visitaRef?.fecha || ticket.fechaPagoVisita || new Date().toISOString()
-                            });
-                        }
+                    // 5. Movilidad Pendiente
+                    const hasVisitaPaid = pagosLegacy.some((p: any) => p.tipo === 'Movilidad / Visita' || p.tipo === 'Viáticos / Movilidad');
+                    if (visitCost > 0 && !hasVisitaPaid && !items.some(i => i.tipo?.includes('Movilidad') || i.tipo?.includes('Viático'))) {
+                        items.push({
+                            id: `${t.id}_visita`,
+                            tipo: 'Movilidad / Visita',
+                            monto: visitCost,
+                            estado: 'pendiente',
+                            fecha: t.created_at
+                        });
                     }
                 }
 
-                // Separar items por beneficiario para crear filas independientes
+                // Separar items por beneficiario
                 const techItems = items.filter(i => !i.specialistName);
                 const specialistGroups: { [name: string]: PaymentItem[] } = {};
                 items.forEach(i => {
@@ -720,46 +645,41 @@ export default function PaymentsPage() {
                     }
                 });
 
-                // A: Añadir fila del Técnico Principal (siempre que tenga items o historial o costos pendientes)
-                if (techItems.length > 0 || hasHistory || hasPendingCosts) {
-                    
-                    // ★ FIX 2026-04-27: Si no hay items pendientes pero hay historial o costos pendientes,
-                    // añadir un item de "referencia" para que se muestre el grupo
+                // A: Grupo del Técnico
+                if (techItems.length > 0 || hasHistory) {
                     if (techItems.length === 0 && hasHistory) {
-                        const lastPayment = allHistory[0];
+                        const lastP = allHistory[0];
                         techItems.push({
-                            id: `${ticket.id}_historial_ref`,
-                            tipo: `Pago Previo: ${lastPayment?.tipo || 'Historial'}`,
-                            monto: lastPayment?.monto || 0,
+                            id: `${t.id}_ref`,
+                            tipo: `Pago: ${lastP.tipo}`,
+                            monto: lastP.monto,
                             estado: 'pagado',
-                            fecha: lastPayment?.fecha || ticket.created_at,
+                            fecha: lastP.fecha,
                             isReference: true
                         });
                     }
                     allGroups.push({
-                        ticketId: ticket.id,
-                        realTicketId: ticket.id,
+                        ticketId: t.id,
+                        realTicketId: t.id,
                         ticketNum,
-                        cliente: ticket.cliente?.nombre || 'Cliente',
-                        sede: ticket.sede?.nombre || 'Sede',
-                        statusId: ticket.estadoId,
-                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(ticket.estadoId), // ★ NUEVO
+                        cliente: t.clients?.name || 'Cliente',
+                        sede: t.branch_offices?.name || 'Sede',
+                        statusId: t.status_id,
+                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id),
                         tecnico: techData,
-                        // El pactado a mostrar en tesorería para el técnico debe ser SOLO su Mano de Obra
                         montoPactado: montoBaseParaTecnico,
-                        montoAdelantado: totalPagadoParaTecnico,  // Solo rescates/adelantos
+                        montoAdelantado: totalPagadoParaTecnico,
                         saldoPendiente: Math.max(0, saldoPendienteTecnico),
                         items: techItems,
                         historialDepositos: allHistory,
                         costoVisita: visitCost,
-                        voucherVisita: allHistory.find((p: any) => p.tipo === 'Movilidad / Visita' || p.referencia?.toLowerCase().includes("visita"))?.voucherRef,
-                        montoFacturado: ticket.montoFacturado,
-                        utilidad: Math.max(0, (ticket.montoFacturado || 0) - (totalPactadoInclVisita + visitCost)),
-                        descripcion: ticket.descripcionServicio || '',
+                        montoFacturado: t.total_quoted_amount,
+                        utilidad: Math.max(0, (t.total_quoted_amount || 0) - (jobCostBase + visitCost)),
+                        descripcion: t.description || '',
                     });
                 }
 
-                // B: Añadir filas para cada Especialista (Gestora/Tercero)
+                // B: Grupos de Especialistas
                 Object.keys(specialistGroups).forEach(name => {
                     const sItems = specialistGroups[name];
                     const first = sItems[0];
@@ -772,38 +692,37 @@ export default function PaymentsPage() {
                         yape: first.specialistYape,
                         plin: first.specialistPlin
                     };
-
                     allGroups.push({
-                        ticketId: `${ticket.id}_${name}`, // ID único para el grupo de UI
-                        realTicketId: ticket.id,         // ID real para actualizaciones de base de datos
+                        ticketId: `${t.id}_${name}`,
+                        realTicketId: t.id,
                         ticketNum,
-                        cliente: ticket.cliente?.nombre || 'Cliente',
-                        sede: ticket.sede?.nombre || 'Sede',
-                        statusId: ticket.estadoId,
-                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(ticket.estadoId), // ★ NUEVO
+                        cliente: t.clients?.name || 'Cliente',
+                        sede: t.branch_offices?.name || 'Sede',
+                        statusId: t.status_id,
+                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id),
                         tecnico: specData,
-                        montoPactado: 0, // Especialistas no tienen pactado total del ticket
+                        montoPactado: 0,
                         montoAdelantado: 0,
                         saldoPendiente: 0,
                         items: sItems,
-                        historialDepositos: [], // El historial principal es del técnico
+                        historialDepositos: [],
                         costoVisita: 0,
                         montoFacturado: 0,
                         utilidad: 0,
-                        descripcion: ticket.descripcionServicio || '',
+                        descripcion: t.description || '',
                     });
                 });
 
             } catch (e) {
-                console.error("Error processing ticket for payments:", e);
+                console.error("Error processing ticket:", t.id, e);
             }
         });
 
         allGroups.sort((a, b) => {
-            const hasPendingA = a.items.some(i => i.estado === 'pendiente');
-            const hasPendingB = b.items.some(i => i.estado === 'pendiente');
-            if (hasPendingA !== hasPendingB) return hasPendingA ? -1 : 1;
-            return 0;
+            const pendingA = a.items.some(i => i.estado === 'pendiente');
+            const pendingB = b.items.some(i => i.estado === 'pendiente');
+            if (pendingA !== pendingB) return pendingA ? -1 : 1;
+            return new Date(b.items[0]?.fecha || 0).getTime() - new Date(a.items[0]?.fecha || 0).getTime();
         });
 
         setPaymentGroups(allGroups);
@@ -999,7 +918,7 @@ export default function PaymentsPage() {
                 
                 if (costErr) throw costErr;
                 
-                await ticketsAPI.updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
+                await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
                 showToast('✅ Pago de costo registrado');
                 refresh();
                 return;
@@ -1207,7 +1126,7 @@ export default function PaymentsPage() {
                         transition: 'all 0.2s'
                     }}
                 >
-                    <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                    <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
                     Sincronizar
                 </button>
             </header>
