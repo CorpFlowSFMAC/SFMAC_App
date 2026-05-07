@@ -66,8 +66,8 @@ const SLATimerHeader = memo(({ ticket }: { ticket: any }) => {
     );
 });
 
-export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
-    const [ticketData, setTicketData] = useState(() => ({
+function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
+    const [ticketData, setTicketData] = useState<any>(() => ({
         ...ticket,
         estadoId: normalizeStateId(ticket.estadoId)
     }));
@@ -1868,6 +1868,13 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         // y dejamos que la sincronización ocurra en segundo plano
         // si no hay transiciones de estado críticas pendientes.
         syncToSupabase().catch(err => console.error("Sync error on close:", err));
+        
+        // Limpiar cache si el ticket ya está en estado final
+        if (['ticket_cerrado', 'liquidado', 'cerrado'].includes(ticketData.estadoId)) {
+            localStorage.removeItem(`ticket_state_${ticketData.id}`);
+            localStorage.removeItem(`ticket_ui_${ticketData.id}`);
+        }
+        
         onClose();
     };
 
@@ -1879,6 +1886,11 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 status_id: "ticket_cerrado",
                 fechaCierre: new Date().toISOString()
             };
+            
+            // Limpiar cache proactivamente
+            localStorage.removeItem(`ticket_state_${ticketData.id}`);
+            localStorage.removeItem(`ticket_ui_${ticketData.id}`);
+
             setTicketData(updated);
             await syncToSupabase(updated);
             showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
@@ -2112,50 +2124,52 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                         </div>
 
                         <div className={styles.infoHistory}>
-                            <InfoBarBase
-                                ticket={ticketData}
-                                title="Revisión Inicial"
-                                icon={FileText}
-                                color="#8B5CF6"
-                                gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"
-                            />
+                            {useMemo(() => (
+                                <>
+                                    <InfoBarBase
+                                        ticket={ticketData}
+                                        title="Revisión Inicial"
+                                        icon={FileText}
+                                        color="#8B5CF6"
+                                        gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"
+                                    />
 
-                            <GestoraAssignmentBar 
-                                ticket={ticketData}
-                                canAssign={userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN' || (myGestoraId === ticketData.gestora_id)}
-                                onAssign={() => setShowGestoraDrawer(true)}
-                            />
+                                    <GestoraAssignmentBar 
+                                        ticket={ticketData}
+                                        canAssign={userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN' || (myGestoraId === ticketData.gestora_id)}
+                                        onAssign={() => setShowGestoraDrawer(true)}
+                                    />
 
-                            <TechnicianSchedulingBar
-                                ticket={ticketData}
-                                onReassign={() => {
-                                    setShowAssignmentDrawer(true);
-                                }}
-                                onEditSchedule={() => {
-                                    setTicketData({ ...ticketData, estadoId: 'en_inspeccion', fechaVisita: undefined });
-                                }}
-                            />
+                                    <TechnicianSchedulingBar
+                                        ticket={ticketData}
+                                        onReassign={() => setShowAssignmentDrawer(true)}
+                                        onEditSchedule={() => {
+                                            setTicketData({ ...ticketData, estadoId: 'en_inspeccion', fechaVisita: undefined });
+                                        }}
+                                    />
 
-                            <DiagnosisInfoBar 
-                                ticket={ticketData} 
-                                onEdit={isAdmin || (myGestoraId === ticketData.gestora_id) ? handleOpenReportUpdate : undefined}
-                            />
-                            <QuoteAssistantBar ticket={ticketData} />
-                            <QuotationInfoBar 
-                                ticket={ticketData} 
-                                onToggleDetails={() => setIsQuotationCollapsed(!isQuotationCollapsed)}
-                                isCollapsed={isQuotationCollapsed}
-                             />
-                            <FinancialLiquidationBar 
-                                ticket={ticketData} 
-                                onOpenMaterials={() => handleOpenExpenseModal()} 
-                                onOpenRescue={handleOpenRescue}
-                                costos={ticketCosts}
-                                availableRescue={availableRescue}
-                            />
-                            <PaymentHistoryBar ticket={ticketData} costos={ticketCosts} />
-                            <UnifiedEvidenceBar ticket={ticketData} />
-                            <DocumentationSummaryBar ticket={ticketData} />
+                                    <DiagnosisInfoBar 
+                                        ticket={ticketData} 
+                                        onEdit={isAdmin || (myGestoraId === ticketData.gestora_id) ? handleOpenReportUpdate : undefined}
+                                    />
+                                    <QuoteAssistantBar ticket={ticketData} />
+                                    <QuotationInfoBar 
+                                        ticket={ticketData} 
+                                        onToggleDetails={() => setIsQuotationCollapsed(!isQuotationCollapsed)}
+                                        isCollapsed={isQuotationCollapsed}
+                                    />
+                                    <FinancialLiquidationBar 
+                                        ticket={ticketData} 
+                                        onOpenMaterials={() => handleOpenExpenseModal()} 
+                                        onOpenRescue={handleOpenRescue}
+                                        costos={ticketCosts}
+                                        availableRescue={availableRescue}
+                                    />
+                                    <PaymentHistoryBar ticket={ticketData} costos={ticketCosts} />
+                                    <UnifiedEvidenceBar ticket={ticketData} />
+                                    <DocumentationSummaryBar ticket={ticketData} />
+                                </>
+                            ), [ticketData, ticketCosts, availableRescue, isQuotationCollapsed, userRole, myGestoraId, isAdmin])}
                         </div>
 
                         <div className={styles.operationalArea}>
@@ -3210,7 +3224,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 const year = new Date().getFullYear().toString().slice(-2);
-                                                                                setTicketData(prev => ({ ...prev, numeroTicketCliente: `MB000000.${year}` }));
+                                                                                setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: `MB000000.${year}` }));
                                                                             }}
                                                                             style={{ fontSize: '0.6rem', background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '1px 4px', borderRadius: '4px', cursor: 'pointer' }}
                                                                         >
@@ -3235,7 +3249,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                 style={ticketData.estadoId !== "documentacion_enviada" && !isAdmin ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#-]/g, '');
-                                                                    setTicketData(prev => ({ ...prev, numeroTicketCliente: val }));
+                                                                    setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: val }));
                                                                 }}
                                                                 onClick={(e) => e.stopPropagation()}
                                                             />
@@ -4446,3 +4460,5 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 }
 
 
+
+export default memo(TicketWindow);
