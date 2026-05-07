@@ -191,7 +191,7 @@ function flattenTicketForPayments(t: any) {
         fechaAsignacion: meta.fechaAsignacion ?? null,
         costoPasaje: meta.costoPasaje ?? 0,
         tecnico: {
-            id: t.technicians?.id || meta.tecnico?.id,
+            id: t.technician_id || t.technicians?.id || meta.tecnico?.id,
             nombre: t.technicians?.name ||
                 (t.technicians?.first_name && t.technicians?.last_name
                     ? `${t.technicians.first_name} ${t.technicians.last_name}`.trim()
@@ -536,7 +536,8 @@ export default function PaymentsPage() {
                 const isPagoParaTecnico = (tipo: string): boolean => {
                     const tp = (tipo || '').toLowerCase();
                     return tp.includes('rescate') || tp.includes('adelanto') || tp.includes('refuerzo') || 
-                           tp.includes('liquidación') || tp.includes('saldo pendiente') || tp.includes('movilidad') || tp.includes('viático');
+                           tp.includes('liquidación') || tp.includes('saldo pendiente') || tp.includes('movilidad') || tp.includes('viático') ||
+                           tp.includes('solicitud') || tp.includes('petición');
                 };
 
                 const pagosParaTecnico = uniqueHistory.filter(p => isPagoParaTecnico(p.tipo));
@@ -548,13 +549,13 @@ export default function PaymentsPage() {
                 const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
                 const techData = {
-                    id: t.technician_id,
-                    nombre: t.technicians?.name || 'Sin asignar',
-                    banco: t.technicians?.bank_name || '---',
-                    numeroCuenta: t.technicians?.account_number || '---',
-                    cci: t.technicians?.cci || '---',
-                    yape: t.technicians?.yape_number,
-                    plin: t.technicians?.plin_number
+                    id: t.technician_id || t.technicians?.id || meta.tecnico?.id,
+                    nombre: t.technicians?.name || meta.tecnico?.nombre || 'Sin asignar',
+                    banco: t.technicians?.bank_name || meta.tecnico?.banco || '---',
+                    numeroCuenta: t.technicians?.account_number || meta.tecnico?.numeroCuenta || '---',
+                    cci: t.technicians?.cci || meta.tecnico?.cci || '---',
+                    yape: t.technicians?.yape_number || meta.tecnico?.yape,
+                    plin: t.technicians?.plin_number || meta.tecnico?.plin
                 };
 
                 const items: PaymentItem[] = [];
@@ -640,6 +641,23 @@ export default function PaymentsPage() {
                             monto: visitCost,
                             estado: 'pendiente',
                             fecha: t.created_at
+                        });
+                    }
+
+                    // 6. Solicitudes de Depósito (Gestora/Admin)
+                    if (t.solicitudesDeposito && Array.isArray(t.solicitudesDeposito)) {
+                        t.solicitudesDeposito.forEach((s: any) => {
+                            if (s.estado === 'pendiente') {
+                                items.push({
+                                    id: s.id,
+                                    tipo: s.tipo || 'Solicitud de Depósito',
+                                    monto: round2(s.monto || 0),
+                                    estado: 'pendiente',
+                                    fecha: s.fecha || t.created_at,
+                                    concepto: s.concepto || 'Petición de fondos',
+                                    solicitudId: s.id
+                                });
+                            }
                         });
                     }
                 }
@@ -747,87 +765,93 @@ export default function PaymentsPage() {
             return;
         }
 
-        // ✅ FIX 2026-04-27: Prevenir ejecución doble con flag
-        const executingRef = denyPaymentRef;
-        if (executingRef.current) return;
-        executingRef.current = true;
+        if (denyPaymentRef.current) return;
+        denyPaymentRef.current = true;
 
         try {
-            // 0. DETERMINAR SI REVERTIMOS ESTADO
             let newStatusId = null;
-            if (group.items.some(i => i.tipo === 'Movilidad / Visita' || i.id === `${group.realTicketId}_visita`)) {
-                // Si denegamos pago de visita, el ticket regresa a técnico asignado
-                if (item.id === `${group.realTicketId}_visita` || item.tipo === 'Movilidad / Visita') {
-                    newStatusId = 'tecnico_asignado';
-                }
-            } else if (item.tipo === 'Liquidación Final' || item.tipo === 'Saldo Pendiente (Auto)') {
-                // Si denegamos liquidación, regresa a documentación enviada
-                newStatusId = 'documentacion_enviada';
-            }
+            
+            // Determinar reversión de estado basada en el tipo de pago
+            const isVisita = item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('visita') || item.id === `${group.realTicketId}_visita`;
+            const isFinal = item.tipo?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('final') || item.id === `${group.realTicketId}_final`;
 
-            // 1. SI ES COSTO DE TABLA (NUEVO)
+            if (isVisita) newStatusId = 'tecnico_asignado';
+            else if (isFinal) newStatusId = 'documentacion_enviada';
+
+            // 1. SI ES COSTO DE TABLA (ticket_costs)
             if (item.isTableCost && item.costId) {
-                const { error: delErr } = await supabase
+                const { error: updErr } = await supabase
                     .from('ticket_costs')
-                    .delete()
+                    .update({ 
+                        estado_pago: 'RECHAZADO',
+                        fecha_pago: new Date().toISOString() 
+                    })
                     .eq('id', item.costId);
 
-                if (delErr) throw delErr;
+                if (updErr) throw updErr;
 
-                // Si era una movilidad/viático vía tabla, también revisamos estado
-                if (item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('viático')) {
-                    const { data: t } = await supabase.from('tickets').select('status_id').eq('id', group.realTicketId).single();
-                    if (t?.status_id === 'esperando_pago_visita') {
-                        const { error: updErr } = await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.realTicketId);
-                        if (updErr) throw updErr;
+                if (isVisita) {
+                    const { data: currentT } = await supabase.from('tickets').select('status_id').eq('id', group.realTicketId).single();
+                    if (currentT?.status_id === 'esperando_pago_visita') {
+                        await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.realTicketId);
                     }
                 }
-
-                showToast('✅ Registro de costo eliminado y solicitud denegada');
+                
+                showToast('❌ Solicitud de costo denegada');
                 refresh();
                 return;
             }
 
-            // 2. FETCH FRESH METADATA (PARA LEGACY)
+            // 2. LOGICA PARA METADATA (LEGACY / SOLICITUDES GESTORA)
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
                 .select('metadata, status_id')
                 .eq('id', group.realTicketId)
                 .single();
 
-            if (fetchErr || !currentTicket?.metadata) return;
+            if (fetchErr) throw fetchErr;
+            if (!currentTicket) throw new Error("Ticket no encontrado");
             
             const meta = { ...currentTicket.metadata };
             const currentStatus = currentTicket.status_id;
 
             if (item.solicitudId) {
-                meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
-            } else if (item.tipo === 'Adelanto') {
+                // Marcar como rechazado en el array en lugar de borrarlo para mantener historial
+                meta.solicitudesDeposito = (meta.solicitudesDeposito || []).map((s: any) => 
+                    s.id === item.solicitudId ? { ...s, estado: 'rechazado', fechaDenegacion: new Date().toISOString() } : s
+                );
+            } else if (item.id === `${group.realTicketId}_adelanto` || item.tipo === 'Adelanto') {
                 meta.solicitudAdelanto = null;
-            } else if (item.tipo === 'Refuerzo') {
+                meta.adelantoRechazado = true;
+            } else if (item.id === `${group.realTicketId}_refuerzo` || item.tipo === 'Refuerzo') {
                 meta.solicitudAdelantoExtra = null;
-            } else if (item.tipo === 'Liquidación Final' || item.tipo === 'Saldo Pendiente (Auto)') {
+            } else if (isFinal) {
                 meta.solicitudLiquidacion = null;
-                if (currentStatus === 'por_liquidar') newStatusId = 'documentacion_enviada';
-            } else if (item.tipo === 'Movilidad / Visita') {
+                if (currentStatus === 'por_liquidar' || currentStatus === 'esperando_pago_final') {
+                    newStatusId = 'documentacion_enviada';
+                }
+            } else if (isVisita) {
                 meta.solicitudPagoVisita = null;
-                if (currentStatus === 'esperando_pago_visita') newStatusId = 'tecnico_asignado';
+                if (currentStatus === 'esperando_pago_visita') {
+                    newStatusId = 'tecnico_asignado';
+                }
             }
 
             const dbUpdates: any = { 
                 metadata: {
                     ...meta,
-                    pagoRechazado: {
+                    ultimoPagoRechazado: {
                         fecha: new Date().toISOString(),
                         monto: item.monto,
                         tipo: item.tipo,
-                        concepto: item.concepto || 'No especificado'
+                        concepto: item.concepto || 'Denegado por Tesorería'
                     }
                 } 
             };
+
             if (newStatusId) {
                 dbUpdates.status_id = newStatusId;
-                dbUpdates.metadata.estadoId = newStatusId; 
+                dbUpdates.metadata.estadoId = newStatusId;
             }
 
             const { error: finalUpdErr } = await supabase
@@ -837,13 +861,13 @@ export default function PaymentsPage() {
             
             if (finalUpdErr) throw finalUpdErr;
 
-            showToast(`✅ Pago denegado y registrado como Rechazado.`);
+            showToast(`❌ Solicitud de pago denegada.`);
             refresh();
-        } catch (err) {
-            console.error('[Payments] Error denying payment:', err);
-            alert('Error al denegar el pago.');
+        } catch (err: any) {
+            console.error('[Payments] Error detallado al denegar pago:', err);
+            alert(`Error al denegar el pago: ${err.message || 'Error desconocido'}`);
         } finally {
-            executingRef.current = false;
+            denyPaymentRef.current = false;
         }
     };
 
