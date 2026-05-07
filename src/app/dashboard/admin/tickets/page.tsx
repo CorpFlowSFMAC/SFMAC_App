@@ -811,44 +811,48 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
         >
             <div className={styles.statusIndicator} />
 
-            {/* Cabecera SINFIMAC: codigo dominante con gradiente */}
+            {/* Cabecera SINFIMAC: Color motivador brillante según el estado */}
             <div className={styles.ticketHeader} style={{
-                background: `linear-gradient(135deg, #0F172A 0%, #1E293B 60%, ${statusAccent}22 100%)`,
-                borderBottom: `2px solid ${statusAccent}`,
-                padding: '0.6rem 0.9rem',
+                background: `linear-gradient(135deg, ${statusAccent} 0%, ${statusAccent}CC 100%)`,
+                padding: '0.7rem 1rem',
                 textAlign: 'left',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                boxShadow: `inset 0 -2px 10px rgba(0,0,0,0.05)`
             }}>
+                {/* Círculo decorativo brillante */}
                 <div style={{
-                    position: 'absolute', top: -20, right: -20,
-                    width: 80, height: 80,
-                    background: `radial-gradient(circle, ${statusAccent}30, transparent)`,
+                    position: 'absolute', top: -30, right: -20,
+                    width: 100, height: 100,
+                    background: `radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 70%)`,
                     borderRadius: '50%'
                 }} />
+                
                 <span className={styles.ticketStatusLabel} style={{
-                    background: `${statusAccent}20`,
-                    color: statusAccent,
-                    border: `1px solid ${statusAccent}50`,
+                    background: 'rgba(255, 255, 255, 0.25)',
+                    color: '#FFFFFF',
+                    border: '1px solid rgba(255, 255, 255, 0.4)',
                     marginBottom: '0.5rem',
-                    backdropFilter: 'blur(4px)'
+                    backdropFilter: 'blur(4px)',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                    fontWeight: 800,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}>
                     {stateName}
                 </span>
+                
                 <h2 style={{
                     margin: '0.3rem 0 0 0',
                     fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
-                    fontSize: ticketCode.length > 15 ? '1.05rem' : '1.4rem',
+                    fontSize: ticketCode.length > 15 ? '1.1rem' : '1.45rem',
                     fontWeight: 900,
                     letterSpacing: '-0.5px',
                     lineHeight: 1.1,
-                    background: `linear-gradient(135deg, #FFFFFF 0%, ${statusAccent} 100%)`,
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
+                    color: '#FFFFFF',
                     wordBreak: 'break-all',
                     position: 'relative',
-                    zIndex: 1
+                    zIndex: 1,
+                    textShadow: '0 2px 6px rgba(0,0,0,0.2)'
                 }}>
                     {ticketCode}
                 </h2>
