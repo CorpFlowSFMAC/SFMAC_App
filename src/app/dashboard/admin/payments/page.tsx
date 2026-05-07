@@ -204,7 +204,6 @@ export default function PaymentsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
-    console.log('[DEBUG-pagos] Estado tickets:', tickets.length, 'loading:', loading,'error:', fetchError);
     const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
@@ -212,49 +211,26 @@ export default function PaymentsPage() {
             if (!isSilent) setLoading(true);
             setFetchError(null);
 
-            // Timeout extendido a 60s; con conexión lenta 15s no alcanzaba.
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout de conexión')), 60000)
             );
 
             const fetchPromise = (async () => {
-                // 🚀 Paso 1: tickets vía RPC (filtra por estados de pago server-side).
-                // ✅ OPTIMIZACIÓN: get_payment_tickets_ultra_light YA incluye costos打包ados
-                console.log('[DEBUG-pagos] Iniciando fetchPaymentTickets...');
                 const data = await ticketsAPI.getForPayments();
-                console.log('[DEBUG-pagos] getForPayments retornó: ', data?.length, ' tickets');
-                
-                // ✅ DATOS UNIFICADOS: Los costos ya vienen incluidos en ticket.costos desde la RPC
-                const fullData = (data || []).slice(0, 100);
-                
-                // ✅ NO consultamos ticket_costs por separado
-                const costs: any[] = [];
-                
-                console.log('[DEBUG-pagos] fullData length: ', fullData.length);
-                return { data: fullData, costs };
+                return data || [];
             })();
 
-            console.time('[DEBUG-pagos] fetchRace');
-            const { data, costs } = await Promise.race([fetchPromise, timeoutPromise]) as any;
-            console.timeEnd('[DEBUG-pagos] fetchRace');
-
-            // ✅ DATOS UNIFICADOS: Los costos vienen en ticket.costos desde la RPC
-            // No necesitamos costsByTicket - leemos directamente de cada ticket
+            const data = await Promise.race([fetchPromise, timeoutPromise]) as any[];
             
             const processed = (data || []).filter(Boolean).map((t: any) => {
                 try {
                     const flat = flattenTicketForPayments(t);
-                    // ✅ LEER DIRECTAMENTE DESDE ticket.costos
                     const relatedCosts = t.costos || [];
                     flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
                     flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
                     flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
 
-                    // ★ ARQUITECTURA FINANCIERA: MOSTRAR TODOS LOS TICKETS ABIERTOS
-                    // incluyendo los que ya tienen pagos confirmados (no solo pendientes)
-                    // El filtro de 'pendiente' ahora es a nivel de UI, no de datos
                     flat.isOpen = !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id);
-                    
                     return flat;
                 } catch (e) {
                     console.error('[Payments] Error processing ticket:', t.id, e);
@@ -262,7 +238,6 @@ export default function PaymentsPage() {
                 }
             }).filter(Boolean);
             
-            console.log('[DEBUG-pagos] Tickets procesados:', processed?.length);
             setTickets(processed);
         } catch (err: any) {
             console.error('[Payments] Fetch Error:', err);
@@ -468,7 +443,6 @@ export default function PaymentsPage() {
     });
 
     useEffect(() => {
-        console.log('[DEBUG-useEffect tickets] tickets.length:', tickets.length, 'loading:', loading);
         if (tickets.length > 0) {
             processTicketsToGroups(tickets);
         } else if (!loading) {
@@ -524,7 +498,6 @@ export default function PaymentsPage() {
     };
 
     const processTicketsToGroups = (allTickets: any[]) => {
-        console.log('[DEBUG-processTickets] Recibidos:', allTickets?.length, 'tickets para procesar');
         const allGroups: PaymentTicketGroup[] = [];
 
         allTickets.forEach(ticket => {
@@ -840,11 +813,6 @@ export default function PaymentsPage() {
             }
         });
 
-        // Helper para filtrar historial (opcional, para limpieza futura)
-        function pagasParaEsteBeneficiario(historial: any[], tipo: string) {
-            return true; // Por ahora mostramos el historial en la fila del técnico
-        }
-
         allGroups.sort((a, b) => {
             const hasPendingA = a.items.some(i => i.estado === 'pendiente');
             const hasPendingB = b.items.some(i => i.estado === 'pendiente');
@@ -852,9 +820,6 @@ export default function PaymentsPage() {
             return 0;
         });
 
-        console.log('[DEBUG-processTickets] Grupos generados:', allGroups.length, 'de', allTickets.length, 'tickets');
-        console.log('[DEBUG-processTickets] Muestra de estados:', allTickets.slice(0,3).map(t => t.estadoId).join(', '));
-        console.log('[DEBUG-processTickets] Muestra de items por grupo:', allGroups.slice(0,3).map(g => g.items.length).join(', '));
         setPaymentGroups(allGroups);
         calculateMonthlyTotalsFromTickets(allTickets);
     };
@@ -1361,19 +1326,6 @@ export default function PaymentsPage() {
                 <div className={styles.tableHeader}>
                     <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E293B' }}>
                         <Wallet size={18} color="#3B82F6" />
-                        <span style={{ 
-                                background: 'linear-gradient(135deg, #1E293B, #0F172A)', 
-                                color: 'white', 
-                                padding: '4px 12px', 
-                                borderRadius: '20px', 
-                                fontSize: '0.65rem', 
-                                fontWeight: 900,
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                letterSpacing: '0.05em'
-                            }}>
-                                SINFIMAC CORP - TESORERÍA v2.3.5 - FIXED
-                            </span>
                         Peticiones de Fondos
                         <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
                             {filteredGroups.length} {filteredGroups.length === 1 ? 'registro' : 'registros'}
