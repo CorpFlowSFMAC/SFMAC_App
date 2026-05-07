@@ -1,7 +1,7 @@
 "use client";
 // Forced redeploy: v1.2 - Sincronizado con Flujo de Cotización y Borrado Inteligente
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 
 // 🚧 DEBUG: Mostrar logs de gestión de tickets en pantalla
 const DEBUG_GESTION = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
