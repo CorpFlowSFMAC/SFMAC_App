@@ -1128,8 +1128,57 @@ export default function PaymentsPage() {
 
     const currentMonthKey = getCurrentMonthKey();
     
-    // ★ MOTOR FINANCIERO V5: Usar monthlyTotals que ya incluye todos los pagos calculados previamente
-    // monthlyTotals se calcula desde ambos: historial legacy + ticket_costs
+    // 🔍 DEPURADOR VISIBLE: Calcular detalladamente los egresos
+    const isPagoParaTecnico = (tipo: string): boolean => {
+        const t = (tipo || '').toLowerCase();
+        return t.includes('rescate') || t.includes('adelanto') || t.includes('refuerzo') || 
+               t.includes('liquidación') || t.includes('saldo pendiente');
+    };
+
+    // Recolectar todos los pagos del mes actual
+    const egresosDetalle: any[] = [];
+    tickets.forEach(ticket => {
+        const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id?.slice(-6)}`;
+        const tecnico = ticket.tecnico?.nombre || 'Sin técnico';
+        
+        // 1️⃣ Pagos de historialPagosTecnico
+        (ticket.historialPagosTecnico || []).forEach((p: any) => {
+            if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
+                const key = getMonthKey(p.fecha);
+                if (key === currentMonthKey) {
+                    egresosDetalle.push({ 
+                        ticket: ticketNum, 
+                        tecnico,
+                        tipo: 'HISTORIAL', 
+                        categoria: p.tipo, 
+                        monto: round2(p.monto), 
+                        fecha: p.fecha 
+                    });
+                }
+            }
+        });
+        
+        // 2️⃣ Pagos de ticket.paidCosts
+        (ticket.paidCosts || []).forEach((c: any) => {
+            if (c.monto && c.fecha_pago && isPagoParaTecnico(c.categoria)) {
+                const key = getMonthKey(c.fecha_pago);
+                if (key === currentMonthKey) {
+                    egresosDetalle.push({ 
+                        ticket: ticketNum, 
+                        tecnico,
+                        tipo: 'COST', 
+                        categoria: c.categoria, 
+                        monto: round2(c.monto), 
+                        fecha: c.fecha_pago 
+                    });
+                }
+            }
+        });
+    });
+
+    const totalEgresosDetalle = round2(egresosDetalle.reduce((s, p) => s + p.monto, 0));
+    
+    // ★ MOTOR FINANCO V5 (usa monthlyTotals que calcula igual)
     const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
     const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
 
@@ -1387,6 +1436,72 @@ export default function PaymentsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* 🔍 PANEL DEPURADOR: Detalle de Egresos del Mes */}
+            {egresosDetalle.length > 0 && (
+                <div style={{ 
+                    background: '#FEF3C7', 
+                    border: '2px solid #F59E0B', 
+                    borderRadius: '12px', 
+                    padding: '16px',
+                    marginBottom: '20px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '1rem' }}>🔍</span>
+                        <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#92400E' }}>
+                            DEPURADOR EGRESOS {formatMonthKey(currentMonthKey)}
+                        </h3>
+                        <span style={{ background: '#F59E0B', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 800 }}>
+                            {egresosDetalle.length} depósitos
+                        </span>
+                    </div>
+                    
+                    <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ background: '#FDE68A', color: '#92400E' }}>
+                                <th style={{ padding: '6px', textAlign: 'left' }}>#</th>
+                                <th style={{ padding: '6px', textAlign: 'left' }}>Ticket</th>
+                                <th style={{ padding: '6px', textAlign: 'left' }}>Técnico</th>
+                                <th style={{ padding: '6px', textAlign: 'left' }}>Fuente</th>
+                                <th style={{ padding: '6px', textAlign: 'left' }}>Tipo</th>
+                                <th style={{ padding: '6px', textAlign: 'right' }}>Monto</th>
+                                <th style={{ padding: '6px', textAlign: 'left' }}>Fecha</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {egresosDetalle.sort((a, b) => b.monto - a.monto).map((p, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #FDE68A' }}>
+                                    <td style={{ padding: '4px', color: '#92400E' }}>{i + 1}</td>
+                                    <td style={{ padding: '4px', fontWeight: 700 }}>{p.ticket}</td>
+                                    <td style={{ padding: '4px' }}>{p.tecnico}</td>
+                                    <td style={{ padding: '4px' }}>
+                                        <span style={{ 
+                                            background: p.tipo === 'HISTORIAL' ? '#3B82F6' : '#8B5CF6', 
+                                            color: 'white', padding: '1px 4px', borderRadius: '3px', fontSize: '0.6rem' 
+                                        }}>
+                                            {p.tipo}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '4px' }}>{p.categoria}</td>
+                                    <td style={{ padding: '4px', textAlign: 'right', fontWeight: 800, fontFamily: 'monospace' }}>S/ {formatSoles(p.monto)}</td>
+                                    <td style={{ padding: '4px', color: '#64748B' }}>{p.fecha?.slice(0, 10)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                        <tfoot>
+                            <tr style={{ background: '#FDE68A', fontWeight: 800 }}>
+                                <td colSpan={5} style={{ padding: '8px', textAlign: 'right' }}>TOTAL:</td>
+                                <td style={{ padding: '8px', textAlign: 'right', fontSize: '1rem', color: '#92400E' }}>S/ {formatSoles(totalEgresosDetalle)}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    
+                    <div style={{ marginTop: '12px', padding: '8px', background: '#FEF3C7', borderRadius: '8px', fontSize: '0.75rem', color: '#92400E' }}>
+                        <strong>Comparación:</strong> monthlyTotals dice S/ {formatSoles(egresosEsteMes)} | Detalle calcula S/ {formatSoles(totalEgresosDetalle)}
+                    </div>
+                </div>
+            )}
 
             {/* ─── TABLA PRINCIPAL ─────────────────────────────── */}
             <div className={styles.tableCard}>
