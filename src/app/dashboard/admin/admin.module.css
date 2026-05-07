@@ -22,6 +22,65 @@
     z-index: 1000;
 }
 
+.sidebarMini {
+    width: 86px;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.sidebarMini:hover {
+    width: 286px;
+}
+
+.sidebarMini .brandNameContainer,
+.sidebarMini .userMeta,
+.sidebarMini .navText {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    display: none;
+}
+
+.sidebarMini:hover .brandNameContainer,
+.sidebarMini:hover .userMeta,
+.sidebarMini:hover .navText {
+    opacity: 1;
+    pointer-events: auto;
+    display: block;
+}
+
+.sidebarMini .sidebarHeader {
+    gap: 0;
+    justify-content: center;
+}
+
+.sidebarMini:hover .sidebarHeader {
+    gap: 1.2rem;
+    justify-content: flex-start;
+}
+
+.sidebarMini .userProfileMini {
+    padding: 0.8rem;
+    justify-content: center;
+}
+
+.sidebarMini:hover .userProfileMini {
+    padding: 1.25rem;
+    justify-content: flex-start;
+}
+
+.sidebarMini .navItem {
+    justify-content: center;
+    padding: 1rem 0;
+}
+
+.sidebarMini:hover .navItem {
+    justify-content: flex-start;
+    padding: 1rem;
+}
+
+
 .sidebarHeader {
     display: flex;
     align-items: center;

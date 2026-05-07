@@ -123,7 +123,7 @@ export default function GestorLayout({
             <AppDataProvider>
                 <div className={styles.adminContainer}>
                     {/* Sidebar */}
-                    <aside className={styles.sidebar}>
+                    <aside className={`${styles.sidebar} ${styles.sidebarMini}`}>
                         <div className={styles.sidebarHeader}>
                             <Image
                                 src="/logo-final.png"
@@ -159,46 +159,44 @@ export default function GestorLayout({
 
                         <nav className={styles.nav}>
                             <Link
-                                href="/dashboard/gestor"
-                                className={`${styles.navItem} ${pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}
+                                href="/dashboard/gestor/metrics"
+                                className={`${styles.navItem} ${pathname.includes('/metrics') ? styles.navItemActive : ''}`}
+                                title="Inicio / Métricas"
                             >
                                 <LayoutDashboard size={20} />
-                                Inicio / Métricas
+                                <span className={styles.navText}>Inicio / Métricas</span>
                             </Link>
 
-                            {/* Sistema Tickets - accesible para gestor (crear y gestionar tickets de su zona) */}
-                            <Link href="/dashboard/gestor/tickets" className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/gestor/tickets" className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`} title="Sistema Tickets">
                                 <Ticket size={20} />
-                                Sistema Tickets
+                                <span className={styles.navText}>Sistema Tickets</span>
                             </Link>
 
-                            {/* Gestión Técnicos - gestor gestiona técnicos de SU ZONA */}
-                            <Link href="/dashboard/gestor/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/gestor/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`} title="Mis Técnicos">
                                 <UserCog size={20} />
-                               Mis Técnicos
+                                <span className={styles.navText}>Mis Técnicos</span>
                             </Link>
 
-                            {/* Solicitudes de Pago - gestor puede CREAR pero NO autorizar pagos */}
-                            <Link href="/dashboard/gestor/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/gestor/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`} title="Solicitar Pagos">
                                 <DollarSign size={20} />
-                                Solicitar Pagos
+                                <span className={styles.navText}>Solicitar Pagos</span>
                             </Link>
 
-                            {/* Reportes de Eficiencia */}
-                            <Link href="/dashboard/gestor/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/gestor/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`} title="Reportes de Eficiencia">
                                 <BarChart3 size={20} />
-                                Reportes de Eficiencia
+                                <span className={styles.navText}>Reportes de Eficiencia</span>
                             </Link>
                         </nav>
 
-                        <div style={{ marginTop: "auto" }}>
+                        <div style={{ marginTop: "auto", overflow: 'hidden' }}>
                             <button
                                 className={styles.navItem}
                                 style={{ color: "#ff4444", background: "none", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
                                 onClick={handleLogout}
+                                title="Cerrar Sesión"
                             >
                                 <LogOut size={20} />
-                                Cerrar Sesión
+                                <span className={styles.navText}>Cerrar Sesión</span>
                             </button>
                         </div>
                     </aside>

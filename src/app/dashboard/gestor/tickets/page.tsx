@@ -1,6 +1,13 @@
 "use client";
-import GestorTicketsClient from '../page';
+
+import AdminTicketsPage from "@/app/dashboard/admin/tickets/page";
+import GestorTurnoWidget from "@/components/GestorTurnoWidget";
 
 export default function GestorTicketsPage() {
-    return <GestorTicketsClient tab="tickets" />;
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F8FAFC' }}>
+            <GestorTurnoWidget />
+            <AdminTicketsPage />
+        </div>
+    );
 }

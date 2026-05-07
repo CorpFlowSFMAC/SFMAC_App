@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight, MapPin, AlertCircle, FileEdit, AlertTriangle } from "lucide-react";
@@ -815,7 +815,7 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
             <div className={styles.ticketHeader} style={{
                 background: `linear-gradient(135deg, #0F172A 0%, #1E293B 60%, ${statusAccent}22 100%)`,
                 borderBottom: `2px solid ${statusAccent}`,
-                padding: '1.2rem 1.5rem',
+                padding: '0.6rem 0.9rem',
                 textAlign: 'left',
                 position: 'relative',
                 overflow: 'hidden'
@@ -854,8 +854,8 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
                 </h2>
             </div>
 
-            <div className={styles.ticketBody} style={{ padding: '1rem 1.2rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.9rem' }}>
+            <div className={styles.ticketBody} style={{ padding: '0.6rem 0.9rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
                     <div style={{
                         width: '36px', height: '36px', borderRadius: '10px',
                         background: clienteLogo ? 'white' : `linear-gradient(135deg, ${statusAccent}30, ${statusAccent}15)`,
