@@ -93,8 +93,17 @@ function getCurrentMonthKey(): string {
 }
 
 // ─────────────────────────────────────────────────────────
-// Helper: extrae campos de pago del metadata y del ticket
+// CONFIGURACIÓN DE TIPOS DE PAGO
 // ─────────────────────────────────────────────────────────
+const TIPO_CONFIG: { [key: string]: { color: string; bg: string; label: string } } = {
+    'Adelanto': { color: '#7C3AED', bg: '#F5F3FF', label: '🟣 Adelanto' },
+    'Refuerzo': { color: '#2563EB', bg: '#EFF6FF', label: '🔵 Refuerzo' },
+    'Liquidación Final': { color: '#059669', bg: '#ECFDF5', label: '🟢 Liquidación' },
+    'Saldo Pendiente (Auto)': { color: '#059669', bg: '#ECFDF5', label: '🟢 Liquidación' },
+    'Movilidad / Visita': { color: '#D97706', bg: '#FFF7ED', label: '🟠 Movilidad' },
+    'Viáticos / Movilidad': { color: '#D97706', bg: '#FFF7ED', label: '🟠 Viáticos' }
+};
+
 function flattenTicketForPayments(t: any) {
     if (!t) return t;
     let meta = t.metadata || {};
@@ -876,6 +885,40 @@ export default function PaymentsPage() {
         }
     };
 
+    // ─────────────────────────────────────────────────────────
+    // SMART PAYMENT FLOW: Yape / Plin / Transferencia
+    // ─────────────────────────────────────────────────────────
+    const handleSmartPayment = (group: PaymentTicketGroup, item: PaymentItem) => {
+        const montoStr = formatSoles(item.monto);
+        const phone = group.tecnico.plin || group.tecnico.yape || "";
+        
+        // Si el técnico tiene Yape o Plin, intentamos Deep Link
+        if (phone && (group.tecnico.yape || group.tecnico.plin)) {
+            const wallet = group.tecnico.yape ? 'yape' : 'plin';
+            const deepLink = wallet === 'yape' 
+                ? `yape://pay?number=${phone}&amount=${item.monto}`
+                : `plin://pay?number=${phone}&amount=${item.monto}`;
+
+            // Abrimos la app y mostramos el modal de espera
+            window.location.href = deepLink;
+            
+            setWaitingVoucher({
+                group,
+                item,
+                wallet,
+                numero: phone
+            });
+            return;
+        }
+
+        // Si no tiene billetera móvil, vamos a confirmación directa
+        setPendingConfirmation({
+            group,
+            item,
+            message: `¿Desea registrar el pago de S/ ${montoStr} para ${group.tecnico.nombre}?`
+        });
+    };
+
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
         // ★ FIX: Si es un costo de la tabla ticket_costs, usamos su UUID real como ID en la metadata.
         // Esto permite que el motor de unificación (deduplicación) sepa que son el mismo registro.
@@ -1024,13 +1067,6 @@ export default function PaymentsPage() {
         return matchesSearch && matchesStatus;
     });
 
-    const TIPO_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
-        'Adelanto': { color: '#2563EB', bg: '#EFF6FF', label: 'Adelanto' },
-        'Refuerzo': { color: '#B45309', bg: '#FEF3C7', label: 'Refuerzo' },
-        'Liquidación Final': { color: '#047857', bg: '#ECFDF5', label: 'Liquidación' },
-        'Movilidad / Visita': { color: '#7C3AED', bg: '#F5F3FF', label: 'Movilidad' },
-        'Solicitud Gestora': { color: '#DC2626', bg: '#FEF2F2', label: '🔔 Solicitado' },
-    };
 
 
     // Obtener todos los excedentes pendientes de todos los tickets
@@ -1463,7 +1499,7 @@ export default function PaymentsPage() {
                                                                 {isPending ? (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                                         <button 
-                                                                            onClick={() => handleConfirmPayment(group, item)}
+                                                                            onClick={() => handleSmartPayment(group, item)}
                                                                             style={{ 
                                                                                 background: '#10B981', color: 'white', border: 'none', 
                                                                                 borderRadius: '10px', padding: '10px 16px', fontWeight: 800,
@@ -1490,7 +1526,7 @@ export default function PaymentsPage() {
                                                                         </div>
                                                                         <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
                                                                         {item.voucherRef && (
-                                                                            <button onClick={() => setShowVoucher(item.voucherRef)}
+                                                                            <button onClick={() => setShowVoucher(item.voucherRef || null)}
                                                                                 style={{ fontSize: '0.65rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
                                                                                 VOUCHER
                                                                             </button>
