@@ -1108,9 +1108,31 @@ export default function PaymentsPage() {
     };
 
     const currentMonthKey = getCurrentMonthKey();
-    const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
-    const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
+    
+    // ★ MOTOR FINANCIERO V3: Cálculo preciso de egresos basado en ticket_costs con estado 'pagado'
+    const costsPagadosEsteMes = tickets.reduce((acc, t) => {
+        const relatedCosts = t.relatedCosts || [];
+        const costsThisMonth = relatedCosts.filter((c: any) => {
+            const st = (c.estado_pago || '').toLowerCase();
+            return st === 'pagado' || st === 'adelanto';
+        });
+        return acc + costsThisMonth.reduce((s: number, c: any) => s + round2(parseFloat(c.monto) || 0), 0);
+    }, 0);
+    
+    const egresosEsteMes = round2(costsPagadosEsteMes || monthlyTotals[currentMonthKey] || 0);
+    
+    // Calcular total histórico basado en ticket_costs pagados
+    const costsPagadosHistorico = tickets.reduce((acc, t) => {
+        const relatedCosts = t.relatedCosts || [];
+        const paidCosts = relatedCosts.filter((c: any) => {
+            const st = (c.estado_pago || '').toLowerCase();
+            return st === 'pagado' || st === 'adelanto';
+        });
+        return acc + paidCosts.reduce((s: number, c: any) => s + round2(parseFloat(c.monto) || 0), 0);
+    }, 0);
+    const totalPagadoHistorico = round2(costsPagadosHistorico);
 
+    // Conteo de peticiones pendientes para alerta roja
     const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).length, 0);
     const totalPendingAmount = round2(paymentGroups.reduce((acc, g) =>
         acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).reduce((s, i) => s + i.monto, 0), 0));
@@ -1283,37 +1305,38 @@ export default function PaymentsPage() {
                 gap: '16px',
                 marginBottom: '28px'
             }}>
-                {/* Pendientes de Pago */}
+                {/* ★ ALERTA TESORERÍA: Si hay peticiones pendientes, indicador en ROJO */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #FEE2E2', boxShadow: '0 4px 12px rgba(239,68,68,0.08)',
+                    background: pendingCount > 0 ? '#FEF2F2' : '#F0FDF4', 
+                    borderRadius: '16px', padding: '20px 24px',
+                    border: pendingCount > 0 ? '2px solid #DC2626' : '1px solid #D1FAE5', 
+                    boxShadow: pendingCount > 0 ? '0 4px 12px rgba(220,38,38,0.15)' : '0 4px 12px rgba(5,150,105,0.08)',
                     display: 'flex', alignItems: 'center', gap: '16px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#FEE2E2,#FECACA)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Clock size={22} color="#DC2626" />
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: pendingCount > 0 ? 'linear-gradient(135deg,#DC2626,#B91C1C)' : 'linear-gradient(135deg,#D1FAE5,#A7F3D0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Clock size={22} color={pendingCount > 0 ? 'white' : '#059669'} />
                     </div>
                     <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pendientes de Pago</p>
-                        <p style={{ margin: '4px 0 0', fontSize: '2rem', fontWeight: 900, color: '#DC2626', lineHeight: 1 }}>{pendingCount}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>solicitudes activas</p>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: pendingCount > 0 ? '#DC2626' : '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{pendingCount > 0 ? '⚠️ ATENCIÓN' : 'Sin Pendientes'}</p>
+                        <p style={{ margin: '4px 0 0', fontSize: '2rem', fontWeight: 900, color: pendingCount > 0 ? '#DC2626' : '#059669', lineHeight: 1 }}>{pendingCount}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748B' }}>{pendingCount === 1 ? 'solicitud activa' : 'solicitudes activas'}</p>
                     </div>
                 </div>
 
-                {/* Monto por Desembolsar */}
+                {/* Monto por Desembolsar - DESTACADO con fuente más grande */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #DBEAFE', boxShadow: '0 4px 12px rgba(37,99,235,0.08)',
+                    background: 'linear-gradient(135deg,#1E3A8A,#1E40AF)', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #1D4ED8', boxShadow: '0 8px 24px rgba(30,64,175,0.25)',
                     display: 'flex', alignItems: 'center', gap: '16px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#DBEAFE,#BFDBFE)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <DollarSign size={22} color="#2563EB" />
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <DollarSign size={22} color="white" />
                     </div>
                     <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Por Desembolsar</p>
-                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: 'white', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.85 }}>POR DESEMBOLSAR</p>
+                        <p style={{ margin: '4px 0 0', fontSize: '2.2rem', fontWeight: 900, color: 'white', lineHeight: 1 }}>
                             S/ {formatSoles(totalPendingAmount)}
                         </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>monto pendiente total</p>
                     </div>
                 </div>
 
