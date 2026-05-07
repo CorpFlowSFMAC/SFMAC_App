@@ -472,15 +472,10 @@ export default function PaymentsPage() {
     const calculateMonthlyTotalsFromGroups = (groups: PaymentTicketGroup[]) => {
         const totals: { [key: string]: number } = {};
         
-        const isPagoParaTecnico = (tipo: string): boolean => {
-            const t = (tipo || '').toLowerCase();
-            return t.includes('rescate') || t.includes('adelanto') || t.includes('refuerzo') || 
-                   t.includes('liquidación') || t.includes('saldo pendiente');
-        };
-
         groups.forEach(group => {
             (group.historialDepositos || []).forEach((p: any) => {
-                if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
+                // Sumamos TODO lo que no esté anulado (MO + Materiales + Compras)
+                if (p.monto && p.fecha && p.estado !== 'anulado') {
                     const key = getMonthKey(p.fecha);
                     totals[key] = round2((totals[key] || 0) + round2(p.monto));
                 }
