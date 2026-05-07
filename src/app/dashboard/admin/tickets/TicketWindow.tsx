@@ -366,6 +366,91 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         (c.categoria || '').toLowerCase().includes('movilidad') && 
         (c.estado_pago || '').toLowerCase() === 'pagado'
     );
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CÁLCULOS MEMOIZADOS PARA RENDIMIENTO - evitar cálculos en setiap render
+    // ─────────────────────────────────────────────────────────────────────────────
+    const costoTecnicoTotal = useMemo(() => {
+        const mo = parseFloat(ticketData.costoManoObra || 0);
+        const mat = parseFloat(ticketData.costoMateriales || 0);
+        return mo + mat;
+    }, [ticketData.costoManoObra, ticketData.costoMateriales]);
+
+    const costoTecnicoConVisita = useMemo(() => {
+        return costoTecnicoTotal || parseFloat(ticketData.costoVisita || 0);
+    }, [costoTecnicoTotal, ticketData.costoVisita]);
+
+    const meta55PorCiento = useMemo(() => {
+        return costoTecnicoConVisita / 0.45;
+    }, [costoTecnicoConVisita]);
+
+    const porcentajeMetaCumplida = useMemo(() => {
+        if (costoTecnicoConVisita <= 0) return 0;
+        return (montoTotalCotizado / costoTecnicoConVisita) * 100;
+    }, [montoTotalCotizado, costoTecnicoConVisita]);
+
+    const estaDebajoDelCosto = montoTotalCotizado < costoTecnicoConVisita;
+    const estaDebajoDeMeta55 = montoTotalCotizado < meta55PorCiento;
+    const faltaParaMeta55 = meta55PorCiento - montoTotalCotizado;
+
+    // Memo para visita (usado en múltiples lugares)
+    const costoVisita = useMemo(() => parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0), [ticketData.costoVisita, ticketData.costoPasaje]);
+    const tieneCostoVisita = costoVisita > 0;
+
+    // Memo para el costo total de técnico (incluye visita como fallback)
+    const costoTotalTecnicoDisplay = useMemo(() => {
+        const mo = parseFloat(ticketData.costoManoObra || 0);
+        const mat = parseFloat(ticketData.costoMateriales || 0);
+        const total = mo + mat;
+        return total > 0 ? total : costoVisita;
+    }, [ticketData.costoManoObra, ticketData.costoMateriales, costoVisita]);
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // MEMOIZACIÓN PARA ESTADOS 6 (Enviada) y 7 (Aprobada)
+    // ─────────────────────────────────────────────────────────────────────────────
+    const esEstadoEnviada = ticketData.estadoId === "cotizacion_enviada";
+    const esEstadoAprobada = ticketData.estadoId === "cotizacion_aprobada";
+    const esEstadoEnEjecucion = ticketData.estadoId === "en_ejecucion";
+    const esEstadoEnCotizacion = ticketData.estadoId === "en_cotizacion";
+    
+    // Memo para conjuntos de estados - evitar .includes() en cada render
+    const estadosConCotizacion = useMemo(() => new Set(["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"]), []);
+    const estadosEnProceso = useMemo(() => new Set(["en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar"]), []);
+    
+    // Indicator functions con memoización
+    const tieneCotizacionAprobadaOPosterior = esEstadoEnviada || estadosConCotizacion.has(ticketData.estadoId);
+    const esEstadoEnProcesoFinanciero = estadosEnProceso.has(ticketData.estadoId);
+    
+    // Memo para indicadores booleanos de costos (usados en render)
+    const tieneCostsConfirmados = ticketCosts && ticketCosts.length > 0;
+    const tienePaymentsPendientes = totalRequested > 0;
+    const tieneSaldoRescate = availableRescue > 0 && ticketData.estadoId !== "ticket_cerrado";
+    const saldoAgotado = availableRescue <= 0 && ticketData.estadoId !== "ticket_cerrado";
+
+    // Memo indicadores de financial
+    const tieneGastoVisita = costoVisita > 0;
+
+    // Memo para filtros de pagos - evitar recalcular en cada render
+    const costosFiltrados = useMemo(() => {
+        if (!ticketCosts || ticketCosts.length === 0) return [];
+        return ticketCosts.filter((c: any) => {
+            const st = (c.estado_pago || '').toLowerCase();
+            return !st.includes('anulado') && !st.includes('rechazado');
+        });
+    }, [ticketCosts]);
+
+    const costosPendientes = useMemo(() => {
+        if (!costosFiltrados || costosFiltrados.length === 0) return [];
+        return costosFiltrados.filter((c: any) => {
+            const st = (c.estado_pago || '').toLowerCase();
+            return st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
+        });
+    }, [costosFiltrados]);
+
+    const totalPendiente = useMemo(() => {
+        return costosPendientes.reduce((acc: number, c: any) => acc + (parseFloat(c.monto) || 0), 0);
+    }, [costosPendientes]);
+
     const [loadingCosts, setLoadingCosts] = useState(false);
 
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
@@ -1807,7 +1892,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
 
     const jobCostBase = finances.totalPactedDebt;
-    const visitPayment = round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0));
+    const visitPayment = costoVisita;  // Usar variable memoizada
     const classicAdvance = round2(parseFloat(ticketData.montoAdelantoManual || ticketData.adelantoMonto || 0));
     const rentabilidadReal = grossMargin;
     const paymentsSummary = unifiedPaymentsSum;
@@ -2507,7 +2592,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                             <label>Materiales:</label>
                                                                             <span>S/ {formatSoles(ticketData.costoMateriales)}</span>
                                                                         </div>
-                                                                        {parseFloat(ticketData.costoVisita || 0) > 0 && (
+                                                                        {ticketData.estadoId === "en_cotizacion" && tieneCostoVisita && (
                                                                             <div className={styles.techRow}>
                                                                                 <label>Gasto de Visita:</label>
                                                                                 <span>S/ {formatSoles(ticketData.costoVisita)}</span>
@@ -2531,45 +2616,32 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     <div className={styles.missingHeader}>
                                                                         <span>CUMPLIMIENTO DE META</span>
                                                                         <strong>
-                                                                            {((montoTotalCotizado / (((parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) / 0.45) || 1)) * 100).toFixed(0)}%
+                                                                            {porcentajeMetaCumplida.toFixed(0)}%
                                                                         </strong>
                                                                     </div>
                                                                     <div className={styles.missingValue}>
-                                                                        {(() => {
-                                                                            const totalCostoTécnico = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)) || parseFloat(ticketData.costoVisita || 0);
-                                                                            const meta55 = totalCostoTécnico / 0.45;
-
-                                                                            if (montoTotalCotizado < totalCostoTécnico) {
-                                                                                return (
-                                                                                    <div className={styles.lossWarning}>
-                                                                                        <div className={styles.lossTitle}>
-                                                                                            <span>⚠️ PÉRDIDA DETECTADA</span>
-                                                                                        </div>
-                                                                                        <span className={styles.lossValue}>
-                                                                                            El presupuesto es menor al costo técnico (S/ {formatSoles(totalCostoTécnico)})
-                                                                                        </span>
-                                                                                    </div>
-                                                                                );
-                                                                            }
-
-                                                                            if (montoTotalCotizado < meta55) {
-                                                                                return (
-                                                                                    <>
-                                                                                        <span className={styles.missingLabel}>FALTAN PARA META 55%:</span>
-                                                                                        <strong className={styles.missingAmount}>
-                                                                                            S/ {formatSoles(meta55 - montoTotalCotizado)}
-                                                                                        </strong>
-                                                                                    </>
-                                                                                );
-                                                                            }
-
-                                                                            return (
-                                                                                <div className={styles.goalReached}>
-                                                                                    <CheckCircle size={14} />
-                                                                                    <span>META ALCANZADA</span>
+                                                                        {estaDebajoDelCosto ? (
+                                                                            <div className={styles.lossWarning}>
+                                                                                <div className={styles.lossTitle}>
+                                                                                    <span>⚠️ PÉRDIDA DETECTADA</span>
                                                                                 </div>
-                                                                            );
-                                                                        })()}
+                                                                                <span className={styles.lossValue}>
+                                                                                    El presupuesto es menor al costo técnico (S/ {formatSoles(costoTecnicoConVisita)})
+                                                                                </span>
+                                                                            </div>
+                                                                        ) : estaDebajoDeMeta55 ? (
+                                                                            <>
+                                                                                <span className={styles.missingLabel}>FALTAN PARA META 55%:</span>
+                                                                                <strong className={styles.missingAmount}>
+                                                                                    S/ {formatSoles(faltaParaMeta55)}
+                                                                                </strong>
+                                                                            </>
+                                                                        ) : (
+                                                                            <div className={styles.goalReached}>
+                                                                                <CheckCircle size={14} />
+                                                                                <span>META ALCANZADA</span>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -3693,7 +3765,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                 <div className={styles.currentCostDisplay}>
                                     <span className={styles.currentCostLabel}>COSTO ACTUAL REGISTRADO</span>
                                     <div className={styles.currentCostBig}>
-                                        S/ {(parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0)).toFixed(2)}
+                                        S/ {costoTecnicoTotal.toFixed(2)}
                                     </div>
                                 </div>
 
