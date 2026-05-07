@@ -497,6 +497,7 @@ export default function PaymentsPage() {
     // Las compras (materiales/movilidad/logística) NO van al técnico, van a rentabilidad
     const calculateMonthlyTotalsFromTickets = (allTickets: any[]) => {
         const totals: { [key: string]: number } = {};
+        const today = new Date();
         
         const isPagoParaTecnico = (tipo: string): boolean => {
             const t = (tipo || '').toLowerCase();
@@ -510,20 +511,32 @@ export default function PaymentsPage() {
         allTickets.forEach(ticket => {
             const ticketNum = ticket.numeroTicketCliente || `#${ticket.id?.slice(-6)}`;
             
-            // 1️⃣ Incluir pagos legacy de historialPagosTecnico (solo si son para técnico)
+            // 1️⃣ Incluir pagos legacy de historialPagosTecnico (solo si son para técnico y hasta hoy)
             (ticket.historialPagosTecnico || []).forEach((p: any) => {
                 if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
                     const key = getMonthKey(p.fecha);
-                    totals[key] = round2((totals[key] || 0) + round2(p.monto));
-                    debugPagos.push({ ticket: ticketNum, tipo: 'legacy', categoria: p.tipo, monto: p.monto, fecha: p.fecha, key });
+                    const fechaPago = new Date(p.fecha);
+                    // ★ BLOQUEO: Solo contar pagos hasta hoy (no fechas futuras)
+                    if (fechaPago <= today) {
+                        totals[key] = round2((totals[key] || 0) + round2(p.monto));
+                        debugPagos.push({ ticket: ticketNum, tipo: 'legacy', categoria: p.tipo, monto: p.monto, fecha: p.fecha, key, esFuturo: false });
+                    } else {
+                        debugPagos.push({ ticket: ticketNum, tipo: 'legacy', categoria: p.tipo, monto: p.monto, fecha: p.fecha, key, esFuturo: true });
+                    }
                 }
             });
-            // 2️⃣ Incluir pagos de ticket_costs (solo si son para técnico)
+            // 2️⃣ Incluir pagos de ticket_costs (solo si son para técnico y hasta hoy)
             (ticket.paidCosts || []).forEach((c: any) => {
                 if (c.monto && c.fecha_pago && isPagoParaTecnico(c.categoria)) {
                     const key = getMonthKey(c.fecha_pago);
-                    totals[key] = round2((totals[key] || 0) + round2(c.monto));
-                    debugPagos.push({ ticket: ticketNum, tipo: 'cost', categoria: c.categoria, monto: c.monto, fecha: c.fecha_pago, key });
+                    const fechaPago = new Date(c.fecha_pago);
+                    // ★ BLOQUEO: Solo contar pagos hasta hoy (no fechas futuras)
+                    if (fechaPago <= today) {
+                        totals[key] = round2((totals[key] || 0) + round2(c.monto));
+                        debugPagos.push({ ticket: ticketNum, tipo: 'cost', categoria: c.categoria, monto: c.monto, fecha: c.fecha_pago, key, esFuturo: false });
+                    } else {
+                        debugPagos.push({ ticket: ticketNum, tipo: 'cost', categoria: c.categoria, monto: c.monto, fecha: c.fecha_pago, key, esFuturo: true });
+                    }
                 }
             });
         });
@@ -531,13 +544,26 @@ export default function PaymentsPage() {
         // 🔍 Mostrar detalle en consola
         const currentKey = getCurrentMonthKey();
         const pagosDelMes = debugPagos.filter(p => p.key === currentKey);
+        const pagosValidos = pagosDelMes.filter(p => !p.esFuturo);
+        const pagosFuturos = pagosDelMes.filter(p => p.esFuturo);
+        
         console.log('🔍 DEPURADOR EGRESOS - Mes actual:', currentKey);
-        console.log('📋 Total de pagos encontrados:', pagosDelMes.length);
-        pagosDelMes.forEach((p, i) => {
-            console.log(`  ${i+1}. ${p.ticket} | ${p.tipo} | ${p.categoria} | S/ ${p.monto} | ${p.fecha}`);
+        console.log('📋 Pagos válidos hasta hoy:', pagosValidos.length);
+        pagosValidos.forEach((p, i) => {
+            console.log(`  ✓ ${i+1}. ${p.ticket} | ${p.tipo} | ${p.categoria} | S/ ${p.monto} | ${p.fecha}`);
         });
-        const suma = pagosDelMes.reduce((s, p) => s + p.monto, 0);
-        console.log('💰 SUMA TOTAL:', suma);
+        
+        if (pagosFuturos.length > 0) {
+            console.log('⚠️ Pagos con fecha FUTURA (NO CONTADOS):', pagosFuturos.length);
+            pagosFuturos.forEach((p, i) => {
+                console.log(`  ⚠️ ${i+1}. ${p.ticket} | ${p.tipo} | ${p.categoria} | S/ ${p.monto} | ${p.fecha}`);
+            });
+        }
+        
+        const sumaValidos = pagosValidos.reduce((s, p) => s + p.monto, 0);
+        const sumaFuturos = pagosFuturos.reduce((s, p) => s + p.monto, 0);
+        console.log('💰 SUMA VÁLIDA (hasta hoy):', sumaValidos);
+        console.log('⚠️ SUMA FUTURA (excluida):', sumaFuturos);
         
         setMonthlyTotals(totals);
     };
@@ -1127,49 +1153,57 @@ export default function PaymentsPage() {
     };
 
     const currentMonthKey = getCurrentMonthKey();
+    const today = new Date();
     
     // 🔍 DEPURADOR VISIBLE: Calcular detalladamente los egresos
+    // ★ LIMPIEZA: Solo incluir pagos hasta la fecha de HOY (no fechas futuras)
     const isPagoParaTecnico = (tipo: string): boolean => {
         const t = (tipo || '').toLowerCase();
         return t.includes('rescate') || t.includes('adelanto') || t.includes('refuerzo') || 
                t.includes('liquidación') || t.includes('saldo pendiente');
     };
 
-    // Recolectar todos los pagos del mes actual
+    // Recolectar todos los pagos del mes actual hasta HOAY (sin fechas futuras)
     const egresosDetalle: any[] = [];
     tickets.forEach(ticket => {
         const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id?.slice(-6)}`;
         const tecnico = ticket.tecnico?.nombre || 'Sin técnico';
         
-        // 1️⃣ Pagos de historialPagosTecnico
+        // 1️⃣ Pagos de historialPagosTecnico (filtrar fechas futuras)
         (ticket.historialPagosTecnico || []).forEach((p: any) => {
             if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
                 const key = getMonthKey(p.fecha);
-                if (key === currentMonthKey) {
+                const fechaPago = new Date(p.fecha);
+                // ★ BLOQUEO: Solo contar pagos hasta hoy (no fechas futuras)
+                if (key === currentMonthKey && fechaPago <= today) {
                     egresosDetalle.push({ 
                         ticket: ticketNum, 
                         tecnico,
                         tipo: 'HISTORIAL', 
                         categoria: p.tipo, 
                         monto: round2(p.monto), 
-                        fecha: p.fecha 
+                        fecha: p.fecha,
+                        esFuturo: fechaPago > today
                     });
                 }
             }
         });
         
-        // 2️⃣ Pagos de ticket.paidCosts
+        // 2️⃣ Pagos de ticket.paidCosts (filtrar fechas futuras)
         (ticket.paidCosts || []).forEach((c: any) => {
             if (c.monto && c.fecha_pago && isPagoParaTecnico(c.categoria)) {
                 const key = getMonthKey(c.fecha_pago);
-                if (key === currentMonthKey) {
+                const fechaPago = new Date(c.fecha_pago);
+                // ★ BLOQUEO: Solo contar pagos hasta hoy (no fechas futuras)
+                if (key === currentMonthKey && fechaPago <= today) {
                     egresosDetalle.push({ 
                         ticket: ticketNum, 
                         tecnico,
                         tipo: 'COST', 
                         categoria: c.categoria, 
                         monto: round2(c.monto), 
-                        fecha: c.fecha_pago 
+                        fecha: c.fecha_pago,
+                        esFuturo: fechaPago > today
                     });
                 }
             }
@@ -1177,8 +1211,10 @@ export default function PaymentsPage() {
     });
 
     const totalEgresosDetalle = round2(egresosDetalle.reduce((s, p) => s + p.monto, 0));
+    const pagosFuturos = egresosDetalle.filter(p => p.esFuturo);
+    const totalFuturos = round2(pagosFuturos.reduce((s, p) => s + p.monto, 0));
     
-    // ★ MOTOR FINANCO V5 (usa monthlyTotals que calcula igual)
+    // ★ MOTOR FINANCO V6: Solo pagos hasta hoy (sin fechas futuras)
     const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
     const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
 
@@ -1437,7 +1473,7 @@ export default function PaymentsPage() {
                 </div>
             </div>
 
-            {/* 🔍 PANEL DEPURADOR: Detalle de Egresos del Mes */}
+            {/* 🔍 PANEL DEPURADOR: Detalle de Egresos del Mes (solo hasta hoy) */}
             {egresosDetalle.length > 0 && (
                 <div style={{ 
                     background: '#FEF3C7', 
@@ -1490,7 +1526,7 @@ export default function PaymentsPage() {
                         </tbody>
                         <tfoot>
                             <tr style={{ background: '#FDE68A', fontWeight: 800 }}>
-                                <td colSpan={5} style={{ padding: '8px', textAlign: 'right' }}>TOTAL:</td>
+                                <td colSpan={5} style={{ padding: '8px', textAlign: 'right' }}>TOTAL HASTA HOY:</td>
                                 <td style={{ padding: '8px', textAlign: 'right', fontSize: '1rem', color: '#92400E' }}>S/ {formatSoles(totalEgresosDetalle)}</td>
                                 <td></td>
                             </tr>
@@ -1499,6 +1535,11 @@ export default function PaymentsPage() {
                     
                     <div style={{ marginTop: '12px', padding: '8px', background: '#FEF3C7', borderRadius: '8px', fontSize: '0.75rem', color: '#92400E' }}>
                         <strong>Comparación:</strong> monthlyTotals dice S/ {formatSoles(egresosEsteMes)} | Detalle calcula S/ {formatSoles(totalEgresosDetalle)}
+                        {totalFuturos > 0 && (
+                            <span style={{ color: '#DC2626', marginLeft: '12px' }}>
+                                ⚠️ {pagosFuturos.length} pagos futuros (S/ {formatSoles(totalFuturos)}) EXCLUÍDOS
+                            </span>
+                        )}
                     </div>
                 </div>
             )}
