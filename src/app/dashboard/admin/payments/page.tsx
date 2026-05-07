@@ -1307,7 +1307,7 @@ export default function PaymentsPage() {
                     <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#1E293B' }}>
                         <Wallet size={18} color="#3B82F6" />
                         Peticiones de Fondos
-                        <span style={{ background: pendingCount > 0 ? '#FEE2E2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
+                        <span style={{ background: pendingCount > 0 ? '#FEF2F2' : '#F0FDF4', color: pendingCount > 0 ? '#DC2626' : '#059669', fontSize: '0.75rem', fontWeight: 800, padding: '2px 10px', borderRadius: '20px' }}>
                             {filteredGroups.length} {filteredGroups.length === 1 ? 'registro' : 'registros'}
                         </span>
                     </h2>
@@ -1357,418 +1357,287 @@ export default function PaymentsPage() {
                                         padding: '7px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer',
                                         fontWeight: 800, fontSize: '0.75rem', transition: 'all 0.2s',
                                         background: filter === f ? 'white' : 'transparent',
-                                        color: filter === f ? '#2563EB' : '#64748B',
-                                        boxShadow: filter === f ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                                        color: filter === f 
+                                            ? (f === 'pendiente' ? '#D97706' : f === 'pagado' ? '#059669' : '#2563EB') 
+                                            : '#64748B',
+                                        boxShadow: filter === f ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
                                     }}>
-                                    {f === 'todos' ? 'Todos' : f === 'pendiente' ? '⏳ Pendientes' : '✅ Pagados'}
+                                    {f === 'todos' ? '📁 Todos' : f === 'pendiente' ? '⏳ Pendientes' : '✅ Pagados'}
                                 </button>
                             ))}
                         </div>
                     </div>
                 </div>
 
-                <div className={styles.tableBody}>
+                <div className={styles.tableBody} style={{ padding: '24px' }}>
                     {loading ? (
                         <div className={styles.emptyState} style={{ padding: '60px 20px' }}>
                             <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 1.5s ease-in-out infinite' }}>
                                 <Clock size={28} color="#3B82F6" />
                             </div>
-                            <p style={{ color: '#64748B', fontWeight: 600 }}>Cargando datos desde Supabase...</p>
+                            <p style={{ color: '#64748B', fontWeight: 600 }}>Cargando solicitudes...</p>
+                        </div>
+                    ) : filteredGroups.length === 0 ? (
+                        <div style={{ 
+                            background: 'white', borderRadius: '20px', padding: '80px 20px', 
+                            textAlign: 'center', border: '1px solid #E2E8F0',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.02)'
+                        }}>
+                            <div style={{ 
+                                width: '80px', height: '80px', borderRadius: '50%', background: '#F1F5F9',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
+                            }}>
+                                <Search size={32} color="#94A3B8" />
+                            </div>
+                            <h3 style={{ margin: '0 0 8px', color: '#1E293B', fontWeight: 700 }}>No hay solicitudes</h3>
+                            <p style={{ color: '#64748B', maxWidth: '340px', margin: '0 auto', fontSize: '0.9rem' }}>
+                                {searchTerm 
+                                    ? `No se encontraron resultados para "${searchTerm}".`
+                                    : filter === 'todos' 
+                                        ? 'Actualmente no hay solicitudes registradas.'
+                                        : `No se encontraron registros con el filtro "${filter}".`}
+                            </p>
+                            {(searchTerm || filter !== 'todos') && (
+                                <button 
+                                    onClick={() => { setSearchTerm(''); setFilter('todos'); }}
+                                    style={{ marginTop: '20px', color: '#3B82F6', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}
+                                >
+                                    Ver todos los registros
+                                </button>
+                            )}
                         </div>
                     ) : (
-                        <table className={styles.paymentsTable}>
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '20%' }}># Ticket / Sede</th>
-                                    <th style={{ width: '25%' }}>Beneficiario (Técnico)</th>
-                                    <th style={{ width: '20%' }}>Estado Financiero</th>
-                                    <th style={{ width: '25%' }}>Solicitud Actual</th>
-                                    <th style={{ width: '10%', textAlign: 'center' }}>Acción</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredGroups.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={5}>
-                                            <div className={styles.emptyState} style={{ padding: '80px 20px', textAlign: 'center' }}>
-                                                <div style={{ 
-                                                    width: '80px', height: '80px', borderRadius: '50%', background: '#F1F5F9',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px'
-                                                }}>
-                                                    <Search size={32} color="#94A3B8" />
-                                                </div>
-                                                <h3 style={{ margin: '0 0 8px', color: '#1E293B', fontWeight: 700 }}>No hay solicitudes</h3>
-                                                <p style={{ color: '#64748B', maxWidth: '340px', margin: '0 auto', fontSize: '0.9rem' }}>
-                                                    {searchTerm 
-                                                        ? `No se encontraron resultados para "${searchTerm}". Intenta con otros términos.`
-                                                        : filter === 'todos' 
-                                                            ? 'Actualmente no hay solicitudes de pago registradas en el sistema.'
-                                                            : `No se encontraron solicitudes con el filtro "${filter}".`}
-                                                </p>
-                                                {(searchTerm || filter !== 'todos') && (
-                                                    <button 
-                                                        onClick={() => { setSearchTerm(''); setFilter('todos'); }}
-                                                        style={{ marginTop: '20px', color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}
-                                                    >
-                                                        Limpiar filtros
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredGroups.map((group) => (
-                                        <React.Fragment key={group.ticketId}>
-                                            <tr className={`${styles.paymentRow} ${group.items.some(i => i.estado === 'pendiente') ? styles.rowPending : styles.rowPaid}`}>
-
-                                                {/* Col 1: Ticket */}
-                                                <td>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        <span style={{ fontFamily: 'monospace', fontWeight: 900, color: '#2563EB', background: '#EFF6FF', padding: '3px 10px', borderRadius: '6px', fontSize: '0.85rem', width: 'fit-content' }}>
-                                                            {group.ticketNum}
-                                                        </span>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem' }}>
-                                                            <Building2 size={11} color="#3B82F6" />
-                                                            <strong style={{ color: '#1E293B' }}>{group.cliente}</strong>
-                                                        </div>
-                                                        <span style={{ color: '#64748B', fontSize: '0.78rem', paddingLeft: '16px' }}>{group.sede}</span>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                            gap: '24px'
+                        }}>
+                            {filteredGroups.map((group) => {
+                                const hasPending = group.items.some(i => i.estado === 'pendiente');
+                                const cardAccentColor = hasPending ? '#F59E0B' : '#10B981';
+                                
+                                return (
+                                    <div key={group.ticketId} style={{
+                                        background: 'white',
+                                        borderRadius: '20px',
+                                        border: '1px solid #E2E8F0',
+                                        borderTop: `6px solid ${cardAccentColor}`,
+                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.04)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        overflow: 'hidden',
+                                        transition: 'transform 0.2s, box-shadow 0.2s',
+                                        position: 'relative'
+                                    }}>
+                                        {/* HEADER CARD */}
+                                        <div style={{ padding: '20px', borderBottom: '1px solid #F1F5F9' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    <span style={{ 
+                                                        fontFamily: 'monospace', fontWeight: 900, color: '#2563EB', 
+                                                        background: '#EFF6FF', padding: '4px 10px', borderRadius: '8px', 
+                                                        fontSize: '0.9rem', width: 'fit-content' 
+                                                    }}>
+                                                        {group.ticketNum}
+                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                                        <Building2 size={14} color="#64748B" />
+                                                        <strong style={{ color: '#0F172A', fontSize: '1rem' }}>{group.cliente}</strong>
                                                     </div>
-                                                </td>
-
-                                                {/* Col 2: Técnico */}
-                                                <td>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, color: '#1F2937', fontSize: '0.88rem' }}>
-                                                            <User size={13} color="#7C3AED" />
-                                                            {group.tecnico.nombre}
+                                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#94A3B8', fontWeight: 500 }}>{group.sede}</p>
+                                                </div>
+                                                <div style={{ 
+                                                    padding: '4px 12px', borderRadius: '20px', 
+                                                    fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase',
+                                                    background: hasPending ? '#FEF3C7' : '#D1FAE5',
+                                                    color: hasPending ? '#D97706' : '#059669'
+                                                }}>
+                                                    {hasPending ? '⏳ Pendiente' : '✅ Pagado'}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* BENEFICIARIO */}
+                                            <div style={{ 
+                                                background: '#F8FAFC', padding: '12px', borderRadius: '12px', 
+                                                border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '12px' 
+                                            }}>
+                                                <div style={{ 
+                                                    width: 40, height: 40, borderRadius: '50%', background: '#7C3AED', 
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' 
+                                                }}>
+                                                    <User size={20} />
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#1E293B' }}>{group.tecnico.nombre}</p>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
+                                                        <CreditCard size={12} />
+                                                        {group.tecnico.banco}
+                                                        <div style={{ display: 'flex', gap: '4px', marginLeft: '4px' }}>
+                                                            {group.tecnico.yape && <span style={{ color: '#7C3AED' }}>YAPE</span>}
+                                                            {group.tecnico.plin && <span style={{ color: '#0EA5E9' }}>PLIN</span>}
                                                         </div>
-                                                        <div style={{ background: '#FDFCFB', border: '1px solid #F1F5F9', borderRadius: '10px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '5px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: 800, color: '#334155' }}>
-                                                                    <CreditCard size={11} color="#64748B" />
-                                                                    {group.tecnico.banco}
-                                                                </div>
-                                                                <div style={{ display: 'flex', gap: '4px' }}>
-                                                                    {group.tecnico.yape && <span style={{ background: '#7C3AED', color: 'white', fontSize: '0.62rem', fontWeight: 900, padding: '2px 6px', borderRadius: '6px' }}>💜 YAPE</span>}
-                                                                    {group.tecnico.plin && <span style={{ background: '#0EA5E9', color: 'white', fontSize: '0.62rem', fontWeight: 900, padding: '2px 6px', borderRadius: '6px' }}>🔵 PLIN</span>}
-                                                                </div>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }}
+                                                    style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px', cursor: 'pointer' }}>
+                                                    <Copy size={14} color="#64748B" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* ESTADO FINANCIERO GRID */}
+                                        <div style={{ 
+                                            padding: '16px 20px', background: '#FAFAFA', 
+                                            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px',
+                                            borderBottom: '1px solid #F1F5F9'
+                                        }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Pactado Trabajo</span>
+                                                <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F172A' }}>S/ {formatSoles(group.montoPactado)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right' }}>
+                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Pagado a Fecha</span>
+                                                <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado)}</span>
+                                            </div>
+                                            <div style={{ 
+                                                gridColumn: '1 / -1', marginTop: '4px', padding: '8px 12px', 
+                                                background: group.saldoPendiente > 0 ? '#FEF2F2' : '#F0FDF4', 
+                                                borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                border: group.saldoPendiente > 0 ? '1px solid #FEE2E2' : '1px solid #DCFCE7'
+                                            }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#991B1B' : '#15803D' }}>SALDO PENDIENTE</span>
+                                                <span style={{ fontSize: '1.1rem', fontWeight: 950, color: group.saldoPendiente > 0 ? '#DC2626' : '#059669' }}>S/ {formatSoles(group.saldoPendiente)}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* SOLICITUDES ACTUALES */}
+                                        <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            {group.items.length === 0 ? (
+                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>No hay solicitudes de pago actuales</p>
+                                            ) : (
+                                                group.items.map((item, idx) => {
+                                                    const isPending = item.estado === 'pendiente';
+                                                    const typeCfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F1F5F9', label: item.tipo };
+                                                    
+                                                    return (
+                                                        <div key={idx} style={{ 
+                                                            background: isPending ? '#FFFBEB' : '#FFFFFF',
+                                                            border: isPending ? '2px solid #F59E0B' : '1px solid #F1F5F9',
+                                                            borderRadius: '14px', padding: '12px',
+                                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                                        }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                <span style={{ 
+                                                                    fontSize: '0.65rem', fontWeight: 900, padding: '2px 8px', borderRadius: '6px',
+                                                                    background: typeCfg.bg, color: typeCfg.color, width: 'fit-content'
+                                                                }}>
+                                                                    {typeCfg.label}
+                                                                </span>
+                                                                <span style={{ fontSize: '1.25rem', fontWeight: 950, color: '#1E293B' }}>S/ {formatSoles(item.monto)}</span>
+                                                                {item.referencia && <span style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>{item.referencia}</span>}
                                                             </div>
                                                             
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                                                <div className={styles.bankDetailRow} onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }} title="Click para copiar" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 4px', borderRadius: '4px', background: '#F8FAFC' }}>
-                                                                    <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 700 }}>CTA:</span>
-                                                                    <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>{group.tecnico.numeroCuenta}</span>
-                                                                    <Copy size={10} style={{ opacity: 0.5 }} />
-                                                                </div>
-                                                                {group.tecnico.cci && group.tecnico.cci !== '---' && (
-                                                                    <div className={styles.bankDetailRow} onClick={() => { navigator.clipboard.writeText(group.tecnico.cci); showToast('CCI copiado'); }} title="Click para copiar" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '2px 4px', borderRadius: '4px', background: '#F8FAFC' }}>
-                                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 700 }}>CCI:</span>
-                                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.72rem', color: '#475569', fontWeight: 600 }}>{group.tecnico.cci}</span>
-                                                                        <Copy size={10} style={{ opacity: 0.5 }} />
+                                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                                {isPending ? (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                                        <button 
+                                                                            onClick={() => handleConfirmPayment(group, item)}
+                                                                            style={{ 
+                                                                                background: '#10B981', color: 'white', border: 'none', 
+                                                                                borderRadius: '10px', padding: '10px 16px', fontWeight: 800,
+                                                                                fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 10px rgba(16,185,129,0.2)'
+                                                                            }}
+                                                                        >
+                                                                            PAGAR
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => handleDenyPayment(group, item)}
+                                                                            style={{ 
+                                                                                background: '#FEF2F2', color: '#DC2626', border: 'none', 
+                                                                                borderRadius: '8px', padding: '6px', fontWeight: 700,
+                                                                                fontSize: '0.7rem', cursor: 'pointer'
+                                                                            }}
+                                                                        >
+                                                                            DENEGAR
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                                        <div style={{ background: '#DCFCE7', borderRadius: '50%', padding: '6px', color: '#10B981' }}>
+                                                                            <CheckCircle2 size={18} />
+                                                                        </div>
+                                                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
+                                                                        {item.voucherRef && (
+                                                                            <button onClick={() => setShowVoucher(item.voucherRef)}
+                                                                                style={{ fontSize: '0.65rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
+                                                                                VOUCHER
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>
-
-                                                            {group.costoVisita && group.costoVisita > 0 && (
-                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: '#7C3AED', fontWeight: 700, borderTop: '1px dashed #E2E8F0', paddingTop: '5px', marginTop: '2px' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <ArrowUpRight size={11} />
-                                                                        Visita: S/ {formatSoles(group.costoVisita)}
-                                                                    </div>
-                                                                    {group.voucherVisita && (
-                                                                        <button onClick={() => setShowVoucher(group.voucherVisita || null)}
-                                                                            style={{ background: '#EDE9FE', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px', color: '#7C3AED', fontSize: '0.62rem', fontWeight: 800 }}>
-                                                                            VOUCHER
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            )}
                                                         </div>
-                                                        {group.descripcion && (
-                                                            <div style={{ 
-                                                                fontSize: '0.68rem', 
-                                                                color: '#64748B', 
-                                                                fontStyle: 'italic', 
-                                                                lineHeight: 1.3, 
-                                                                padding: '6px 8px',
-                                                                background: '#F8FAFC',
-                                                                borderRadius: '6px',
-                                                                borderLeft: '2px solid #E2E8F0',
-                                                                marginTop: '8px',
-                                                                whiteSpace: 'pre-wrap',
-                                                                maxHeight: '40px',
-                                                                overflow: 'hidden',
-                                                                textOverflow: 'ellipsis',
-                                                                display: '-webkit-box',
-                                                                WebkitLineClamp: 2,
-                                                                WebkitBoxOrient: 'vertical'
-                                                            }}>
-                                                                {group.descripcion}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-
-                                                {/* Col 3: Estado Financiero - Con Presupuesto y Rentabilidad */}
-                                                <td>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                        {/* Presupuesto Aprobado (BLUE) */}
-                                                        <div className={styles.quotedRow}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span className={styles.quotedLabel}>Presupuesto Cliente</span>
-                                                                <span className={styles.quotedValue}>S/ {formatSoles(group.montoFacturado)}</span>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Desglose de Pago al Técnico */}
-                                                        <div className={styles.financialGridCompact}>
-                                                            <div className={styles.finRowCompact}>
-                                                                <span className={styles.finLabelCompact}>Pactado Trabajo</span>
-                                                                <span className={styles.finValueCompact}>S/ {formatSoles(group.montoPactado)}</span>
-                                                            </div>
-                                                            <div className={styles.finRowCompact}>
-                                                                <span className={styles.finLabelCompact}>Pagado Previo</span>
-                                                                <span className={styles.finValueCompact} style={{ color: '#059669' }}>- S/ {formatSoles(group.montoAdelantado)}</span>
-                                                            </div>
-                                                            <div className={styles.finRowTotal}>
-                                                                <div className={styles.finRowCompact}>
-                                                                    <span style={{ fontWeight: 800, color: '#64748B', fontSize: '0.65rem' }}>SALDO PENDIENTE</span>
-                                                                    <span style={{ fontWeight: 900, color: group.saldoPendiente > 0 ? '#2563EB' : '#059669', fontSize: '0.85rem' }}>
-                                                                        S/ {formatSoles(group.saldoPendiente)}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Rentabilidad (GREEN/RED) */}
-                                                        <div className={group.utilidad > 0 ? styles.finRowProfit : styles.finRowLoss}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span className={styles.profitLabel}>Rentabilidad Bruta</span>
-                                                                <span className={styles.profitValue}>S/ {formatSoles(group.utilidad)}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-
-                                                {/* Col 4: Solicitud Actual */}
-                                                <td>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        {group.items.map((item) => {
-                                                            const cfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F8FAFC', label: item.tipo };
-                                                            return (
-                                                                <div key={item.id} style={{
-                                                                    background: item.isReference ? '#F8FAFC' : (item.tipo === 'Solicitud Gestora' ? '#FEF2F2' : (item.estado === 'pendiente' ? '#FFFBEB' : (item.estado === 'requiere_aprobacion' ? '#FFF1F2' : '#F0FDF4'))),
-                                                                    border: `1px solid ${item.isReference ? '#E2E8F0' : (item.tipo === 'Solicitud Gestora' ? '#FECACA' : (item.estado === 'pendiente' ? '#FCD34D' : (item.estado === 'requiere_aprobacion' ? '#FDA4AF' : '#86EFAC')))}`,
-                                                                    borderRadius: '8px', padding: '7px 9px',
-                                                                    opacity: item.isReference ? 0.75 : 1
-                                                                }}>
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                                                                        <span style={{ background: cfg.bg, color: cfg.color, fontSize: '0.65rem', fontWeight: 800, padding: '2px 7px', borderRadius: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                                            {cfg.label}
-                                                                        </span>
-                                                                        <span style={{ fontSize: '0.8rem', fontWeight: 900, color: '#0F172A', fontFamily: 'monospace' }}>
-                                                                            S/ {formatSoles(item.monto)}
-                                                                        </span>
-                                                                    </div>
-                                                                    {item.concepto && (
-                                                                        <div style={{ fontSize: '0.68rem', color: '#7F1D1D', fontWeight: 600, marginBottom: '3px', fontStyle: 'italic' }}>
-                                                                            "{item.concepto}"
-                                                                        </div>
-                                                                    )}
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                        <span style={{ fontSize: '0.65rem', color: '#94A3B8' }}>
-                                                                            {new Date(item.fecha).toLocaleDateString('es-PE')}
-                                                                        </span>
-                                                                        <span style={{
-                                                                            fontSize: '0.62rem', fontWeight: 800,
-                                                                            color: item.isReference ? '#64748B' : (item.estado === 'pendiente' ? '#D97706' : (item.estado === 'requiere_aprobacion' ? '#DC2626' : '#166534')),
-                                                                            background: item.isReference ? '#F1F5F9' : (item.estado === 'pendiente' ? '#FEF3C7' : (item.estado === 'requiere_aprobacion' ? '#FEF2F2' : '#DCFCE7')),
-                                                                            padding: '1px 6px', borderRadius: '4px'
-                                                                        }}>
-                                                                            {item.isReference ? '✓ REFERENCIA' : (item.estado === 'pendiente' ? '⏳ PENDIENTE' : (item.estado === 'requiere_aprobacion' ? '🔔 REVISIÓN ADMIN' : '✓ PAGADO'))}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </td>
-
-                                                {/* Col 5: Acciones — Zero-Fee Deep Link */}
-                                                <td>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
-                                                        {group.items.filter(i => i.estado === 'pendiente').map((item) => {
-                                                            const hasYape = !!group.tecnico.yape;
-                                                            const hasPlin = !!group.tecnico.plin;
-                                                            const hasBanco = group.tecnico.numeroCuenta && group.tecnico.numeroCuenta !== '---';
-                                                            const beneficiaryName = group.tecnico.nombre;
-                                                            const yapeNum = group.tecnico.yape;
-                                                            const plinNum = group.tecnico.plin;
-
-                                                            return (
-                                                                <div key={`action-${item.id}`} className={styles.zeroFeeActions}>
-                                                                    {/* ESTADO: REQUIERE APROBACIÓN ADMIN */}
-                                                                    {item.estado === 'requiere_aprobacion' && (
-                                                                        <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
-                                                                            <button
-                                                                                onClick={() => handleApproveExceedance(item.id)}
-                                                                                style={{ flex: 1, background: '#10B981', color: 'white', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                                                                            >
-                                                                                <CheckCircle2 size={12} /> APROBAR
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleRejectExceedance(item.id)}
-                                                                                style={{ flex: 1, background: '#EF4444', color: 'white', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                                                                            >
-                                                                                <X size={12} /> DENEGAR
-                                                                            </button>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Botón YAPE — Deep Link */}
-                                                                    {hasYape && (
-                                                                        <button
-                                                                            className={styles.btnYape}
-                                                                            onClick={() => handleDeepLinkPayment(group, item, 'yape')}
-                                                                            title={`Copiar ${yapeNum} y abrir Yape (Beneficiario: ${beneficiaryName})`}
-                                                                        >
-                                                                            <span className={styles.walletEmoji}>💜</span>
-                                                                            <span>Yape</span>
-                                                                            <span className={styles.walletNum}>{yapeNum}</span>
-                                                                            <Copy size={10} style={{ opacity: 0.7 }} />
-                                                                        </button>
-                                                                    )}
-                                                                    {/* Botón PLIN — Deep Link */}
-                                                                    {hasPlin && (
-                                                                        <button
-                                                                            className={styles.btnPlin}
-                                                                            onClick={() => handleDeepLinkPayment(group, item, 'plin')}
-                                                                            title={`Copiar ${plinNum} y abrir Plin (Beneficiario: ${beneficiaryName})`}
-                                                                        >
-                                                                            <span className={styles.walletEmoji}>🔵</span>
-                                                                            <span>Plin</span>
-                                                                            <span className={styles.walletNum}>{plinNum}</span>
-                                                                            <Copy size={10} style={{ opacity: 0.7 }} />
-                                                                        </button>
-                                                                    )}
-                                                                    {/* Botón BANCO — Solo portapapeles, sin deep link */}
-                                                                    {!hasYape && !hasPlin && hasBanco && (
-                                                                        <button
-                                                                            className={styles.btnBanco}
-                                                                            onClick={() => handleDeepLinkPayment(group, item, 'banco')}
-                                                                        >
-                                                                            <span>🏦</span>
-                                                                            <span>Transferir</span>
-                                                                            <Copy size={10} style={{ opacity: 0.7 }} />
-                                                                        </button>
-                                                                    )}
-                                                                    {/* Botón clásico con voucher */}
-                                                                    <label className={styles.btnVoucherClassic}>
-                                                                        <Upload size={11} />
-                                                                        Ya pagué · Subir voucher
-                                                                        <input type="file" accept="image/*" style={{ display: 'none' }}
-                                                                            onChange={async (e) => {
-                                                                                const file = e.target.files?.[0];
-                                                                                if (file) {
-                                                                                    const compressed = await compressImage(file);
-                                                                                    const reader = new FileReader();
-                                                                                    reader.onloadend = () => setPendingConfirmation({
-                                                                                        group, item,
-                                                                                        voucher: reader.result as string,
-                                                                                        message: `¿Confirmar depósito de S/ ${formatSoles(item.monto)} para ${item.tipo}?`
-                                                                                    });
-                                                                                    reader.readAsDataURL(compressed);
-                                                                                }
-                                                                            }} />
-                                                                    </label>
-
-                                                                    {/* Botón DENEGAR PAGO */}
-                                                                    <button
-                                                                        className={styles.btnDeny}
-                                                                        onClick={() => handleDenyPayment(group, item)}
-                                                                        title="Denegar y cancelar solicitud"
-                                                                    >
-                                                                        <X size={12} />
-                                                                        Denegar Pago
-                                                                    </button>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                        {group.items.length > 0 ? (
-                                                            group.items.every(i => i.estado === 'pagado' || i.isReference) && !group.items.every(i => i.isReference) && (
-                                                                <div style={{ textAlign: 'center', padding: '8px 4px' }}>
-                                                                    <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
-                                                                        <CheckCircle2 size={18} color="#22C55E" />
-                                                                    </div>
-                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803D', display: 'block' }}>COMPLETADO</span>
-                                                                    {group.historialDepositos.length > 0 && (
-                                                                        <button className={styles.historyToggle}
-                                                                            style={{ marginTop: '6px', width: '100%' }}
-                                                                            onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}>
-                                                                            {expandedHistory === group.ticketId ? <ChevronUp size={14} /> : <History size={14} />}
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            )
-                                                        ) : (
-                                                            round2(group.montoPactado - group.montoAdelantado) <= 0.01 && (
-                                                                <div style={{ textAlign: 'center', padding: '8px 4px' }}>
-                                                                    <div style={{ width: 32, height: 32, background: '#DCFCE7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 4px' }}>
-                                                                        <CheckCircle2 size={18} color="#22C55E" />
-                                                                    </div>
-                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#15803D', display: 'block' }}>COMPLETADO</span>
-                                                                    {group.historialDepositos.length > 0 && (
-                                                                        <button className={styles.historyToggle}
-                                                                            style={{ marginTop: '6px', width: '100%' }}
-                                                                            onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}>
-                                                                            {expandedHistory === group.ticketId ? <ChevronUp size={14} /> : <History size={14} />}
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            )
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-
-                                            {/* Historial expandido */}
-                                            {expandedHistory === group.ticketId && (
-                                                <tr className={styles.historyRow}>
-                                                    <td colSpan={5}>
-                                                        <div className={styles.historyContainer}>
-                                                            <h4 style={{ margin: '0 0 16px', color: '#475569', fontSize: '0.85rem', textTransform: 'uppercase', fontWeight: 800 }}>
-                                                                📋 Historial de Transferencias — Ticket {group.ticketNum}
-                                                            </h4>
-                                                            <div className={styles.historyGrid}>
-                                                                {group.historialDepositos.map((dep, idx) => (
-                                                                    <div key={idx} className={styles.historyCard}>
-                                                                        <div className={styles.historyHeader}>
-                                                                            <span className={styles.historyIndex}>#{idx + 1}</span>
-                                                                            <span className={styles.historyDate}>{new Date(dep.fecha).toLocaleString('es-PE')}</span>
-                                                                        </div>
-                                                                        <div className={styles.historyBody}>
-                                                                            <strong style={{ fontSize: '1.05rem', color: '#1E293B', fontFamily: 'monospace' }}>S/ {formatSoles(dep.monto)}</strong>
-                                                                            {(dep.hasVoucher || dep.voucherRef) && (
-                                                                                <button onClick={() => handleViewVoucher(group.realTicketId, dep.voucherRef, dep.hasVoucher)}
-                                                                                    className={styles.viewVoucherBtn}
-                                                                                    style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '0.72rem', cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
-                                                                                    <Eye size={12} /> Ver Voucher
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                </tr>
+                                                    );
+                                                })
                                             )}
-                                        </React.Fragment>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                        </div>
+
+                                        {/* FOOTER - HISTORIAL RÁPIDO */}
+                                        <div style={{ 
+                                            padding: '12px 20px', background: '#F8FAFC', 
+                                            borderTop: '1px solid #F1F5F9', display: 'flex', 
+                                            justifyContent: 'space-between', alignItems: 'center' 
+                                        }}>
+                                            <button 
+                                                onClick={() => toggleHistory(group.ticketId)}
+                                                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                            >
+                                                <History size={14} />
+                                                {expandedTicket === group.ticketId ? 'Ocultar historial' : 'Ver historial'}
+                                            </button>
+                                            <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600 }}>{group.historialDepositos.length} depósitos</span>
+                                        </div>
+                                        
+                                        {/* EXPANDED HISTORY (Sub-card style) */}
+                                        {expandedTicket === group.ticketId && (
+                                            <div style={{ padding: '16px', background: '#F1F5F9', borderTop: '1px solid #E2E8F0' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {group.historialDepositos.map((h: any, i: number) => (
+                                                        <div key={i} style={{ background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                                                            <div>
+                                                                <span style={{ fontWeight: 800, color: '#334155' }}>{h.tipo || h.referencia}</span>
+                                                                <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.65rem' }}>{new Date(h.fecha).toLocaleDateString()}</p>
+                                                            </div>
+                                                            <span style={{ fontWeight: 900, color: '#0F172A' }}>S/ {formatSoles(h.monto)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     )}
+                </div>
+
+
+
+
+
+                                                            
+
+
+
+
+
+
+
+
+
                 </div>
             </div>
 
