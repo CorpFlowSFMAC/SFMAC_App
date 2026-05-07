@@ -469,7 +469,7 @@ export default function PaymentsPage() {
 
     // ★ FIX 2026-04-27: CORREGIR monthlyTotals - SOLO pagos al técnico (rescates/adelantos)
     // Las compras (materiales/movilidad/logística) NO van al técnico, van a rentabilidad
-    const calculateMonthlyTotalsFromTickets = (allTickets: any[]) => {
+    const calculateMonthlyTotalsFromGroups = (groups: PaymentTicketGroup[]) => {
         const totals: { [key: string]: number } = {};
         
         const isPagoParaTecnico = (tipo: string): boolean => {
@@ -478,19 +478,11 @@ export default function PaymentsPage() {
                    t.includes('liquidación') || t.includes('saldo pendiente');
         };
 
-        allTickets.forEach(ticket => {
-            // 1️⃣ Incluir pagos legacy de historialPagosTecnico (solo si son para técnico)
-            (ticket.historialPagosTecnico || []).forEach((p: any) => {
+        groups.forEach(group => {
+            (group.historialDepositos || []).forEach((p: any) => {
                 if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
                     const key = getMonthKey(p.fecha);
                     totals[key] = round2((totals[key] || 0) + round2(p.monto));
-                }
-            });
-            // 2️⃣ Incluir pagos de ticket_costs (solo si son para técnico)
-            (ticket.paidCosts || []).forEach((c: any) => {
-                if (c.monto && c.fecha_pago && isPagoParaTecnico(c.categoria)) {
-                    const key = getMonthKey(c.fecha_pago);
-                    totals[key] = round2((totals[key] || 0) + round2(c.monto));
                 }
             });
         });
@@ -820,7 +812,7 @@ export default function PaymentsPage() {
         });
 
         setPaymentGroups(allGroups);
-        calculateMonthlyTotalsFromTickets(allTickets);
+        calculateMonthlyTotalsFromGroups(allGroups);
     };
 
     // ★ USAMOS CONTEXTO PARA ACTUALIZACIÓN INMEDIATA EN DASHBOARD
