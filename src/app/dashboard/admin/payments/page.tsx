@@ -1168,40 +1168,47 @@ export default function PaymentsPage() {
             )}
 
             {/* ─── HEADER PREMIUM ──────────────────────────────── */}
+            {/* ─── HEADER COMPACTO & MINIMALISTA ────────────────────────── */}
             <header style={{
-                background: 'linear-gradient(135deg, #0F172A 0%, #1E3A5F 50%, #0EA5E9 100%)',
-                borderRadius: '20px',
-                padding: '28px 32px',
-                marginBottom: '28px',
+                background: '#FFFFFF',
+                borderRadius: '16px',
+                padding: '16px 24px',
+                marginBottom: '24px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                boxShadow: '0 20px 40px -12px rgba(14,165,233,0.35)'
+                boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                border: '1px solid #E2E8F0'
             }}>
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-                        <div style={{ width: 42, height: 42, background: 'rgba(255,255,255,0.15)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Banknote size={22} color="white" />
-                        </div>
-                        <h1 style={{ margin: 0, fontSize: '1.7rem', fontWeight: 900, color: 'white', letterSpacing: '-0.02em' }}>
-                            Módulo de Pagos y Tesorería
-                        </h1>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ 
+                        width: 40, height: 40, 
+                        background: 'linear-gradient(135deg, #0F172A 0%, #334155 100%)', 
+                        borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 10px rgba(15,23,42,0.2)'
+                    }}>
+                        <Banknote size={20} color="white" />
                     </div>
-                    <p style={{ margin: 0, color: 'rgba(255,255,255,0.65)', fontSize: '0.92rem' }}>
-                        Gestión centralizada de transferencias · Control financiero en tiempo real
-                    </p>
+                    <div>
+                        <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+                            Tesorería y Pagos
+                        </h1>
+                        <p style={{ margin: 0, color: '#64748B', fontSize: '0.8rem', fontWeight: 500 }}>
+                            Control financiero operativo en tiempo real
+                        </p>
+                    </div>
                 </div>
                 <button
                     onClick={async () => { setRefreshing(true); await refresh(); setRefreshing(false); }}
                     style={{
-                        background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)',
-                        borderRadius: '12px', padding: '10px 18px', color: 'white', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.85rem',
-                        backdropFilter: 'blur(8px)', transition: 'all 0.2s'
+                        background: '#F8FAFC', border: '1px solid #E2E8F0',
+                        borderRadius: '10px', padding: '8px 16px', color: '#0F172A', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '0.8rem',
+                        transition: 'all 0.2s'
                     }}
                 >
-                    <RefreshCw size={16} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-                    Actualizar
+                    <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                    Sincronizar
                 </button>
             </header>
 
@@ -1228,81 +1235,68 @@ export default function PaymentsPage() {
             )}
 
             {/* ─── STAT CARDS ──────────────────────────────────── */}
+            {/* ─── STAT CARDS MINIMALISTAS ────────────────────────── */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '16px',
-                marginBottom: '28px'
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '20px',
+                marginBottom: '24px'
             }}>
                 {/* Pendientes de Pago */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #FEE2E2', boxShadow: '0 4px 12px rgba(239,68,68,0.08)',
-                    display: 'flex', alignItems: 'center', gap: '16px'
+                    background: 'white', borderRadius: '14px', padding: '16px 20px',
+                    border: '1px solid #E2E8F0', borderLeft: '4px solid #EF4444',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    display: 'flex', flexDirection: 'column', gap: '4px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#FEE2E2,#FECACA)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Clock size={22} color="#DC2626" />
-                    </div>
-                    <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pendientes de Pago</p>
-                        <p style={{ margin: '4px 0 0', fontSize: '2rem', fontWeight: 900, color: '#DC2626', lineHeight: 1 }}>{pendingCount}</p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>solicitudes activas</p>
+                    <p style={{ margin: 0, fontSize: '0.65rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>SOLICITUDES</p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                        <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 900, color: '#0F172A', lineHeight: 1 }}>{pendingCount}</p>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#EF4444', background: '#FEF2F2', padding: '2px 8px', borderRadius: '6px' }}>Pendientes</span>
                     </div>
                 </div>
 
                 {/* Monto por Desembolsar */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #DBEAFE', boxShadow: '0 4px 12px rgba(37,99,235,0.08)',
-                    display: 'flex', alignItems: 'center', gap: '16px'
+                    background: 'white', borderRadius: '14px', padding: '16px 20px',
+                    border: '1px solid #E2E8F0', borderLeft: '4px solid #3B82F6',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    display: 'flex', flexDirection: 'column', gap: '4px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#DBEAFE,#BFDBFE)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <DollarSign size={22} color="#2563EB" />
-                    </div>
-                    <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Por Desembolsar</p>
-                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#2563EB', lineHeight: 1 }}>
-                            S/ {formatSoles(totalPendingAmount)}
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>monto pendiente total</p>
+                    <p style={{ margin: 0, fontSize: '0.65rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>POR DESEMBOLSAR</p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#3B82F6' }}>S/</span>
+                        <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 900, color: '#0F172A', lineHeight: 1 }}>{formatSoles(totalPendingAmount)}</p>
                     </div>
                 </div>
 
-                {/* Egresos del Mes ACTUAL — ★ FIX: usa clave YYYY-MM */}
+                {/* Egresos del Mes ACTUAL */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #D1FAE5', boxShadow: '0 4px 12px rgba(5,150,105,0.08)',
-                    display: 'flex', alignItems: 'center', gap: '16px'
+                    background: 'white', borderRadius: '14px', padding: '16px 20px',
+                    border: '1px solid #E2E8F0', borderLeft: '4px solid #10B981',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    display: 'flex', flexDirection: 'column', gap: '4px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#D1FAE5,#A7F3D0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <CalendarCheck size={22} color="#059669" />
-                    </div>
-                    <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Egresos {formatMonthKey(currentMonthKey)}
-                        </p>
-                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#059669', lineHeight: 1 }}>
-                            S/ {formatSoles(egresosEsteMes)}
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>pagado al técnico este mes</p>
+                    <p style={{ margin: 0, fontSize: '0.65rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        GASTO {formatMonthKey(currentMonthKey)}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#10B981' }}>S/</span>
+                        <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 900, color: '#0F172A', lineHeight: 1 }}>{formatSoles(egresosEsteMes)}</p>
                     </div>
                 </div>
 
                 {/* Total Histórico */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #EDE9FE', boxShadow: '0 4px 12px rgba(124,58,237,0.08)',
-                    display: 'flex', alignItems: 'center', gap: '16px'
+                    background: 'white', borderRadius: '14px', padding: '16px 20px',
+                    border: '1px solid #E2E8F0', borderLeft: '4px solid #8B5CF6',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                    display: 'flex', flexDirection: 'column', gap: '4px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#EDE9FE,#DDD6FE)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <BarChart3 size={22} color="#7C3AED" />
-                    </div>
-                    <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Histórico</p>
-                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#7C3AED', lineHeight: 1 }}>
-                            S/ {formatSoles(totalPagadoHistorico)}
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>acumulado total de pagos</p>
+                    <p style={{ margin: 0, fontSize: '0.65rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>HISTÓRICO TOTAL</p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#8B5CF6' }}>S/</span>
+                        <p style={{ margin: 0, fontSize: '1.75rem', fontWeight: 900, color: '#0F172A', lineHeight: 1 }}>{formatSoles(totalPagadoHistorico)}</p>
                     </div>
                 </div>
             </div>

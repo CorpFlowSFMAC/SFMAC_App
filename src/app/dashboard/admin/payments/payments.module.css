@@ -13,16 +13,17 @@
 }
 
 .titleSection h1 {
-    font-size: 1.8rem;
+    font-size: 1.2rem;
     font-weight: 800;
-    color: #1E293B;
+    color: #0F172A;
     margin: 0;
     letter-spacing: -0.02em;
 }
 
 .titleSection p {
     color: #64748B;
-    margin: 4px 0 0 0;
+    margin: 2px 0 0 0;
+    font-size: 0.8rem;
 }
 
 /* Stats Row */
@@ -104,13 +105,13 @@
 }
 
 .tableHeader h2 {
-    font-size: 1.1rem;
-    font-weight: 700;
+    font-size: 0.95rem;
+    font-weight: 800;
     margin: 0;
-    color: #334155;
+    color: #0F172A;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .pills {
@@ -142,15 +143,14 @@
 
 .paymentsTable th {
     text-align: left;
-    padding: 12px 10px;
-    /* Reduced padding */
-    font-size: 0.7rem;
+    padding: 10px 12px;
+    font-size: 0.65rem;
     text-transform: uppercase;
-    color: #64748B;
-    background: #F8FAFC;
-    border-bottom: 1px solid #EDF2F7;
+    color: #94A3B8;
+    background: #FFFFFF;
+    border-bottom: 1px solid #F1F5F9;
     font-weight: 800;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
 }
 
 .paymentsTable td {
