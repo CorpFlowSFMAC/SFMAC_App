@@ -136,14 +136,20 @@ export default function GestorTurnoWidget() {
     const currentHour = new Date().getHours();
     const isLate = currentHour >= 18;
 
-    // LÓGICA DE BUCLE RRHH:
-    // Oculto por defecto si ya existe registro de entrada (activo o cerrado) PERO es antes de las 18:00
-    // Si ya ingresó y es tarde (18:00+), mostrar SOLO botón salir
-    // Si ya cerró su turno hoy, se oculta hasta el día siguiente
+    // Calcular cuánto tiempo lleva en el turno (en horas)
+    let horas = 0;
+    if (turnoActivo) {
+        horas = (Date.now() - new Date(turnoActivo.hora_ingreso).getTime()) / 3_600_000;
+    }
     
+    // Si acaba de marcar ingreso (hace menos de 15 minutos), no le mostramos "Marcar Salida" todavía,
+    // incluso si ya son más de las 18:00 hrs. Esto permite que el banner desaparezca limpiamente.
+    const justStarted = horas < 0.25;
+
+    // LÓGICA DE BUCLE RRHH:
     let shouldShow = false;
     if (!turnoActivo && !turnoHoyCerrado) shouldShow = true; // No ha ingresado hoy
-    if (turnoActivo && isLate) shouldShow = true; // Turno activo, es tarde, necesita salir
+    if (turnoActivo && isLate && !justStarted) shouldShow = true; // Turno activo, es tarde, necesita salir y no acaba de ingresar
 
     if (!shouldShow) {
         return null; // Oculto
