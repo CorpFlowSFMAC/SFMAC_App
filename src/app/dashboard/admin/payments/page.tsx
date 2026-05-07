@@ -1109,33 +1109,23 @@ export default function PaymentsPage() {
 
     const currentMonthKey = getCurrentMonthKey();
     
-    // ★ MOTOR FINANCIERO V4: Cálculo preciso con todos los estados de pago válido
-    const isPagadoEstado = (estado: string) => {
-        const st = (estado || '').toLowerCase().trim();
-        return st === 'pagado' || st === 'adelanto' || st === 'confirmado' || 
-               st === 'autorizado' || st === 'aprobado' || st === 'transferido';
-    };
-    
-    // Los costos vienen en ticket.costos (no relatedCosts)
-    const costsPagadosEsteMes = tickets.reduce((acc, t) => {
-        const ticketCosts = t.costos || [];
-        const costsThisMonth = ticketCosts.filter((c: any) => isPagadoEstado(c.estado_pago));
-        return acc + costsThisMonth.reduce((s: number, c: any) => s + round2(parseFloat(c.monto) || 0), 0);
-    }, 0);
-    
-    const egresosEsteMes = round2(costsPagadosEsteMes);
-    
-    // Calcular total histórico basado en ticket.costos pagados
-    const costsPagadosHistorico = tickets.reduce((acc, t) => {
-        const ticketCosts = t.costos || [];
-        const paidCosts = ticketCosts.filter((c: any) => isPagadoEstado(c.estado_pago));
-        return acc + paidCosts.reduce((s: number, c: any) => s + round2(parseFloat(c.monto) || 0), 0);
-    }, 0);
-    const totalPagadoHistorico = round2(costsPagadosHistorico);
+    // ★ MOTOR FINANCIERO V5: Usar monthlyTotals que ya incluye todos los pagos calculados previamente
+    // monthlyTotals se calcula desde ambos: historial legacy + ticket_costs
+    const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
+    const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
 
-    // Conteo de peticiones pendientes
+    // Conteo de peticiones pendientes - buscar también en tickets.costos pendientes
+    const costosPendientesCount = tickets.reduce((acc, t) => {
+        const ticketCosts = t.costos || [];
+        return acc + ticketCosts.filter((c: any) => {
+            const st = (c.estado_pago || '').toLowerCase().trim();
+            return st === 'pendiente' || st === 'requiere_aprobacion';
+        }).length;
+    }, 0);
+    
     const pendingCount = paymentGroups.reduce((acc, g) => 
-        acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).length, 0);
+        acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).length, 0) + costosPendientesCount;
+    
     const totalPendingAmount = round2(paymentGroups.reduce((acc, g) =>
         acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).reduce((s, i) => s + i.monto, 0), 0));
 
@@ -1325,58 +1315,56 @@ export default function PaymentsPage() {
                     </div>
                 </div>
 
-                {/* Monto por Desembolsar - DESTACADO con fuente más grande */}
+                {/* Monto por Desembolsar - FONDO AZUL NOCTURNO */}
                 <div style={{
-                    background: 'linear-gradient(135deg,#1E3A8A,#1E40AF)', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #1D4ED8', boxShadow: '0 8px 24px rgba(30,64,175,0.25)',
+                    background: 'linear-gradient(135deg,#0f172a,#1e293b)', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #334155', boxShadow: '0 8px 24px rgba(15,23,42,0.3)',
                     display: 'flex', alignItems: 'center', gap: '16px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <DollarSign size={22} color="white" />
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'rgba(250,204,21,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <DollarSign size={22} color="#FACC15" />
                     </div>
                     <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: 'white', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.85 }}>POR DESEMBOLSAR</p>
-                        <p style={{ margin: '4px 0 0', fontSize: '2.2rem', fontWeight: 900, color: 'white', lineHeight: 1 }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>POR DESEMBOLSAR</p>
+                        <p style={{ margin: '4px 0 0', fontSize: '2.2rem', fontWeight: 900, color: '#FACC15', lineHeight: 1 }}>
                             S/ {formatSoles(totalPendingAmount)}
                         </p>
                     </div>
                 </div>
 
-                {/* Egresos del Mes ACTUAL — ★ FIX: usa clave YYYY-MM */}
+                {/* Egresos del Mes - FONDO AZUL NOCTURNO */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #D1FAE5', boxShadow: '0 4px 12px rgba(5,150,105,0.08)',
+                    background: 'linear-gradient(135deg,#0f172a,#1e293b)', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #334155', boxShadow: '0 8px 24px rgba(15,23,42,0.3)',
                     display: 'flex', alignItems: 'center', gap: '16px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#D1FAE5,#A7F3D0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <CalendarCheck size={22} color="#059669" />
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'rgba(34,197,94,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CalendarCheck size={22} color="#22C55E" />
                     </div>
                     <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Egresos {formatMonthKey(currentMonthKey)}
                         </p>
-                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#059669', lineHeight: 1 }}>
+                        <p style={{ margin: '4px 0 0', fontSize: '1.8rem', fontWeight: 900, color: '#22C55E', lineHeight: 1 }}>
                             S/ {formatSoles(egresosEsteMes)}
                         </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>pagado al técnico este mes</p>
                     </div>
                 </div>
 
-                {/* Total Histórico */}
+                {/* Total Histórico - FONDO AZUL NOCTURNO */}
                 <div style={{
-                    background: 'white', borderRadius: '16px', padding: '20px 24px',
-                    border: '1px solid #EDE9FE', boxShadow: '0 4px 12px rgba(124,58,237,0.08)',
+                    background: 'linear-gradient(135deg,#0f172a,#1e293b)', borderRadius: '16px', padding: '20px 24px',
+                    border: '1px solid #334155', boxShadow: '0 8px 24px rgba(15,23,42,0.3)',
                     display: 'flex', alignItems: 'center', gap: '16px'
                 }}>
-                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'linear-gradient(135deg,#EDE9FE,#DDD6FE)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <BarChart3 size={22} color="#7C3AED" />
+                    <div style={{ width: 50, height: 50, borderRadius: '14px', background: 'rgba(168,85,247,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <BarChart3 size={22} color="#A855F7" />
                     </div>
                     <div>
-                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Histórico</p>
-                        <p style={{ margin: '4px 0 0', fontSize: '1.5rem', fontWeight: 900, color: '#7C3AED', lineHeight: 1 }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Histórico</p>
+                        <p style={{ margin: '4px 0 0', fontSize: '1.8rem', fontWeight: 900, color: '#A855F7', lineHeight: 1 }}>
                             S/ {formatSoles(totalPagadoHistorico)}
                         </p>
-                        <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>acumulado total de pagos</p>
                     </div>
                 </div>
             </div>
@@ -1531,14 +1519,16 @@ export default function PaymentsPage() {
                                                 {/* Col 2: Técnico */}
                                                 <td>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, color: '#1F2937', fontSize: '0.88rem' }}>
-                                                            <User size={13} color="#7C3AED" />
+                                                        {/* ★ JERARQUÍA: Nombre del beneficiario más grande y prominente */}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 900, color: '#0F172A', fontSize: '1.1rem', textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+                                                            <User size={16} color="#7C3AED" />
                                                             {group.tecnico.nombre}
                                                         </div>
-                                                        <div style={{ background: '#FDFCFB', border: '1px solid #F1F5F9', borderRadius: '10px', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '5px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                                                        {/* Información bancaria en segundo plano */}
+                                                        <div style={{ background: '#F8F9FA', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '3px', opacity: 0.8 }}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: 800, color: '#334155' }}>
-                                                                    <CreditCard size={11} color="#64748B" />
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', fontWeight: 600, color: '#6B7280' }}>
+                                                                    <CreditCard size={10} color="#9CA3AF" />
                                                                     {group.tecnico.banco}
                                                                 </div>
                                                                 <div style={{ display: 'flex', gap: '4px' }}>
@@ -1625,8 +1615,8 @@ export default function PaymentsPage() {
                                                             </div>
                                                             <div className={styles.finRowTotal}>
                                                                 <div className={styles.finRowCompact}>
-                                                                    <span style={{ fontWeight: 800, color: '#64748B', fontSize: '0.65rem' }}>SALDO PENDIENTE</span>
-                                                                    <span style={{ fontWeight: 900, color: group.saldoPendiente > 0 ? '#2563EB' : '#059669', fontSize: '0.85rem' }}>
+                                                                    <span style={{ fontWeight: 800, color: group.saldoPendiente > 0 ? '#DC2626' : '#059669', fontSize: '0.65rem' }}>SALDO PENDIENTE</span>
+                                                                    <span style={{ fontWeight: 900, color: group.saldoPendiente > 0 ? '#DC2626' : '#059669', fontSize: '1rem' }}>
                                                                         S/ {formatSoles(group.saldoPendiente)}
                                                                     </span>
                                                                 </div>
