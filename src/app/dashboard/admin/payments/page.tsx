@@ -1109,31 +1109,33 @@ export default function PaymentsPage() {
 
     const currentMonthKey = getCurrentMonthKey();
     
-    // ★ MOTOR FINANCIERO V3: Cálculo preciso de egresos basado en ticket_costs con estado 'pagado'
+    // ★ MOTOR FINANCIERO V4: Cálculo preciso con todos los estados de pago válido
+    const isPagadoEstado = (estado: string) => {
+        const st = (estado || '').toLowerCase().trim();
+        return st === 'pagado' || st === 'adelanto' || st === 'confirmado' || 
+               st === 'autorizado' || st === 'aprobado' || st === 'transferido';
+    };
+    
+    // Los costos vienen en ticket.costos (no relatedCosts)
     const costsPagadosEsteMes = tickets.reduce((acc, t) => {
-        const relatedCosts = t.relatedCosts || [];
-        const costsThisMonth = relatedCosts.filter((c: any) => {
-            const st = (c.estado_pago || '').toLowerCase();
-            return st === 'pagado' || st === 'adelanto';
-        });
+        const ticketCosts = t.costos || [];
+        const costsThisMonth = ticketCosts.filter((c: any) => isPagadoEstado(c.estado_pago));
         return acc + costsThisMonth.reduce((s: number, c: any) => s + round2(parseFloat(c.monto) || 0), 0);
     }, 0);
     
-    const egresosEsteMes = round2(costsPagadosEsteMes || monthlyTotals[currentMonthKey] || 0);
+    const egresosEsteMes = round2(costsPagadosEsteMes);
     
-    // Calcular total histórico basado en ticket_costs pagados
+    // Calcular total histórico basado en ticket.costos pagados
     const costsPagadosHistorico = tickets.reduce((acc, t) => {
-        const relatedCosts = t.relatedCosts || [];
-        const paidCosts = relatedCosts.filter((c: any) => {
-            const st = (c.estado_pago || '').toLowerCase();
-            return st === 'pagado' || st === 'adelanto';
-        });
+        const ticketCosts = t.costos || [];
+        const paidCosts = ticketCosts.filter((c: any) => isPagadoEstado(c.estado_pago));
         return acc + paidCosts.reduce((s: number, c: any) => s + round2(parseFloat(c.monto) || 0), 0);
     }, 0);
     const totalPagadoHistorico = round2(costsPagadosHistorico);
 
-    // Conteo de peticiones pendientes para alerta roja
-    const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).length, 0);
+    // Conteo de peticiones pendientes
+    const pendingCount = paymentGroups.reduce((acc, g) => 
+        acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).length, 0);
     const totalPendingAmount = round2(paymentGroups.reduce((acc, g) =>
         acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).reduce((s, i) => s + i.monto, 0), 0));
 
