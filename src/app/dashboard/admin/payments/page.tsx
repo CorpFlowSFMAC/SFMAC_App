@@ -1024,9 +1024,17 @@ export default function PaymentsPage() {
     const egresosEsteMes = round2(monthlyTotals[currentMonthKey] || 0);
     const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
 
-    const pendingCount = paymentGroups.reduce((acc, g) => acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).length, 0);
-    const totalPendingAmount = round2(paymentGroups.reduce((acc, g) =>
-        acc + g.items.filter(i => i.estado === 'pendiente' && i.monto > 0).reduce((s, i) => s + i.monto, 0), 0));
+    const pendingCount = paymentGroups.reduce((acc, g) => {
+        const isClosed = ['cerrado', 'cancelado', 'rechazado'].includes(g.statusId || '');
+        if (isClosed) return acc;
+        return acc + g.items.filter(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && i.monto > 0 && !i.isReference).length;
+    }, 0);
+
+    const totalPendingAmount = round2(paymentGroups.reduce((acc, g) => {
+        const isClosed = ['cerrado', 'cancelado', 'rechazado'].includes(g.statusId || '');
+        if (isClosed) return acc;
+        return acc + g.items.filter(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && i.monto > 0 && !i.isReference).reduce((s, i) => s + i.monto, 0);
+    }, 0));
 
     const filteredGroups = paymentGroups.filter(g => {
         const lowerSearch = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -1042,27 +1050,25 @@ export default function PaymentsPage() {
         // ★ UX FIX: Si el usuario está buscando, ignoramos el filtro de estado
         if (searchTerm && matchesSearch) return true;
 
-        // ★ ARQUITECTURA FINANCIERA: 
-        // - Bandeja Activa: Tickets abiertos (no cerrados) siempre visibles
-        // - Los adelantos/rescates pagados siguen visibles pero marcados como "Pagado"
-        // - Solo desaparecen cuando el ticket está cerrado (estado: 'cerrado')
+        const isTicketClosed = g.statusId === 'cerrado' || g.statusId === 'cancelado' || g.statusId === 'rechazado';
         
-        const isTicketClosed = g.statusId === 'cerrado';
+        // 1. Identificar si hay ítems realmente pendientes (no históricos/referencia)
+        const hasPendingItems = g.items.some(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && !i.isReference);
         
-        // Los tickets cerrados NO aparecen en la bandeja activa
-        if (isTicketClosed) return false;
-        
-        // ★ ARQUITECTURA FINANCIERA V2:
-        // - filtro 'pendiente' = TODOS los tickets ABIERTOS (sin importar si tienen pagos hechos)
-        // - Solo verificamos si el ticket está abierto (no cancelado/rechazado/cerrado)
-        const isOpen = g.isOpen !== false;
-        
-        // Los tickets abiertos siempre aparecen
-        // El filtro 'pendiente' ahora muestra tickets abiertos (el admins puede ver ambos)
-        // El filtro 'pagado' muestra tickets con historial de depósitos
-        const matchesStatus = filter === 'todos' ||
-                            (filter === 'pendiente' && isOpen) ||  // Todos los tickets abiertos
-                            (filter === 'pagado' && g.historialDepositos.length > 0);
+        // 2. Identificar si tiene historial de pagos (o ítems ya marcados como pagados)
+        const hasPaidItems = g.items.some(i => i.estado === 'pagado' && !i.isReference) || (g.historialDepositos || []).length > 0;
+
+        let matchesStatus = false;
+        if (filter === 'todos') {
+            matchesStatus = true;
+        } else if (filter === 'pendiente') {
+            // Bandeja PENDIENTE: Tickets no cerrados que tienen solicitudes de pago activas
+            matchesStatus = hasPendingItems && !isTicketClosed;
+        } else if (filter === 'pagado') {
+            // Bandeja PAGADOS: Tickets (abiertos o cerrados) donde todo lo solicitado ya se pagó
+            // Incluimos referencias históricas para que el Admin pueda ver qué se pagó recientemente.
+            matchesStatus = (!hasPendingItems || isTicketClosed) && (hasPaidItems || g.items.some(i => i.isReference));
+        }
         
         return matchesSearch && matchesStatus;
     });
