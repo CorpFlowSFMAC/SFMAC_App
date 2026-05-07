@@ -527,6 +527,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     setTicketData((prev: any) => {
                         const merged = {
                             ...prev, ...fullTicket, ...meta, ...cachedMetadata,
+                            numeroTicketCliente: fullTicket.client_ticket_number || meta.numeroTicketCliente || cachedMetadata.numeroTicketCliente || prev.numeroTicketCliente,
                             metadata: { ...meta, ...cachedMetadata },
                             estadoId: finalEstadoId,
                             status_id: finalStatusId,
@@ -622,6 +623,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || meta.evidenciasEjecucion,
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || meta.documentosChecklist,
                 historialPagosTécnico: prev.historialPagosTécnico || prev.metadata?.historialPagosTécnico || meta.historialPagosTécnico,
+                numeroTicketCliente: prev.numeroTicketCliente || ticket.client_ticket_number || meta.numeroTicketCliente,
                 
                 // BLINDAJE DE TÉCNICO Y GESTORA:
                 // Si el ID del prop coincide con el ID que ya tenemos en el estado local (prev),
@@ -753,7 +755,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
 
         const cleanedClientTicketNumber = (() => {
             const val = businessData.numeroTicketCliente;
-            if (!val || val.trim() === "" || val.startsWith("#")) return null;
+            if (!val || val.trim() === "") return null;
             return val.trim();
         })();
 
@@ -3202,22 +3204,38 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                         <div className={styles.checkText}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                 <strong>5. NÚMERO DE TICKET DEL CLIENTE</strong>
-                                                                {isClientTicketFormatValid(ticketData.numeroTicketCliente) && (
-                                                                    <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
-                                                                )}
+                                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                    {!ticketData.numeroTicketCliente && (
+                                                                        <button 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                const year = new Date().getFullYear().toString().slice(-2);
+                                                                                setTicketData(prev => ({ ...prev, numeroTicketCliente: `MB000000.${year}` }));
+                                                                            }}
+                                                                            style={{ fontSize: '0.6rem', background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '1px 4px', borderRadius: '4px', cursor: 'pointer' }}
+                                                                        >
+                                                                            Auto-completar
+                                                                        </button>
+                                                                    )}
+                                                                    {isClientTicketFormatValid(ticketData.numeroTicketCliente) && (
+                                                                        <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                             <input
                                                                 type="text"
                                                                 className={styles.inlineTicketInput}
                                                                 placeholder={`EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`}
                                                                 value={ticketData.numeroTicketCliente || ""}
+                                                                autoComplete="off"
+                                                                spellCheck={false}
                                                                 
-                                                                // Si el ticket ya venÃƒÂ­a con nÃƒÂºmero asignado (desde props), bloquear ediciÃƒÂ³n
+                                                                // Si el ticket ya venía con número asignado (desde props), bloquear edición
                                                                 disabled={ticketData.estadoId !== "documentacion_enviada" && !isAdmin}
                                                                 style={ticketData.estadoId !== "documentacion_enviada" && !isAdmin ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
-                                                                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#]/g, '');
-                                                                    setTicketData({ ...ticketData, numeroTicketCliente: val });
+                                                                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#-]/g, '');
+                                                                    setTicketData(prev => ({ ...prev, numeroTicketCliente: val }));
                                                                 }}
                                                                 onClick={(e) => e.stopPropagation()}
                                                             />
@@ -3232,7 +3250,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                                                     Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
                                                                 </span>
                                                             )}
-                                                            {ticketData.numeroTicketCliente && (/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && (
+                                                            {ticketData.numeroTicketCliente && ((/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) || ticketData.numeroTicketCliente.startsWith('#')) && (
                                                                 <span style={{ color: '#059669', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
                                                                     ✔ FORMATO VÁLIDO
                                                                 </span>
