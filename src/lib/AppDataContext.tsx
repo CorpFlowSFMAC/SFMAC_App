@@ -244,13 +244,56 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 old
                                     ? old.map((t) => {
                                         if (t.id !== ticketId) return t;
+                                        
+                                        // Detectar cambios en técnicos/gestoras para evitar parpadeo (flickering)
+                                        // Si el ID cambió pero el objeto unido (tecnico/gestora) es el viejo,
+                                        // intentamos parcharlo desde el caché global de maestros.
+                                        const hasTechChanged = pNew.technician_id !== undefined && pNew.technician_id !== t.technician_id;
+                                        const hasGestoraChanged = pNew.gestora_id !== undefined && pNew.gestora_id !== t.gestora_id;
+
+                                        let patchedTecnico = t.tecnico;
+                                        if (hasTechChanged) {
+                                            if (!pNew.technician_id) {
+                                                patchedTecnico = null;
+                                            } else {
+                                                const allTechs = queryClient.getQueryData<any[]>(queryKeys.technicians.all);
+                                                const found = allTechs?.find(tech => tech.id === pNew.technician_id);
+                                                if (found) {
+                                                    // Normalizar técnico igual que en useQueryHooks
+                                                    const firstName = found.first_name || found.nombre || "";
+                                                    const lastName = found.last_name || found.apellido || "";
+                                                    patchedTecnico = {
+                                                        ...found,
+                                                        id: found.id,
+                                                        nombre: found.name || (firstName && lastName ? `${firstName} ${lastName}`.trim() : firstName || lastName) || "Sin Técnico"
+                                                    };
+                                                } else {
+                                                    // Si no está en cache, forzamos null para que la UI no muestre el viejo
+                                                    patchedTecnico = null; 
+                                                }
+                                            }
+                                        }
+
+                                        let patchedGestora = t.gestora;
+                                        if (hasGestoraChanged) {
+                                            if (!pNew.gestora_id) {
+                                                patchedGestora = null;
+                                            } else {
+                                                const allGestoras = queryClient.getQueryData<any[]>(queryKeys.gestoras.all);
+                                                const found = allGestoras?.find(g => g.id === pNew.gestora_id);
+                                                if (found) {
+                                                    patchedGestora = { ...found, nombre: found.name || found.nombre };
+                                                } else {
+                                                    patchedGestora = null;
+                                                }
+                                            }
+                                        }
+
                                         const statusId = pNew.status_id || t.status_id;
                                         const incomingMeta = pNew.metadata || {};
                                         const existingMeta = t.metadata || {};
                                         
                                         // Merge metadata: el payload nuevo gana.
-                                        // Solo protegemos campos si el incoming es explícitamente undefined
-                                        // (lo que indicaría un payload parcial corrupto).
                                         const mergedMeta = {
                                             ...existingMeta,
                                             ...incomingMeta,
@@ -270,9 +313,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             status_id: statusId,
                                             estadoId: normalizeStateId(statusId),
                                             metadata: mergedMeta,
+                                            tecnico: patchedTecnico,
+                                            gestora: patchedGestora,
                                             // Propagar campos clave a nivel raiz
                                             solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                             adelantoPagado: mergedMeta.adelantoPagado ?? t.adelantoPagado,
+                                            pagoRechazado: mergedMeta.pagoRechazado,
                                         };
                                     })
                                     : old
@@ -283,6 +329,47 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                             queryKeys.tickets.detail(ticketId),
                             (old: any) => {
                                 if (!old) return old;
+                                
+                                // Detectar cambios en técnicos/gestoras para el detalle
+                                const hasTechChanged = pNew.technician_id !== undefined && pNew.technician_id !== old.technician_id;
+                                const hasGestoraChanged = pNew.gestora_id !== undefined && pNew.gestora_id !== old.gestora_id;
+
+                                let patchedTecnico = old.tecnico;
+                                if (hasTechChanged) {
+                                    if (!pNew.technician_id) {
+                                        patchedTecnico = null;
+                                    } else {
+                                        const allTechs = queryClient.getQueryData<any[]>(queryKeys.technicians.all);
+                                        const found = allTechs?.find(tech => tech.id === pNew.technician_id);
+                                        if (found) {
+                                            const firstName = found.first_name || found.nombre || "";
+                                            const lastName = found.last_name || found.apellido || "";
+                                            patchedTecnico = {
+                                                ...found,
+                                                id: found.id,
+                                                nombre: found.name || (firstName && lastName ? `${firstName} ${lastName}`.trim() : firstName || lastName) || "Sin Técnico"
+                                            };
+                                        } else {
+                                            patchedTecnico = null; 
+                                        }
+                                    }
+                                }
+
+                                let patchedGestora = old.gestora;
+                                if (hasGestoraChanged) {
+                                    if (!pNew.gestora_id) {
+                                        patchedGestora = null;
+                                    } else {
+                                        const allGestoras = queryClient.getQueryData<any[]>(queryKeys.gestoras.all);
+                                        const found = allGestoras?.find(g => g.id === pNew.gestora_id);
+                                        if (found) {
+                                            patchedGestora = { ...found, nombre: found.name || found.nombre };
+                                        } else {
+                                            patchedGestora = null;
+                                        }
+                                    }
+                                }
+
                                 const incomingMeta = pNew.metadata || {};
                                 const existingMeta = old.metadata || {};
                                 const mergedMeta = {
@@ -302,8 +389,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     ...old,
                                     ...pNew,
                                     metadata: mergedMeta,
+                                    tecnico: patchedTecnico,
+                                    gestora: patchedGestora,
                                     solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                     adelantoPagado: mergedMeta.adelantoPagado ?? old.adelantoPagado,
+                                    pagoRechazado: mergedMeta.pagoRechazado,
                                 };
                             }
                         );

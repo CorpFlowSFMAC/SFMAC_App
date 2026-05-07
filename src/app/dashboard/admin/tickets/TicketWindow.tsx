@@ -540,12 +540,14 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         // para evitar el parpadeo entre pantallas por race condition
         if (isProcessingAdvance.current) return;
 
-        // Solo actualizar si el estado o metadata importante cambió en el prop
+        // Solo actualizar si el estado, técnico o metadata importante cambió en el prop
         setTicketData((prev: any) => {
             const hasStatusChanged = ticket.status_id !== prev.status_id;
+            const hasTechChanged = ticket.technician_id !== prev.technician_id;
+            const hasGestoraChanged = ticket.gestora_id !== prev.gestora_id;
             const hasMetaChanged = JSON.stringify(ticket.metadata) !== JSON.stringify(prev.metadata);
             
-            if (!hasStatusChanged && !hasMetaChanged) return prev;
+            if (!hasStatusChanged && !hasTechChanged && !hasGestoraChanged && !hasMetaChanged) return prev;
             
             let meta = ticket.metadata || {};
             const rawEstadoId = normalizeStateId(ticket.status_id || meta.estadoId || 'nuevo');
@@ -586,7 +588,12 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || meta.evidenciasEjecucion,
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || meta.documentosChecklist,
                 historialPagosTécnico: prev.historialPagosTécnico || prev.metadata?.historialPagosTécnico || meta.historialPagosTécnico,
-                gestora: prev.gestora || meta.gestora || ticket.gestora,
+                
+                // BLINDAJE DE TÉCNICO Y GESTORA:
+                // Si el ID del prop coincide con el ID que ya tenemos en el estado local (prev),
+                // preferimos el objeto local que puede tener datos más completos/frescos.
+                tecnico: (prev.tecnico?.id === ticket.technician_id) ? prev.tecnico : (ticket.tecnico || prev.tecnico),
+                gestora: (prev.gestora?.id === ticket.gestora_id) ? prev.gestora : (prev.gestora || meta.gestora || ticket.gestora),
                 
                 metadata: {
                     ...meta,
@@ -602,7 +609,8 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                 solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 
                 // Extraer pagoRechazado desde metadata para que la UI lo detecte
-                pagoRechazado: meta.pagoRechazado || prev.pagoRechazado,
+                // FIX: Usar asignación directa desde meta para permitir que el servidor lo limpie (null)
+                pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
 
                 // Si el local está más avanzado, NO LO RETROCEDEMOS
                 estadoId: shouldPreservePrevState ? prev.estadoId : corregidoEstadoId,
@@ -906,6 +914,24 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
             status_id: newEstadoId
         }));
         setShowAssignmentDrawer(false);
+    };
+
+    const handleDismissRejection = async () => {
+        try {
+            // Actualizar localmente primero para feedback instantáneo
+            setTicketData((prev: any) => ({
+                ...prev,
+                pagoRechazado: null
+            }));
+            
+            // Persistir en Supabase limpiando el campo en metadata
+            await ticketsAPI.patchMetadata(ticketData.id, { pagoRechazado: null });
+            
+            showToast("Observación Archivada", "Ya puede generar una nueva solicitud.", "success");
+        } catch (err) {
+            console.error("Error dismiss rejection:", err);
+            showToast("Error", "No se pudo archivar la observación.", "error");
+        }
     };
 
     const handleProceedToAssignment = () => {
@@ -2129,7 +2155,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                                         <p>La solicitud de <strong>{ticketData.pagoRechazado.tipo}</strong> por <strong>S/ {formatSoles(ticketData.pagoRechazado.monto)}</strong> fue denegada.</p>
                                         <span>Acción Requerida: Revise las observaciones y genere una nueva solicitud desde cero.</span>
                                     </div>
-                                    <button onClick={() => setTicketData({...ticketData, pagoRechazado: null})} className={styles.dismissRejection}>Entendido</button>
+                                    <button onClick={handleDismissRejection} className={styles.dismissRejection}>Entendido</button>
                                 </div>
                             )}
 
