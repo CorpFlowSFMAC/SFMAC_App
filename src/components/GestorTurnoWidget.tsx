@@ -11,6 +11,7 @@ export default function GestorTurnoWidget() {
     const [bannerDesc, setBannerDesc] = useState(false);
     const [showBanner6PM, setShowBanner6PM] = useState(false);
     const [turnoTickle, setTurnoTickle] = useState(0);
+    const [justClickedIngreso, setJustClickedIngreso] = useState(false);
 
     // Cargar turno activo al montar
     useEffect(() => {
@@ -76,6 +77,7 @@ export default function GestorTurnoWidget() {
             const result = await response.json();
             if (result.success && result.turno) {
                 setTurnoActivo({ id: result.turno.id, hora_ingreso: result.turno.hora_ingreso });
+                setJustClickedIngreso(true);
                 setTurnoLoading(false);
                 return;
             }
@@ -89,7 +91,14 @@ export default function GestorTurnoWidget() {
             .insert({ usuario_email: email, usuario_nombre: nombre, fecha: new Date().toISOString().split('T')[0] })
             .select('id, hora_ingreso')
             .single();
-        if (!error && data) setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso });
+        if (!error && data) {
+            setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso });
+            setJustClickedIngreso(true);
+        } else if (error && error.code === '23505') {
+            // Error de duplicado: significa que ya había registrado hoy.
+            // Si hubo error, podemos intentar simplemente hacer select.
+            console.log('[Gestor] Error insertando turno:', error);
+        }
         setTurnoLoading(false);
     };
 
@@ -136,20 +145,18 @@ export default function GestorTurnoWidget() {
     const currentHour = new Date().getHours();
     const isLate = currentHour >= 18;
 
-    // Calcular cuánto tiempo lleva en el turno (en horas)
+    // Calcular cuánto tiempo lleva en el turno (en horas) para la UI
+    // NOTA: Para evitar bugs de zona horaria con la base de datos que hagan que 'horas' sea > 0.25 erróneamente,
+    // usaremos el flag `justClickedIngreso` para la lógica de ocultamiento inmediato.
     let horas = 0;
     if (turnoActivo) {
         horas = (Date.now() - new Date(turnoActivo.hora_ingreso).getTime()) / 3_600_000;
     }
-    
-    // Si acaba de marcar ingreso (hace menos de 15 minutos), no le mostramos "Marcar Salida" todavía,
-    // incluso si ya son más de las 18:00 hrs. Esto permite que el banner desaparezca limpiamente.
-    const justStarted = horas < 0.25;
 
     // LÓGICA DE BUCLE RRHH:
     let shouldShow = false;
     if (!turnoActivo && !turnoHoyCerrado) shouldShow = true; // No ha ingresado hoy
-    if (turnoActivo && isLate && !justStarted) shouldShow = true; // Turno activo, es tarde, necesita salir y no acaba de ingresar
+    if (turnoActivo && isLate && !justClickedIngreso) shouldShow = true; // Turno activo, es tarde, necesita salir y no acaba de ingresar en esta sesión
 
     if (!shouldShow) {
         return null; // Oculto
