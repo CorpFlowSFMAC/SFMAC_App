@@ -1164,6 +1164,7 @@ export default function PaymentsPage() {
     };
 
     // Recolectar todos los pagos del mes actual hasta HOAY (sin fechas futuras)
+    const hoyStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
     const egresosDetalle: any[] = [];
     tickets.forEach(ticket => {
         const ticketNum = ticket.numeroTicketCliente || ticket.numeroTicket || `#${ticket.id?.slice(-6)}`;
@@ -1174,8 +1175,10 @@ export default function PaymentsPage() {
             if (p.monto && p.fecha && p.estado !== 'anulado' && isPagoParaTecnico(p.tipo)) {
                 const key = getMonthKey(p.fecha);
                 const fechaPago = new Date(p.fecha);
+                const fechaStr = p.fecha?.slice(0, 10);
+                const esFechaFutura = fechaStr > hoyStr;
                 // ★ BLOQUEO: Solo contar pagos hasta hoy (no fechas futuras)
-                if (key === currentMonthKey && fechaPago <= today) {
+                if (key === currentMonthKey && !esFechaFutura) {
                     egresosDetalle.push({ 
                         ticket: ticketNum, 
                         tecnico,
@@ -1183,7 +1186,7 @@ export default function PaymentsPage() {
                         categoria: p.tipo, 
                         monto: round2(p.monto), 
                         fecha: p.fecha,
-                        esFuturo: fechaPago > today
+                        esFuturo: esFechaFutura
                     });
                 }
             }
@@ -1194,8 +1197,10 @@ export default function PaymentsPage() {
             if (c.monto && c.fecha_pago && isPagoParaTecnico(c.categoria)) {
                 const key = getMonthKey(c.fecha_pago);
                 const fechaPago = new Date(c.fecha_pago);
+                const fechaStr = c.fecha_pago?.slice(0, 10);
+                const esFechaFutura = fechaStr > hoyStr;
                 // ★ BLOQUEO: Solo contar pagos hasta hoy (no fechas futuras)
-                if (key === currentMonthKey && fechaPago <= today) {
+                if (key === currentMonthKey && !esFechaFutura) {
                     egresosDetalle.push({ 
                         ticket: ticketNum, 
                         tecnico,
@@ -1203,7 +1208,7 @@ export default function PaymentsPage() {
                         categoria: c.categoria, 
                         monto: round2(c.monto), 
                         fecha: c.fecha_pago,
-                        esFuturo: fechaPago > today
+                        esFuturo: esFechaFutura
                     });
                 }
             }
