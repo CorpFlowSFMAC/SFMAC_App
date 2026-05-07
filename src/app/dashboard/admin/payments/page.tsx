@@ -558,13 +558,13 @@ export default function PaymentsPage() {
                 const totalPagadoParaTecnico = round2(pagosParaTecnico.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 const totalPagadoParaRentabilidad = round2(pagosParaRentabilidad.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
-                // ✅ SEPARACIÓN CORRECTA: Saldo del técnico = (MO + Materiales) - pagos de Rescate/Adelanto
-                // Los pagos de rescates/adelantos se restan del pactado total (no de cada categoría)
-                // NOTA: Los pagos de "compras" (materiales adicionales, viáticos) van a rentabilidad, no al técnico
+                // ✅ FIX: Saldo del técnico = (MO + Visita) - pagos de Rescate/Adelanto/Liquidación
+                // NOTA: Los pagos de "compras" (materiales) van a rentabilidad y se saldan independientemente.
                 const costoManoObraPactado = costoManoObra; // Solo MO para el técnico
+                const montoBaseParaTecnico = costoManoObraPactado > 0 ? costoManoObraPactado : visitCost;
                 
-                // El saldo pendiente al técnico: Total pactado - pagos de rescate/adelanto al técnico
-                const saldoPendienteTecnico = round2(totalPactadoInclVisita - totalPagadoParaTecnico);
+                // El saldo pendiente al técnico: Solo MO - pagos de rescate/adelanto
+                const saldoPendienteTecnico = round2(montoBaseParaTecnico - totalPagadoParaTecnico);
                 
                 const totalPagadoArray = totalPagadoParaTecnico + totalPagadoParaRentabilidad;
                 const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
@@ -581,7 +581,7 @@ export default function PaymentsPage() {
 
                 // 2026-04-10 13:20 - Treasury Fix: Solo mostrar solicitudes pendientes reales
                 const items: PaymentItem[] = [];
-                // Usar el saldo correcto basado en pagos al técnico (no todas las compras)
+                // Usar el saldo correcto basado en pagos de Mano de Obra al técnico
                 const saldoReal = saldoPendienteTecnico;
 
                 // ★ FIX 2026-04-27: Mostrar tickets si:
@@ -758,9 +758,8 @@ export default function PaymentsPage() {
                         statusId: ticket.estadoId,
                         isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(ticket.estadoId), // ★ NUEVO
                         tecnico: techData,
-                        // Total pactado = MO + Materiales (para el técnico esto representa el costo total de ejecución)
-                        // El saldo pendiente es: pactado - pagos de rescate/adelanto
-                        montoPactado: totalPactadoInclVisita,
+                        // El pactado a mostrar en tesorería para el técnico debe ser SOLO su Mano de Obra
+                        montoPactado: montoBaseParaTecnico,
                         montoAdelantado: totalPagadoParaTecnico,  // Solo rescates/adelantos
                         saldoPendiente: Math.max(0, saldoPendienteTecnico),
                         items: techItems,
