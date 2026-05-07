@@ -149,6 +149,8 @@ export default function GestorTurnoWidget() {
         return null; // Oculto
     }
 
+    const isIngreso = !turnoActivo;
+
     return (
         <div style={{ padding: "0 2rem", marginTop: "1.5rem" }}>
             {showBanner6PM && !bannerDesc && (
@@ -185,46 +187,50 @@ export default function GestorTurnoWidget() {
             )}
 
             <div style={{
-                background: 'white', borderRadius: '14px', border: '1px solid #E2E8F0',
-                padding: '1rem 1.5rem', marginBottom: '1.25rem',
+                background: isIngreso 
+                    ? 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)' 
+                    : 'linear-gradient(135deg, #EA580C 0%, #9A3412 100%)',
+                borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)',
+                padding: '1.25rem 2rem', marginBottom: '1.25rem',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                boxShadow: isIngreso ? '0 10px 25px rgba(37,99,235,0.3)' : '0 10px 25px rgba(234,88,12,0.3)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div style={{
-                        width: 40, height: 40, borderRadius: '12px',
-                        background: turnoActivo ? '#DCFCE7' : '#F1F5F9',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        width: 50, height: 50, borderRadius: '14px',
+                        background: 'rgba(255,255,255,0.15)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)'
                     }}>
-                        <Clock size={20} color={turnoActivo ? '#15803D' : '#94A3B8'} />
+                        <Clock size={26} color="white" />
                     </div>
                     <div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#1E293B' }}>
-                            {turnoActivo ? '🟢 Turno en curso' : '⚪ Sin turno activo'}
+                        <div style={{ fontSize: '1.2rem', fontWeight: 900, color: 'white', letterSpacing: '-0.3px' }}>
+                            {isIngreso ? '¡Buen día! Inicia tu jornada laboral' : '¡Jornada finalizada! Registra tu salida'}
                         </div>
-                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                            {turnoActivo
-                                ? `Ingresaste a las ${new Date(turnoActivo.hora_ingreso).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',hour12:true})} · ${horasTranscurridas(turnoActivo.hora_ingreso)} trabajados`
-                                : 'Presiona "Marcar Ingreso" para iniciar tu jornada'}
+                        <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.85)', marginTop: '2px' }}>
+                            {isIngreso
+                                ? 'Es necesario marcar tu ingreso para habilitar tus funciones del día.'
+                                : `Has estado trabajando por ${horasTranscurridas(turnoActivo!.hora_ingreso)}. Presiona el botón para cerrar tu turno.`}
                         </div>
                     </div>
                 </div>
                 <div>
-                    {!turnoActivo ? (
+                    {isIngreso ? (
                         <button
                             onClick={handleIngreso}
                             disabled={turnoLoading}
                             style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                background: 'linear-gradient(135deg,#059669,#047857)',
-                                color: 'white', border: 'none', borderRadius: '10px',
-                                padding: '0.55rem 1.25rem', cursor: 'pointer',
-                                fontSize: '0.85rem', fontWeight: 800,
-                                boxShadow: '0 4px 14px rgba(5,150,105,0.35)',
-                                opacity: turnoLoading ? 0.7 : 1, transition: 'all 0.2s'
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: 'white', color: '#1E40AF', border: 'none', borderRadius: '12px',
+                                padding: '0.7rem 1.5rem', cursor: 'pointer',
+                                fontSize: '0.95rem', fontWeight: 900,
+                                boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+                                opacity: turnoLoading ? 0.7 : 1, transition: 'all 0.2s',
+                                transform: turnoLoading ? 'scale(0.98)' : 'scale(1)'
                             }}
                         >
-                            <LogIn size={15} />
+                            <LogIn size={18} />
                             {turnoLoading ? 'Registrando...' : 'Marcar Ingreso'}
                         </button>
                     ) : (
@@ -232,16 +238,16 @@ export default function GestorTurnoWidget() {
                             onClick={handleSalida}
                             disabled={turnoLoading}
                             style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                background: 'linear-gradient(135deg,#EF4444,#DC2626)',
-                                color: 'white', border: 'none', borderRadius: '10px',
-                                padding: '0.55rem 1.25rem', cursor: 'pointer',
-                                fontSize: '0.85rem', fontWeight: 800,
-                                boxShadow: '0 4px 14px rgba(239,68,68,0.35)',
-                                opacity: turnoLoading ? 0.7 : 1, transition: 'all 0.2s'
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: 'white', color: '#9A3412', border: 'none', borderRadius: '12px',
+                                padding: '0.7rem 1.5rem', cursor: 'pointer',
+                                fontSize: '0.95rem', fontWeight: 900,
+                                boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+                                opacity: turnoLoading ? 0.7 : 1, transition: 'all 0.2s',
+                                transform: turnoLoading ? 'scale(0.98)' : 'scale(1)'
                             }}
                         >
-                            <LogOut size={15} />
+                            <LogOut size={18} />
                             {turnoLoading ? 'Cerrando...' : 'Marcar Salida'}
                         </button>
                     )}
