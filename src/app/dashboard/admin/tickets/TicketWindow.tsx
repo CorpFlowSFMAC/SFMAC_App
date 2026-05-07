@@ -32,6 +32,40 @@ interface TicketWindowProps {
     children?: React.ReactNode;
 }
 
+// ── COMPONENTE OPTIMIZADO: CRONÓMETRO SLA AISLADO ──
+// Esto evita que TODO el TicketWindow (~4400 líneas) se re-renderice cada 1 segundo.
+const SLATimerHeader = memo(({ ticket }: { ticket: any }) => {
+    const [now, setNow] = useState(new Date());
+
+    useEffect(() => {
+        if (ticket.pausadoSLA) return;
+        const interval = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(interval);
+    }, [ticket.pausadoSLA]);
+
+    const formatElapsed = () => {
+        const start = new Date(ticket.fechaCreacion);
+        const end = (ticket.pausadoSLA && ticket.fechaPausa)
+            ? new Date(ticket.fechaPausa)
+            : now;
+
+        const diffMs = Math.max(0, end.getTime() - start.getTime());
+        const hrs = Math.floor(diffMs / 3600000);
+        const mins = Math.floor((diffMs % 3600000) / 60000);
+        const secs = Math.floor((diffMs % 60000) / 1000);
+
+        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    return (
+        <div className={`${styles.slaTimerHeader} ${ticket.pausadoSLA ? styles.paused : ''}`}>
+            <Clock size={14} />
+            <span>{formatElapsed()}</span>
+            {ticket.pausadoSLA && <span className={styles.pausedLabel}>PAUSADO</span>}
+        </div>
+    );
+});
+
 export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
     const [ticketData, setTicketData] = useState(() => ({
         ...ticket,
@@ -93,7 +127,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
     const [partidasCotización, setPartidasCotización] = useState<any[]>(() => {
         return ticket.partidas || ticket.metadata?.partidas || [];
     });
-    const [currentTime, setCurrentTime] = useState<Date | null>(null);
+
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
     const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
@@ -693,27 +727,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
         }
     }, [ticketData.estadoId, ticketData.client_id]);
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setCurrentTime(new Date());
-        }, 1000);
 
-        return () => clearInterval(interval);
-    }, [ticketData.tecnico?.id]);
-
-    const formatElapsedTime = () => {
-        const start = new Date(ticketData.fechaCreacion);
-        const end = (ticketData.pausadoSLA && ticketData.fechaPausa)
-            ? new Date(ticketData.fechaPausa)
-            : (currentTime || new Date());
-
-        const diffMs = Math.max(0, end.getTime() - start.getTime());
-        const hrs = Math.floor(diffMs / 3600000);
-        const mins = Math.floor((diffMs % 3600000) / 60000);
-        const secs = Math.floor((diffMs % 60000) / 1000);
-
-        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
 
     const windowRef = useRef<HTMLDivElement>(null);
 
@@ -2027,11 +2041,7 @@ export default function TicketWindow({ ticket, onClose, onUpdate, index = 0, chi
                     </div>
 
                     {!isMinimized && (
-                        <div className={`${styles.slaTimerHeader} ${ticketData.pausadoSLA ? styles.paused : ''}`}>
-                            <Clock size={14} />
-                            <span>{formatElapsedTime()}</span>
-                            {ticketData.pausadoSLA && <span className={styles.pausedLabel}>PAUSADO</span>}
-                        </div>
+                        <SLATimerHeader ticket={ticketData} />
                     )}
 
                     <div className={styles.windowControls} onMouseDown={(e) => { e.stopPropagation(); bringToFront(); }} onClick={(e) => e.stopPropagation()}>

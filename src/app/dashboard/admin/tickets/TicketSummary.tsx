@@ -16,7 +16,7 @@ interface InfoBarBaseProps {
     gradient: string;
 }
 
-export function InfoBarBase({ ticket, title, icon: Icon, color, gradient }: InfoBarBaseProps) {
+export const InfoBarBase = memo(function InfoBarBase({ ticket, title, icon: Icon, color, gradient }: InfoBarBaseProps) {
     const service = getServiceById(ticket.tipoServicio);
     const ServiceIcon = service?.icon;
 
@@ -124,7 +124,7 @@ export function InfoBarBase({ ticket, title, icon: Icon, color, gradient }: Info
             </div>
         </div>
     );
-}
+});
 
 interface TechnicianSchedulingBarProps {
     ticket: any;
@@ -132,7 +132,7 @@ interface TechnicianSchedulingBarProps {
     onEditSchedule?: () => void;
 }
 
-export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
+export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
     const techStatus = ticket.tecnico || ticket.tecnicoAsignado || ticket.technicians;
     if (!ticket.technicianId && !techStatus && !ticket.technician_id) return null;
 
@@ -155,8 +155,7 @@ export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: 
     const getVoucherSrc = (ref?: string | null) => {
         if (!ref) return "";
         if (ref.startsWith("data:image")) return ref;
-        if (typeof window === 'undefined') return "";
-        return localStorage.getItem(ref) || "";
+        return ""; 
     };
 
     return (
@@ -277,9 +276,9 @@ export function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: 
             )}
         </div>
     );
-}
+});
 
-export function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () => void }) {
+export const DiagnosisInfoBar = memo(function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () => void }) {
     if (!ticket.diagnostico && !ticket.costoManoObra) return null;
 
     return (
@@ -313,7 +312,9 @@ export function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () 
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Modalidad</span>
                 <div className={styles.clienteCompact}>
-                    <CreditCard size={12} color="#0D9488" />
+                    <div className={styles.clienteAvatar} style={{ background: '#0D9488', width: '20px', height: '20px', fontSize: '10px' }}>
+                        <CreditCard size={12} color="white" />
+                    </div>
                     <span className={styles.infoValue}>{ticket.modalidad === 'todo_costo' ? 'A Todo Costo' : 'Desagregado'}</span>
                 </div>
             </div>
@@ -347,7 +348,7 @@ export function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () 
             )}
         </div>
     );
-}
+});
 
 // ── OPTIMIZATION: ROW VIRTUALIZATION & DEBOUNCE ──
 const QuotationRow = memo(({ p, idx, onChange }: any) => {
@@ -406,7 +407,7 @@ const QuotationRow = memo(({ p, idx, onChange }: any) => {
     );
 });
 
-export function QuoteAssistantBar({ ticket }: { ticket: any }) {
+export const QuoteAssistantBar = memo(function QuoteAssistantBar({ ticket }: { ticket: any }) {
     // ── CONDICIÓN DE VISIBILIDAD ──
     const costoMO = parseFloat(ticket.costoManoObra || 0);
     const costoMat = parseFloat(ticket.costoMateriales || 0);
@@ -849,9 +850,9 @@ export function QuoteAssistantBar({ ticket }: { ticket: any }) {
             </div>
         </div>
     );
-}
+});
 
-export function QuotationInfoBar({ ticket, onToggleDetails, isCollapsed }: { ticket: any; onToggleDetails?: () => void; isCollapsed?: boolean }) {
+export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggleDetails, isCollapsed }: { ticket: any; onToggleDetails?: () => void; isCollapsed?: boolean }) {
     if (!ticket.partidas || ticket.partidas.length === 0 || ticket.estadoId === 'en_cotizacion') return null;
 
     const isEnviada = ticket.estadoId === 'cotizacion_enviada';
@@ -998,7 +999,7 @@ export function QuotationInfoBar({ ticket, onToggleDetails, isCollapsed }: { tic
             }
         </div >
     );
-}
+});
 
 interface FinancialLiquidationBarProps {
     ticket: any;
@@ -1008,7 +1009,7 @@ interface FinancialLiquidationBarProps {
     availableRescue?: number;
 }
 
-export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
+export const UnifiedEvidenceBar = memo(function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
     const hasAnyEvidence = (ticket.evidencias && ticket.evidencias.length > 0) ||
         (ticket.evidenciasCampo && ticket.evidenciasCampo.length > 0) ||
         (ticket.evidenciasEjecucion && ticket.evidenciasEjecucion.length > 0);
@@ -1056,9 +1057,9 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                     <div className={styles.miniThumbnails}>
                         {ticket.evidencias.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#8B5CF6' }}>
-                                <img src={ev.url} alt="Cliente" className={styles.thumbImage} />
+                                <img src={ev.url} alt="Cliente" className={styles.thumbImage} loading="lazy" />
                                 <div className={styles.largePreview}>
-                                    <img src={ev.url} alt="Vista ampliada" />
+                                    <img src={ev.url} alt="Vista ampliada" loading="lazy" />
                                 </div>
                             </div>
                         ))}
@@ -1073,9 +1074,9 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                     <div className={styles.miniThumbnails}>
                         {ticket.evidenciasCampo.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#0D9488' }}>
-                                <img src={ev.url} alt="Inspección" className={styles.thumbImage} />
+                                <img src={ev.url} alt="Inspección" className={styles.thumbImage} loading="lazy" />
                                 <div className={styles.largePreview}>
-                                    <img src={ev.url} alt="Vista ampliada" />
+                                    <img src={ev.url} alt="Vista ampliada" loading="lazy" />
                                 </div>
                             </div>
                         ))}
@@ -1090,9 +1091,9 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
                     <div className={styles.miniThumbnails}>
                         {ticket.evidenciasEjecucion.slice(0, 3).map((ev: any, i: number) => (
                             <div key={i} className={styles.miniThumb} style={{ borderColor: '#059669' }}>
-                                <img src={ev.url} alt="Ejecución" className={styles.thumbImage} />
+                                <img src={ev.url} alt="Ejecución" className={styles.thumbImage} loading="lazy" />
                                 <div className={styles.largePreview}>
-                                    <img src={ev.url} alt="Vista ampliada" />
+                                    <img src={ev.url} alt="Vista ampliada" loading="lazy" />
                                 </div>
                             </div>
                         ))}
@@ -1104,9 +1105,9 @@ export function UnifiedEvidenceBar({ ticket }: { ticket: any }) {
             )}
         </div>
     );
-}
+});
 
-export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
+export const DocumentationSummaryBar = memo(function DocumentationSummaryBar({ ticket }: { ticket: any }) {
     // Solo mostrar si hay documentos validados y estamos en estados avanzados
     const hasDocs = ticket.documentosValidados;
     if (!hasDocs) return null;
@@ -1179,10 +1180,10 @@ export function DocumentationSummaryBar({ ticket }: { ticket: any }) {
             </div>
         </div>
     );
-}
+});
 
 
-export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue, costos, availableRescue: propRescue }: FinancialLiquidationBarProps) {
+export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue, costos, availableRescue: propRescue }: FinancialLiquidationBarProps) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
@@ -1411,13 +1412,13 @@ export function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue,
             )}
         </div>
     );
-}
+});
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // PAYMENT HISTORY BAR — visible para Admin Y Gestora
 // Muestra todos los pagos confirmados por el admin con vouchers
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: any[] }) {
+export const PaymentHistoryBar = memo(function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: any[] }) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
     // Fuente Moderna: estados confirmados (incluyendo compuestos como "Autorizado Admin; Adelanto")
@@ -1692,7 +1693,7 @@ export function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: an
             )}
         </div>
     );
-}
+});
 
 interface TicketSummaryProps {
     ticket: any;
@@ -1702,7 +1703,7 @@ interface TicketSummaryProps {
     costos?: any[];
 }
 
-export function TicketSummary({ ticket, onProceed, onOpenMaterials, onOpenRescue, costos }: TicketSummaryProps) {
+export const TicketSummary = memo(function TicketSummary({ ticket, onProceed, onOpenMaterials, onOpenRescue, costos }: TicketSummaryProps) {
     return (
         <div className={styles.container}>
             <InfoBarBase
@@ -1735,9 +1736,9 @@ export function TicketSummary({ ticket, onProceed, onOpenMaterials, onOpenRescue
             </div>
         </div>
     );
-}
+});
 
-export function GestoraAssignmentBar({ ticket, onAssign, canAssign }: { ticket: any; onAssign?: () => void; canAssign: boolean }) {
+export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket, onAssign, canAssign }: { ticket: any; onAssign?: () => void; canAssign: boolean }) {
     const gestora = ticket.gestora || ticket.gestoraAsignado;
     const hasGestora = !!gestora;
 
@@ -1799,4 +1800,4 @@ export function GestoraAssignmentBar({ ticket, onAssign, canAssign }: { ticket: 
             )}
         </div>
     );
-}
+});
