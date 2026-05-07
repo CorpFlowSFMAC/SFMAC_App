@@ -1537,7 +1537,7 @@ export default function PaymentsPage() {
                                                                     {typeCfg.label}
                                                                 </span>
                                                                 <span style={{ fontSize: '1.25rem', fontWeight: 950, color: '#1E293B' }}>S/ {formatSoles(item.monto)}</span>
-                                                                {item.referencia && <span style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>{item.referencia}</span>}
+                                                                {item.concepto && <span style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>{item.concepto}</span>}
                                                             </div>
                                                             
                                                             <div style={{ display: 'flex', gap: '8px' }}>
@@ -1592,17 +1592,17 @@ export default function PaymentsPage() {
                                             justifyContent: 'space-between', alignItems: 'center' 
                                         }}>
                                             <button 
-                                                onClick={() => toggleHistory(group.ticketId)}
+                                                onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}
                                                 style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                                             >
                                                 <History size={14} />
-                                                {expandedTicket === group.ticketId ? 'Ocultar historial' : 'Ver historial'}
+                                                {expandedHistory === group.ticketId ? 'Ocultar historial' : 'Ver historial'}
                                             </button>
                                             <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600 }}>{group.historialDepositos.length} depósitos</span>
                                         </div>
                                         
                                         {/* EXPANDED HISTORY (Sub-card style) */}
-                                        {expandedTicket === group.ticketId && (
+                                        {expandedHistory === group.ticketId && (
                                             <div style={{ padding: '16px', background: '#F1F5F9', borderTop: '1px solid #E2E8F0' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                     {group.historialDepositos.map((h: any, i: number) => (
@@ -1623,23 +1623,9 @@ export default function PaymentsPage() {
                         </div>
                     )}
                 </div>
-
-
-
-
-
-                                                            
-
-
-
-
-
-
-
-
-
-                </div>
             </div>
+
+
 
             {/* ─── TOAST ZERO-FEE ──────────────────────────────── */}
             <div className={`${styles.toastZeroFee} ${toast.visible ? styles.toastVisible : ''}`}>
