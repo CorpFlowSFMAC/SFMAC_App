@@ -3209,11 +3209,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
                                                     {/* Nuevo Item: Número de Ticket del Cliente */}
                                                     <div
-                                                        className={`${styles.checkItem} ${ticketData.numeroTicketCliente ? styles.checkItemActive : styles.checkItemAlert}`}
+                                                        className={`${styles.checkItem} ${isClientTicketFormatValid(ticketData.numeroTicketCliente) ? styles.checkItemActive : styles.checkItemAlert}`}
                                                         style={{ cursor: 'default' }}
                                                     >
                                                         <div className={styles.checkSquare}>
-                                                            {ticketData.numeroTicketCliente ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} color="#EF4444" />}
+                                                            {isClientTicketFormatValid(ticketData.numeroTicketCliente) ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} color="#EF4444" />}
                                                         </div>
                                                         <div className={styles.checkText}>
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -3224,7 +3224,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 const year = new Date().getFullYear().toString().slice(-2);
-                                                                                setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: `MB000000.${year}` }));
+                                                                                setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: `MB000000.${year}` })); // Auto-fill sugerido
                                                                             }}
                                                                             style={{ fontSize: '0.6rem', background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '1px 4px', borderRadius: '4px', cursor: 'pointer' }}
                                                                         >

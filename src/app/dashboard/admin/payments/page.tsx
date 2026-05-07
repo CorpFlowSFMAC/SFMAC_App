@@ -1071,8 +1071,7 @@ export default function PaymentsPage() {
             match(g.tecnico?.nombre) ||
             match(g.descripcion || "");
 
-        // ★ UX FIX: Si el usuario está buscando, ignoramos el filtro de estado
-        if (searchTerm && matchesSearch) return true;
+
 
         const isTicketClosed = g.statusId === 'cerrado' || g.statusId === 'cancelado' || g.statusId === 'rechazado';
         
