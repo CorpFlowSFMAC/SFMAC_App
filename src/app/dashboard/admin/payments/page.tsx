@@ -459,6 +459,28 @@ export default function PaymentsPage() {
         } catch { /* silencioso */ }
     }, [showToast]);
 
+    // ★ LIMPIEZA DE CACHE: Forzar re-fetch desde Supabase
+    useEffect(() => {
+        // Limpiar cualquier cache de localStorage
+        if (typeof window !== 'undefined') {
+            // Limpiar cache de pagos si existe
+            const cacheKey = 'payments_cache';
+            localStorage.removeItem(cacheKey);
+            
+            console.log('🧹 LIMPIEZA: Cache limpiado, forzando re-fetch...');
+        }
+    }, []);
+
+    // 🔍 DEBUG: Ver qué datos llegan de Supabase
+    console.log('🔍 DEBUG: tickets.length =', tickets.length);
+    console.log('🔍 DEBUG: tickets sample =', tickets.slice(0, 1).map(t => ({
+        id: t.id,
+        numero: t.numeroTicketCliente,
+        historial: t.historialPagosTecnico?.length,
+        costs: t.costos?.length,
+        paidCosts: t.paidCosts?.length
+    })));
+    
     // ★ FIX: monthlyTotals usa claves YYYY-MM (no locale) para evitar inconsistencias
     const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
 
