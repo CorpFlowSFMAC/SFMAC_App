@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
 import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
+import { calculateUnifiedPaymentSummary } from "@/lib/calculations";
 import styles from "./payments.module.css";
 
 // ──────────────────────────────────────────────────────────────

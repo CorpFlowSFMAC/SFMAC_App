@@ -174,3 +174,85 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         operationalCostsArr: [...modernOps, ...legacyOps]
     };
 }
+
+/**
+ * ============================================================
+ * FUNCIÓN UNIFICADA: calculateUnifiedPaymentSummary
+ * Centraliza TODOS los cálculos de pago - elimina duplicados
+ * ============================================================
+ */
+export function calculateUnifiedPaymentSummary(
+    ticketId: string,
+    pactadoMO: number,
+    ticketCosts: any[] = [],
+    legacyPayments: any[] = []
+): {
+    totalPagado: number;
+    saldoPendiente: number;
+    pagosActivos: any[];
+    hasDuplicates: boolean;
+    source: string;
+} {
+    const toNum = (val: any) => {
+        if (typeof val === 'number') return val;
+        if (typeof val === 'string') {
+            const clean = val.replace(/[^0-9.-]/g, '');
+            return parseFloat(clean) || 0;
+        }
+        return 0;
+    };
+    
+    const normalizeState = (estado: string | null | undefined): string => {
+        return (estado || '').toString().toLowerCase().trim();
+    };
+    
+    const isActive = (estado: string | null | undefined): boolean => {
+        const normalized = normalizeState(estado);
+        const valid = ['pagado', 'adelanto', 'abonado', 'confirmado', 'auditado', 
+                     'ejecutado', 'autorizado admin', 'autorizado', 'aprobado', 
+                     'transferido', 'completado'];
+        return valid.some(v => normalized.includes(v));
+    };
+    
+    const isExcluded = (estado: string | null | undefined): boolean => {
+        const normalized = normalizeState(estado);
+        return normalized === 'anulado' || normalized === 'rechazado';
+    };
+    
+    const seenPayments = new Set<string>();
+    const pagosActivos: any[] = [];
+    let hasDuplicates = false;
+    
+    // Fuente moderna: ticket_costs
+    (ticketCosts || []).forEach((c: any) => {
+        if (!isActive(c.estado_pago) || isExcluded(c.estado_pago)) return;
+        
+        const key = `moderno_${c.id}_${round2(toNum(c.monto))}_${(c.fecha_pago || '').slice(0, 10)}`;
+        
+        if (seenPayments.has(key)) {
+            hasDuplicates = true;
+            return;
+        }
+        seenPayments.add(key);
+        pagosActivos.push({ id: c.id, monto: toNum(c.monto), fecha: c.fecha_pago || c.created_at, tipo: c.categoria, source: 'ticket_costs' });
+    });
+    
+    // Fuente legacy: metadata.historialPagosTecnico
+    (legacyPayments || []).forEach((p: any) => {
+        if (!isActive(p.estado) || isExcluded(p.estado)) return;
+        
+        const key = `legacy_${p.id || toNum(p.monto)}_${round2(toNum(p.monto))}_${(p.fecha || '').slice(0, 10)}`;
+        
+        if (seenPayments.has(key)) {
+            hasDuplicates = true;
+            return;
+        }
+        seenPayments.add(key);
+        pagosActivos.push({ id: p.id, monto: toNum(p.monto), fecha: p.fecha, tipo: p.tipo, source: 'legacy' });
+    });
+    
+    const totalPagado = round2(pagosActivos.reduce((sum, p) => sum + p.monto, 0));
+    const saldoPendiente = Math.max(0, round2(pactadoMO - totalPagado));
+    
+    return { totalPagado, saldoPendiente, pagosActivos, hasDuplicates, source: 'unified' };
+}
