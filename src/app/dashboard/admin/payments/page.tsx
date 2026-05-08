@@ -506,6 +506,17 @@ export default function PaymentsPage() {
                 const visitCost = round2(t.visit_cost || 0);
                 const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
 
+                // ✅ MEJORA: Usar el campo específico monto_pactado_mo como base primaria
+                const pactadoMOBase = [
+                    t.monto_pactado_mo,
+                    t.labor_cost,
+                    meta.costoManoObra,
+                    meta.monto_pactado_mo
+                ].reduce((best, val) => {
+                    const num = parseFloat(val) || 0;
+                    return (num > 0 && (!best || num < best)) ? num : best;
+                }, 0);
+
                 const meta = t.metadata || {};
                 const pagosLegacy = meta.historialPagosTecnico || meta.historialPagosTécnico || [];
                 
@@ -543,7 +554,10 @@ export default function PaymentsPage() {
                 const pagosParaTecnico = uniqueHistory.filter(p => isPagoParaTecnico(p.tipo));
                 const totalPagadoParaTecnico = round2(pagosParaTecnico.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
-                const montoBaseParaTecnico = (t.labor_cost || 0) > 0 ? round2(t.labor_cost || 0) : visitCost;
+                // ✅ MEJORA: Usar pactadoMOBase si existe, luego labor_cost, luego visitCost como fallback
+                const montoBaseParaTecnico = pactadoMOBase > 0 
+                    ? round2(pactadoMOBase) 
+                    : ((t.labor_cost || 0) > 0 ? round2(t.labor_cost || 0) : visitCost);
                 const saldoPendienteTecnico = round2(montoBaseParaTecnico - totalPagadoParaTecnico);
                 
                 const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
@@ -560,6 +574,17 @@ export default function PaymentsPage() {
 
                 const items: PaymentItem[] = [];
                 const saldoReal = saldoPendienteTecnico;
+
+                // ✅ MEJORA: Deduplicar items contra historial ya pagado (evitar duplicados Adelanto/Liquidación)
+                const paidIds = new Set<string>();
+                allHistory.forEach((h: any) => {
+                    if (h.id && h.estado === 'pagado') {
+                        paidIds.add(h.id);
+                        // Also add dedupe by tipo + monto close match
+                        const key = `${h.tipo}_${round2(h.monto)}`;
+                        paidIds.add(key);
+                    }
+                });
 
                 const hasPendingCosts = (t.costos || []).some((c: any) => c.estado_pago === 'pendiente');
                 const hasHistory = allHistory.length > 0;
@@ -619,7 +644,8 @@ export default function PaymentsPage() {
                     const isPorLiquidar = t.status_id === 'por_liquidar' || t.status_id === 'esperando_pago_final';
                     const hasFinalPaid = pagosLegacy.some((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
                     if (isPorLiquidar && !hasFinalPaid) {
-                        const liqMonto = round2(meta.solicitudLiquidacion?.monto ?? Math.max(0, saldoReal));
+                        // ✅ MEJORA: Usar montoBaseParaTecnico (que ahora considera monto_pactado_mo) para calculo correcto
+                        const liqMonto = round2(meta.solicitudLiquidacion?.monto ?? Math.max(0, montoBaseParaTecnico - totalPagadoParaTecnico));
                         if (liqMonto > 0.01) {
                             items.push({
                                 id: `${t.id}_final`,
