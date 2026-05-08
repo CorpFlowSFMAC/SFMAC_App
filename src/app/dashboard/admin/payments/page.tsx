@@ -631,15 +631,27 @@ export default function PaymentsPage() {
                 }));
 
                 // Unificar historial (sin duplicados)
+                // ✅ MEJORA: Deduplicación robusta usando ID + monto + fecha (1hr tolerance)
+                const seenPaymentIds = new Set<string>();
                 const uniqueHistory = [...pagosLegacy];
+                
+                // Primero agregar pagos de legacy sin duplicados
+                pagosLegacy.forEach((p: any) => {
+                    if (p.id) seenPaymentIds.add(p.id);
+                    const key = `${p.tipo}_${round2(p.monto)}_${p.fecha?.slice(0,10)}`;
+                    seenPaymentIds.add(key);
+                });
+                
+                // Agregar costos de tabla solo si no están duplicados
                 costsAsHistory.forEach((costPayment: any) => {
-                    const alreadyPresent = uniqueHistory.some((p: any) => 
-                        p.id === costPayment.id || 
-                        (Math.abs(p.monto - costPayment.monto) < 0.01 && 
-                         (p.tipo || '').toLowerCase() === (costPayment.tipo || '').toLowerCase() &&
-                         Math.abs(new Date(p.fecha).getTime() - new Date(costPayment.fecha).getTime()) < 3600000)
-                    );
-                    if (!alreadyPresent) uniqueHistory.push(costPayment);
+                    if (seenPaymentIds.has(costPayment.id)) return;
+                    
+                    const key = `${costPayment.tipo}_${round2(costPayment.monto)}_${costPayment.fecha?.slice(0,10)}`;
+                    if (seenPaymentIds.has(key)) return;
+                    
+                    seenPaymentIds.add(costPayment.id);
+                    seenPaymentIds.add(key);
+                    uniqueHistory.push(costPayment);
                 });
 
                 // Filtrar SOLO pagos que van dirigidas AL TÉCNICO (MO, Adelanto, Liquidación, Rescate)
@@ -1042,6 +1054,13 @@ export default function PaymentsPage() {
     const handleSmartPayment = (group: PaymentTicketGroup, item: PaymentItem) => {
         const montoStr = formatSoles(item.monto);
         const phone = group.tecnico.plin || group.tecnico.yape || "";
+        
+        // ✅ BLOQUEO DE SEGURIDAD: No permitir pagar más del saldo pendiente
+        const maxAllowedPayment = group.saldoPendiente;
+        if (item.monto > maxAllowedPayment + 1) { // tolerance of S/ 1
+            alert(`⚠️ SECURITY BLOCK: El monto a pagar (S/ ${montoStr}) excede el saldo pendiente (S/ ${formatSoles(maxAllowedPayment)}). No se puede proceder.`);
+            return;
+        }
         
         // Si el técnico tiene Yape o Plin, intentamos Deep Link
         if (phone && (group.tecnico.yape || group.tecnico.plin)) {
@@ -1657,7 +1676,7 @@ export default function PaymentsPage() {
                                                 borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                                 border: group.saldoPendiente > 0 ? '1px solid #FEE2E2' : '1px solid #DCFCE7'
                                             }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#991B1B' : '#15803D' }}>SALDO PENDIENTE</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#991B1B' : '#15803D' }}>SALDO MO NETO</span>
                                                 <span style={{ fontSize: '1.1rem', fontWeight: 950, color: group.saldoPendiente > 0 ? '#DC2626' : '#059669' }}>S/ {formatSoles(group.saldoPendiente)}</span>
                                             </div>
                                         </div>
