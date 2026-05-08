@@ -1120,21 +1120,29 @@ export default function PaymentsPage() {
                     additionalUpdates.metadataFields.fechaPagoFinal = new Date().toISOString();
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
                     
-                    // ✅ CALCULAR Y GUARDAR RENTABILIDAD AL CERRAR (TABLA ticket_costs)
-                    const ingresso = safeNum(t.total_quoted_amount || t.montoFinal || t.ingresos_reales || 0);
-                    const pactadoMO = safeNum(t.monto_pactado_mo || t.labor_cost || 0);
-                    const materiales = safeNum(t.materials_cost || 0);
-                    const visita = safeNum(t.visit_cost || 0);
+                    // ✅ CALCULAR Y GUARDAR RENTABILIDAD AL CERRAR -Obtener ticket primero
+                    const { data: ticketData } = await supabase
+                        .from('tickets')
+                        .select('*, costs(*)')
+                        .eq('id', group.realTicketId)
+                        .single();
                     
-                    const ingresoSinIGV = ingresso / 1.18;
-                    const TotalGastos = pactadoMO + materiales + visita;
-                    const utilidadNeta = Math.max(0, round2(ingresoSinIGV - TotalGastos));
-                    const margenReal = ingresoSinIGV > 0 ? round2((utilidadNeta / ingresoSinIGV) * 100) : 0;
-                    
-                    additionalUpdates.ingresos_reales = ingresso;
-                    additionalUpdates.utilidad_neta = utilidadNeta;
-                    additionalUpdates.margen_real = margenReal;
-                    additionalUpdates.total_invertido = TotalGastos;
+                    if (ticketData) {
+                        const ingresso = safeNum(ticketData.total_quoted_amount || ticketData.montoFinal || ticketData.ingresos_reales || 0);
+                        const pactadoMO = safeNum(ticketData.monto_pactado_mo || ticketData.labor_cost || 0);
+                        const materiales = safeNum(ticketData.materials_cost || 0);
+                        const visita = safeNum(ticketData.visit_cost || 0);
+                        
+                        const ingresoSinIGV = ingresso / 1.18;
+                        const TotalGastos = pactadoMO + materiales + visita;
+                        const utilidadNeta = Math.max(0, round2(ingresoSinIGV - TotalGastos));
+                        const margenReal = ingresoSinIGV > 0 ? round2((utilidadNeta / ingresoSinIGV) * 100) : 0;
+                        
+                        additionalUpdates.ingresos_reales = ingresso;
+                        additionalUpdates.utilidad_neta = utilidadNeta;
+                        additionalUpdates.margen_real = margenReal;
+                        additionalUpdates.total_invertido = TotalGastos;
+                    }
                 }
 
                 const { error: costErr } = await supabase
@@ -1156,7 +1164,7 @@ export default function PaymentsPage() {
 
             const { data: currentTicket } = await supabase
                 .from('tickets')
-                .select('metadata, status_id')
+                .select('*, metadata, status_id')
                 .eq('id', group.realTicketId)
                 .single();
 
@@ -1180,10 +1188,10 @@ export default function PaymentsPage() {
                 
                 // ✅ CALCULAR Y GUARDAR RENTABILIDAD AL CERRAR EL TICKET
                 // Obtener valores finales del ticket para calcular utilidad
-                const ingresso = safeNum(t.total_quoted_amount || t.montoFinal || t.ingresos_reales || meta.ingresos_reales || 0);
-                const pactadoMO = safeNum(t.monto_pactado_mo || t.labor_cost || meta.costoManoObra || 0);
-                const materiales = safeNum(t.materials_cost || meta.costoMateriales || 0);
-                const visita = safeNum(t.visit_cost || meta.costoVisita || 0);
+                const ingresso = safeNum(currentTicket.total_quoted_amount || currentTicket.montoFinal || currentTicket.ingresos_reales || meta.ingresos_reales || 0);
+                const pactadoMO = safeNum(currentTicket.monto_pactado_mo || currentTicket.labor_cost || meta.costoManoObra || 0);
+                const materiales = safeNum(currentTicket.materials_cost || meta.costoMateriales || 0);
+                const visita = safeNum(currentTicket.visit_cost || meta.costoVisita || 0);
                 
                 const ingresoSinIGV = ingresso / 1.18; // Quitar IGV
                 const TotalGastos = pactadoMO + materiales + visita;
