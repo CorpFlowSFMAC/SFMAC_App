@@ -134,6 +134,34 @@ function getMonthKey(dateStr: string): string {
     return `${y}-${m}`;
 }
 
+// ─────────────────────────────────────────────────────────
+// Helper: Normaliza estado de pago para comparación consistente
+// ─────────────────────────────────────────────────────────
+function normalizePaymentStatus(estado: string | null | undefined): string {
+    if (!estado) return '';
+    return estado.toString().toLowerCase().trim();
+}
+
+// ─────────────────────────────────────────────────────────
+// Helper: Verifica si un pago debe ser excluido de cálculos financieros
+// (ANULADO, RECHAZADO, anulado, rechazado)
+// ─────────────────────────────────────────────────────────
+function isPaymentExcluded(estado: string | null | undefined): boolean {
+    const normalized = normalizePaymentStatus(estado);
+    return normalized === 'anulado' || normalized === 'rechazado';
+}
+
+// ─────────────────────────────────────────────────────────
+// Helper: Verifica si un pago está confirmado/activo para cálculos
+// ─────────────────────────────────────────────────────────
+function isPaymentConfirmed(estado: string | null | undefined): boolean {
+    const normalized = normalizePaymentStatus(estado);
+    const validStatuses = ['pagado', 'adelanto', 'abonado', 'confirmado', 'auditado', 
+                          'ejecutado', 'autorizado admin', 'autorizado', 'aprobado', 
+                          'transferido', 'completado'];
+    return validStatuses.some(v => normalized.includes(v));
+}
+
 // Formatea clave YYYY-MM como "Febrero 2026" en español
 function formatMonthKey(key: string): string {
     const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -290,9 +318,10 @@ export default function PaymentsPage() {
                 try {
                     const flat = flattenTicketForPayments(t);
                     const relatedCosts = t.costos || [];
+                    // ✅ CORRECCIÓN: Usar función de normalización para filtrar costos correctamente
                     flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
-                    flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
-                    flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
+                    flat.paidCosts = relatedCosts.filter((c: any) => isPaymentConfirmed(c.estado_pago));
+                    flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN' || c.estado_pago === 'requiere_aprobacion_admin');
 
                     flat.isOpen = !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id);
                     return flat;
@@ -539,7 +568,8 @@ export default function PaymentsPage() {
             (group.historialDepositos || []).forEach((p: any) => {
                 const pId = p.id || `${group.realTicketId}_${p.monto}_${p.fecha}_${p.tipo}`;
                 if (!countedPaymentIds.has(pId)) {
-                    if (p.monto && p.fecha && p.estado !== 'anulado') {
+                    // ✅ CORRECCIÓN: Usar función de normalización para excluir ANULADOS/RECHAZADOS
+                    if (p.monto && p.fecha && !isPaymentExcluded(p.estado)) {
                         const key = getMonthKey(p.fecha);
                         totals[key] = round2((totals[key] || 0) + round2(p.monto));
                         countedPaymentIds.add(pId);
@@ -587,7 +617,8 @@ export default function PaymentsPage() {
                 const pagosLegacy = meta.historialPagosTecnico || meta.historialPagosTécnico || [];
                 
                 // Costos de tabla moderna
-                const paidCostsArr = (t.costos || []).filter((c: any) => c.estado_pago === 'pagado');
+                // ✅ CORRECCIÓN: Usar función de normalización para incluir todos los confirmados
+                const paidCostsArr = (t.costos || []).filter((c: any) => isPaymentConfirmed(c.estado_pago) && !isPaymentExcluded(c.estado_pago));
                 const costsAsHistory = paidCostsArr.map((c: any) => ({
                     id: c.id,
                     monto: c.monto,
@@ -1068,6 +1099,22 @@ export default function PaymentsPage() {
                     additionalUpdates.status_id = 'ticket_cerrado';
                     additionalUpdates.metadataFields.fechaPagoFinal = new Date().toISOString();
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
+                    
+                    // ✅ CALCULAR Y GUARDAR RENTABILIDAD AL CERRAR (TABLA ticket_costs)
+                    const ingresso = safeNum(t.total_quoted_amount || t.montoFinal || t.ingresos_reales || 0);
+                    const pactadoMO = safeNum(t.monto_pactado_mo || t.labor_cost || 0);
+                    const materiales = safeNum(t.materials_cost || 0);
+                    const visita = safeNum(t.visit_cost || 0);
+                    
+                    const ingresoSinIGV = ingresso / 1.18;
+                    const TotalGastos = pactadoMO + materiales + visita;
+                    const utilidadNeta = Math.max(0, round2(ingresoSinIGV - TotalGastos));
+                    const margenReal = ingresoSinIGV > 0 ? round2((utilidadNeta / ingresoSinIGV) * 100) : 0;
+                    
+                    additionalUpdates.ingresos_reales = ingresso;
+                    additionalUpdates.utilidad_neta = utilidadNeta;
+                    additionalUpdates.margen_real = margenReal;
+                    additionalUpdates.total_invertido = TotalGastos;
                 }
 
                 const { error: costErr } = await supabase
@@ -1110,6 +1157,28 @@ export default function PaymentsPage() {
                 additionalUpdates.closure_date = new Date().toISOString();
                 meta.fechaPagoFinal = additionalUpdates.closure_date;
                 meta.solicitudLiquidacion = null;
+                
+                // ✅ CALCULAR Y GUARDAR RENTABILIDAD AL CERRAR EL TICKET
+                // Obtener valores finales del ticket para calcular utilidad
+                const ingresso = safeNum(t.total_quoted_amount || t.montoFinal || t.ingresos_reales || meta.ingresos_reales || 0);
+                const pactadoMO = safeNum(t.monto_pactado_mo || t.labor_cost || meta.costoManoObra || 0);
+                const materiales = safeNum(t.materials_cost || meta.costoMateriales || 0);
+                const visita = safeNum(t.visit_cost || meta.costoVisita || 0);
+                
+                const ingresoSinIGV = ingresso / 1.18; // Quitar IGV
+                const TotalGastos = pactadoMO + materiales + visita;
+                const utilidadNeta = Math.max(0, round2(ingresoSinIGV - TotalGastos));
+                const margenReal = ingresoSinIGV > 0 ? round2((utilidadNeta / ingresoSinIGV) * 100) : 0;
+                
+                // Guardar campos de rentabilidad en la DB
+                additionalUpdates.ingresos_reales = ingresso;
+                additionalUpdates.utilidad_neta = utilidadNeta;
+                additionalUpdates.margen_real = margenReal;
+                additionalUpdates.total_invertido = TotalGastos;
+                
+                meta.utilidadNeta = utilidadNeta;
+                meta.margenReal = margenReal;
+                meta.fechaCierre = additionalUpdates.closure_date;
             } else if (item.id === `${group.realTicketId}_visita`) {
                 const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
                 if (preInspectionStates.includes(currentTicket.status_id)) {

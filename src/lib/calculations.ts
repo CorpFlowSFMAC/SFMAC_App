@@ -55,6 +55,12 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     ];
     const operationalKeywords = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'gasto', 'compra'];
     
+    // ✅ NUEVO: Función para verificar si un pago debe ser excluido (ANULADO, RECHAZADO)
+    const isExcluded = (status: string | null | undefined) => {
+        const rawSt = (status || '').toLowerCase().trim();
+        return rawSt === 'anulado' || rawSt === 'rechazado';
+    };
+    
     const isConfirmed = (status: string | null | undefined) => {
         const rawSt = (status || '').toLowerCase().trim();
         // Soportar estados compuestos como "Autorizado Admin; Adelanto" o "Autorizado Admin: Adelanto"
@@ -67,7 +73,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         return parts.some(part => valid.some(v => part.includes(v)));
     };
 
-    const confirmedModernPayments = safeCosts.filter(c => isConfirmed(c.estado_pago || c.estado));
+    // ✅ CORRECCIÓN: Excluir pagos anulados/rechazados del conteo
+    const confirmedModernPayments = safeCosts.filter(c => isConfirmed(c.estado_pago || c.estado) && !isExcluded(c.estado_pago || c.estado));
 
     const isFee = (cat: string) => {
         const c = (cat || '').toLowerCase();
@@ -135,8 +142,14 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     }, 0);
     const totalInvestmentReal = round2(totalInvestmentModern + totalLegacyFeesSum);
 
-    const currentGrossMargin = (utilidadDB > 0) ? utilidadDB : Math.max(0, round2(montoFinal - totalInvestmentReal));
-    const currentMarginPercent = (margenDB > 0) ? (margenDB * 100) : (montoFinal > 0 ? (currentGrossMargin / montoFinal) * 100 : 0);
+    // ✅ CORRECCIÓN: Calcular utilidad correctamente (sin IGV)
+    const montoFinalSinIGV = montoFinal / 1.18;
+    const utilidadCalculada = Math.max(0, round2(montoFinalSinIGV - totalInvestmentReal));
+    const margenCalculado = montoFinalSinIGV > 0 ? round2((utilidadCalculada / montoFinalSinIGV) * 100) : 0;
+
+    // Usar valores de DB si existen, si no usar calculados
+    const grossMarginFinal = (utilidadDB > 0) ? utilidadDB : utilidadCalculada;
+    const marginPercentFinal = (margenDB > 0) ? margenDB : margenCalculado;
 
     return {
         totalPactedDebt: pactedMO,
@@ -145,9 +158,13 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         totalRequested: totalPendingFromCosts,
         totalInProcess: totalPendingFromCosts,
         balance: realBalance,
-        grossMargin: currentGrossMargin,
-        marginPercent: currentMarginPercent,
+        grossMargin: grossMarginFinal,
+        marginPercent: marginPercentFinal,
         totalInvestment: totalInvestmentReal,
+        // Valores separados para diagnostics
+        utilidadCalculada,
+        margenCalculado,
+        montoFinalSinIGV,
         pactedMO,
         pactedMat: 0,
         extraCosts: toNum(ticket.gastos_flujo_a || 0),
