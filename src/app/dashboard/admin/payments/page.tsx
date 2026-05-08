@@ -562,20 +562,31 @@ export default function PaymentsPage() {
 
                 const meta = t.metadata || {};
 
-                // ✅ MEJORA: Usar el campo específico monto_pactado_mo como base primaria
-                const pactadoMOBase = [
-                    t.monto_pactado_mo,
-                    t.labor_cost,
-                    meta.costoManoObra,
-                    meta.monto_pactado_mo
-                ].reduce((best, val) => {
+                // ──────────────────────────────────────────────────────────────────
+                // CÁLCULO SIMPLIFICADO DE LIQUIDACIÓN
+                // PRIORIDAD EXACTA: monto_pactado_mo → labor_cost → metadata
+                // ──────────────────────────────────────────────────────────────────
+                
+                // 1. Obtener MO PACTADA (solo 1 valor, el primero que exista)
+                let pactadoMO = 0;
+                const moSources = [t.monto_pactado_mo, t.labor_cost, meta.costoManoObra, meta.monto_pactado_mo];
+                for (const val of moSources) {
                     const num = parseFloat(val) || 0;
-                    return (num > 0 && (!best || num < best)) ? num : best;
-                }, 0);
+                    if (num > 0) { pactadoMO = round2(num); break; }
+                }
+                
+                // 2. Obtener INGRESO TOTAL (facturación)
+                let ingresoTotal = 0;
+                const ingresoSources = [t.ingresos_reales, t.montoFinal, t.total_quoted_amount];
+                for (const val of ingresoSources) {
+                    const num = parseFloat(val) || 0;
+                    if (num > 0) { ingresoTotal = round2(num); break; }
+                }
 
+                // 3. Sumar pagos YA REALIZADOS al técnico (solo los confirmados/pendientes para técnico)
                 const pagosLegacy = meta.historialPagosTecnico || meta.historialPagosTécnico || [];
                 
-                // ✅ UNIFICACIÓN: Incluir pagos de ticket_costs
+                // Costos de tabla moderna
                 const paidCostsArr = (t.costos || []).filter((c: any) => c.estado_pago === 'pagado');
                 const costsAsHistory = paidCostsArr.map((c: any) => ({
                     id: c.id,
@@ -588,6 +599,7 @@ export default function PaymentsPage() {
                     isTableCost: true
                 }));
 
+                // Unificar historial (sin duplicados)
                 const uniqueHistory = [...pagosLegacy];
                 costsAsHistory.forEach((costPayment: any) => {
                     const alreadyPresent = uniqueHistory.some((p: any) => 
@@ -599,20 +611,19 @@ export default function PaymentsPage() {
                     if (!alreadyPresent) uniqueHistory.push(costPayment);
                 });
 
+                // Filtrar SOLO pagos que van dirigidas AL TÉCNICO (MO, Adelanto, Liquidación, Rescate)
                 const isPagoParaTecnico = (tipo: string): boolean => {
                     const tp = (tipo || '').toLowerCase();
                     return tp.includes('rescate') || tp.includes('adelanto') || tp.includes('refuerzo') || 
                            tp.includes('liquidación') || tp.includes('saldo pendiente') || tp.includes('movilidad') || tp.includes('viático') ||
-                           tp.includes('solicitud') || tp.includes('petición');
+                           tp.includes('solicitud') || tp.includes('petición') || tp.includes('mano de obra') || tp.includes('pago_mo');
                 };
 
                 const pagosParaTecnico = uniqueHistory.filter(p => isPagoParaTecnico(p.tipo));
                 const totalPagadoParaTecnico = round2(pagosParaTecnico.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
                 
-                // ✅ MEJORA: Usar pactadoMOBase si existe, luego labor_cost, luego visitCost como fallback
-                const montoBaseParaTecnico = pactadoMOBase > 0 
-                    ? round2(pactadoMOBase) 
-                    : ((t.labor_cost || 0) > 0 ? round2(t.labor_cost || 0) : visitCost);
+                // 4. CALCULO FINAL: Saldo = Pactado MO - Pagado
+                const montoBaseParaTecnico = pactadoMO;
                 const saldoPendienteTecnico = round2(montoBaseParaTecnico - totalPagadoParaTecnico);
                 
                 const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
