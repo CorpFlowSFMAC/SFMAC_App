@@ -16,6 +16,60 @@ import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
 
+// ──────────────────────────────────────────────────────────────
+// HELPERS CENTRALIZADOS PARA CÁLCULOS
+// ──────────────────────────────────────────────────────────────
+function safeNum(val: any): number {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        const clean = val.replace(/[^0-9.-]/g, '');
+        return parseFloat(clean) || 0;
+    }
+    return 0;
+}
+
+// Obtener monto pactado de MO considerando todas las fuentes
+function getPactadoMO(t: any, meta: any): number {
+    const values = [t.monto_pactado_mo, t.labor_cost, meta?.costoManoObra, meta?.monto_pactado_mo];
+    for (const val of values) {
+        const num = safeNum(val);
+        if (num > 0) return num;
+    }
+    return 0;
+}
+
+// Obtener ingreso total considerando todas las fuentes
+function getIngresoTotal(t: any, meta: any): number {
+    const values = [
+        t.ingresos_reales, t.montoFinal, t.total_quoted_amount,
+        meta?.ingresos_reales, meta?.total_quoted_amount, meta?.montoFinal
+    ];
+    for (const val of values) {
+        const num = safeNum(val);
+        if (num > 0) return num;
+    }
+    return 0;
+}
+
+// Calcular utilidad/rentabilidad de un ticket
+function calculateTicketProfitability(t: any, meta: any): { utilidad: number; margen: number } {
+    const ingresoTotal = getIngresoTotal(t, meta);
+    const subtotal = ingresoTotal / 1.18; // Sin IGV
+    
+    const pactadoMO = getPactadoMO(t, meta);
+    const materialsCost = safeNum(t.materials_cost || 0);
+    const visitCost = safeNum(t.visit_cost || 0);
+    
+    // Total invertido = pactado MO + materiales + visita
+    const totalInversion = pactadoMO + materialsCost + visitCost;
+    
+    // Utilidad = Ingreso sin IGV - Inversión total
+    const utilidad = Math.max(0, round2(subtotal - totalInversion));
+    const margen = subtotal > 0 ? round2((utilidad / subtotal) * 100) : 0;
+    
+    return { utilidad, margen };
+}
+
 interface PaymentItem {
     id: string;
     tipo: string;
@@ -64,6 +118,7 @@ interface PaymentTicketGroup {
     voucherVisita?: string | null;
     montoFacturado: number;
     utilidad: number;
+    margen?: number; // Porcentaje de rentabilidad
     descripcion?: string;
 }
 
@@ -727,7 +782,11 @@ export default function PaymentsPage() {
                         historialDepositos: allHistory,
                         costoVisita: visitCost,
                         montoFacturado: t.total_quoted_amount,
-                        utilidad: Math.max(0, (t.total_quoted_amount || 0) - (jobCostBase + visitCost)),
+                        // ✅ MEJORA: Usar helper centralizado para cálculo correcto
+                        ...(() => {
+                            const profit = calculateTicketProfitability(t, meta);
+                            return { utilidad: profit.utilidad, margen: profit.margen };
+                        })(),
                         descripcion: t.description || '',
                     });
                 }

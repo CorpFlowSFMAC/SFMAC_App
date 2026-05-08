@@ -15,13 +15,75 @@ const TERMINAL_STATES = ["por_liquidar", "ticket_cerrado"];
 // ── Advanced (in-transit) states for rollover / goal tracker ──
 const TRANSIT_STATES = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar"];
 
-// ── Utility: calc net profit from a ticket (Subtotal minus real outflows) ──
+// ── Función helper para parseo seguro de números ──
+function safeNum(val: any): number {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        const clean = val.replace(/[^0-9.-]/g, '');
+        return parseFloat(clean) || 0;
+    }
+    return 0;
+}
+
+// ── Utility: calc net profit from a ticket (Subtotal minus real outflows)
+// VERSIÓN MEJORADA - Considera legacy + moderna + pactado
 function netUtility(t: any): number {
-    const bruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-    const subtotal = bruto / 1.18; // excl. IGV
-    const pagos = (t.metadata?.historialPagosTecnico || [])
-        .reduce((s: number, p: any) => s + (parseFloat(p.monto) || 0), 0);
-    return Math.max(0, subtotal - pagos);
+    const meta = t.metadata || {};
+    
+    // 1. INGRESOS: Priorizar ingresos reales confirmados
+    const ingresoBruto = [
+        t.ingresos_reales,
+        t.montoFinal,
+        t.total_quoted_amount,
+        meta.ingresos_reales,
+        meta.total_quoted_amount,
+        meta.montoFinal
+    ].reduce((best: number, val: any) => {
+        const num = safeNum(val);
+        return (num > 0 && (!best || num < best)) ? num : best;
+    }, 0);
+    
+    const subtotal = ingresoBruto / 1.18; // excl. IGV
+    
+    // 2. PAGOS AL TÉCNICO: Unificar legacy + moderna
+    // Legacy payments
+    const legacyPagos = (meta.historialPagosTecnico || meta.historialPagosTécnico || []).reduce((s: number, p: any) => {
+        if (p.estado !== 'anulado' && p.estado !== 'rechazado') {
+            return s + safeNum(p.monto);
+        }
+        return s;
+    }, 0);
+    
+    // Modern costs ( tabla ticket_costs )
+    const modernCosts = (t.costos || []).reduce((s: number, c: any) => {
+        const st = (c.estado_pago || '').toLowerCase();
+        if (!st.includes('anulado') && !st.includes('rechazado')) {
+            return s + safeNum(c.monto);
+        }
+        return s;
+    }, 0);
+    
+    // 3. COSTOS PACTADOS: Mano de obra pactada
+    const pactadoMO = [
+        t.monto_pactado_mo,
+        t.labor_cost,
+        meta.costoManoObra,
+        meta.monto_pactado_mo
+    ].reduce((best: number, val: any) => {
+        const num = safeNum(val);
+        return (num > 0 && (!best || num < best)) ? num : best;
+    }, 0);
+    
+    // 4. COSTOS ADICIONALES: materiales, visita, etc.
+    const materialsCost = safeNum(t.materials_cost || 0);
+    const visitCost = safeNum(t.visit_cost || 0);
+    
+    // Total de salidas reales = máximo entre pactadoMO vs lo realmente pagado 
+    // (para evitar utilidad negativa por pagos mayores al pactado)
+    const totalPagos = legacyPagos + modernCosts;
+    const totalOutflow = Math.max(pactadoMO + materialsCost + visitCost, totalPagos);
+    
+    return Math.max(0, subtotal - totalOutflow);
 }
 
 // ── Days remaining in current month ──
