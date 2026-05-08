@@ -504,7 +504,8 @@ export default function PaymentsPage() {
 
                 const jobCostBase = round2((t.labor_cost || 0) + (t.materials_cost || 0));
                 const visitCost = round2(t.visit_cost || 0);
-                const totalPactadoInclVisita = jobCostBase > 0 ? jobCostBase : visitCost;
+
+                const meta = t.metadata || {};
 
                 // ✅ MEJORA: Usar el campo específico monto_pactado_mo como base primaria
                 const pactadoMOBase = [
@@ -517,7 +518,6 @@ export default function PaymentsPage() {
                     return (num > 0 && (!best || num < best)) ? num : best;
                 }, 0);
 
-                const meta = t.metadata || {};
                 const pagosLegacy = meta.historialPagosTecnico || meta.historialPagosTécnico || [];
                 
                 // ✅ UNIFICACIÓN: Incluir pagos de ticket_costs
