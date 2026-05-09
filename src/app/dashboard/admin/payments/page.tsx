@@ -83,8 +83,8 @@ interface PaymentTicketGroup {
 function getMonthKey(dateStr: string): string {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return 'invalido';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
     return `${y}-${m}`;
 }
 
@@ -496,13 +496,10 @@ export default function PaymentsPage() {
                 const pId = p.id || `fallback_${group.realTicketId}_${p.monto}_${p.fecha || 'nodate'}_${p.tipo || 'notype'}`;
                 
                 if (!countedPaymentIds.has(pId)) {
-                    const montoVal = toNum(p.monto);
+                    const montoVal = p.monto; // Ya es número por normalizePayment
                     if (montoVal > 0 && p.estado !== 'anulado') {
-                        // FALLBACK DE FECHA: Si el pago no tiene fecha, usamos la fecha del ticket o la actual
-                        // para que NO se pierda del historial total.
-                        const fechaReferencia = p.fecha || p.created_at || (group as any).created_at || new Date().toISOString();
-                        const key = getMonthKey(fechaReferencia);
-                        
+                        // Usar la fecha normalizada del motor financiero
+                        const key = getMonthKey(p.fecha);
                         totals[key] = round2((totals[key] || 0) + montoVal);
                         countedPaymentIds.add(pId);
                     }
@@ -658,7 +655,7 @@ export default function PaymentsPage() {
                         isOpen: !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id),
                         tecnico: techData,
                         montoPactado: pactedMO,
-                        montoAdelantado: totalLaborConfirmed,
+                        montoAdelantado: totalLaborConfirmed + totalOpConfirmed,
                         saldoPendiente: netLaborBalance,
                         items: techItems,
                         historialDepositos: allConfirmedHistory,
@@ -935,6 +932,7 @@ export default function PaymentsPage() {
     // SMART PAYMENT FLOW: Yape / Plin / Transferencia
     // ─────────────────────────────────────────────────────────
     const handleSmartPayment = (group: PaymentTicketGroup, item: PaymentItem) => {
+        setDepositDate(new Date().toISOString().split('T')[0]); // Reset a hoy
         const montoStr = formatSoles(item.monto);
         const phone = group.tecnico.plin || group.tecnico.yape || "";
         
@@ -992,12 +990,12 @@ export default function PaymentsPage() {
                 if (isAdvance) {
                     additionalUpdates.status_id = 'en_ejecucion';
                     additionalUpdates.metadataFields.adelantoPagado = true;
-                    additionalUpdates.metadataFields.fechaPagoAdelanto = new Date().toISOString();
+                    additionalUpdates.metadataFields.fechaPagoAdelanto = finalDate;
                     additionalUpdates.metadataFields.solicitudAdelanto = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
                 } else if (isFinal) {
                     additionalUpdates.status_id = 'ticket_cerrado';
-                    additionalUpdates.metadataFields.fechaPagoFinal = new Date().toISOString();
+                    additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
                 }
