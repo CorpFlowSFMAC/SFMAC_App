@@ -269,7 +269,7 @@ export default function ReportesEficienciaPage() {
                 const finances = calculateTicketFinances(t, []); // En reporte masivo no tenemos costs individuales cargados aún, pero usamos la lógica unificada
                 const billingGross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
                 const billingNet = billingGross / 1.18;
-                const inversion = finances.totalPaidCalculated;
+                const inversion = finances.totalExpenses;
                 
                 return (billingNet - inversion) < -1;
             });
@@ -280,7 +280,7 @@ export default function ReportesEficienciaPage() {
                     const finances = calculateTicketFinances(t, []);
                     const billingGross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
                     const billingNet = billingGross / 1.18;
-                    const inversion = finances.totalPaidCalculated;
+                    const inversion = finances.totalExpenses;
                     console.warn(`Ticket: ${t.numeroTicketCliente || t.id} | Neto: S/ ${billingNet.toFixed(2)} | Inversión: S/ ${inversion.toFixed(2)} | ROI: S/ ${(billingNet - inversion).toFixed(2)}`);
                 });
                 console.groupEnd();
@@ -340,7 +340,7 @@ export default function ReportesEficienciaPage() {
                 map[gid].facturacion += gross / 1.18;
             }
             
-            map[gid].inversion += finances.totalPaidCalculated;
+            map[gid].inversion += finances.totalExpenses;
         });
 
         const baseList = Object.values(map).map((g: any) => {
@@ -392,7 +392,7 @@ export default function ReportesEficienciaPage() {
             }
             
             const finances = calculateTicketFinances(t, []);
-            map[cid].costs += finances.totalPaidCalculated;
+            map[cid].costs += finances.totalExpenses;
         });
 
         return Object.values(map).map((c: any) => {

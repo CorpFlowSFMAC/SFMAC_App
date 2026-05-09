@@ -4,20 +4,26 @@ import { round2 } from "./formatters";
  * Lógica Financiera Centralizada y Blindada para Tickets.
  * Esta función unifica el cálculo de pagos (Legacy + Moderno) y costos pactados.
  */
+/**
+ * Función auxiliar para parseo ultra-seguro de valores numéricos
+ */
+export const toNum = (val: any): number => {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        const clean = val.replace(/[^0-9.-]/g, '');
+        return parseFloat(clean) || 0;
+    }
+    return 0;
+};
+
+/**
+ * Lógica Financiera Centralizada y Blindada para Tickets.
+ * Esta función unifica el cálculo de pagos (Legacy + Moderno) y costos pactados.
+ */
 export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     // 1. NORMALIZACIÓN DE METADATA
     const rawMetadata = ticket.metadata || {};
     const safeCosts = Array.isArray(costs) ? costs : [];
-    
-    // Función auxiliar para parseo ultra-seguro
-    const toNum = (val: any) => {
-        if (typeof val === 'number') return val;
-        if (typeof val === 'string') {
-            const clean = val.replace(/[^0-9.-]/g, '');
-            return parseFloat(clean) || 0;
-        }
-        return 0;
-    };
 
     // 2. DETECCIÓN DE MONTOS PACTADOS (Blindaje contra nulos y ceros)
     const pactedMO = [
@@ -149,9 +155,14 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     return {
         // Canal de Mano de Obra (Pasivo Laboral)
         pactedMO,
+        laborPactado: pactedMO, // Alias para compatibilidad
+        totalPactedDebt: pactedMO, // Alias para compatibilidad
         totalLaborConfirmed,
+        laborExpenses: totalLaborConfirmed, // Alias para compatibilidad
         totalLaborPending,
         netLaborBalance,
+        balance: netLaborBalance, // Alias para compatibilidad
+        laborRequested: round2(totalLaborConfirmed + totalLaborPending),
         
         // Canal de Gastos Operativos
         operatingExpenses: totalOpConfirmed,
@@ -159,8 +170,17 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         
         // Rentabilidad Real
         totalVenta,
+        netIncome: totalVenta, // Alias para compatibilidad
         realProfitability,
+        netProfit: realProfitability, // Alias para compatibilidad
         margenReal,
+        profitMargin: margenReal, // Alias para compatibilidad
+        
+        // Totales Agregados
+        totalExpenses: round2(totalLaborConfirmed + totalOpConfirmed),
+        totalPaidCalculated: round2(totalLaborConfirmed + totalOpConfirmed), // Alias para compatibilidad
+        totalRequested: round2(totalLaborPending + totalOpPending), // Alias para compatibilidad
+        totalPending: round2(totalLaborPending + totalOpPending), // Alias para compatibilidad
         
         // Desgloses para TransactionLedger
         laborItems: [...modernLabor, ...legacyLabor],

@@ -14,7 +14,7 @@ import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
-import { calculateTicketFinances } from "@/lib/calculations";
+import { calculateTicketFinances, toNum } from "@/lib/calculations";
 import { supabase } from "@/lib/supabase";
 import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
@@ -379,17 +379,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         'requiere_revision_admin',
     ]);
     if (pactedMO > 0 && RESCUE_ELIGIBLE_STATES.has(ticketData.estadoId)) {
-        // 🔄 REACTIVIDAD: usar paidModernArr (excluye ANULADO/RECHAZADO, incluye
-        // pendiente + REQUIERE_APROBACION + pagado). Esto hace que al crear una
-        // solicitud de rescate, availableRescue baje de inmediato sin necesidad
-        // de cerrar/abrir la ventana.
-        const totalRequestedToTech = (paidModernArr || []).reduce(
-            (sum: number, c: any) => sum + (parseFloat(c.monto) || 0),
-            0
-        );
-        const computed = Math.max(0, pactedMO - totalRequestedToTech);
+        // 🔄 REACTIVIDAD: usar laborRequested (incluye pagado + pendiente)
+        const computed = Math.max(0, pactedMO - finances.laborRequested);
         // Tomamos el mínimo entre saldo del backend y el computado client-side
-        // para evitar sobre-otorgar liquidez.
         availableRescue = (availableRescue > 0)
             ? Math.min(availableRescue, computed)
             : computed;
@@ -1542,7 +1534,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 isExceeding 
                     ? "El monto excede el costo pactado. Se ha enviado a revisión del administrador." 
                     : "La solicitud ha sido enviada a la bandeja de pagos del administrador.", 
-                isExceeding ? "warning" : "success"
+                isExceeding ? "info" : "success"
             );
 
 
@@ -1883,7 +1875,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         return /^MB\d{6}\.\d{2}$/.test(num);
     }, []);
 
-    const capitalExposed = finances.totalPaidCalculated;
+    const capitalExposed = finances.totalExpenses;
 
     const handleCloseInternal = () => {
         // Optimismo visual: Cerramos la interfaz inmediatamente
@@ -2010,7 +2002,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     // Regla: El rescate solo descuenta de la MO Pactada y los adelantos/rescates previos.
     // Las "Compras" (Materiales/Logística) NO afectan este saldo.
     const totalPactadoTecnico = pactedMO;
-    const totalAdelantadoAlTecnico = finances.totalPaidCalculated;
+    const totalAdelantadoAlTecnico = finances.totalExpenses;
     
     // REFUERZO: Si no hay pactado definido aún pero el ticket está en ejecución, permitir un rescate base de S/ 100
     // (Lógica movida arriba a la sección financiera centralizada)
@@ -3504,7 +3496,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         <Package size={16} />
                                                                         <span style={{ fontWeight: 900, fontSize: '11px', letterSpacing: '0.5px' }}>CANAL 2: GASTOS OPERATIVOS (RENTABILIDAD)</span>
                                                                     </div>
-                                                                    <span style={{ fontWeight: 800 }}>- S/ {totalOpConfirmed.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                                    <span style={{ fontWeight: 800 }}>- S/ {operatingExpenses.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                 </div>
                                                                 
                                                                 <div className={styles.depositsListPremium}>

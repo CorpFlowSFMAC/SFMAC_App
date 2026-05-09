@@ -1216,7 +1216,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
 
     if (!visibleStates.includes(ticket.estadoId)) return null;
 
-    const availableRescue = propRescue !== undefined ? propRescue : Math.max(finances.balance, finances.pactedMO - finances.totalPaidCalculated);
+    const availableRescue = propRescue !== undefined ? propRescue : Math.max(finances.netLaborBalance, finances.pactedMO - finances.totalExpenses);
 
     return (
         <div
@@ -1416,7 +1416,6 @@ export const PaymentHistoryBar = memo(function PaymentHistoryBar({ ticket, costo
 
     if (combinedPagos.length === 0) return null;
 
-    const finances = calculateTicketFinances(ticket, costos);
     const totalPagadoConfirmado = finances.totalLaborConfirmed + finances.operatingExpenses;
 
     const getTipoBadge = (p: any) => {
