@@ -1497,30 +1497,49 @@ export default function PaymentsPage() {
                                             </div>
                                         </div>
 
-                                        {/* ESTADO FINANCIERO GRID */}
+                                        {/* RESUMEN FINANCIERO COMPACTO */}
                                         <div style={{ 
-                                            padding: '16px 20px', background: '#FAFAFA', 
-                                            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px',
-                                            borderBottom: '1px solid #F1F5F9'
+                                            padding: '12px 20px', background: '#FAFAFA', 
+                                            display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '8px',
+                                            borderBottom: '1px solid #F1F5F9',
+                                            alignItems: 'center'
                                         }}>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Pactado Mano de Obra</span>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F172A' }}>S/ {formatSoles(group.montoPactado)}</span>
+                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Pactado MO</span>
+                                                <span style={{ fontSize: '1rem', fontWeight: 900, color: '#1E293B' }}>S/ {formatSoles(group.montoPactado)}</span>
                                             </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right' }}>
-                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Total MO Pagado</span>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado)}</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
+                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Total Pagado</span>
+                                                <span style={{ fontSize: '1rem', fontWeight: 900, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado)}</span>
+                                                <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: 600 }}>({group.historialDepositos.length} depósitos)</span>
                                             </div>
-                                            <div style={{ 
-                                                gridColumn: '1 / -1', marginTop: '4px', padding: '8px 12px', 
-                                                background: group.saldoPendiente > 0 ? '#FEF2F2' : '#F0FDF4', 
-                                                borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                border: group.saldoPendiente > 0 ? '1px solid #FEE2E2' : '1px solid #DCFCE7'
-                                            }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#991B1B' : '#15803D' }}>SALDO MANO DE OBRA (TÉCNICO)</span>
-                                                <span style={{ fontSize: '1.1rem', fontWeight: 950, color: group.saldoPendiente > 0 ? '#DC2626' : '#059669' }}>S/ {formatSoles(group.saldoPendiente)}</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
+                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Utilidad Est.</span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                                    <span style={{ fontSize: '1rem', fontWeight: 950, color: group.utilidad > 0 ? '#2563EB' : '#DC2626' }}>
+                                                        S/ {formatSoles(group.utilidad)}
+                                                    </span>
+                                                    {group.margen !== undefined && (
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: group.margen > 20 ? '#059669' : '#D97706', background: group.margen > 20 ? '#ECFDF5' : '#FFFBEB', padding: '0 4px', borderRadius: '4px' }}>
+                                                            {group.margen}% Margen
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {/* PÍLDORA DE SALDO (Solo si hay saldo) */}
+                                        {group.saldoPendiente > 0 && (
+                                            <div style={{ 
+                                                margin: '8px 20px 0', padding: '6px 12px', 
+                                                background: '#FEF2F2', borderRadius: '10px', 
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                border: '1px solid #FEE2E2'
+                                            }}>
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#991B1B' }}>SALDO PENDIENTE (TÉCNICO)</span>
+                                                <span style={{ fontSize: '0.95rem', fontWeight: 950, color: '#DC2626' }}>S/ {formatSoles(group.saldoPendiente)}</span>
+                                            </div>
+                                        )}
 
                                         {/* SOLICITUDES ACTUALES */}
                                         <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1607,7 +1626,6 @@ export default function PaymentsPage() {
                                                 <History size={14} />
                                                 {expandedHistory === group.ticketId ? 'Ocultar historial' : 'Ver historial'}
                                             </button>
-                                            <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 600 }}>{group.historialDepositos.length} depósitos</span>
                                         </div>
                                         
                                         {/* EXPANDED HISTORY (Sub-card style) */}
