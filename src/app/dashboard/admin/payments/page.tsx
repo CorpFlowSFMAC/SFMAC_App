@@ -553,7 +553,7 @@ export default function PaymentsPage() {
                     const st = (c.estado_pago || '').toUpperCase();
                     if (st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN') {
                         const isSpecialist = c.specialist_id && c.specialist_id !== t.technician_id;
-                        const specialistName = isSpecialist ? (c.technicians?.name || 'Especialista') : undefined;
+                        const specialistName = isSpecialist ? (c.technicians?.name || c.proveedor || 'Especialista') : undefined;
 
                         pendingItems.push({
                             id: c.id,
@@ -960,7 +960,8 @@ export default function PaymentsPage() {
         setPendingConfirmation({
             group,
             item,
-            message: `¿Desea registrar el pago de S/ ${montoStr} para ${group.tecnico.nombre}?`
+            message: `¿Desea registrar el pago de S/ ${montoStr} para ${group.tecnico.nombre}?`,
+            voucher: null
         });
     };
 
@@ -1842,6 +1843,47 @@ export default function PaymentsPage() {
                                             fontSize: '0.85rem', fontWeight: 700, color: '#1E293B', outline: 'none'
                                         }}
                                     />
+                                </div>
+
+                                {/* CTA: Subir comprobante (Para transferencias) */}
+                                <div style={{ marginTop: '20px', background: '#F8FAFC', padding: '16px', borderRadius: '14px', border: '1.5px dashed #CBD5E1', textAlign: 'center' }}>
+                                    <Camera size={24} color="#6366F1" style={{ marginBottom: '8px' }} />
+                                    <p style={{ margin: '0 0 10px', fontWeight: 800, color: '#1E293B', fontSize: '0.85rem' }}>
+                                        {pendingConfirmation.voucher ? '✅ COMPROBANTE LISTO' : 'SUBIR VOUCHER (OPCIONAL)'}
+                                    </p>
+                                    <label style={{ 
+                                        display: 'inline-flex', alignItems: 'center', gap: '8px',
+                                        padding: '10px 20px', borderRadius: '10px',
+                                        background: pendingConfirmation.voucher ? '#10B981' : '#6366F1',
+                                        color: 'white', fontWeight: 700, fontSize: '0.8rem',
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                        boxShadow: '0 4px 6px rgba(99, 102, 241, 0.2)'
+                                    }}>
+                                        <Upload size={14} />
+                                        {pendingConfirmation.voucher ? 'CAMBIAR IMAGEN' : 'SELECCIONAR ARCHIVO'}
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: 'none' }}
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    const compressed = await compressImage(file);
+                                                    const reader = new FileReader();
+                                                    reader.onloadend = () => {
+                                                        setPendingConfirmation(prev => prev ? { ...prev, voucher: reader.result as string } : null);
+                                                        showToast('📸 Comprobante cargado correctamente');
+                                                    };
+                                                    reader.readAsDataURL(compressed);
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                    {pendingConfirmation.voucher && (
+                                        <p style={{ margin: '8px 0 0', fontSize: '0.7rem', color: '#059669', fontWeight: 700 }}>
+                                            ✓ La imagen se guardará al confirmar el pago
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             <div className={styles.modalFooter}>

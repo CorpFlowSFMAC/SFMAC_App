@@ -32,18 +32,22 @@ const isOperating = (item: any) => {
         'compras', 'materiales', 'viáticos', 'viatico', 'logística', 
         'insumos', 'movilidad', 'pasajes', 'taxi', 'bus', 'transporte',
         'envíos', 'gasto operativo', 'compra mat', 'herramientas',
-        'repuestos', 'insumo', 'peaje', 'estacionamiento'
+        'repuestos', 'insumo', 'peaje', 'estacionamiento', 'egreso', 'compras'
     ];
     
+    // Si tiene un specialist_id y NO es el técnico principal del ticket (si se conoce),
+    // o si el concepto indica explícitamente un pago a tercero/compra.
+    const isExternalSpecialist = item.specialist_id && item.specialist_id !== item.main_technician_id;
+
     if (con.includes('adelanto operativo')) {
         return con.includes('materiales');
     }
     
-    return operatingKeywords.some(key => cat.includes(key) || con.includes(key));
+    return operatingKeywords.some(key => cat.includes(key) || con.includes(key)) || isExternalSpecialist;
 };
 
 const isLabor = (item: any) => {
-    if (isOperating(item)) return false; // Prioridad operativa
+    if (isOperating(item)) return false; // Prioridad operativa/terceros
 
     const cat = (item.categoria || '').toLowerCase();
     const con = (item.concepto || item.tipo || '').toLowerCase();
@@ -95,6 +99,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     const normalizePayment = (p: any) => ({
         ...p,
+        main_technician_id: ticket.technician_id || ticket.technicians?.id || rawMetadata.tecnico?.id,
         monto: toNum(p.monto || p.amount || 0),
         fecha: p.fecha_pago || p.fecha || p.date || p.created_at || (ticket as any).created_at || new Date().toISOString(),
     });
@@ -131,10 +136,10 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         !safeCosts.some(mc => mc.id === lp.id) && isConfirmed(lp.estado)
     );
 
-    const modernLabor = confirmedModern.filter(isLabor).map(normalizePayment);
-    const modernOp = confirmedModern.filter(isOperating).map(normalizePayment);
-    const legacyLabor = filteredLegacy.filter(isLabor);
-    const legacyOp = filteredLegacy.filter(isOperating);
+    const modernLabor = confirmedModern.map(normalizePayment).filter(isLabor);
+    const modernOp = confirmedModern.map(normalizePayment).filter(isOperating);
+    const legacyLabor = filteredLegacy.map(normalizePayment).filter(isLabor);
+    const legacyOp = filteredLegacy.map(normalizePayment).filter(isOperating);
 
     const totalLaborConfirmed = round2(
         modernLabor.reduce((acc, c) => acc + c.monto, 0) +
@@ -150,8 +155,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const realProfitability = round2(montoBase - pactedMO - totalOpConfirmed);
     const margenReal = montoBase > 0 ? round2((realProfitability / montoBase) * 100) : 0;
 
-    const pendingLaborItems = pendingModern.filter(isLabor).map(normalizePayment);
-    const pendingOpItems = pendingModern.filter(isOperating).map(normalizePayment);
+    const pendingLaborItems = pendingModern.map(normalizePayment).filter(isLabor);
+    const pendingOpItems = pendingModern.map(normalizePayment).filter(isOperating);
     const totalOpPending = round2(pendingOpItems.reduce((acc, c) => acc + c.monto, 0));
     const totalLaborPending = round2(pendingLaborItems.reduce((acc, c) => acc + c.monto, 0));
     const laborRequested = totalLaborConfirmed + totalLaborPending;

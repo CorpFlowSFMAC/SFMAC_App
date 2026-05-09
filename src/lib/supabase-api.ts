@@ -476,7 +476,7 @@ export const ticketsAPI = {
                 branch_offices(id, name),
                 technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
                 gestoras(id, name),
-                costos:ticket_costs(*)
+                costos:ticket_costs(*, technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone))
             `)
             .not('status_id', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`)
             .order('created_at', { ascending: false })
