@@ -793,7 +793,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 ...serverMeta,
                 ...sourceMetadata,
                 // PROTECCIÓN DE HISTORIAL: Nunca sobreescribir con datos locales viejos
+                // FIX: Escribir en AMBAS variantes para consistencia cross-módulos
                 historialPagosTécnico: (() => {
+                    const localPagos = businessData?.historialPagosTécnico || businessData?.historialPagosTecnico || [];
+                    const serverPagos = serverMeta.historialPagosTécnico || serverMeta.historialPagosTecnico || [];
+                    const allById = new Map();
+                    [...serverPagos, ...localPagos].forEach(p => {
+                        if (p?.id) allById.set(p.id, p);
+                    });
+                    return Array.from(allById.values());
+                })(),
+                historialPagosTecnico: (() => {
                     const localPagos = businessData?.historialPagosTécnico || businessData?.historialPagosTecnico || [];
                     const serverPagos = serverMeta.historialPagosTécnico || serverMeta.historialPagosTecnico || [];
                     const allById = new Map();

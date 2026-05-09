@@ -656,7 +656,9 @@ export const ticketsAPI = {
         const newMetadata = {
             ...serverMeta,
             ...additionalUpdates.metadataFields,
+            // FIX: Guardar en AMBAS variantes para consistencia cross-módulos
             historialPagosTecnico: mergedPagos,
+            historialPagosTécnico: mergedPagos
         };
 
         // 4. Preparar updates de columnas
@@ -704,7 +706,9 @@ export const ticketsAPI = {
         const newMetadata = {
             ...serverMeta,
             ...metadataUpdates,
-            historialPagosTécnico: mergedPagos
+            // FIX: Escribir en AMBAS variantes para是一致的
+            historialPagosTécnico: mergedPagos,
+            historialPagosTecnico: mergedPagos
         };
 
         const updates = {

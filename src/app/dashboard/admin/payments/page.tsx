@@ -873,7 +873,9 @@ export default function PaymentsPage() {
             const nuevoHistorial = historial.filter((p: any) => p.id !== dep.id);
             const nuevoTotal = nuevoHistorial.reduce((sum: number, p: any) => sum + (p.monto || 0), 0);
 
+            // FIX: Guardar en AMBAS variantes para consistencia cross-módulos
             meta.historialPagosTecnico = nuevoHistorial;
+            meta.historialPagosTécnico = nuevoHistorial;
             meta.montoAdelanto = nuevoTotal;
 
             const { error } = await supabase
