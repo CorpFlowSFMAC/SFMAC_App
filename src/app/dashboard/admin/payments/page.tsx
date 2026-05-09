@@ -722,8 +722,8 @@ export default function PaymentsPage() {
             let newStatusId = null;
             
             // Determinar reversión de estado basada en el tipo de pago
-            const isVisita = item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('visita') || item.id === `${group.realTicketId}_visita`;
-            const isFinal = item.tipo?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('final') || item.id === `${group.realTicketId}_final`;
+            const isVisita = item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('visita') || (item.categoria || '').toLowerCase().includes('viático') || (item.categoria || '').toLowerCase().includes('movilidad');
+            const isFinal = item.tipo?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('final') || (item.categoria || '').toLowerCase().includes('mano de obra') || (item.categoria || '').toLowerCase().includes('pago mo');
 
             if (isVisita) newStatusId = 'tecnico_asignado';
             else if (isFinal) newStatusId = 'documentacion_enviada';
@@ -750,10 +750,12 @@ export default function PaymentsPage() {
                 if (ticketRef) {
                     let nextStatus = null;
                     const cat = (item.categoria || '').toUpperCase();
+                    const currentId = ticketRef.status_id;
 
-                    if (cat.includes('VISITA') && ticketRef.status_id === 'esperando_pago_visita') {
+                    if ((cat.includes('VISITA') || cat.includes('MOVILIDAD') || cat.includes('VIÁTICO')) && currentId === 'esperando_pago_visita') {
                         nextStatus = 'tecnico_asignado';
-                    } else if (cat.includes('PAGO MO') && (ticketRef.status_id === 'por_liquidar' || ticketRef.status_id === 'esperando_pago_final')) {
+                    } else if ((cat.includes('MANO DE OBRA') || cat.includes('PAGO MO') || cat.includes('LIQUIDACIÓN')) && 
+                             ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin'].includes(currentId)) {
                         nextStatus = 'documentacion_enviada';
                     }
 
@@ -766,7 +768,7 @@ export default function PaymentsPage() {
                     }
                 }
                 
-                showToast('❌ Pago denegado. El ticket ha vuelto a su estado anterior.');
+                showToast('❌ Pago denegado y estado del ticket revertido.');
                 refresh();
                 return;
             }
@@ -796,7 +798,7 @@ export default function PaymentsPage() {
                 meta.solicitudAdelantoExtra = null;
             } else if (isFinal) {
                 meta.solicitudLiquidacion = null;
-                if (currentStatus === 'por_liquidar' || currentStatus === 'esperando_pago_final') {
+                if (['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin'].includes(currentStatus)) {
                     newStatusId = 'documentacion_enviada';
                 }
             } else if (isVisita) {
