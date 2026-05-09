@@ -461,13 +461,8 @@ export const ticketsAPI = {
         // ════════════════════════════════════════════════════════════════════
         const ESTADOS_EXCLUIDOS = [
             'borrador',
-            // Estados terminales (no requieren acción de pago)
-            'ticket_cerrado',
-            'ticket_rechazado',
-            'ticket_cancelado',
-            // Aliases legacy que podrían existir en datos antiguos
-            'rechazado',
-            'cancelado',
+            // NO excluir estados terminales aquí, ya que se necesitan para el historial (PAGADOS)
+            // y para el cálculo de estadísticas globales.
         ];
 
         const { data: ticketsData, error: tErr } = await supabase

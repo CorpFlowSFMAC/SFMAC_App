@@ -248,7 +248,7 @@ export default function PaymentsPage() {
                     flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
                     flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
 
-                    flat.isOpen = !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id);
+                    flat.isOpen = !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id);
                     return flat;
                 } catch (e) {
                     console.error('[Payments] Error processing ticket:', t.id, e);
@@ -647,7 +647,7 @@ export default function PaymentsPage() {
                         cliente: t.clients?.name || 'Cliente',
                         sede: t.branch_offices?.name || 'Sede',
                         statusId: t.status_id,
-                        isOpen: !['ticket_cerrado', 'ticket_rechazado', 'ticket_cancelado'].includes(t.status_id),
+                        isOpen: !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id),
                         tecnico: techData,
                         montoPactado: pactedMO,
                         montoAdelantado: totalLaborConfirmed,
@@ -1074,13 +1074,13 @@ export default function PaymentsPage() {
     const totalPagadoHistorico = round2(Object.values(monthlyTotals).reduce((s: any, v: any) => s + v, 0) as number);
 
     const pendingCount = paymentGroups.reduce((acc, g) => {
-        const isClosed = ['cerrado', 'cancelado', 'rechazado'].includes(g.statusId || '');
+        const isClosed = ['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(g.statusId || '');
         if (isClosed) return acc;
         return acc + g.items.filter(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && i.monto > 0 && !i.isReference).length;
     }, 0);
 
     const totalPendingAmount = round2(paymentGroups.reduce((acc, g) => {
-        const isClosed = ['cerrado', 'cancelado', 'rechazado'].includes(g.statusId || '');
+        const isClosed = ['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(g.statusId || '');
         if (isClosed) return acc;
         return acc + g.items.filter(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && i.monto > 0 && !i.isReference).reduce((s, i) => s + i.monto, 0);
     }, 0));
@@ -1098,7 +1098,7 @@ export default function PaymentsPage() {
 
 
 
-        const isTicketClosed = g.statusId === 'cerrado' || g.statusId === 'cancelado' || g.statusId === 'rechazado';
+        const isTicketClosed = g.statusId === 'ticket_cerrado' || g.statusId === 'ticket_cancelado' || g.statusId === 'ticket_rechazado';
         
         // 1. Identificar si hay ítems realmente pendientes (no históricos/referencia)
         const hasPendingItems = g.items.some(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && !i.isReference);
