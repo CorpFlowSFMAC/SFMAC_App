@@ -269,7 +269,7 @@ export default function ReportesEficienciaPage() {
                 const finances = calculateTicketFinances(t, []); // En reporte masivo no tenemos costs individuales cargados aún, pero usamos la lógica unificada
                 const billingGross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
                 const billingNet = billingGross / 1.18;
-                const inversion = finances.totalExpenses;
+                const inversion = (finances.totalLaborConfirmed + finances.totalOpConfirmed);
                 
                 return (billingNet - inversion) < -1;
             });
@@ -280,7 +280,7 @@ export default function ReportesEficienciaPage() {
                     const finances = calculateTicketFinances(t, []);
                     const billingGross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
                     const billingNet = billingGross / 1.18;
-                    const inversion = finances.totalExpenses;
+                    const inversion = (finances.totalLaborConfirmed + finances.totalOpConfirmed);
                     console.warn(`Ticket: ${t.numeroTicketCliente || t.id} | Neto: S/ ${billingNet.toFixed(2)} | Inversión: S/ ${inversion.toFixed(2)} | ROI: S/ ${(billingNet - inversion).toFixed(2)}`);
                 });
                 console.groupEnd();
@@ -340,7 +340,7 @@ export default function ReportesEficienciaPage() {
                 map[gid].facturacion += gross / 1.18;
             }
             
-            map[gid].inversion += finances.totalExpenses;
+            map[gid].inversion += (finances.totalLaborConfirmed + finances.totalOpConfirmed);
         });
 
         const baseList = Object.values(map).map((g: any) => {
@@ -392,7 +392,7 @@ export default function ReportesEficienciaPage() {
             }
             
             const finances = calculateTicketFinances(t, []);
-            map[cid].costs += finances.totalExpenses;
+            map[cid].costs += (finances.totalLaborConfirmed + finances.totalOpConfirmed);
         });
 
         return Object.values(map).map((c: any) => {

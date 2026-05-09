@@ -522,6 +522,7 @@ export default function PaymentsPage() {
                 const {
                     pactedMO,
                     totalLaborConfirmed,
+                    totalOpConfirmed,
                     netLaborBalance,
                     laborItems,
                     operatingItems,
@@ -1829,6 +1830,7 @@ export default function PaymentsPage() {
                                     <span className={`${styles.detailValue} ${styles.popAmount}`}>
                                         S/ {formatSoles(pendingConfirmation.item.monto)}
                                     </span>
+                                </div>
                                 <div className={styles.detailRow} style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F1F5F9' }}>
                                     <span className={styles.detailLabel} style={{ color: '#3B82F6', fontWeight: 800 }}>Fecha de Depósito:</span>
                                     <input 

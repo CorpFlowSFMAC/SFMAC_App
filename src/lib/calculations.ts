@@ -150,16 +150,37 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const realProfitability = round2(montoBase - pactedMO - totalOpConfirmed);
     const margenReal = montoBase > 0 ? round2((realProfitability / montoBase) * 100) : 0;
 
+    const pendingLaborItems = pendingModern.filter(isLabor).map(normalizePayment);
+    const pendingOpItems = pendingModern.filter(isOperating).map(normalizePayment);
+    const totalOpPending = round2(pendingOpItems.reduce((acc, c) => acc + c.monto, 0));
+    const totalLaborPending = round2(pendingLaborItems.reduce((acc, c) => acc + c.monto, 0));
+    const laborRequested = totalLaborConfirmed + totalLaborPending;
+
     return {
         pactedMO,
         totalVenta: montoBase,
         totalLaborConfirmed,
         totalOpConfirmed,
+        laborRequested, // Requerido por TicketWindow
+        totalLaborPending,
+        netProfit: realProfitability, // Alias
+        profitMargin: margenReal,    // Alias
+        netIncome: montoBase,        // Alias
+        laborPactado: pactedMO,      // Alias
+        laborExpenses: totalLaborConfirmed, // Alias
+        totalPactedDebt: pactedMO,   // Alias
+        operatingExpenses: totalOpConfirmed, // Alias para compatibilidad V2
+        totalExpenses: totalLaborConfirmed + totalOpConfirmed, // Alias para compatibilidad V2
         netLaborBalance,
+        balance: netLaborBalance, // Alias para compatibilidad V2
         realProfitability,
         margenReal,
         laborItems: [...modernLabor, ...legacyLabor],
         operatingItems: [...modernOp, ...legacyOp],
-        pendingCosts: pendingModern
+        pendingCosts: pendingModern,
+        pendingLaborItems,
+        pendingOpItems,
+        totalOpPending,
+        totalRequested: totalLaborConfirmed + totalOpConfirmed + totalOpPending
     };
 }
