@@ -13,7 +13,7 @@ import { ticketsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
 import { round2, formatSoles } from "@/lib/formatters";
-import { calculateTicketFinances } from "@/lib/calculations";
+import { calculateTicketFinances, toNum } from "@/lib/calculations";
 import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
 
@@ -491,11 +491,18 @@ export default function PaymentsPage() {
         
         groups.forEach(group => {
             (group.historialDepositos || []).forEach((p: any) => {
-                const pId = p.id || `${group.realTicketId}_${p.monto}_${p.fecha}_${p.tipo}`;
+                // Generar ID único robusto para evitar doble contabilidad
+                const pId = p.id || `fallback_${group.realTicketId}_${p.monto}_${p.fecha || 'nodate'}_${p.tipo || 'notype'}`;
+                
                 if (!countedPaymentIds.has(pId)) {
-                    if (p.monto && p.fecha && p.estado !== 'anulado') {
-                        const key = getMonthKey(p.fecha);
-                        totals[key] = round2((totals[key] || 0) + round2(p.monto));
+                    const montoVal = toNum(p.monto);
+                    if (montoVal > 0 && p.estado !== 'anulado') {
+                        // FALLBACK DE FECHA: Si el pago no tiene fecha, usamos la fecha del ticket o la actual
+                        // para que NO se pierda del historial total.
+                        const fechaReferencia = p.fecha || p.created_at || (group as any).created_at || new Date().toISOString();
+                        const key = getMonthKey(fechaReferencia);
+                        
+                        totals[key] = round2((totals[key] || 0) + montoVal);
                         countedPaymentIds.add(pId);
                     }
                 }
