@@ -765,7 +765,7 @@ export default function PaymentsPage() {
                             estadoId: nextStatus,
                             solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : ticketRef.metadata?.solicitudLiquidacion,
                             solicitudPagoVisita: nextStatus === 'tecnico_asignado' ? null : ticketRef.metadata?.solicitudPagoVisita,
-                            ultimoPagoRechazado: {
+                            pagoRechazado: {
                                 fecha: new Date().toISOString(),
                                 monto: item.monto,
                                 tipo: item.tipo,
@@ -822,7 +822,7 @@ export default function PaymentsPage() {
             const dbUpdates: any = { 
                 metadata: {
                     ...meta,
-                    ultimoPagoRechazado: {
+                    pagoRechazado: {
                         fecha: new Date().toISOString(),
                         monto: item.monto,
                         tipo: item.tipo,
@@ -950,12 +950,12 @@ export default function PaymentsPage() {
                     additionalUpdates.metadataFields.adelantoPagado = true;
                     additionalUpdates.metadataFields.fechaPagoAdelanto = new Date().toISOString();
                     additionalUpdates.metadataFields.solicitudAdelanto = null;
-                    additionalUpdates.metadataFields.ultimoPagoRechazado = null;
+                    additionalUpdates.metadataFields.pagoRechazado = null;
                 } else if (isFinal) {
                     additionalUpdates.status_id = 'ticket_cerrado';
                     additionalUpdates.metadataFields.fechaPagoFinal = new Date().toISOString();
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
-                    additionalUpdates.metadataFields.ultimoPagoRechazado = null;
+                    additionalUpdates.metadataFields.pagoRechazado = null;
                 }
 
                 const { error: costErr } = await supabase
@@ -1012,7 +1012,7 @@ export default function PaymentsPage() {
                 );
             }
 
-            meta.ultimoPagoRechazado = null;
+            meta.pagoRechazado = null;
 
             additionalUpdates.metadataFields = meta;
             await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);

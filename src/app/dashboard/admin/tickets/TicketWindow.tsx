@@ -596,7 +596,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const prevStatusOrder = TICKET_STATE_ORDER[prev.estadoId] || 0;
             // SIEMPRE gana el más avanzado (nunca retroceder de estado automáticamente)
             // EXCEPCIÓN: Si hay una denegación de pago reciente, permitimos el retroceso para que la UI se sincronice
-            const hasRejection = !!meta.ultimoPagoRechazado;
+            const hasRejection = !!meta.pagoRechazado;
             const shouldPreservePrevState = prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current;
 
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
