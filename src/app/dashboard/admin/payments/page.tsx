@@ -580,7 +580,8 @@ export default function PaymentsPage() {
                 const isPorLiquidar = ['por_liquidar', 'documentacion_enviada', 'requiere_revision_admin'].includes(t.status_id);
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 if (isPorLiquidar && !hasLiquidacionPaid) {
-                    const liqMonto = round2(meta.solicitudLiquidacion?.monto ?? netLaborBalance);
+                    // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
+                    const liqMonto = round2(netLaborBalance);
                     if (liqMonto > 0.01) {
                         pendingItems.push({
                             id: `${t.id}_final`,

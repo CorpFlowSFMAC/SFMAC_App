@@ -1486,22 +1486,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setIsSavingNegotiation(true);
         setShowLiquidationConfirm(false);
         try {
-            const costsRes = await supabase.from('ticket_costs').select('monto').eq('ticket_id', ticket.id).eq('estado_pago', 'pagado');
-            const modernPaymentsSum = (costsRes.data || []).reduce((acc, c) => acc + (parseFloat(c.monto) || 0), 0);
-            
-            // UNIFICACIÓN: Incluir historialPagosTécnico (Legacy) para evitar liquidaciones de monto 0
-            const legacyPaymentsSum = (ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || []).reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
-            const unifiedPaymentsSum = round2(modernPaymentsSum + legacyPaymentsSum);
+            // 🚀 MOTOR V3: El saldo a liquidar es SIEMPRE el netLaborBalance (Pactado MO - Pagos MO)
+            // No usamos montoTotalCotizado (Precio Cliente) porque eso inflaría el pago del técnico
+            const amount = finances.netLaborBalance;
+            const costRef = finances.pactedMO;
 
-            const costRef = round2(parseFloat(montoTotalCotizado as any || ticketData.montoFinal || 0));
-            const amount = Math.max(0, round2(costRef - unifiedPaymentsSum));
-
-            // Si el monto es 0 pero el ticket NO está pagado, algo anda mal con la sincronización o los datos
-            if (amount <= 0 && costRef > 0) {
-                console.warn("Monto de liquidación calculado como 0 con costo pactado > 0. Revisar pagos.");
+            // Si el monto es 0 pero hay deuda pactada, alertar
+            if (amount <= 0 && costRef > 0 && finances.totalLaborConfirmed < costRef) {
+                console.warn("Saldo calculado como 0 pero aún hay deuda pactada. Revisar categorización de costos.");
             }
 
-            const isExceeding = (unifiedPaymentsSum + amount > costRef + 1);
+            const isExceeding = (finances.totalLaborConfirmed + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
 
             // ✅ UNIFICACIÓN DE ESTRUCTURA: solicitudLiquidacion debe ir dentro de metadata
