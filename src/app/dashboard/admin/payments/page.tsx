@@ -41,6 +41,7 @@ interface PaymentItem {
     specialistPlin?: string;
     hasVoucher?: boolean; // Flag para carga diferida de base64
     isReference?: boolean; // Marca ítems usados como referencia histórica
+    categoria?: string;    // Categoría del costo (MO, Gastos, etc)
 }
 
 interface PaymentTicketGroup {
@@ -561,6 +562,7 @@ export default function PaymentsPage() {
                             specialistCCI: c.technicians?.cci,
                             specialistYape: c.technicians?.yape_number,
                             specialistPlin: c.technicians?.plin_number,
+                            categoria: c.categoria,
                         });
                     }
                 });
@@ -577,7 +579,7 @@ export default function PaymentsPage() {
                     });
                 }
 
-                const isPorLiquidar = ['por_liquidar', 'documentacion_enviada', 'requiere_revision_admin'].includes(t.status_id);
+                const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 if (isPorLiquidar && !hasLiquidacionPaid) {
                     // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
@@ -727,8 +729,10 @@ export default function PaymentsPage() {
             else if (isFinal) newStatusId = 'documentacion_enviada';
 
             // 1. SI ES COSTO DE TABLA (ticket_costs)
+            // 1. DENEGAR COSTO DE TABLA (V3 / Canal 2 / Specialists)
             if (item.isTableCost && item.costId) {
-                const { error: updErr } = await supabase
+                // Actualizar el costo individual
+                await supabase
                     .from('ticket_costs')
                     .update({ 
                         estado_pago: 'RECHAZADO',
@@ -736,16 +740,33 @@ export default function PaymentsPage() {
                     })
                     .eq('id', item.costId);
 
-                if (updErr) throw updErr;
+                // Reversión de estado del Ticket si el costo es crítico
+                const { data: ticketRef } = await supabase
+                    .from('tickets')
+                    .select('status_id, metadata')
+                    .eq('id', group.realTicketId)
+                    .single();
 
-                if (isVisita) {
-                    const { data: currentT } = await supabase.from('tickets').select('status_id').eq('id', group.realTicketId).single();
-                    if (currentT?.status_id === 'esperando_pago_visita') {
-                        await supabase.from('tickets').update({ status_id: 'tecnico_asignado' }).eq('id', group.realTicketId);
+                if (ticketRef) {
+                    let nextStatus = null;
+                    const cat = (item.categoria || '').toUpperCase();
+
+                    if (cat.includes('VISITA') && ticketRef.status_id === 'esperando_pago_visita') {
+                        nextStatus = 'tecnico_asignado';
+                    } else if (cat.includes('PAGO MO') && (ticketRef.status_id === 'por_liquidar' || ticketRef.status_id === 'esperando_pago_final')) {
+                        nextStatus = 'documentacion_enviada';
+                    }
+
+                    if (nextStatus) {
+                        const newMeta = { ...ticketRef.metadata, estadoId: nextStatus };
+                        await supabase.from('tickets').update({ 
+                            status_id: nextStatus,
+                            metadata: newMeta
+                        }).eq('id', group.realTicketId);
                     }
                 }
                 
-                showToast('❌ Solicitud de costo denegada');
+                showToast('❌ Pago denegado. El ticket ha vuelto a su estado anterior.');
                 refresh();
                 return;
             }
@@ -762,9 +783,9 @@ export default function PaymentsPage() {
             
             const meta = { ...currentTicket.metadata };
             const currentStatus = currentTicket.status_id;
+            newStatusId = null; // Reiniciar para este bloque
 
             if (item.solicitudId) {
-                // Marcar como rechazado en el array en lugar de borrarlo para mantener historial
                 meta.solicitudesDeposito = (meta.solicitudesDeposito || []).map((s: any) => 
                     s.id === item.solicitudId ? { ...s, estado: 'rechazado', fechaDenegacion: new Date().toISOString() } : s
                 );
@@ -809,7 +830,7 @@ export default function PaymentsPage() {
             
             if (finalUpdErr) throw finalUpdErr;
 
-            showToast(`❌ Solicitud de pago denegada.`);
+            showToast(`❌ Solicitud de pago denegada. El ticket ha vuelto a su estado anterior.`);
             refresh();
         } catch (err: any) {
             console.error('[Payments] Error detallado al denegar pago:', err);
