@@ -966,7 +966,7 @@ export default function PaymentsPage() {
     };
 
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null, forcedDate?: string) => {
-        const finalDate = forcedDate 
+        const finalDate = (forcedDate && forcedDate.trim() !== "") 
             ? new Date(forcedDate + "T12:00:00").toISOString() 
             : new Date().toISOString();
 
