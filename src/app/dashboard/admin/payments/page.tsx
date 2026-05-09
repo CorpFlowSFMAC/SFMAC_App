@@ -42,6 +42,8 @@ interface PaymentItem {
     hasVoucher?: boolean; // Flag para carga diferida de base64
     isReference?: boolean; // Marca ítems usados como referencia histórica
     categoria?: string;    // Categoría del costo (MO, Gastos, etc)
+    motivoRechazo?: string; // ★ NUEVO: Motivo de rechazo (opcional)
+    gestoraId?: string;    // ★ NUEVO: ID de la gestora para notificaciones
 }
 
 interface PaymentTicketGroup {
@@ -826,7 +828,8 @@ export default function PaymentsPage() {
                         fecha: new Date().toISOString(),
                         monto: item.monto,
                         tipo: item.tipo,
-                        concepto: item.concepto || 'Denegado por Tesorería'
+                        concepto: item.concepto || 'Denegado por Tesorería',
+                        mensajeRechazo: item.motivoRechazo || 'Pago denegado por Tesorería'
                     }
                 } 
             };
@@ -836,6 +839,20 @@ export default function PaymentsPage() {
                 dbUpdates.metadata.estadoId = newStatusId;
             }
 
+            // ★ NUEVO: Guardar notificación para la gestora
+            const notificacionGestora = {
+                id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                tipo: 'SOLICITUD_DENEGADA',
+                titulo: '❌ Solicitud de Pago Denegada',
+                mensaje: `Tu solicitud de ${item.tipo || 'pago'} por S/ ${formatSoles(item.monto)} ha sido denegada.${item.motivoRechazo ? ' Motivo: ' + item.motivoRechazo : ''}`,
+                ticketId: group.realTicketId,
+                ticketNum: group.ticketNum,
+                fecha: new Date().toISOString(),
+                leida: false,
+                prioridad: 'alta'
+            };
+            dbUpdates.metadata.notificacionesGestora = [...(meta.notificacionesGestora || []), notificacionGestora];
+
             const { error: finalUpdErr } = await supabase
                 .from('tickets')
                 .update(dbUpdates)
@@ -843,6 +860,7 @@ export default function PaymentsPage() {
             
             if (finalUpdErr) throw finalUpdErr;
 
+            // ★ NUEVO: Notificación Realtime para la gestora
             showToast(`❌ Solicitud de pago denegada. El ticket ha vuelto a su estado anterior.`);
             refresh();
         } catch (err: any) {

@@ -36,6 +36,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         ticket.monto_acordado // Alias adicional
     ].map(v => toNum(v)).find(v => v > 0) || 0;
     
+    // 3. DETECCIÓN DE MONTOS Y IGV
+    // Calcular montoFinal primero
     const montoFinal = [
         ticket.ingresos_reales, // Priorizar ingresos reales confirmados
         ticket.monto_presupuesto,
@@ -47,6 +49,11 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         rawMetadata.montoFinal,
         rawMetadata.montoTotalCotizado
     ].map(v => toNum(v)).find(v => v > 0) || 0;
+    
+    // Detectar IGV y calcular base imponible (sin IGV)
+    const hasIGV = rawMetadata?.montoIGV > 0 || rawMetadata?.igv > 0 || ticket.montoIGV > 0 || ticket.igv > 0;
+    const igvMonto = toNum(rawMetadata?.montoIGV || rawMetadata?.igv || ticket.montoIGV || ticket.igv || 0);
+    const montoBase = hasIGV && igvMonto > 0 ? round2(montoFinal - igvMonto) : montoFinal;
 
     const ingresosReales = toNum(ticket.ingresos_reales || 0);
     const utilidadDB = toNum(ticket.utilidad_neta || 0);
@@ -147,8 +154,9 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     // Regla 1: netLaborBalance solo descuenta Pasivo Laboral
     const netLaborBalance = Math.max(0, round2(pactedMO - totalLaborConfirmed));
     
-    // Regla 2: realProfitability = (Venta) - (MO Pactada) - (Gastos Operativos)
-    const totalVenta = montoFinal;
+    // Regla 2: realProfitability = (Venta SIN IGV) - (MO Pactada) - (Gastos Operativos)
+    // IMPORTANTE: Se calcula sobre base imponible (sin IGV) para reflejar la utilidad real
+    const totalVenta = montoBase > 0 ? montoBase : montoFinal; // Usar base sin IGV si está disponible
     const realProfitability = round2(totalVenta - pactedMO - totalOpConfirmed);
     const margenReal = totalVenta > 0 ? round2((realProfitability / totalVenta) * 100) : 0;
 
@@ -175,6 +183,11 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         netProfit: realProfitability, // Alias para compatibilidad
         margenReal,
         profitMargin: margenReal, // Alias para compatibilidad
+        
+        // Campos adicionales para IGV (nuevos)
+        montoBase,      // Base imponible (sin IGV)
+        montoIGV: igvMonto, // Monto de IGV detectado
+        montoConIGV: montoFinal, // Monto total con IGV
         
         // Totales Agregados
         totalExpenses: round2(totalLaborConfirmed + totalOpConfirmed),
