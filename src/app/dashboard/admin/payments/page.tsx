@@ -760,7 +760,18 @@ export default function PaymentsPage() {
                     }
 
                     if (nextStatus) {
-                        const newMeta = { ...ticketRef.metadata, estadoId: nextStatus };
+                        const newMeta = { 
+                            ...ticketRef.metadata, 
+                            estadoId: nextStatus,
+                            solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : ticketRef.metadata?.solicitudLiquidacion,
+                            solicitudPagoVisita: nextStatus === 'tecnico_asignado' ? null : ticketRef.metadata?.solicitudPagoVisita,
+                            ultimoPagoRechazado: {
+                                fecha: new Date().toISOString(),
+                                monto: item.monto,
+                                tipo: item.tipo,
+                                concepto: item.concepto || 'Denegado por Tesorería'
+                            }
+                        };
                         await supabase.from('tickets').update({ 
                             status_id: nextStatus,
                             metadata: newMeta
@@ -939,10 +950,12 @@ export default function PaymentsPage() {
                     additionalUpdates.metadataFields.adelantoPagado = true;
                     additionalUpdates.metadataFields.fechaPagoAdelanto = new Date().toISOString();
                     additionalUpdates.metadataFields.solicitudAdelanto = null;
+                    additionalUpdates.metadataFields.ultimoPagoRechazado = null;
                 } else if (isFinal) {
                     additionalUpdates.status_id = 'ticket_cerrado';
                     additionalUpdates.metadataFields.fechaPagoFinal = new Date().toISOString();
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
+                    additionalUpdates.metadataFields.ultimoPagoRechazado = null;
                 }
 
                 const { error: costErr } = await supabase
@@ -998,6 +1011,8 @@ export default function PaymentsPage() {
                     s.id === item.solicitudId ? { ...s, estado: 'pagado', fechaPago: new Date().toISOString() } : s
                 );
             }
+
+            meta.ultimoPagoRechazado = null;
 
             additionalUpdates.metadataFields = meta;
             await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
