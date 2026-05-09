@@ -117,6 +117,13 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         return st === 'pendiente' || st === 'requiere_aprobacion_admin';
     });
 
+    const normalizePayment = (p: any) => ({
+        ...p,
+        monto: toNum(p.monto || p.amount || 0),
+        // Prioridad: Fecha de Pago (Depósito) > Fecha Histórica > Creación > Fecha Ticket
+        fecha: p.fecha_pago || p.fecha || p.date || p.created_at || (ticket as any).created_at || new Date().toISOString(),
+    });
+
     const arrs = [
         rawMetadata.historialPagosTecnico, 
         ticket.historialPagosTecnico,
@@ -127,11 +134,11 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     arrs.forEach(arr => {
         if (Array.isArray(arr)) {
             arr.forEach(p => {
-                if (p?.id) allById.set(p.id, p);
+                const normalized = normalizePayment(p);
+                if (normalized?.id) allById.set(normalized.id, normalized);
                 else {
-                    // Si no hay ID, usar un hash del concepto+monto+fecha para evitar duplicados exactos
-                    const hash = `${p.tipo}-${p.concepto}-${p.monto}-${p.fecha}`;
-                    allById.set(hash, p);
+                    const hash = `${normalized.tipo}-${normalized.concepto}-${normalized.monto}-${normalized.fecha}`;
+                    allById.set(hash, normalized);
                 }
             });
         }
@@ -141,11 +148,10 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         !safeCosts.some(mc => mc.id === lp.id) && isConfirmed(lp.estado)
     );
 
-    // 5. CÁLCULOS POR CANAL
-    const modernLabor = confirmedModern.filter(isLabor);
-    const modernOp = confirmedModern.filter(isOperating);
-    const legacyLabor = filteredLegacy.filter(isLabor);
-    const legacyOp = filteredLegacy.filter(isOperating);
+    const modernLabor = confirmedModern.filter(isLabor).map(normalizePayment);
+    const modernOp = confirmedModern.filter(isOperating).map(normalizePayment);
+    const legacyLabor = filteredLegacy.filter(isLabor); // Ya normalizados arriba
+    const legacyOp = filteredLegacy.filter(isOperating); // Ya normalizados arriba
 
     const totalLaborConfirmed = round2(
         modernLabor.reduce((acc, c) => acc + toNum(c.monto), 0) +

@@ -383,6 +383,7 @@ export default function PaymentsPage() {
     } | null>(null);
     const [showVoucher, setShowVoucher] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [depositDate, setDepositDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
     // ── ZERO-FEE DEEP LINK STATE ─────────────────────────────────
     // waitingVoucher: después del deep link, espera que el admin vuelva y suba el voucher
@@ -964,14 +965,18 @@ export default function PaymentsPage() {
         });
     };
 
-    const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null) => {
+    const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null, forcedDate?: string) => {
+        const finalDate = forcedDate 
+            ? new Date(forcedDate + "T12:00:00").toISOString() 
+            : new Date().toISOString();
+
         // ★ FIX: Si es un costo de la tabla ticket_costs, usamos su UUID real como ID en la metadata.
         // Esto permite que el motor de unificación (deduplicación) sepa que son el mismo registro.
         const pagoId = (item.isTableCost && item.costId) ? item.costId : `pago_${group.realTicketId}_${Date.now()}`;
         const nuevoPago = {
             id: pagoId,
             monto: item.monto,
-            fecha: new Date().toISOString(),
+            fecha: finalDate,
             tipo: item.tipo,
             estado: 'pagado',
             referencia: `Autorizado Admin: ${item.concepto || item.tipo}`,
@@ -1002,7 +1007,7 @@ export default function PaymentsPage() {
                     .update({ 
                         estado_pago: 'pagado', 
                         url_comprobante: voucherBase64 || null,
-                        fecha_pago: new Date().toISOString()
+                        fecha_pago: finalDate
                     })
                     .eq('id', item.costId);
                 
@@ -1027,13 +1032,13 @@ export default function PaymentsPage() {
             // ★ V4: APROBACIÓN ROBUSTA - Eliminar de pendientes y mover a aprobados
             const aprobacionBase = {
                 ...item,
-                fechaAprobacion: new Date().toISOString(),
+                fechaAprobacion: finalDate,
                 estado: 'pagado'
             };
 
             if (item.id === `${group.realTicketId}_adelanto`) {
                 additionalUpdates.status_id = 'en_ejecucion';
-                additionalUpdates.execution_date = new Date().toISOString();
+                additionalUpdates.execution_date = finalDate;
                 meta.adelantoPagado = true;
                 meta.fechaPagoAdelanto = additionalUpdates.execution_date;
                 meta.solicitudAdelanto = null;
@@ -1041,7 +1046,7 @@ export default function PaymentsPage() {
                 meta.solicitudAdelantoExtra = null;
             } else if (item.id === `${group.realTicketId}_final`) {
                 additionalUpdates.status_id = 'ticket_cerrado';
-                additionalUpdates.closure_date = new Date().toISOString();
+                additionalUpdates.closure_date = finalDate;
                 meta.fechaPagoFinal = additionalUpdates.closure_date;
                 meta.solicitudLiquidacion = null;
             } else if (item.id === `${group.realTicketId}_visita`) {
@@ -1050,7 +1055,7 @@ export default function PaymentsPage() {
                     additionalUpdates.status_id = 'en_inspeccion';
                 }
                 meta.visitPaymentConfirmed = true;
-                meta.fechaPagoVisita = new Date().toISOString();
+                meta.fechaPagoVisita = finalDate;
                 meta.solicitudPagoVisita = null;
             } else if (item.solicitudId) {
                 const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
@@ -1693,9 +1698,17 @@ export default function PaymentsPage() {
                                     <span className={styles.detailLabel}>Concepto:</span>
                                     <span className={styles.detailValue}>{waitingVoucher.item.tipo}</span>
                                 </div>
-                                <div className={styles.detailRow}>
-                                    <span className={styles.detailLabel}>Monto transferido:</span>
-                                    <span className={`${styles.detailValue} ${styles.popAmount}`}>S/ {formatSoles(waitingVoucher.item.monto)}</span>
+                                <div className={styles.detailRow} style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F1F5F9' }}>
+                                    <span className={styles.detailLabel} style={{ color: '#3B82F6', fontWeight: 800 }}>Fecha de Depósito:</span>
+                                    <input 
+                                        type="date" 
+                                        value={depositDate}
+                                        onChange={(e) => setDepositDate(e.target.value)}
+                                        style={{ 
+                                            padding: '4px 8px', borderRadius: '8px', border: '1px solid #3B82F6',
+                                            fontSize: '0.85rem', fontWeight: 700, color: '#1E293B', outline: 'none'
+                                        }}
+                                    />
                                 </div>
                             </div>
 
@@ -1742,7 +1755,8 @@ export default function PaymentsPage() {
                                                     handleConfirmPayment(
                                                         capturedWaiting.group,
                                                         capturedWaiting.item,
-                                                        reader.result as string
+                                                        reader.result as string,
+                                                        depositDate
                                                     );
                                                     showToast('🎉 ¡Pago registrado y cerrado!');
                                                 };
@@ -1763,7 +1777,7 @@ export default function PaymentsPage() {
                                     onClick={() => {
                                         const capturedWaiting = waitingVoucher!;
                                         setWaitingVoucher(null);
-                                        handleConfirmPayment(capturedWaiting.group, capturedWaiting.item, undefined);
+                                        handleConfirmPayment(capturedWaiting.group, capturedWaiting.item, undefined, depositDate);
                                         showToast('✅ Pago confirmado sin voucher');
                                     }}
                                 >
@@ -1817,12 +1831,23 @@ export default function PaymentsPage() {
                                     <span className={`${styles.detailValue} ${styles.popAmount}`}>
                                         S/ {formatSoles(pendingConfirmation.item.monto)}
                                     </span>
+                                <div className={styles.detailRow} style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #F1F5F9' }}>
+                                    <span className={styles.detailLabel} style={{ color: '#3B82F6', fontWeight: 800 }}>Fecha de Depósito:</span>
+                                    <input 
+                                        type="date" 
+                                        value={depositDate}
+                                        onChange={(e) => setDepositDate(e.target.value)}
+                                        style={{ 
+                                            padding: '4px 8px', borderRadius: '8px', border: '1px solid #3B82F6',
+                                            fontSize: '0.85rem', fontWeight: 700, color: '#1E293B', outline: 'none'
+                                        }}
+                                    />
                                 </div>
                             </div>
                             <div className={styles.modalFooter}>
                                 <button className={styles.cancelBtn} onClick={() => setPendingConfirmation(null)}>CANCELAR</button>
                                 <button className={styles.confirmBtn} onClick={() => {
-                                    handleConfirmPayment(pendingConfirmation.group, pendingConfirmation.item, pendingConfirmation.voucher);
+                                    handleConfirmPayment(pendingConfirmation.group, pendingConfirmation.item, pendingConfirmation.voucher, depositDate);
                                     setPendingConfirmation(null);
                                 }}>
                                     CONFIRMAR PAGO
