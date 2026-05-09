@@ -138,6 +138,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [showLiquidationConfirm, setShowLiquidationConfirm] = useState(false);
+    const [advanceClassification, setAdvanceClassification] = useState<'pocket' | 'materials'>('pocket');
     const [showExceedApprovalConfirm, setShowExceedApprovalConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
@@ -343,17 +344,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         [ticketData, ticketCosts]  // ✅ Recalcular cuando cambien los costs
     );
     const {
-        totalPactedDebt: techPactedTotal,
-        totalPaidCalculated: unifiedPaymentsSum,
-        balance: finalBalance,
-        grossMargin,
-        marginPercent: pctReal,
-        paidModernArr,
-        paidModernPendingArr = [], // ✅ NUEVO:pendientes
-        totalRequested = 0, // ✅ NUEVO:total solicitado pendiente
-        legacyPaymentsFiltered,
-        extraCosts: extraPactedCosts,
-        totalInvestment: totalTicketCosts,
+        pactedMO: techPactedTotal,
+        totalLaborConfirmed: unifiedPaymentsSum,
+        netLaborBalance: finalBalance,
+        realProfitability: grossMargin,
+        margenReal: pctReal,
+        laborItems,
+        operatingItems,
+        pendingLaborItems,
+        pendingOpItems,
+        operatingExpenses,
+        totalOpPending,
+        totalRequested,
         pactedMO,
         balance: baseRescue
     } = finances;
@@ -418,25 +420,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
             setTicketCosts(costs || []);
             
-            // Actualizar silenciosamente los cálculos financieros del backend
-            // Solo actualizar si hay valores válidos (no 0, no undefined)
+            // MOTOR V3: Recalcular finanzas localmente para garantizar coherencia instantánea
             try {
                 const updatedTicket = await ticketsAPI.getById(ticketData.id);
-                if (updatedTicket && updatedTicket.utilidad_neta != null) {
+                if (updatedTicket) {
+                    const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : (costs || []);
+                    const v3Finances = calculateTicketFinances(updatedTicket, localCosts);
+
                     setTicketData((prev: any) => ({
                         ...prev,
-                        saldo_tecnico: updatedTicket.saldo_tecnico ?? prev.saldo_tecnico,
-                        utilidad_neta: updatedTicket.utilidad_neta ?? prev.utilidad_neta,
-                        margen_real: updatedTicket.margen_real ?? prev.margen_real,
-                        ingresos_reales: updatedTicket.ingresos_reales ?? prev.ingresos_reales,
-                        monto_pactado_mo: updatedTicket.monto_pactado_mo ?? prev.monto_pactado_mo,
-                        total_costs_agg: updatedTicket.total_costs_agg ?? prev.total_costs_agg,
-                        gastos_flujo_a: updatedTicket.gastos_flujo_a ?? prev.gastos_flujo_a,
-                        adelantos_flujo_b: updatedTicket.adelantos_flujo_b ?? prev.adelantos_flujo_b
+                        ...updatedTicket,
+                        // Sobrescribir con cálculos frescos del motor V3 (JS Fallback)
+                        saldo_tecnico: v3Finances.netLaborBalance,
+                        utilidad_neta: v3Finances.netProfit,
+                        margen_real: v3Finances.profitMargin,
+                        ingresos_reales: v3Finances.netIncome,
+                        monto_pactado_mo: v3Finances.laborPactado,
+                        total_costs_agg: v3Finances.totalExpenses,
+                        gastos_flujo_a: v3Finances.operatingExpenses,
+                        adelantos_flujo_b: v3Finances.laborExpenses
                     }));
                 }
             } catch (e) {
-                console.error("Error silently updating financial details:", e);
+                console.error("Error updating local V3 finances:", e);
             }
         } catch (err) {
             console.error("Error loading costs:", err);
@@ -803,6 +809,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     return Array.from(allById.values());
                 })(),
                 estadoId: resolvedStatusId,
+                status_id: resolvedStatusId,
+                solicitudLiquidacion: businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion,
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
                 evidenciasEjecucion,
@@ -1342,10 +1350,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         isProcessingAdvance.current = true;
         try {
             // 1. Registro Financiero Inmutable
+            const isForMaterials = ticketData.solicitudAdelanto?.classification === 'materials' || advanceClassification === 'materials';
+            const category = isForMaterials ? "Materiales" : "Mano de Obra";
+            const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto Operativo (MANO DE OBRA)";
+
             await ticketCostsAPI.create({
                 ticket_id: currentId,
-                concepto: `Adelanto Operativo - ${displayLabel}`,
-                categoria: "Mano de Obra",
+                concepto: `${conceptPrefix} - ${displayLabel}`,
+                categoria: category,
                 specialist_id: technicianId,
                 monto: amount,
                 estado_pago: "pagado",
@@ -1450,7 +1462,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 solicitudAdelanto: {
                     porcentaje: pctVal,
                     monto: amount,
-                    fecha: new Date().toISOString()
+                    fecha: new Date().toISOString(),
+                    classification: advanceClassification // pocket vs materials
                 },
                 pagoRechazado: null
             };
@@ -1499,31 +1512,40 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const isExceeding = (unifiedPaymentsSum + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
 
+            // ✅ UNIFICACIÓN DE ESTRUCTURA: solicitudLiquidacion debe ir dentro de metadata
+            const finalMetadata = {
+                ...(ticketData.metadata || {}),
+                solicitudLiquidacion: {
+                    fecha: new Date().toISOString(),
+                    monto: amount,
+                    excedeTope: isExceeding
+                },
+                estadoId: newState // Sincronizar estado interno en metadata
+            };
+
             const updated = {
                 ...ticketData,
                 estadoId: newState,
                 status_id: newState,
                 final_balance: amount,
-                solicitudLiquidacion: {
-                    fecha: new Date().toISOString(),
-                    monto: amount,
-                    excedeTope: isExceeding
-                }
+                metadata: finalMetadata
             };
 
             setTicketData(updated);
-            await onUpdate?.(ticketData.id, { 
-                status_id: newState,
-                metadata: updated.metadata || updated
-            });
-
+            
+            // 🚀 SYNC INMEDIATO: Usamos syncToSupabase con override para asegurar 
+            // que se apliquen todas las reglas de negocio y no haya race conditions.
+            await syncToSupabase(updated, { allowStateRollback: true });
+            
             showToast(
-                newState === "por_liquidar" ? "Ticket en Liquidación" : "Requiere Revisión Admin",
-                newState === "por_liquidar" 
-                    ? "El ticket ha sido enviado a Tesorería para el pago final." 
-                    : "El monto excede lo pactado. Un administrador debe aprobar el cierre.",
-                newState === "por_liquidar" ? "success" : "info"
+                isExceeding ? "Revisión Requerida" : "Liquidación Solicitada", 
+                isExceeding 
+                    ? "El monto excede el costo pactado. Se ha enviado a revisión del administrador." 
+                    : "La solicitud ha sido enviada a la bandeja de pagos del administrador.", 
+                isExceeding ? "warning" : "success"
             );
+
+
         } catch (err) {
             console.error("Error in liquidation request:", err);
             showToast("Error", "No se pudo procesar la liquidación. Intente nuevamente.", "error");
@@ -2967,37 +2989,64 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 </div>
 
                                                                 {!ticketData.solicitudAdelanto && (
-                                                                    <div className={styles.percentageSelectorPremium}>
-                                                                        {[0.4, 0.5, 0.6].map(p => (
-                                                                            <button
-                                                                                key={p}
-                                                                                className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p && !montoAdelantoManual ? styles.pctActivePremium : ''}`}
-                                                                                onClick={() => {
-                                                                                    setPorcentajeAdelanto(p);
-                                                                                    setMontoAdelantoManual("");
-                                                                                }}
-                                                                            >
-                                                                                {(p * 100).toFixed(0)}%
-                                                                            </button>
-                                                                        ))}
-                                                                        <div className={styles.manualAmountContainer}>
-                                                                            <span className={styles.manualCurrency}>S/</span>
-                                                                            <input 
-                                                                                type="number"
-                                                                                className={styles.manualAmountInput}
-                                                                                placeholder="Monto"
-                                                                                value={montoAdelantoManual}
-                                                                                onChange={(e) => {
-                                                                                    setMontoAdelantoManual(e.target.value);
-                                                                                    setPorcentajeAdelanto(null);
-                                                                                }}
-                                                                                onKeyDown={(e) => {
-                                                                                    if (e.key === 'Enter') {
-                                                                                        if (isAdmin) handleConfirmAdvance();
-                                                                                        else handleRequestAdvance();
-                                                                                    }
-                                                                                }}
-                                                                            />
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
+                                                                        <div className={styles.percentageSelectorPremium}>
+                                                                            {[0.4, 0.5, 0.6].map(p => (
+                                                                                <button
+                                                                                    key={p}
+                                                                                    className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p && !montoAdelantoManual ? styles.pctActivePremium : ''}`}
+                                                                                    onClick={() => {
+                                                                                        setPorcentajeAdelanto(p);
+                                                                                        setMontoAdelantoManual("");
+                                                                                    }}
+                                                                                >
+                                                                                    {(p * 100).toFixed(0)}%
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+
+                                                                        <div className={styles.manualAmountContainer} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px' }}>
+                                                                            <div style={{ flex: 1 }}>
+                                                                                <label className={styles.optimisticLabel} style={{ marginBottom: '8px', display: 'block', fontSize: '10px' }}>
+                                                                                    {montoAdelantoManual ? 'MONTO PERSONALIZADO' : 'O INGRESE MONTO MANUAL'}
+                                                                                </label>
+                                                                                <div className={styles.modalityToggleOptimistic} style={{ marginBottom: '12px' }}>
+                                                                                    <div 
+                                                                                        className={`${styles.modalityItemOptimistic} ${advanceClassification === 'pocket' ? styles.modalityActiveTodoCosto : ''}`}
+                                                                                        onClick={() => setAdvanceClassification('pocket')}
+                                                                                    >
+                                                                                        <User size={14} />
+                                                                                        <span>Bolsillo Técnico</span>
+                                                                                    </div>
+                                                                                    <div 
+                                                                                        className={`${styles.modalityItemOptimistic} ${advanceClassification === 'materials' ? styles.modalityActiveDesagregado : ''}`}
+                                                                                        onClick={() => setAdvanceClassification('materials')}
+                                                                                    >
+                                                                                        <Package size={14} />
+                                                                                        <span>Materiales</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div style={{ position: 'relative' }}>
+                                                                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 900, color: '#94A3B8' }}>S/</span>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        className={styles.formTextareaOptimistic}
+                                                                                        style={{ height: '48px', fontSize: '1.2rem', fontWeight: 900, textAlign: 'center', paddingLeft: '30px' }}
+                                                                                        placeholder="0.00"
+                                                                                        value={montoAdelantoManual}
+                                                                                        onChange={(e) => {
+                                                                                            setMontoAdelantoManual(e.target.value);
+                                                                                            setPorcentajeAdelanto(null);
+                                                                                        }}
+                                                                                        onKeyDown={(e) => {
+                                                                                            if (e.key === 'Enter') {
+                                                                                                if (isAdmin) handleConfirmAdvance();
+                                                                                                else handleRequestAdvance();
+                                                                                            }
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -3397,129 +3446,94 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
                                                         
                                                         {/* ✅ NUEVO:Mostrar solicitudes pendientes separately */}
-                                                        {totalRequested > 0 && (
-                                                        <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '8px' }}>
-                                                            <span className={styles.rowLabel} style={{ fontWeight: 600, color: '#D97706' }}>Total Solicitado (Pendiente)</span>
-                                                            <span className={styles.rowValue} style={{ color: '#D97706', fontSize: '16px' }}>S/ {totalRequested.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                        </div>
-                                                        )}
-
-                                                        {(paymentsSummary > 0 || legacyPaymentsFiltered.length > 0 || visitPayment > 0 || classicAdvance > 0) && (
-                                                            <div className={styles.depositsListPremium}>
-                                                                {/* Pagos de la nueva tabla */}
-                                                                {ticketCosts
-                                                                    .filter(c => {
-                                                                        const st = (c.estado_pago || '').toLowerCase();
-                                                                        // Incluimos todos excepto los que el usuario decida ocultar (opcional), 
-                                                                        // pero por ahora mostramos todo para transparencia.
-                                                                        return true; 
-                                                                    })
-                                                                    .map((p: any, i: number) => {
-                                                                        const st = (p.estado_pago || '').toLowerCase();
+                                                                                               <div className={styles.transactionLedgerPremium}>
+                                                            {/* --- SECCIÓN 1: PASIVO LABORAL --- */}
+                                                            <div className={styles.ledgerChannel}>
+                                                                <div className={styles.channelHeader} style={{ color: '#1E40AF', background: '#EFF6FF' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <User size={16} />
+                                                                        <span style={{ fontWeight: 900, fontSize: '11px', letterSpacing: '0.5px' }}>CANAL 1: PASIVO LABORAL (M.O.)</span>
+                                                                    </div>
+                                                                    <span style={{ fontWeight: 800 }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                                </div>
+                                                                
+                                                                <div className={styles.depositsListPremium}>
+                                                                    {[...laborItems, ...pendingLaborItems].sort((a,b) => new Date(b.created_at || b.fecha).getTime() - new Date(a.created_at || a.fecha).getTime()).map((p: any, i: number) => {
+                                                                        const st = (p.estado_pago || p.estado || '').toLowerCase();
+                                                                        const isPending = st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
                                                                         const isRejected = st === 'rechazado' || st === 'anulado';
+                                                                        
+                                                                        return (
+                                                                            <div key={`labor-${i}`} className={styles.depositEntry} style={{ 
+                                                                                opacity: isRejected ? 0.5 : 1,
+                                                                                textDecoration: isRejected ? 'line-through' : 'none',
+                                                                                background: st === 'requiere_aprobacion_admin' ? '#f5f3ff' : 'transparent',
+                                                                                borderLeft: st === 'requiere_aprobacion_admin' ? '3px solid #6366f1' : 'none'
+                                                                            }}>
+                                                                                <div className={styles.depositLabel}>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                        {isRejected ? <XCircle size={12} color="#EF4444" /> : (isPending ? <Clock size={12} color="#F59E0B" /> : <CheckCircle size={12} color="#10B981" />)}
+                                                                                        <span style={{ fontWeight: 700 }}>{p.concepto || p.categoria || p.tipo || 'Pago MO'}</span>
+                                                                                    </div>
+                                                                                    <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha).toLocaleDateString('es-PE')}</span>
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                                                                    <span className={styles.depositAmount} style={{ color: isRejected ? '#94A3B8' : (isPending ? '#F59E0B' : '#1E40AF') }}>
+                                                                                        - S/ {toNum(p.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                                                    </span>
+                                                                                    {isAdmin && st === 'requiere_aprobacion_admin' && (
+                                                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                                                            <button onClick={() => handleRejectRescueAdmin(p.id)} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>DENEGAR</button>
+                                                                                            <button onClick={() => handleApproveRescueAdmin(p.id)} style={{ background: '#dcfce7', color: '#15803d', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>APROBAR</button>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                    {laborItems.length === 0 && pendingLaborItems.length === 0 && (
+                                                                        <div className={styles.operationalHint} style={{ padding: '8px', textAlign: 'center' }}>Sin movimientos de mano de obra.</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* --- SECCIÓN 2: GASTOS OPERATIVOS --- */}
+                                                            <div className={styles.ledgerChannel} style={{ marginTop: '16px' }}>
+                                                                <div className={styles.channelHeader} style={{ color: '#9D174D', background: '#FDF2F8' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <Package size={16} />
+                                                                        <span style={{ fontWeight: 900, fontSize: '11px', letterSpacing: '0.5px' }}>CANAL 2: GASTOS OPERATIVOS (RENTABILIDAD)</span>
+                                                                    </div>
+                                                                    <span style={{ fontWeight: 800 }}>- S/ {totalOpConfirmed.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                                </div>
+                                                                
+                                                                <div className={styles.depositsListPremium}>
+                                                                    {[...operatingItems, ...pendingOpItems].sort((a,b) => new Date(b.created_at || b.fecha).getTime() - new Date(a.created_at || a.fecha).getTime()).map((p: any, i: number) => {
+                                                                        const st = (p.estado_pago || p.estado || '').toLowerCase();
                                                                         const isPending = st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
                                                                         
                                                                         return (
-                                                                         <div key={`new-${i}`} className={styles.depositEntry} style={{ 
-                                                                             opacity: isPending ? 0.7 : (isRejected ? 0.5 : 1),
-                                                                             textDecoration: isRejected ? 'line-through' : 'none',
-                                                                             borderLeft: st === 'requiere_aprobacion_admin' ? '3px solid #6366f1' : 'none',
-                                                                             background: st === 'requiere_aprobacion_admin' ? '#f5f3ff' : 'transparent',
-                                                                             padding: st === 'requiere_aprobacion_admin' ? '8px' : '4px 0',
-                                                                             borderRadius: '6px'
-                                                                         }}>
-                                                                             <div className={styles.depositLabel}>
-                                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                                                     {isRejected ? <XCircle size={14} style={{ color: '#EF4444' }} /> : (isPending ? <Clock size={14} style={{ color: '#F59E0B' }} /> : <ArrowDownLeft size={14} style={{ color: '#10B981' }} />)}
-                                                                                     <span style={{ fontWeight: 700 }}>
-                                                                                        {p.categoria === 'Mano de Obra' ? 'PAGO M.O.' : p.categoria === 'Materiales' ? 'COMPRA MAT.' : p.categoria.toUpperCase()}
-                                                                                     </span>
-                                                                                     
-                                                                                     {isRejected && <span style={{ fontSize: '9px', fontWeight: 800, color: '#EF4444', background: '#FEF2F2', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>DENIEGADO</span>}
-                                                                                     {st === 'pendiente' && <span style={{ fontSize: '9px', fontWeight: 800, color: '#F59E0B', background: '#FFFBEB', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>TESORERÍA (PENDIENTE)</span>}
-                                                                                     {st === 'requiere_aprobacion_admin' && (
-                                                                                        <span style={{ fontSize: '9px', fontWeight: 900, color: '#6366f1', background: '#eef2ff', border: '1px solid #c7d2fe', padding: '1px 6px', borderRadius: '4px', textDecoration: 'none', display: 'inline-block' }}>
-                                                                                            ESPERANDO APROBACIÓN ADMIN
-                                                                                        </span>
-                                                                                     )}
-                                                                                 </div>
-                                                                                 <span className={styles.depositMeta}>
-                                                                                    {new Date(p.created_at || p.fecha || Date.now()).toLocaleDateString('es-PE')}
-                                                                                    {p.motivo && <span style={{ display: 'block', fontStyle: 'italic', fontSize: '10px', color: '#64748b', marginTop: '2px' }}>"{p.motivo}"</span>}
-                                                                                 </span>
-                                                                             </div>
-                                                                             
-                                                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                                                                                <span className={styles.depositAmount} style={{ color: isRejected ? '#94A3B8' : (isPending ? (st === 'requiere_aprobacion_admin' ? '#6366f1' : '#F59E0B') : '#059669') }}>
-                                                                                    - S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                                                </span>
-                                                                                
-                                                                                {/* ACCIONES DE ADMINISTRADOR PARA RESCATE EXCEDENTE */}
-                                                                                {isAdmin && st === 'requiere_aprobacion_admin' && (
-                                                                                    <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                                                                                        <button 
-                                                                                            onClick={() => handleRejectRescueAdmin(p.id)}
-                                                                                            style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
-                                                                                        >
-                                                                                            DENEGAR
-                                                                                        </button>
-                                                                                        <button 
-                                                                                            onClick={() => handleApproveRescueAdmin(p.id)}
-                                                                                            style={{ background: '#dcfce7', color: '#15803d', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, cursor: 'pointer' }}
-                                                                                        >
-                                                                                            APROBAR
-                                                                                        </button>
+                                                                            <div key={`op-${i}`} className={styles.depositEntry}>
+                                                                                <div className={styles.depositLabel}>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                        {isPending ? <Clock size={12} color="#F59E0B" /> : <ArrowDownLeft size={12} color="#9D174D" />}
+                                                                                        <span style={{ fontWeight: 700 }}>{p.concepto || p.categoria || p.tipo || 'Gasto'}</span>
                                                                                     </div>
-                                                                                )}
-                                                                             </div>
-                                                                         </div>
+                                                                                    <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha).toLocaleDateString('es-PE')}</span>
+                                                                                </div>
+                                                                                <span className={styles.depositAmount} style={{ color: isPending ? '#F59E0B' : '#9D174D' }}>
+                                                                                    - S/ {toNum(p.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                                                </span>
+                                                                            </div>
                                                                         );
                                                                     })}
-
-                                                                {/* Pago de Visita (Movilidad) */}
-                                                                {visitPayment > 0 && (
-                                                                    <div className={styles.depositEntry}>
-                                                                        <div className={styles.depositLabel}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <ArrowDownLeft size={14} style={{ color: '#F59E0B' }} />
-                                                                                MOVILIDAD / VISITA (SISTEMA)
-                                                                            </div>
-                                                                            <span className={styles.depositMeta}>{ticketData.fechaPagoVisita ? new Date(ticketData.fechaPagoVisita).toLocaleDateString('es-PE') : 'Confirmado'}</span>
-                                                                        </div>
-                                                                        <span className={styles.depositAmount} style={{ color: '#F59E0B' }}>- S/ {visitPayment.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Adelanto Clásico */}
-                                                                {classicAdvance > 0 && (
-                                                                    <div className={styles.depositEntry}>
-                                                                        <div className={styles.depositLabel}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <ArrowDownLeft size={14} style={{ color: '#3B82F6' }} />
-                                                                                ADELANTO INICIAL (SISTEMA)
-                                                                            </div>
-                                                                            <span className={styles.depositMeta}>{new Date(ticketData.fechaPagoAdelanto || ticketData.createdAt).toLocaleDateString('es-PE')}</span>
-                                                                        </div>
-                                                                        <span className={styles.depositAmount} style={{ color: '#3B82F6' }}>- S/ {classicAdvance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Pagos históricos (Deduplicados arriba) */}
-                                                                {legacyPaymentsFiltered.map((p: any, i: number) => (
-                                                                    <div key={`old-${i}`} className={styles.depositEntry} style={{ opacity: 0.9 }}>
-                                                                        <div className={styles.depositLabel}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                <ArrowDownLeft size={14} style={{ color: '#6366F1' }} />
-                                                                                {p.tipo ? p.tipo.toUpperCase() : 'DEPOSITO REGISTRADO'}
-                                                                            </div>
-                                                                            <span className={styles.depositMeta}>{p.fecha ? new Date(p.fecha).toLocaleDateString('es-PE') : '--'}</span>
-                                                                        </div>
-                                                                        <span className={styles.depositAmount} style={{ color: '#4F46E5' }}>- S/ {(parseFloat(p.monto) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                                    </div>
-                                                                ))}
+                                                                    {operatingItems.length === 0 && pendingOpItems.length === 0 && (
+                                                                        <div className={styles.operationalHint} style={{ padding: '8px', textAlign: 'center' }}>Sin gastos operativos registrados.</div>
+                                                                    )}
+                                                                </div>
+                                                                </div>
                                                             </div>
-                                                        )}
-                                                    </div>
+                                                        </div>
 
                                                     <div className={styles.bankDetailsPanel}>
                                                         <h4>Transferencia a Destino</h4>
@@ -3557,21 +3571,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         )}
                                                     </div>
 
-                                                    {(unifiedPaymentsSum > techPactedTotal + 0.01) && (
-                                                        <div className={styles.warningBannerPremium}>
-                                                            <AlertTriangle size={20} />
-                                                            <span>ATENCIÓN: Se han detectado excedentes en los depósitos previos.</span>
-                                                        </div>
-                                                    )}
-
                                                     <div className={styles.finalBalanceBanner} style={ticketData.estadoId === "ticket_cerrado" ? { background: '#064E3B' } : {}}>
                                                         <span className={styles.finalBalanceLabel}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "Monto Total Liquidado" : "Saldo Final a Pagar"}
+                                                            {ticketData.estadoId === "ticket_cerrado" ? "MONTO TOTAL LIQUIDADO" : "SALDO MANO DE OBRA (TÉCNICO)"}
                                                         </span>
                                                         <span className={styles.finalBalanceValue}>
                                                             S/ {(ticketData.estadoId === "ticket_cerrado" 
                                                                 ? unifiedPaymentsSum 
-                                                                : Math.max(0, techPactedTotal - unifiedPaymentsSum)
+                                                                : Math.max(0, finalBalance)
                                                             ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
@@ -3590,11 +3597,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                                                 {["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId)
                                                                     ? "Rentabilidad Proyectada"
-                                                                    : "Rentabilidad Real"
+                                                                    : "Rentabilidad Real (V3)"
                                                                 }
                                                             </span>
                                                             <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '2px 8px', background: 'rgba(255,255,255,0.2)', borderRadius: '6px' }}>
-                                                                {costPercentage.toFixed(1)}% Costo
+                                                                Gastos Op: S/ {operatingExpenses.toFixed(2)}
                                                             </span>
                                                         </div>
                                                         <div style={{ fontSize: '1.6rem', fontWeight: 900, display: 'flex', alignItems: 'baseline', gap: '4px' }}>
@@ -3602,7 +3609,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             {grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </div>
                                                         <p style={{ fontSize: '0.7rem', marginTop: '6px', opacity: 0.8, lineHeight: 1.3 }}>
-                                                            Margen bruto tras descontar mano de obra pactada, materiales y rescates financieros.
+                                                            Utilidad Real tras deducir Pasivo Laboral pactado y Gastos Operativos del ticket.
                                                         </p>
                                                     </div>
                                                 </div>

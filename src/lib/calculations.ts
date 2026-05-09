@@ -46,49 +46,61 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const utilidadDB = toNum(ticket.utilidad_neta || 0);
     const margenDB = toNum(ticket.margen_real || 0);
 
-    // 3. CATEGORIZACIÓN Y ESTADOS (Expansión de estados válidos)
-    // ── Familia FEES: Mano de obra, adelantos, rescates (UNIFICADOS) ──────────
-    const feeKeywords = [
-        'mano de obra', 'adelanto', 'pago_mo', 'pago mo',
-        'rescate', 'rescate adelanto', 'rescate m.o',
-        'bono', 'honorarios', 'pago', 'mo', 'comisión'
+    // 3. CATEGORIZACIÓN ESTRICTA V3
+    // Canal 1: Pasivo Laboral (Descontable de MO)
+    const laborKeywords = [
+        'adelanto m.o', 'rescate financiero', 'pago mo', 
+        'adelanto', 'rescate', 'pago_mo', 'liquidación final',
+        'mano de obra', 'honorarios', 'pago técnico', 'pago_tecnico'
     ];
-    const operationalKeywords = ['materiales', 'insumos', 'viáticos', 'movilidad', 'logística', 'envíos', 'gasto', 'compra'];
     
+    // Canal 2: Gastos Operativos (Afectan Rentabilidad)
+    const operatingKeywords = [
+        'compras', 'materiales', 'viáticos', 'logística', 
+        'mano de obra externa', 'insumos', 'movilidad', 
+        'envíos', 'gasto operativo', 'compra mat'
+    ];
+
     const isConfirmed = (status: string | null | undefined) => {
         const rawSt = (status || '').toLowerCase().trim();
-        // Soportar estados compuestos como "Autorizado Admin; Adelanto" o "Autorizado Admin: Adelanto"
-        const parts = rawSt.split(/[;:,]+/).map(s => s.trim());
         const valid = [
             'pagado', 'adelanto', 'abonado', 'confirmado', 'auditado',
             'ejecutado', 'autorizado admin', 'autorizado', 'aprobado',
             'transferido', 'completado'
         ];
-        return parts.some(part => valid.some(v => part.includes(v)));
+        return valid.some(v => rawSt.includes(v));
     };
 
-    const confirmedModernPayments = safeCosts.filter(c => isConfirmed(c.estado_pago || c.estado));
-
-    const isFee = (cat: string) => {
-        const c = (cat || '').toLowerCase();
-        return feeKeywords.some(key => c.includes(key));
+    const isLabor = (item: any) => {
+        const cat = (item.categoria || '').toLowerCase();
+        const con = (item.concepto || item.tipo || '').toLowerCase();
+        
+        // Regla especial V3: Adelanto Operativo clasificado
+        if (con.includes('adelanto operativo')) {
+            return !con.includes('materiales'); // Si no dice materiales, asumimos bolsillo técnico
+        }
+        
+        return laborKeywords.some(key => cat.includes(key) || con.includes(key));
     };
     
-    const isOp = (cat: string) => {
-        const c = (cat || '').toLowerCase();
-        return operationalKeywords.some(key => c.includes(key));
+    const isOperating = (item: any) => {
+        const cat = (item.categoria || '').toLowerCase();
+        const con = (item.concepto || item.tipo || '').toLowerCase();
+        
+        // Regla especial V3: Adelanto Operativo clasificado
+        if (con.includes('adelanto operativo')) {
+            return con.includes('materiales');
+        }
+        
+        return operatingKeywords.some(key => cat.includes(key) || con.includes(key));
     };
 
-    const modernFees = confirmedModernPayments.filter(c => isFee(c.categoria || c.concepto || ''));
-    const modernOps = confirmedModernPayments.filter(c => isOp(c.categoria || c.concepto || ''));
-
-    // NUEVO: Filtrar solicitudes pendientes (no pagadas aún)
-    const pendingModernPayments = safeCosts.filter(c => {
+    // 4. FILTRADO DE MOVIMIENTOS
+    const confirmedModern = safeCosts.filter(c => isConfirmed(c.estado_pago || c.estado));
+    const pendingModern = safeCosts.filter(c => {
         const st = (c.estado_pago || c.estado || '').toLowerCase();
         return st === 'pendiente' || st === 'requiere_aprobacion_admin';
     });
-
-    const pendingFeesArr = pendingModernPayments.filter(c => isFee(c.categoria));
 
     const arrs = [
         rawMetadata.historialPagosTécnico, 
@@ -102,58 +114,58 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
             legacyPayments = arr;
         }
     }
-    
-    // Filtrar pagos duplicados entre Legacy y Modern (por ID)
     const filteredLegacy = legacyPayments.filter((lp: any) => 
-        !safeCosts.some(mc => mc.id === lp.id)
+        !safeCosts.some(mc => mc.id === lp.id) && isConfirmed(lp.estado)
     );
 
-    const confirmedLegacyPayments = filteredLegacy.filter((p: any) => isConfirmed(p.estado));
+    // 5. CÁLCULOS POR CANAL
+    const modernLabor = confirmedModern.filter(isLabor);
+    const modernOp = confirmedModern.filter(isOperating);
+    const legacyLabor = filteredLegacy.filter(isLabor);
+    const legacyOp = filteredLegacy.filter(isOperating);
 
-    const legacyFees = confirmedLegacyPayments.filter((p: any) => isFee(p.tipo || p.concepto || ''));
-    const legacyOps = confirmedLegacyPayments.filter((p: any) => isOp(p.tipo || p.concepto || ''));
+    const totalLaborConfirmed = round2(
+        modernLabor.reduce((acc, c) => acc + toNum(c.monto), 0) +
+        legacyLabor.reduce((acc, p) => acc + toNum(p.monto), 0)
+    );
 
-    // 5. CÁLCULO DE TOTALES (Mano de Obra vs Operativos)
-    const totalModernFeesSum = modernFees.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
-    const totalLegacyFeesSum = legacyFees.reduce((acc: number, p: any) => acc + toNum(p.monto), 0);
-    const totalModernOpsSum = modernOps.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
-    const totalLegacyOpsSum = legacyOps.reduce((acc: number, p: any) => acc + toNum(p.monto), 0);
+    const totalOpConfirmed = round2(
+        modernOp.reduce((acc, c) => acc + toNum(c.monto), 0) +
+        legacyOp.reduce((acc, p) => acc + toNum(p.monto), 0)
+    );
 
-    // Suma global para el label "Total Transferido"
-    const totalConfirmedSum = round2(totalModernFeesSum + totalLegacyFeesSum + totalModernOpsSum + totalLegacyOpsSum);
-    // Suma solo de honorarios para el Saldo Pendiente de MO
-    const totalFeesOnlySum = round2(totalModernFeesSum + totalLegacyFeesSum);
+    const totalLaborPending = round2(pendingModern.filter(isLabor).reduce((acc, c) => acc + toNum(c.monto), 0));
+    const totalOpPending = round2(pendingModern.filter(isOperating).reduce((acc, c) => acc + toNum(c.monto), 0));
 
-    const totalPendingFromCosts = pendingFeesArr.reduce((acc: number, c: any) => acc + toNum(c.monto), 0);
-
-    // 6. RESULTADOS FINALES
-    const realBalance = Math.max(0, round2(pactedMO - totalFeesOnlySum));
-
-    const totalInvestmentModern = safeCosts.reduce((acc: number, c: any) => {
-        const st = (c.estado_pago || c.estado || '').toLowerCase();
-        return (!st.includes('anulado') && !st.includes('rechazado')) ? acc + toNum(c.monto) : acc;
-    }, 0);
-    const totalInvestmentReal = round2(totalInvestmentModern + totalLegacyFeesSum);
-
-    const currentGrossMargin = (utilidadDB > 0) ? utilidadDB : Math.max(0, round2(montoFinal - totalInvestmentReal));
-    const currentMarginPercent = (margenDB > 0) ? (margenDB * 100) : (montoFinal > 0 ? (currentGrossMargin / montoFinal) * 100 : 0);
+    // 6. RESULTADOS V3 (BUSINESS RULES)
+    // Regla 1: netLaborBalance solo descuenta Pasivo Laboral
+    const netLaborBalance = Math.max(0, round2(pactedMO - totalLaborConfirmed));
+    
+    // Regla 2: realProfitability = (Venta) - (MO Pactada) - (Gastos Operativos)
+    const totalVenta = montoFinal;
+    const realProfitability = round2(totalVenta - pactedMO - totalOpConfirmed);
+    const margenReal = totalVenta > 0 ? round2((realProfitability / totalVenta) * 100) : 0;
 
     return {
-        totalPactedDebt: pactedMO,
-        totalPaidCalculated: totalConfirmedSum,
-        totalConfirmed: totalConfirmedSum,
-        totalRequested: totalPendingFromCosts,
-        totalInProcess: totalPendingFromCosts,
-        balance: realBalance,
-        grossMargin: currentGrossMargin,
-        marginPercent: currentMarginPercent,
-        totalInvestment: totalInvestmentReal,
+        // Canal de Mano de Obra (Pasivo Laboral)
         pactedMO,
-        pactedMat: 0,
-        extraCosts: toNum(ticket.gastos_flujo_a || 0),
-        paidModernArr: modernFees,
-        paidModernPendingArr: pendingFeesArr,
-        legacyPaymentsFiltered: legacyFees,
-        operationalCostsArr: [...modernOps, ...legacyOps]
+        totalLaborConfirmed,
+        totalLaborPending,
+        netLaborBalance,
+        
+        // Canal de Gastos Operativos
+        operatingExpenses: totalOpConfirmed,
+        totalOpPending,
+        
+        // Rentabilidad Real
+        totalVenta,
+        realProfitability,
+        margenReal,
+        
+        // Desgloses para TransactionLedger
+        laborItems: [...modernLabor, ...legacyLabor],
+        operatingItems: [...modernOp, ...legacyOp],
+        pendingLaborItems: pendingModern.filter(isLabor),
+        pendingOpItems: pendingModern.filter(isOperating)
     };
 }

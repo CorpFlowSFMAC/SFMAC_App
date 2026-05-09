@@ -13,62 +13,13 @@ import { ticketsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
 import { round2, formatSoles } from "@/lib/formatters";
+import { calculateTicketFinances } from "@/lib/calculations";
 import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
 
 // ──────────────────────────────────────────────────────────────
-// HELPERS CENTRALIZADOS PARA CÁLCULOS
+// MODELO DE DATOS V3 - BANDEJA DE PAGOS
 // ──────────────────────────────────────────────────────────────
-function safeNum(val: any): number {
-    if (typeof val === 'number') return val;
-    if (typeof val === 'string') {
-        const clean = val.replace(/[^0-9.-]/g, '');
-        return parseFloat(clean) || 0;
-    }
-    return 0;
-}
-
-// Obtener monto pactado de MO considerando todas las fuentes
-function getPactadoMO(t: any, meta: any): number {
-    const values = [t.monto_pactado_mo, t.labor_cost, meta?.costoManoObra, meta?.monto_pactado_mo];
-    for (const val of values) {
-        const num = safeNum(val);
-        if (num > 0) return num;
-    }
-    return 0;
-}
-
-// Obtener ingreso total considerando todas las fuentes
-function getIngresoTotal(t: any, meta: any): number {
-    const values = [
-        t.ingresos_reales, t.montoFinal, t.total_quoted_amount,
-        meta?.ingresos_reales, meta?.total_quoted_amount, meta?.montoFinal
-    ];
-    for (const val of values) {
-        const num = safeNum(val);
-        if (num > 0) return num;
-    }
-    return 0;
-}
-
-// Calcular utilidad/rentabilidad de un ticket
-function calculateTicketProfitability(t: any, meta: any): { utilidad: number; margen: number } {
-    const ingresoTotal = getIngresoTotal(t, meta);
-    const subtotal = ingresoTotal / 1.18; // Sin IGV
-    
-    const pactadoMO = getPactadoMO(t, meta);
-    const materialsCost = safeNum(t.materials_cost || 0);
-    const visitCost = safeNum(t.visit_cost || 0);
-    
-    // Total invertido = pactado MO + materiales + visita
-    const totalInversion = pactadoMO + materialsCost + visitCost;
-    
-    // Utilidad = Ingreso sin IGV - Inversión total
-    const utilidad = Math.max(0, round2(subtotal - totalInversion));
-    const margen = subtotal > 0 ? round2((utilidad / subtotal) * 100) : 0;
-    
-    return { utilidad, margen };
-}
 
 interface PaymentItem {
     id: string;
@@ -556,77 +507,23 @@ export default function PaymentsPage() {
         allTickets.forEach(t => {
             try {
                 const ticketNum = t.client_ticket_number || `#${t.ticket_number}` || `#${t.id.toString().slice(-6).toUpperCase()}`;
-
-                const jobCostBase = round2((t.labor_cost || 0) + (t.materials_cost || 0));
-                const visitCost = round2(t.visit_cost || 0);
-
                 const meta = t.metadata || {};
-
-                // ──────────────────────────────────────────────────────────────────
-                // CÁLCULO SIMPLIFICADO DE LIQUIDACIÓN
-                // PRIORIDAD EXACTA: monto_pactado_mo → labor_cost → metadata
-                // ──────────────────────────────────────────────────────────────────
                 
-                // 1. Obtener MO PACTADA (solo 1 valor, el primero que exista)
-                let pactadoMO = 0;
-                const moSources = [t.monto_pactado_mo, t.labor_cost, meta.costoManoObra, meta.monto_pactado_mo];
-                for (const val of moSources) {
-                    const num = parseFloat(val) || 0;
-                    if (num > 0) { pactadoMO = round2(num); break; }
-                }
-                
-                // 2. Obtener INGRESO TOTAL (facturación)
-                let ingresoTotal = 0;
-                const ingresoSources = [t.ingresos_reales, t.montoFinal, t.total_quoted_amount];
-                for (const val of ingresoSources) {
-                    const num = parseFloat(val) || 0;
-                    if (num > 0) { ingresoTotal = round2(num); break; }
-                }
+                // 🚀 MOTOR FINANCIERO V3: Fuente de Verdad Inmutable
+                const finances = calculateTicketFinances(t, t.costos);
+                const {
+                    pactedMO,
+                    totalLaborConfirmed,
+                    netLaborBalance,
+                    laborItems,
+                    operatingItems,
+                    realProfitability,
+                    margenReal
+                } = finances;
 
-                // 3. Sumar pagos YA REALIZADOS al técnico (solo los confirmados/pendientes para técnico)
-                const pagosLegacy = meta.historialPagosTecnico || meta.historialPagosTécnico || [];
-                
-                // Costos de tabla moderna
-                const paidCostsArr = (t.costos || []).filter((c: any) => c.estado_pago === 'pagado');
-                const costsAsHistory = paidCostsArr.map((c: any) => ({
-                    id: c.id,
-                    monto: c.monto,
-                    fecha: c.fecha_pago || c.created_at,
-                    tipo: c.categoria,
-                    estado: 'pagado',
-                    referencia: c.concepto,
-                    voucherRef: c.url_comprobante,
-                    isTableCost: true
-                }));
-
-                // Unificar historial (sin duplicados)
-                const uniqueHistory = [...pagosLegacy];
-                costsAsHistory.forEach((costPayment: any) => {
-                    const alreadyPresent = uniqueHistory.some((p: any) => 
-                        p.id === costPayment.id || 
-                        (Math.abs(p.monto - costPayment.monto) < 0.01 && 
-                         (p.tipo || '').toLowerCase() === (costPayment.tipo || '').toLowerCase() &&
-                         Math.abs(new Date(p.fecha).getTime() - new Date(costPayment.fecha).getTime()) < 3600000)
-                    );
-                    if (!alreadyPresent) uniqueHistory.push(costPayment);
-                });
-
-                // Filtrar SOLO pagos que van dirigidas AL TÉCNICO (MO, Adelanto, Liquidación, Rescate)
-                const isPagoParaTecnico = (tipo: string): boolean => {
-                    const tp = (tipo || '').toLowerCase();
-                    return tp.includes('rescate') || tp.includes('adelanto') || tp.includes('refuerzo') || 
-                           tp.includes('liquidación') || tp.includes('saldo pendiente') || tp.includes('movilidad') || tp.includes('viático') ||
-                           tp.includes('solicitud') || tp.includes('petición') || tp.includes('mano de obra') || tp.includes('pago_mo');
-                };
-
-                const pagosParaTecnico = uniqueHistory.filter(p => isPagoParaTecnico(p.tipo));
-                const totalPagadoParaTecnico = round2(pagosParaTecnico.reduce((sum: number, p: any) => sum + round2(p.monto || 0), 0));
-                
-                // 4. CALCULO FINAL: Saldo = Pactado MO - Pagado
-                const montoBaseParaTecnico = pactadoMO;
-                const saldoPendienteTecnico = round2(montoBaseParaTecnico - totalPagadoParaTecnico);
-                
-                const allHistory = [...uniqueHistory].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+                const allConfirmedHistory = [...laborItems, ...operatingItems].sort((a, b) => 
+                    new Date(b.fecha || b.created_at || 0).getTime() - new Date(a.fecha || a.created_at || 0).getTime()
+                );
 
                 const techData = {
                     id: t.technician_id || t.technicians?.id || meta.tecnico?.id,
@@ -638,145 +535,106 @@ export default function PaymentsPage() {
                     plin: t.technicians?.plin_number || meta.tecnico?.plin
                 };
 
-                const items: PaymentItem[] = [];
-                const saldoReal = saldoPendienteTecnico;
+                const pendingItems: PaymentItem[] = [];
 
-                // ✅ MEJORA: Deduplicar items contra historial ya pagado (evitar duplicados Adelanto/Liquidación)
-                const paidIds = new Set<string>();
-                allHistory.forEach((h: any) => {
-                    if (h.id && h.estado === 'pagado') {
-                        paidIds.add(h.id);
-                        // Also add dedupe by tipo + monto close match
-                        const key = `${h.tipo}_${round2(h.monto)}`;
-                        paidIds.add(key);
+                // 1. Identificar ítems PENDIENTES (No están en finances.laborItems ni finances.operatingItems porque no están confirmados)
+                
+                // A. Costos de Tabla Pendientes
+                (t.costos || []).forEach((c: any) => {
+                    const st = (c.estado_pago || '').toUpperCase();
+                    if (st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN') {
+                        const isSpecialist = c.specialist_id && c.specialist_id !== t.technician_id;
+                        const specialistName = isSpecialist ? (c.technicians?.name || 'Especialista') : undefined;
+
+                        pendingItems.push({
+                            id: c.id,
+                            tipo: `Gasto: ${c.categoria}`,
+                            monto: c.monto,
+                            estado: st === 'REQUIERE_APROBACION_ADMIN' ? 'requiere_aprobacion' : 'pendiente',
+                            fecha: c.created_at,
+                            concepto: c.concepto,
+                            isTableCost: true,
+                            costId: c.id,
+                            specialistName,
+                            specialistBanco: c.technicians?.bank_name,
+                            specialistCuenta: c.technicians?.account_number,
+                            specialistCCI: c.technicians?.cci,
+                            specialistYape: c.technicians?.yape_number,
+                            specialistPlin: c.technicians?.plin_number,
+                        });
                     }
                 });
 
-                const hasPendingCosts = (t.costos || []).some((c: any) => c.estado_pago === 'pendiente');
-                const hasHistory = allHistory.length > 0;
-                const shouldProcess = t.status_id !== 'cerrado' || hasPendingCosts || hasHistory;
-                
-                if (shouldProcess) {
-                    // 1. Adelantos pendientes en Metadata
-                    const hasAdelantoPaid = !!(meta.adelantoPagado || pagosLegacy.some((p: any) => p.tipo === 'Adelanto'));
-                    const adelantoRef = meta.solicitudAdelanto || pagosLegacy.find((p: any) => p.tipo === 'Adelanto');
-                    if (!hasAdelantoPaid && adelantoRef) {
-                        items.push({
-                            id: `${t.id}_adelanto`,
-                            tipo: 'Adelanto',
-                            monto: round2(adelantoRef.monto || 0),
-                            estado: 'pendiente',
-                            fecha: adelantoRef.fecha || t.created_at
-                        });
-                    }
-
-                    // 2. Refuerzos pendientes
-                    if (meta.solicitudAdelantoExtra && !meta.solicitudAdelantoExtra.pagado) {
-                        items.push({
-                            id: `${t.id}_refuerzo`,
-                            tipo: 'Refuerzo',
-                            monto: round2(meta.solicitudAdelantoExtra.monto || 0),
-                            estado: 'pendiente',
-                            fecha: meta.solicitudAdelantoExtra.fecha || new Date().toISOString()
-                        });
-                    }
-
-                    // 3. Costos de Tabla Pendientes
-                    (t.costos || []).forEach((c: any) => {
-                        if (c.estado_pago === 'pendiente' || c.estado_pago === 'REQUIERE_APROBACION_ADMIN') {
-                            const isSpecialist = c.specialist_id && c.specialist_id !== t.technician_id;
-                            const specialistName = isSpecialist ? (c.technicians?.name || 'Especialista') : undefined;
-
-                            items.push({
-                                id: c.id,
-                                tipo: `Gasto: ${c.categoria}`,
-                                monto: c.monto,
-                                estado: c.estado_pago === 'REQUIERE_APROBACION_ADMIN' ? 'requiere_aprobacion' : 'pendiente',
-                                fecha: c.created_at,
-                                concepto: c.concepto,
-                                isTableCost: true,
-                                costId: c.id,
-                                specialistName,
-                                specialistBanco: c.technicians?.bank_name,
-                                specialistCuenta: c.technicians?.account_number,
-                                specialistCCI: c.technicians?.cci,
-                                specialistYape: c.technicians?.yape_number,
-                                specialistPlin: c.technicians?.plin_number,
-                            });
-                        }
+                // B. Solicitudes en Metadata (Adelanto/Liquidación) - Solo si no están ya en el historial confirmado
+                const hasAdelantoPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('adelanto'));
+                if (!hasAdelantoPaid && meta.solicitudAdelanto) {
+                    pendingItems.push({
+                        id: `${t.id}_adelanto`,
+                        tipo: 'Adelanto',
+                        monto: round2(meta.solicitudAdelanto.monto || 0),
+                        estado: 'pendiente',
+                        fecha: meta.solicitudAdelanto.fecha || t.created_at
                     });
+                }
 
-                    // 4. Liquidación Final Pendiente
-                    const isPorLiquidar = t.status_id === 'por_liquidar' || t.status_id === 'esperando_pago_final';
-                    const hasFinalPaid = pagosLegacy.some((p: any) => p.tipo === 'Liquidación Final' || p.tipo === 'Saldo Pendiente (Auto)');
-                    if (isPorLiquidar && !hasFinalPaid) {
-                        // ✅ MEJORA: Usar montoBaseParaTecnico (que ahora considera monto_pactado_mo) para calculo correcto
-                        const liqMonto = round2(meta.solicitudLiquidacion?.monto ?? Math.max(0, montoBaseParaTecnico - totalPagadoParaTecnico));
-                        if (liqMonto > 0.01) {
-                            items.push({
-                                id: `${t.id}_final`,
-                                tipo: 'Liquidación Final',
-                                monto: liqMonto,
-                                estado: 'pendiente',
-                                fecha: new Date().toISOString(),
-                                concepto: "Saldo de Mano de Obra"
-                            });
-                        }
-                    }
-
-                    // 5. Movilidad Pendiente
-                    const hasVisitaPaid = pagosLegacy.some((p: any) => p.tipo === 'Movilidad / Visita' || p.tipo === 'Viáticos / Movilidad');
-                    if (visitCost > 0 && !hasVisitaPaid && !items.some(i => i.tipo?.includes('Movilidad') || i.tipo?.includes('Viático'))) {
-                        items.push({
-                            id: `${t.id}_visita`,
-                            tipo: 'Movilidad / Visita',
-                            monto: visitCost,
+                const isPorLiquidar = ['por_liquidar', 'documentacion_enviada', 'requiere_revision_admin'].includes(t.status_id);
+                const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
+                if (isPorLiquidar && !hasLiquidacionPaid) {
+                    const liqMonto = round2(meta.solicitudLiquidacion?.monto ?? netLaborBalance);
+                    if (liqMonto > 0.01) {
+                        pendingItems.push({
+                            id: `${t.id}_final`,
+                            tipo: 'Liquidación Final',
+                            monto: liqMonto,
                             estado: 'pendiente',
-                            fecha: t.created_at
-                        });
-                    }
-
-                    // 6. Solicitudes de Depósito (Gestora/Admin)
-                    if (t.solicitudesDeposito && Array.isArray(t.solicitudesDeposito)) {
-                        t.solicitudesDeposito.forEach((s: any) => {
-                            if (s.estado === 'pendiente') {
-                                items.push({
-                                    id: s.id,
-                                    tipo: s.tipo || 'Solicitud de Depósito',
-                                    monto: round2(s.monto || 0),
-                                    estado: 'pendiente',
-                                    fecha: s.fecha || t.created_at,
-                                    concepto: s.concepto || 'Petición de fondos',
-                                    solicitudId: s.id
-                                });
-                            }
+                            fecha: new Date().toISOString(),
+                            concepto: "Saldo de Mano de Obra"
                         });
                     }
                 }
 
-                // Separar items por beneficiario
-                const techItems = items.filter(i => !i.specialistName);
+                // C. Solicitudes de Depósito (Tabla solicitudes_deposito)
+                if (t.solicitudesDeposito && Array.isArray(t.solicitudesDeposito)) {
+                    t.solicitudesDeposito.forEach((s: any) => {
+                        if (s.estado === 'pendiente') {
+                            pendingItems.push({
+                                id: s.id,
+                                tipo: s.tipo || 'Solicitud de Depósito',
+                                monto: round2(s.monto || 0),
+                                estado: 'pendiente',
+                                fecha: s.fecha || t.created_at,
+                                concepto: s.concepto || 'Petición de fondos',
+                                solicitudId: s.id
+                            });
+                        }
+                    });
+                }
+
+                // 2. Separar ítems por beneficiario
+                const techItems = pendingItems.filter(i => !i.specialistName);
                 const specialistGroups: { [name: string]: PaymentItem[] } = {};
-                items.forEach(i => {
+                pendingItems.forEach(i => {
                     if (i.specialistName) {
                         if (!specialistGroups[i.specialistName]) specialistGroups[i.specialistName] = [];
                         specialistGroups[i.specialistName].push(i);
                     }
                 });
 
-                // A: Grupo del Técnico
-                if (techItems.length > 0 || hasHistory) {
-                    if (techItems.length === 0 && hasHistory) {
-                        const lastP = allHistory[0];
+                // A: Grupo del Técnico Principal
+                if (techItems.length > 0 || allConfirmedHistory.length > 0) {
+                    // Si no hay pendientes pero hay historial, mostrar el último como referencia
+                    if (techItems.length === 0 && allConfirmedHistory.length > 0) {
+                        const lastP = allConfirmedHistory[0];
                         techItems.push({
                             id: `${t.id}_ref`,
-                            tipo: `Pago: ${lastP.tipo}`,
+                            tipo: `Último Pago: ${lastP.tipo || lastP.categoria}`,
                             monto: lastP.monto,
                             estado: 'pagado',
                             fecha: lastP.fecha,
                             isReference: true
                         });
                     }
+
                     allGroups.push({
                         ticketId: t.id,
                         realTicketId: t.id,
@@ -784,37 +642,24 @@ export default function PaymentsPage() {
                         cliente: t.clients?.name || 'Cliente',
                         sede: t.branch_offices?.name || 'Sede',
                         statusId: t.status_id,
-                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id),
+                        isOpen: !['ticket_cerrado', 'ticket_rechazado', 'ticket_cancelado'].includes(t.status_id),
                         tecnico: techData,
-                        montoPactado: montoBaseParaTecnico,
-                        montoAdelantado: totalPagadoParaTecnico,
-                        saldoPendiente: Math.max(0, saldoPendienteTecnico),
+                        montoPactado: pactedMO,
+                        montoAdelantado: totalLaborConfirmed,
+                        saldoPendiente: netLaborBalance,
                         items: techItems,
-                        historialDepositos: allHistory,
-                        costoVisita: visitCost,
-                        montoFacturado: t.total_quoted_amount,
-                        // ✅ MEJORA: Usar helper centralizado para cálculo correcto
-                        ...(() => {
-                            const profit = calculateTicketProfitability(t, meta);
-                            return { utilidad: profit.utilidad, margen: profit.margen };
-                        })(),
+                        historialDepositos: allConfirmedHistory,
+                        montoFacturado: t.total_quoted_amount || 0,
+                        utilidad: realProfitability,
+                        margen: margenReal,
                         descripcion: t.description || '',
                     });
                 }
 
-                // B: Grupos de Especialistas
+                // B: Grupos de Especialistas Externos
                 Object.keys(specialistGroups).forEach(name => {
                     const sItems = specialistGroups[name];
                     const first = sItems[0];
-                    const specData = {
-                        id: undefined,
-                        nombre: name,
-                        banco: first.specialistBanco || '---',
-                        numeroCuenta: first.specialistCuenta || '---',
-                        cci: first.specialistCCI || '---',
-                        yape: first.specialistYape,
-                        plin: first.specialistPlin
-                    };
                     allGroups.push({
                         ticketId: `${t.id}_${name}`,
                         realTicketId: t.id,
@@ -822,25 +667,31 @@ export default function PaymentsPage() {
                         cliente: t.clients?.name || 'Cliente',
                         sede: t.branch_offices?.name || 'Sede',
                         statusId: t.status_id,
-                        isOpen: !['cerrado', 'cancelado', 'rechazado'].includes(t.status_id),
-                        tecnico: specData,
+                        isOpen: true,
+                        tecnico: {
+                            nombre: name,
+                            banco: first.specialistBanco || '---',
+                            numeroCuenta: first.specialistCuenta || '---',
+                            cci: first.specialistCCI || '---',
+                            yape: first.specialistYape,
+                            plin: first.specialistPlin
+                        },
                         montoPactado: 0,
                         montoAdelantado: 0,
                         saldoPendiente: 0,
                         items: sItems,
                         historialDepositos: [],
-                        costoVisita: 0,
                         montoFacturado: 0,
                         utilidad: 0,
-                        descripcion: t.description || '',
                     });
                 });
 
             } catch (e) {
-                console.error("Error processing ticket:", t.id, e);
+                console.error("Error processing ticket for treasury:", t.id, e);
             }
         });
 
+        // Ordenar: Pendientes primero, luego por fecha
         allGroups.sort((a, b) => {
             const pendingA = a.items.some(i => i.estado === 'pendiente');
             const pendingB = b.items.some(i => i.estado === 'pendiente');
@@ -1575,11 +1426,11 @@ export default function PaymentsPage() {
                                             borderBottom: '1px solid #F1F5F9'
                                         }}>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Pactado Trabajo</span>
+                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Pactado Mano de Obra</span>
                                                 <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#0F172A' }}>S/ {formatSoles(group.montoPactado)}</span>
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right' }}>
-                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Pagado a Fecha</span>
+                                                <span style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 800, textTransform: 'uppercase' }}>Total MO Pagado</span>
                                                 <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado)}</span>
                                             </div>
                                             <div style={{ 
@@ -1588,7 +1439,7 @@ export default function PaymentsPage() {
                                                 borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                                 border: group.saldoPendiente > 0 ? '1px solid #FEE2E2' : '1px solid #DCFCE7'
                                             }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#991B1B' : '#15803D' }}>SALDO PENDIENTE</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#991B1B' : '#15803D' }}>SALDO MANO DE OBRA (TÉCNICO)</span>
                                                 <span style={{ fontSize: '1.1rem', fontWeight: 950, color: group.saldoPendiente > 0 ? '#DC2626' : '#059669' }}>S/ {formatSoles(group.saldoPendiente)}</span>
                                             </div>
                                         </div>

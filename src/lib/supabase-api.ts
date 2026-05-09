@@ -455,20 +455,21 @@ export const ticketsAPI = {
     },
 
     async getForPayments() {
-        // 1) Intento primario: RPC server-side (más rápido, costos pre-empacados)
-        try {
-            const { data, error } = await supabase
-                .rpc('get_payment_tickets_ultra_light');
-            if (error) throw error;
-            if (data && Array.isArray(data) && data.length >= 0) return data;
-        } catch (rpcErr: any) {
-            console.warn('[getForPayments] RPC no disponible, usando fallback directo:', rpcErr?.message || rpcErr);
-        }
+        // ════════════════════════════════════════════════════════════════════
+        // MOTOR PRINCIPAL V3: Consulta directa JS con Joins (SINFIMAC V3)
+        // Esta consulta es la fuente de verdad para la Bandeja de Tesorería/Pagos.
+        // ════════════════════════════════════════════════════════════════════
+        const ESTADOS_EXCLUIDOS = [
+            'borrador',
+            // Estados terminales (no requieren acción de pago)
+            'ticket_cerrado',
+            'ticket_rechazado',
+            'ticket_cancelado',
+            // Aliases legacy que podrían existir en datos antiguos
+            'rechazado',
+            'cancelado',
+        ];
 
-        // 2) Fallback: consulta directa a la tabla tickets con joins.
-        // Devuelve la misma forma que la RPC para que el resto de la UI no necesite cambios.
-        // Trae también los ticket_costs relacionados (compras y MO) en un sólo round-trip
-        // a través de la relación foránea `ticket_costs(*)`.
         const { data: ticketsData, error: tErr } = await supabase
             .from('tickets')
             .select(`
@@ -482,12 +483,14 @@ export const ticketsAPI = {
                 gestoras(id, name),
                 costos:ticket_costs(*)
             `)
-            .not('status_id', 'in', '(borrador,rechazado,cancelado)')
+            .not('status_id', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`)
             .order('created_at', { ascending: false })
-            .limit(150);
+            .limit(200);
 
         if (tErr) throw tErr;
-        // Asegurar que `costos` sea siempre un arreglo (Supabase devuelve [] si no hay)
+
+        // Normalizar: costos siempre es array; ticket_cerrado sin pagos pendientes
+        // se filtra en el lado JS (processTicketsToGroups) según negocio.
         return (ticketsData || []).map((t: any) => ({
             ...t,
             costos: Array.isArray(t.costos) ? t.costos : [],
@@ -495,32 +498,32 @@ export const ticketsAPI = {
     },
 
     async getById(id: string) {
-        // Obtener detalle del ticket
+        // ════════════════════════════════════════════════════════════════════
+        // MOTOR V3: Consulta Directa con Joins (Evita dependencia de RPCs legacy)
+        // ════════════════════════════════════════════════════════════════════
         const { data, error } = await supabase
-            .rpc('get_ticket_detail_v5', { p_id: id });
+            .from('tickets')
+            .select(`
+                *,
+                clients(*),
+                branch_offices(*, zonas(*)),
+                technicians(*),
+                gestora:gestoras(*),
+                costos:ticket_costs(*),
+                solicitudesDeposito:solicitudes_deposito(*)
+            `)
+            .eq('id', id)
+            .single();
 
         if (error) throw error;
         
-        // Si el ticket viene sin datos financieros, obtenerlos por separado (ultra-ligero)
-        if (data && (!data.utilidad_neta || !data.saldo_tecnico)) {
-            try {
-                const financials = await supabase.rpc('get_ticket_financials_detail', { p_id: id });
-                if (financials.data) {
-                    data.saldo_tecnico = financials.data.saldo_tecnico;
-                    data.utilidad_neta = financials.data.utilidad_neta;
-                    data.margen_real = financials.data.margen_real;
-                    data.ingresos_reales = financials.data.ingresos_reales;
-                    data.total_costs_agg = financials.data.total_costs_agg;
-                    data.monto_pactado_mo = financials.data.monto_pactado_mo;
-                    data.gastos_flujo_a = financials.data.gastos_flujo_a;
-                    data.adelantos_flujo_b = financials.data.adelantos_flujo_b;
-                }
-            } catch (e) {
-                console.error("Error fetching financials:", e);
-            }
-        }
+        // Normalizar costos para el motor de cálculos
+        const ticket = {
+            ...data,
+            costos: Array.isArray(data.costos) ? data.costos : []
+        };
         
-        return data;
+        return ticket;
     },
 
     async getByStatus(statusId: string) {
