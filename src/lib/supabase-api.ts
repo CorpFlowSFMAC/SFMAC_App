@@ -647,16 +647,16 @@ export const ticketsAPI = {
         const serverMeta = current?.metadata || {};
 
         // 2. Merge del historial: nunca pisamos pagos existentes
-        const existingPagos: any[] = serverMeta.historialPagosTecnico || [];
+        // 2. Unificar historial (evitar duplicados y manejar ambos nombres de campo)
+        const existingPagos: any[] = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
         // Evitar duplicados en caso de doble-click
         const alreadyExists = existingPagos.some((p: any) => p.id === newPago.id);
         const mergedPagos = alreadyExists ? existingPagos : [...existingPagos, newPago];
 
-        // 3. Metadata final: merge del servidor + cambios de pago
+        // 3. Metadata final: merge inteligente del servidor + cambios de pago
         const newMetadata = {
             ...serverMeta,
             ...additionalUpdates.metadataFields,
-            // FIX: Guardar en AMBAS variantes para consistencia cross-módulos
             historialPagosTecnico: mergedPagos,
             historialPagosTécnico: mergedPagos
         };
@@ -692,10 +692,10 @@ export const ticketsAPI = {
 
         const serverMeta = current?.metadata || {};
         
-        // Merge especial para el historial de pagos para evitar duplicados o pérdidas
-        let mergedPagos = serverMeta.historialPagosTécnico || serverMeta.historialPagosTecnico || [];
-        if (metadataUpdates.historialPagosTécnico || metadataUpdates.historialPagosTecnico) {
-            const incoming = metadataUpdates.historialPagosTécnico || metadataUpdates.historialPagosTecnico || [];
+        // Manejar ambos nombres de campo (con y sin acento) y unificar a sin acento
+        let mergedPagos = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
+        if (metadataUpdates.historialPagosTecnico || metadataUpdates.historialPagosTécnico) {
+            const incoming = metadataUpdates.historialPagosTecnico || metadataUpdates.historialPagosTécnico || [];
             const allById = new Map();
             [...mergedPagos, ...incoming].forEach(p => {
                 if (p?.id) allById.set(p.id, p);
@@ -703,17 +703,16 @@ export const ticketsAPI = {
             mergedPagos = Array.from(allById.values());
         }
 
-        const newMetadata = {
+        const finalMetadata = {
             ...serverMeta,
             ...metadataUpdates,
-            // FIX: Escribir en AMBAS variantes para是一致的
-            historialPagosTécnico: mergedPagos,
-            historialPagosTecnico: mergedPagos
+            historialPagosTecnico: mergedPagos,
+            historialPagosTécnico: mergedPagos
         };
 
         const updates = {
             ...columnUpdates,
-            metadata: newMetadata
+            metadata: finalMetadata
         };
 
         const { data, error } = await supabase

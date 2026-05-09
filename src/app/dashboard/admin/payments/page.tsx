@@ -800,53 +800,34 @@ export default function PaymentsPage() {
             const currentStatus = currentTicket.status_id;
             newStatusId = null; // Reiniciar para este bloque
 
+            // ★ V4: DENEGACIÓN ROBUSTA - Eliminar de pendientes y mover a históricos
+            const rechazoBase = {
+                ...item,
+                fechaRechazo: new Date().toISOString(),
+                estado: 'rechazado',
+                motivo: item.concepto || 'Denegado por Tesorería'
+            };
+
             if (item.solicitudId) {
-                // ★ FIX: Eliminar la solicitud denegada del array de pendientes (no solo cambar estado)
-                // Esto evita que vuelva a aparecer en la lista
-                const solicitudesPrev = meta.solicitudesDeposito || [];
-                const solicitudDenegada = solicitudesPrev.find((s: any) => s.id === item.solicitudId);
-                meta.solicitudesDeposito = solicitudesPrev.filter((s: any) => s.id !== item.solicitudId);
-                // Guardar en historial de rechazadas para auditoría
-                meta.solicitudesRechazadas = [...(meta.solicitudesRechazadas || []), {
-                    ...solicitudDenegada,
-                    estado: 'rechazado',
-                    fechaDenegacion: new Date().toISOString(),
-                    motivoRechazo: item.motivoRechazo || 'Denegado por Tesorería'
-                }];
+                const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
+                meta.solicitudesRechazadas = [...(meta.solicitudesRechazadas || []), { ...(found || item), ...rechazoBase }];
+                meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
             } else if (item.id === `${group.realTicketId}_adelanto` || item.tipo === 'Adelanto') {
-                // ★ FIX: Limpiar y marcar como rechazada
+                meta.historialRechazosAdelanto = [...(meta.historialRechazosAdelanto || []), { ...(meta.solicitudAdelanto || item), ...rechazoBase }];
                 meta.solicitudAdelanto = null;
                 meta.adelantoRechazado = true;
-                meta.historialRechazosAdelanto = [...(meta.historialRechazosAdelanto || []), {
-                    monto: item.monto,
-                    fecha: new Date().toISOString(),
-                    motivo: item.motivoRechazo || 'Denegado por Tesorería'
-                }];
             } else if (item.id === `${group.realTicketId}_refuerzo` || item.tipo === 'Refuerzo') {
                 meta.solicitudAdelantoExtra = null;
-                meta.historialRechazosAdelanto = [...(meta.historialRechazosAdelanto || []), {
-                    monto: item.monto,
-                    tipo: 'Refuerzo',
-                    fecha: new Date().toISOString(),
-                    motivo: item.motivoRechazo || 'Denegado por Tesorería'
-                }];
+                meta.historialRechazosAdelanto = [...(meta.historialRechazosAdelanto || []), { ...rechazoBase, tipo: 'Refuerzo' }];
             } else if (isFinal) {
+                meta.historialRechazosLiquidacion = [...(meta.historialRechazosLiquidacion || []), { ...(meta.solicitudLiquidacion || item), ...rechazoBase }];
                 meta.solicitudLiquidacion = null;
-                meta.historialRechazosLiquidacion = [...(meta.historialRechazosLiquidacion || []), {
-                    monto: item.monto,
-                    fecha: new Date().toISOString(),
-                    motivo: item.motivoRechazo || 'Denegado por Tesorería'
-                }];
                 if (['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin'].includes(currentStatus)) {
                     newStatusId = 'documentacion_enviada';
                 }
             } else if (isVisita) {
+                meta.historialRechazosVisita = [...(meta.historialRechazosVisita || []), { ...(meta.solicitudPagoVisita || item), ...rechazoBase }];
                 meta.solicitudPagoVisita = null;
-                meta.historialRechazosVisita = [...(meta.historialRechazosVisita || []), {
-                    monto: item.monto,
-                    fecha: new Date().toISOString(),
-                    motivo: item.motivoRechazo || 'Denegado por Tesorería'
-                }];
                 if (currentStatus === 'esperando_pago_visita') {
                     newStatusId = 'tecnico_asignado';
                 }
@@ -1036,6 +1017,13 @@ export default function PaymentsPage() {
             const meta = { ...currentTicket.metadata };
             const additionalUpdates: any = { metadataFields: {} };
 
+            // ★ V4: APROBACIÓN ROBUSTA - Eliminar de pendientes y mover a aprobados
+            const aprobacionBase = {
+                ...item,
+                fechaAprobacion: new Date().toISOString(),
+                estado: 'pagado'
+            };
+
             if (item.id === `${group.realTicketId}_adelanto`) {
                 additionalUpdates.status_id = 'en_ejecucion';
                 additionalUpdates.execution_date = new Date().toISOString();
@@ -1058,15 +1046,9 @@ export default function PaymentsPage() {
                 meta.fechaPagoVisita = new Date().toISOString();
                 meta.solicitudPagoVisita = null;
             } else if (item.solicitudId) {
-                // ★ FIX: Eliminar del array de pendientes y mover a historial de aprobadas
-                const solicitudesPrev = meta.solicitudesDeposito || [];
-                const solicitudAprobada = solicitudesPrev.find((s: any) => s.id === item.solicitudId);
-                meta.solicitudesDeposito = solicitudesPrev.filter((s: any) => s.id !== item.solicitudId);
-                meta.solicitudesAprobadas = [...(meta.solicitudesAprobadas || []), {
-                    ...solicitudAprobada,
-                    estado: 'pagado',
-                    fechaPago: new Date().toISOString()
-                }];
+                const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
+                meta.solicitudesAprobadas = [...(meta.solicitudesAprobadas || []), { ...(found || item), ...aprobacionBase }];
+                meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
             }
 
             meta.pagoRechazado = null;

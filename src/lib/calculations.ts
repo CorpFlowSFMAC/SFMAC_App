@@ -64,7 +64,9 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const laborKeywords = [
         'adelanto m.o', 'rescate financiero', 'pago mo', 
         'adelanto', 'rescate', 'pago_mo', 'liquidación final',
-        'mano de obra', 'honorarios', 'pago técnico', 'pago_tecnico'
+        'mano de obra', 'honorarios', 'pago técnico', 'pago_tecnico',
+        'pago mo', 'pago mano de obra', 'mo pactada', 'pacted mo', 'adelanto', 
+        'liquidación', 'liquidacion', 'saldo mo', 'mo final', 'laboral', 'técnico', 'pago', 'final'
     ];
     
     // Canal 2: Gastos Operativos (Afectan Rentabilidad)
@@ -79,7 +81,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         const valid = [
             'pagado', 'adelanto', 'abonado', 'confirmado', 'auditado',
             'ejecutado', 'autorizado admin', 'autorizado', 'aprobado',
-            'transferido', 'completado'
+            'transferido', 'completado', 'depósito', 'deposito'
         ];
         return valid.some(v => rawSt.includes(v));
     };
@@ -116,17 +118,25 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     });
 
     const arrs = [
-        rawMetadata.historialPagosTécnico, 
         rawMetadata.historialPagosTecnico, 
-        ticket.historialPagosTécnico, 
-        ticket.historialPagosTecnico
+        ticket.historialPagosTecnico,
+        rawMetadata.historialPagosTécnico, 
+        ticket.historialPagosTécnico
     ];
-    let legacyPayments: any[] = [];
-    for (const arr of arrs) {
-        if (Array.isArray(arr) && arr.length > legacyPayments.length) {
-            legacyPayments = arr;
+    const allById = new Map();
+    arrs.forEach(arr => {
+        if (Array.isArray(arr)) {
+            arr.forEach(p => {
+                if (p?.id) allById.set(p.id, p);
+                else {
+                    // Si no hay ID, usar un hash del concepto+monto+fecha para evitar duplicados exactos
+                    const hash = `${p.tipo}-${p.concepto}-${p.monto}-${p.fecha}`;
+                    allById.set(hash, p);
+                }
+            });
         }
-    }
+    });
+    const legacyPayments = Array.from(allById.values());
     const filteredLegacy = legacyPayments.filter((lp: any) => 
         !safeCosts.some(mc => mc.id === lp.id) && isConfirmed(lp.estado)
     );

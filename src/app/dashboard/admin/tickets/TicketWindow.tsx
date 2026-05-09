@@ -533,7 +533,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             visitPaymentConfirmed: visitConfirmed,
                             solicitudAdelanto: meta.solicitudAdelanto ?? null,
                             solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
-                            historialPagosTécnico: meta.historialPagosTécnico ?? [],
+                            historialPagosTecnico: meta.historialPagosTecnico ?? [],
                             gestora: fullTicket.gestora || meta.gestora || null
                         };
                         // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
@@ -622,7 +622,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 diagnostico: prev.diagnostico || prev.metadata?.diagnostico || meta.diagnostico,
                 evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || meta.evidenciasEjecucion,
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || meta.documentosChecklist,
-                historialPagosTécnico: prev.historialPagosTécnico || prev.metadata?.historialPagosTécnico || meta.historialPagosTécnico,
+                historialPagosTecnico: prev.historialPagosTecnico || prev.metadata?.historialPagosTecnico || meta.historialPagosTecnico,
                 numeroTicketCliente: prev.numeroTicketCliente || ticket.client_ticket_number || meta.numeroTicketCliente,
                 
                 // BLINDAJE DE TÉCNICO Y GESTORA:
@@ -793,19 +793,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 ...serverMeta,
                 ...sourceMetadata,
                 // PROTECCIÓN DE HISTORIAL: Nunca sobreescribir con datos locales viejos
-                // FIX: Escribir en AMBAS variantes para consistencia cross-módulos
-                historialPagosTécnico: (() => {
-                    const localPagos = businessData?.historialPagosTécnico || businessData?.historialPagosTecnico || [];
-                    const serverPagos = serverMeta.historialPagosTécnico || serverMeta.historialPagosTecnico || [];
+                historialPagosTecnico: (() => {
+                    const localPagos = businessData?.historialPagosTecnico || businessData?.historialPagosTécnico || [];
+                    const serverPagos = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
                     const allById = new Map();
                     [...serverPagos, ...localPagos].forEach(p => {
                         if (p?.id) allById.set(p.id, p);
                     });
                     return Array.from(allById.values());
                 })(),
-                historialPagosTecnico: (() => {
-                    const localPagos = businessData?.historialPagosTécnico || businessData?.historialPagosTecnico || [];
-                    const serverPagos = serverMeta.historialPagosTécnico || serverMeta.historialPagosTecnico || [];
+                historialPagosTécnico: (() => {
+                    const localPagos = businessData?.historialPagosTecnico || businessData?.historialPagosTécnico || [];
+                    const serverPagos = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
                     const allById = new Map();
                     [...serverPagos, ...localPagos].forEach(p => {
                         if (p?.id) allById.set(p.id, p);
