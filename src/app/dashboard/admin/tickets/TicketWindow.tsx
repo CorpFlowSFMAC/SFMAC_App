@@ -785,11 +785,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
         const localStateOrder = TICKET_STATE_ORDER[businessData.estadoId] ?? 0;
         const serverStateOrder = TICKET_STATE_ORDER[serverStatusId] ?? 0;
-        // 🔁 BYPASS controlado: Reajuste/Reprogramar y otras transiciones intencionales
-        // necesitan poder retroceder de estado. Si el caller lo solicita, forzamos el local.
+        
+        // 🔁 REGLA DE SINCRONIZACIÓN: 
+        // 1. Si el caller pide rollback (p.ej. Reajuste o nueva solicitud), gana el local.
+        // 2. Si el servidor tiene una denegación activa (pagoRechazado), el servidor MANDA (evita re-envíos automáticos).
+        // 3. Por defecto, el estado más avanzado gana.
+        const hasActiveRejection = !!serverMeta.pagoRechazado;
+        
         const resolvedStatusId = options?.allowStateRollback
             ? businessData.estadoId
-            : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId);
+            : (hasActiveRejection 
+                ? serverStatusId 
+                : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId));
 
         const updates: any = {
             status_id: resolvedStatusId,
@@ -826,7 +833,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 })(),
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
-                solicitudLiquidacion: businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion,
+                // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
+                // Si el servidor ha limpiado la solicitud (denegación), no la re-inyectamos desde el local stale.
+                solicitudLiquidacion: (hasActiveRejection && !options?.allowStateRollback) 
+                    ? serverMeta.solicitudLiquidacion 
+                    : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
+                solicitudAdelanto: (hasActiveRejection && !options?.allowStateRollback)
+                    ? serverMeta.solicitudAdelanto
+                    : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
+                solicitudPagoVisita: (hasActiveRejection && !options?.allowStateRollback)
+                    ? serverMeta.solicitudPagoVisita
+                    : (businessData.solicitudPagoVisita || serverMeta.solicitudPagoVisita),
+                
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
                 evidenciasEjecucion,
