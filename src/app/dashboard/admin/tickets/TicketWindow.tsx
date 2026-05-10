@@ -1319,7 +1319,32 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
     };
 
+    // ============================================================
+    // BLINDAJE ETAPA 6: Verificar si el ticket está en Cotización Enviada
+    // antes de permitir operaciones financieras
+    // ============================================================
+    const isInStage6 = ticketData.estadoId === 'cotizacion_enviada';
+    
+    const showStage6Warning = (context: string) => {
+        if (!isInStage6) return false;
+        // Solo mostrar warning si es operación financiera (no solo visualización)
+        return context.includes('pago') || context.includes('adelanto') || context.includes('costo');
+    };
+
     const handleConfirmAdvance = async () => {
+        // ============================================================
+        // BLINDAJE ETAPA 6: Advertencia crítica para gestoras
+        // ============================================================
+        if (isInStage6) {
+            const confirmed = window.confirm(
+                '⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente.\n' +
+                '¿Desea proceder con el gasto bajo riesgo de la empresa?'
+            );
+            if (!confirmed) {
+                showToast('Operación cancelada', 'La cotización debe ser aprobada por el cliente antes de realizar pagos.', 'info');
+                return;
+            }
+        }
         // ✅ FIX 2026-04-27: Prevenir ejecución doble
         if (confirmAdvanceRef.current) return;
         confirmAdvanceRef.current = true;
@@ -1439,6 +1464,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
     };
     const handleRequestAdvance = async () => {
+        // ============================================================
+        // BLINDAJE ETAPA 6: Advertencia crítica para gestoras
+        // ============================================================
+        if (isInStage6) {
+            const confirmed = window.confirm(
+                '⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente.\n' +
+                '¿Desea proceder con el gasto bajo riesgo de la empresa?'
+            );
+            if (!confirmed) {
+                showToast('Operación cancelada', 'La cotización debe ser aprobada por el cliente antes de solicitar pagos.', 'info');
+                return;
+            }
+        }
+
         // ✅ FIX 2026-04-27: Prevenir ejecución doble
         if (requestAdvanceRef.current) return;
         requestAdvanceRef.current = true;
@@ -1825,6 +1864,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     }, []);
 
     const handleSubmitMaterialsRequest = async () => {
+        // ============================================================
+        // BLINDAJE ETAPA 6: Advertencia crítica para gestoras
+        // ============================================================
+        if (isInStage6) {
+            const confirmed = window.confirm(
+                '⚠️ ATENCIÓN: Esta cotización aún no ha sido aprovada por el cliente.\n' +
+                '¿Desea proceder con el gasto bajo riesgo de la empresa?'
+            );
+            if (!confirmed) {
+                showToast('Operación cancelada', 'La cotización debe ser aprovada por el cliente antes de registrar gastos.', 'info');
+                return;
+            }
+        }
+
         if (!materialsForm.concepto.trim() || !materialsForm.monto) {
             showToast("Campos incompletos", "El concepto y el monto son obligatorios.", "error");
             return;
