@@ -2,7 +2,7 @@
 
 import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package, Truck, ShieldAlert } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
-import React, { useState, useEffect, useCallback, memo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { supabase } from "@/lib/supabase";
 import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances } from "@/lib/calculations";
@@ -133,28 +133,30 @@ interface TechnicianSchedulingBarProps {
 }
 
 export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
-    const techStatus = ticket.tecnico || ticket.tecnicoAsignado || ticket.technicians;
-    if (!ticket.technicianId && !techStatus && !ticket.technician_id) return null;
+    // Optimización: Priorizar siempre el objeto unido de la DB para evitar intermitencia
+    const tech = ticket.technicians || ticket.tecnico;
+    if (!ticket.technician_id && !tech && !ticket.technicianId) return null;
 
-    const techName = techStatus?.nombre || techStatus?.name || "Técnico Asignado";
-    const techPhone = techStatus?.celular || techStatus?.telefono || techStatus?.phone || "---";
+    const techName = tech?.nombre || tech?.name || "Técnico Asignado";
+    const techPhone = tech?.celular || tech?.telefono || tech?.phone || "---";
     const hasScheduling = !!ticket.fechaVisita;
     const scheduleDate = hasScheduling ? new Date(ticket.fechaVisita) : null;
     const scheduleLabel = ticket.programacionLabel || "Visita Programada";
 
     const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || 0);
 
-    const voucherVisita = (ticket.historialPagosTecnico || []).find((p: any) => {
-        const tipo = (p.tipo || "").toLowerCase();
-        const ref = (p.referencia || "").toLowerCase();
-        return tipo === 'movilidad / visita' || ref.includes("movilidad") || ref.includes("visita") || ref.includes("pasaje");
-    })?.voucherRef;
+    // Memoizar el voucher de visita para evitar búsquedas repetitivas en cada render
+    const voucherVisita = useMemo(() => {
+        return (ticket.historialPagosTecnico || []).find((p: any) => {
+            const low = (p.tipo || p.referencia || "").toLowerCase();
+            return low.includes('movilidad') || low.includes('visita') || low.includes('pasaje');
+        })?.voucherRef;
+    }, [ticket.historialPagosTecnico]);
 
     const [showFullVoucher, setShowFullVoucher] = useState<string | null>(null);
 
     const getVoucherSrc = (ref?: string | null) => {
-        if (!ref) return "";
-        if (ref.startsWith("data:image")) return ref;
+        if (ref?.startsWith("data:image")) return ref;
         return ""; 
     };
 
@@ -1252,12 +1254,18 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
                 <span className={styles.infoLabel} style={{ color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? '#3B82F6' : '#059669' }}>
                     {["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? "Rentabilidad Proyectada" : "Rentabilidad Real"}
                 </span>
-                <span className={styles.infoValue} style={{ 
-                    color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? '#3B82F6' : (rentabilidadReal < 0 ? '#EF4444' : '#059669'), 
-                    fontWeight: 900 
-                }}>
-                    S/ {formatSoles(rentabilidadReal)}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span className={styles.infoValue} style={{ 
+                        color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? '#3B82F6' : (rentabilidadReal < 0 ? '#EF4444' : '#059669'), 
+                        fontWeight: 900,
+                        fontSize: '1.1rem'
+                    }}>
+                        S/ {formatSoles(rentabilidadReal)}
+                    </span>
+                    <span style={{ fontSize: '9px', color: '#64748B', fontWeight: 600, marginTop: '2px' }}>
+                        ({formatSoles(montoTotalCliente)} - {formatSoles(pactadoLaborBase)} - {formatSoles(operatingExpenses)})
+                    </span>
+                </div>
             </div>
 
             <div className={styles.infoItem} style={{ flex: 1.5 }}>
@@ -1683,7 +1691,7 @@ export const TicketSummary = memo(function TicketSummary({ ticket, onProceed, on
 });
 
 export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket, onAssign, canAssign }: { ticket: any; onAssign?: () => void; canAssign: boolean }) {
-    const gestora = ticket.gestora || ticket.gestoraAsignado;
+    const gestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado;
     const hasGestora = !!gestora;
 
     return (

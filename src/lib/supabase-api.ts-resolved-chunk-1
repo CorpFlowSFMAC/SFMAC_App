@@ -1,0 +1,14 @@
+        // 2. Unificar historial (evitar duplicados y manejar ambos nombres de campo)
+        const existingPagos: any[] = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
+        // Evitar duplicados en caso de doble-click
+        const alreadyExists = existingPagos.some((p: any) => p.id === newPago.id);
+        const mergedPagos = alreadyExists ? existingPagos : [...existingPagos, newPago];
+
+        // 3. Metadata final: merge inteligente del servidor + cambios de pago
+        const newMetadata = {
+            ...serverMeta,
+            ...additionalUpdates.metadataFields,
+            // FIX: Guardar en AMBAS variantes para consistencia cross-módulos
+            historialPagosTecnico: mergedPagos,
+            historialPagosTécnico: mergedPagos
+        };

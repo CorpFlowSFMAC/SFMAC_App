@@ -73,6 +73,7 @@ interface PaymentTicketGroup {
     montoFacturado: number;
     utilidad: number;
     margen?: number; // Porcentaje de rentabilidad
+    gastosOperativos: number; // ★ NUEVO: para desglose
     descripcion?: string;
 }
 
@@ -663,6 +664,7 @@ export default function PaymentsPage() {
                         montoFacturado: t.total_quoted_amount || 0,
                         utilidad: realProfitability,
                         margen: margenReal,
+                        gastosOperativos: totalOpConfirmed,
                         descripcion: t.description || '',
                     });
                 }
@@ -694,6 +696,7 @@ export default function PaymentsPage() {
                         historialDepositos: [],
                         montoFacturado: 0,
                         utilidad: 0,
+                        gastosOperativos: 0,
                     });
                 });
 
@@ -1512,18 +1515,21 @@ export default function PaymentsPage() {
                                         {/* RESUMEN FINANCIERO COMPACTO */}
                                         <div style={{ 
                                             padding: '12px 20px', background: '#FAFAFA', 
-                                            display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '8px',
+                                            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.2fr', gap: '8px',
                                             borderBottom: '1px solid #F1F5F9',
                                             alignItems: 'center'
                                         }}>
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                 <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Pactado MO</span>
-                                                <span style={{ fontSize: '1rem', fontWeight: 900, color: '#1E293B' }}>S/ {formatSoles(group.montoPactado)}</span>
+                                                <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#1E293B' }}>S/ {formatSoles(group.montoPactado)}</span>
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
-                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Total Pagado</span>
-                                                <span style={{ fontSize: '1rem', fontWeight: 900, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado)}</span>
-                                                <span style={{ fontSize: '0.6rem', color: '#94A3B8', fontWeight: 600 }}>({group.historialDepositos.length} depósitos)</span>
+                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Pagado Tech</span>
+                                                <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado - group.gastosOperativos)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
+                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Gastos Oper.</span>
+                                                <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#DB2777' }}>S/ {formatSoles(group.gastosOperativos)}</span>
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
                                                 <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Utilidad Est.</span>
@@ -1531,8 +1537,11 @@ export default function PaymentsPage() {
                                                     <span style={{ fontSize: '1rem', fontWeight: 950, color: group.utilidad > 0 ? '#2563EB' : '#DC2626' }}>
                                                         S/ {formatSoles(group.utilidad)}
                                                     </span>
+                                                    <span style={{ fontSize: '8px', color: '#94A3B8', fontWeight: 600 }}>
+                                                        ({formatSoles(group.montoFacturado)} - {formatSoles(group.montoPactado)} - {formatSoles(group.gastosOperativos)})
+                                                    </span>
                                                     {group.margen !== undefined && (
-                                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: group.margen > 20 ? '#059669' : '#D97706', background: group.margen > 20 ? '#ECFDF5' : '#FFFBEB', padding: '0 4px', borderRadius: '4px' }}>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: group.margen > 20 ? '#059669' : '#D97706', background: group.margen > 20 ? '#ECFDF5' : '#FFFBEB', padding: '0 4px', borderRadius: '4px', marginTop: '2px' }}>
                                                             {group.margen}% Margen
                                                         </span>
                                                     )}
