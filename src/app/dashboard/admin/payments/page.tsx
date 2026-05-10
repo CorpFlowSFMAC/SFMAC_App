@@ -393,6 +393,7 @@ export default function PaymentsPage() {
         item: PaymentItem;
         wallet: 'yape' | 'plin' | 'banco';
         numero: string;
+        stage6Warning?: boolean;
     } | null>(null);
 
     // Toast flash (1s) para confirmar que el número fue copiado
@@ -439,8 +440,17 @@ export default function PaymentsPage() {
         // PASO B: Toast flash
         showToast(`✅ Número copiado. Pegue el monto: S/ ${formatSoles(item.monto)}`);
 
+        // ⚠️ ADVERTENCIA RIESGO FINANCIERO (ETAPA 6)
+        const isStage6 = group.statusId === 'cotizacion_enviada';
+
         // Marcar como "esperando voucher" ANTES de salir de la app
-        setWaitingVoucher({ group, item, wallet, numero });
+        setWaitingVoucher({ 
+            group, 
+            item, 
+            wallet, 
+            numero,
+            stage6Warning: isStage6
+        });
 
         // PASO C: Deep Link — intentar abrir la app bancaria vía scheme URI
         await new Promise(r => setTimeout(r, 300));
@@ -959,11 +969,16 @@ export default function PaymentsPage() {
             return;
         }
 
+        // ⚠️ ADVERTENCIA RIESGO FINANCIERO (ETAPA 6)
+        const isStage6 = group.statusId === 'cotizacion_enviada';
+        
         // Si no tiene billetera móvil, vamos a confirmación directa
         setPendingConfirmation({
             group,
             item,
-            message: `¿Desea registrar el pago de S/ ${montoStr} para ${group.tecnico.nombre}?`,
+            message: isStage6 
+                ? '⚠️ Atención: Esta cotización aún no ha sido aprobada por el cliente. ¿Desea proceder con el gasto bajo riesgo de la empresa?'
+                : `¿Desea registrar el pago de S/ ${montoStr} para ${group.tecnico.nombre}?`,
             voucher: null
         });
     };
@@ -993,13 +1008,13 @@ export default function PaymentsPage() {
                 const isFinal = item.concepto?.toLowerCase().includes('liquidación final');
 
                 if (isAdvance) {
-                    additionalUpdates.status_id = 'en_ejecucion';
+                    // ELIMINADO: No forzar estado 'en_ejecucion' por pago
                     additionalUpdates.metadataFields.adelantoPagado = true;
                     additionalUpdates.metadataFields.fechaPagoAdelanto = finalDate;
                     additionalUpdates.metadataFields.solicitudAdelanto = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
                 } else if (isFinal) {
-                    additionalUpdates.status_id = 'ticket_cerrado';
+                    // ELIMINADO: No forzar estado 'ticket_cerrado' por pago
                     additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
@@ -1040,17 +1055,15 @@ export default function PaymentsPage() {
             };
 
             if (item.id === `${group.realTicketId}_adelanto`) {
-                additionalUpdates.status_id = 'en_ejecucion';
-                additionalUpdates.execution_date = finalDate;
+                // ELIMINADO: No forzar estado 'en_ejecucion' por pago
                 meta.adelantoPagado = true;
-                meta.fechaPagoAdelanto = additionalUpdates.execution_date;
+                meta.fechaPagoAdelanto = finalDate;
                 meta.solicitudAdelanto = null;
             } else if (item.id === `${group.realTicketId}_refuerzo`) {
                 meta.solicitudAdelantoExtra = null;
             } else if (item.id === `${group.realTicketId}_final`) {
-                additionalUpdates.status_id = 'ticket_cerrado';
-                additionalUpdates.closure_date = finalDate;
-                meta.fechaPagoFinal = additionalUpdates.closure_date;
+                // ELIMINADO: No forzar estado 'ticket_cerrado' por pago
+                meta.fechaPagoFinal = finalDate;
                 meta.solicitudLiquidacion = null;
             } else if (item.id === `${group.realTicketId}_visita`) {
                 const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
@@ -1693,6 +1706,19 @@ export default function PaymentsPage() {
                             <h3 style={{ fontSize: '1.2rem' }}>¿Transferencia realizada?</h3>
                         </div>
                         <div className={styles.modalBody}>
+                            {/* ⚠️ AVISO DE RIESGO ETAPA 6 */}
+                            {waitingVoucher.stage6Warning && (
+                                <div style={{ 
+                                    background: '#FFFBEB', border: '1px solid #F59E0B', borderRadius: '12px', 
+                                    padding: '12px', marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'flex-start' 
+                                }}>
+                                    <AlertCircle size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#92400E', fontWeight: 700, lineHeight: 1.4 }}>
+                                        Atención: Esta cotización aún no ha sido aprobada por el cliente. Gasto bajo riesgo de la empresa.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Resumen */}
                             <div className={styles.confirmationDetails} style={{ marginBottom: 20 }}>
                                 <div className={styles.detailRow}>
@@ -1821,7 +1847,19 @@ export default function PaymentsPage() {
                             <h3>Confirmar Transacción</h3>
                         </div>
                         <div className={styles.modalBody}>
-                            <p className={styles.modalText}>{pendingConfirmation.message}</p>
+                            {pendingConfirmation.group.statusId === 'cotizacion_enviada' ? (
+                                <div style={{ 
+                                    background: '#FFFBEB', border: '2px solid #F59E0B', borderRadius: '12px', 
+                                    padding: '16px', marginBottom: '20px', display: 'flex', gap: '12px', alignItems: 'center' 
+                                }}>
+                                    <AlertCircle size={24} color="#D97706" />
+                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#92400E', fontWeight: 800, lineHeight: 1.4 }}>
+                                        ⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente. ¿Desea proceder con el gasto bajo riesgo de la empresa?
+                                    </p>
+                                </div>
+                            ) : (
+                                <p className={styles.modalText}>{pendingConfirmation.message}</p>
+                            )}
                             <div className={styles.confirmationDetails}>
                                 <div className={styles.detailRow}>
                                     <span className={styles.detailLabel}>Ticket:</span>
