@@ -967,6 +967,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // Persistir en Supabase limpiando el campo en metadata
             await ticketsAPI.patchMetadata(ticketData.id, { pagoRechazado: null });
             
+            // ★ FIX: También limpiar notificaciones de rechazo para evitar parpadeo
+            const currentMeta = ticketData.metadata || {};
+            const notifsFiltradas = (currentMeta.notificacionesGestora || []).filter(
+                (n: any) => n.tipo !== 'SOLICITUD_DENEGADA'
+            );
+            await ticketsAPI.patchMetadata(ticketData.id, { notificacionesGestora: notifsFiltradas });
+            
             showToast("Observación Archivada", "Ya puede generar una nueva solicitud.", "success");
         } catch (err) {
             console.error("Error dismiss rejection:", err);
