@@ -586,9 +586,13 @@ export default function PaymentsPage() {
                     }
                 });
 
-                // B. Solicitudes en Metadata (Adelanto/Liquidación) - Solo si no están ya en el historial confirmado
+                // B. Solicitudes en Metadata (Adelanto) - Solo si no están ya en el historial confirmado
                 const hasAdelantoPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('adelanto'));
-                if (!hasAdelantoPaid && meta.solicitudAdelanto) {
+                
+                // ★ FIX: Si hay rechazos de adelantos en historial, no regenerar automáticamente
+                const tieneRechazosAdelanto = (meta.historialRechazosAdelanto || []).length > 0;
+                
+                if (!hasAdelantoPaid && !tieneRechazosAdelanto && meta.solicitudAdelanto) {
                     pendingItems.push({
                         id: `${t.id}_adelanto`,
                         tipo: 'Adelanto',
@@ -598,9 +602,14 @@ export default function PaymentsPage() {
                     });
                 }
 
-                const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
+                const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin'].includes(t.status_id);
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
-                if (isPorLiquidar && !hasLiquidacionPaid) {
+                
+                // ★ FIX: Si ya hay rechazos de liquidación en historial, no regenerar automáticamente como pendiente
+                // El administrador debe solicitar manualmente una nueva liquidación si la necesita
+                const tieneRechazosLiquidacion = (meta.historialRechazosLiquidacion || []).length > 0;
+                
+                if (isPorLiquidar && !hasLiquidacionPaid && !tieneRechazosLiquidacion) {
                     // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
                     const liqMonto = round2(netLaborBalance);
                     if (liqMonto > 0.01) {
