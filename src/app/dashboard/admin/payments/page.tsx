@@ -1014,7 +1014,9 @@ export default function PaymentsPage() {
                     additionalUpdates.metadataFields.solicitudAdelanto = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
                 } else if (isFinal) {
-                    // ELIMINADO: No forzar estado 'ticket_cerrado' por pago
+                    // RESTAURADO: El pago final SÍ cierra el ticket automáticamente
+                    additionalUpdates.status_id = 'ticket_cerrado';
+                    additionalUpdates.closure_date = finalDate;
                     additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
@@ -1062,7 +1064,9 @@ export default function PaymentsPage() {
             } else if (item.id === `${group.realTicketId}_refuerzo`) {
                 meta.solicitudAdelantoExtra = null;
             } else if (item.id === `${group.realTicketId}_final`) {
-                // ELIMINADO: No forzar estado 'ticket_cerrado' por pago
+                // RESTAURADO: El pago final SÍ cierra el ticket automáticamente
+                additionalUpdates.status_id = 'ticket_cerrado';
+                additionalUpdates.closure_date = finalDate;
                 meta.fechaPagoFinal = finalDate;
                 meta.solicitudLiquidacion = null;
             } else if (item.id === `${group.realTicketId}_visita`) {
