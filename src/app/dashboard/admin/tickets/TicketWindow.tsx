@@ -4541,17 +4541,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
                 {/* --- MODAL DE ALERTA DE RIESGO (PROFESIONAL) --- */}
                 {riskAlert.show && (
-                    <div className={styles.negotiationModal} style={{ zIndex: 9999 }}>
+                    <div className={styles.modalOverlay} style={{ zIndex: 20000 }}>
                         <div className={styles.negotiationModalCard} style={{ maxWidth: '450px', border: '2px solid #F59E0B' }}>
-                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
-                                <div className={styles.negoHeaderTitle}>
-                                    <ShieldAlert size={24} color="#FFF" />
-                                    <div>
-                                        <h3 style={{ color: '#FFF' }}>{riskAlert.title}</h3>
-                                        <p style={{ color: 'rgba(255,255,255,0.8)' }}>Validación de Seguridad Financiera</p>
-                                    </div>
+                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <div className={styles.negoIconWrapper} style={{ backgroundColor: 'white', color: '#D97706' }}>
+                                    <ShieldAlert size={24} />
                                 </div>
-                                <button className={styles.negoCloseBtn} onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))}>
+                                <div className={styles.negoTitleGroup}>
+                                    <h3 style={{ color: '#FFF', margin: 0 }}>{riskAlert.title}</h3>
+                                    <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem' }}>Validación de Seguridad Financiera</span>
+                                </div>
+                                <button className={styles.closeNegoBtn} onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))} style={{ color: 'white', marginLeft: 'auto' }}>
                                     <X size={20} />
                                 </button>
                             </div>
