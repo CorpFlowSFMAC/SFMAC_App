@@ -392,18 +392,36 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
                                 const incomingMeta = pNew.metadata || {};
                                 const existingMeta = old.metadata || {};
+                                
+                                // ★ FIX: Segunda ubicación - misma lógica de protección
+                                const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
+                                const incomingHasPagoVista = incomingMeta.solicitudPagoVista !== undefined;
+                                const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
+                                const existingHasPagoVista = existingMeta.solicitudPagoVista !== undefined;
+                                
+                                const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
+                                const serverClearedPagoVista = incomingMeta.solicitudPagoVista === null || (incomingHasPagoVista && !incomingMeta.solicitudPagoVista);
+                                
                                 const mergedMeta = {
                                     ...existingMeta,
                                     ...incomingMeta,
-                                    solicitudAdelanto: incomingMeta.solicitudAdelanto !== undefined
-                                        ? incomingMeta.solicitudAdelanto
-                                        : existingMeta.solicitudAdelanto,
-                                    adelantoPagado: incomingMeta.adelantoPagado !== undefined
-                                        ? incomingMeta.adelantoPagado
-                                        : existingMeta.adelantoPagado,
-                                    solicitudPagoVisita: incomingMeta.solicitudPagoVisita !== undefined
-                                        ? incomingMeta.solicitudPagoVisita
-                                        : existingMeta.solicitudPagoVisita,
+                                    solicitudAdelanto: serverClearedAdelanto 
+                                        ? null 
+                                        : (incomingHasAdelanto 
+                                            ? incomingMeta.solicitudAdelanto 
+                                            : (existingHasAdelanto 
+                                                ? existingMeta.solicitudAdelanto 
+                                                : undefined)),
+                                    solicitudPagoVista: serverClearedPagoVista 
+                                        ? null 
+                                        : (incomingHasPagoVista 
+                                            ? incomingMeta.solicitudPagoVista 
+                                            : (existingHasPagoVista 
+                                                ? existingMeta.solicitudPagoVista 
+                                                : undefined)),
+                                    pagoRechazado: incomingMeta.pagoRechazado !== undefined 
+                                        ? incomingMeta.pagoRechazado 
+                                        : existingMeta.pagoRechazado,
                                 };
                                 return {
                                     ...old,
@@ -412,7 +430,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     tecnico: patchedTecnico,
                                     gestora: patchedGestora,
                                     solicitudAdelanto: mergedMeta.solicitudAdelanto,
-                                    adelantoPagado: mergedMeta.adelantoPagado ?? old.adelantoPagado,
+                                    solicitudPagoVista: mergedMeta.solicitudPagoVista,
                                     pagoRechazado: mergedMeta.pagoRechazado,
                                 };
                             }
