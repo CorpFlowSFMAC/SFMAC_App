@@ -1198,7 +1198,7 @@ export default function PaymentsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
                         <AlertCircle size={24} color="#EF4444" />
                         <h3 style={{ margin: 0, color: '#991B1B', fontSize: '1.1rem', fontWeight: 900 }}>
-                            Solicitudes de Rescate por Excedente Pendientes ({allExceedanceRequests.length})
+                            Aprobaciones de Gasto y Rescate por Excedente ({allExceedanceRequests.length})
                         </h3>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
@@ -1206,15 +1206,28 @@ export default function PaymentsPage() {
                             <div key={req.id} style={{ background: 'white', border: '1px solid #FEE2E2', borderRadius: '12px', padding: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <div>
-                                        <p style={{ margin: 0, fontSize: '0.7rem', color: '#94A3B8', fontWeight: 800 }}>TICKET: {req.ticket?.numeroTicketCliente || req.ticket?.id.slice(-6)}</p>
-                                        <p style={{ margin: '2px 0 0', fontSize: '0.85rem', fontWeight: 700, color: '#1E293B' }}>{req.ticket?.tecnico?.nombre}</p>
+                                        <p style={{ margin: 0, fontSize: '0.7rem', color: '#94A3B8', fontWeight: 800 }}>
+                                            TICKET: {req.ticket?.numeroTicketCliente || (req.ticket?.id ? `TK-${req.ticket.id.slice(-8).toUpperCase()}` : 'S/N')}
+                                        </p>
+                                        <p style={{ margin: '2px 0 0', fontSize: '0.85rem', fontWeight: 700, color: '#1E293B' }}>
+                                            {req.categoria === 'Rescate Financiero' ? 'RESCATE PARA: ' : 'GASTO PARA: '}
+                                            <span style={{ color: '#3B82F6' }}>
+                                                {req.technicians?.name || req.proveedor || req.ticket?.tecnico?.nombre || 'Especialista'}
+                                            </span>
+                                        </p>
                                     </div>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#EF4444' }}>
-                                        {formatSoles(req.monto)}
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: 900, color: '#94A3B8', textTransform: 'uppercase', marginBottom: '2px' }}>
+                                            {req.categoria}
+                                        </div>
+                                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#EF4444' }}>
+                                            {formatSoles(req.monto)}
+                                        </div>
                                     </div>
                                 </div>
-                                <div style={{ background: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', fontSize: '0.75rem', color: '#475569', borderLeft: '3px solid #64748B' }}>
-                                    <strong>Justificación:</strong> {req.motivo || 'No se proporcionó motivo.'}
+                                <div style={{ background: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', fontSize: '0.75rem', color: '#475569', borderLeft: '3px solid #EF4444' }}>
+                                    <div style={{ fontWeight: 800, color: '#1E293B', marginBottom: '2px', fontSize: '0.65rem', textTransform: 'uppercase' }}>Detalle de la Solicitud:</div>
+                                    {req.concepto || req.motivo || 'Gasto operativo por excedente de presupuesto.'}
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                                     <button 
