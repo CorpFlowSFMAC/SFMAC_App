@@ -857,14 +857,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
                 // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
-                // Si el servidor ha limpiado la solicitud (denegación), no la re-inyectamos desde el local stale.
-                solicitudLiquidacion: (hasActiveRejection && !options?.allowStateRollback) 
+                // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
+                // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
+                const serverHasSolicitudLiqui = serverMeta.solicitudLiquidacion != null;
+                const serverHasSolicitudAdelanto = serverMeta.solicitudAdelanto != null;
+                const serverHasSolicitudVisita = serverMeta.solicitudPagoVisita != null;
+                
+                const shouldUseServerSolicitudLiqui = hasActiveRejection || !serverHasSolicitudLiqui || (options?.allowStateRollback === false);
+                const shouldUseServerAdelanto = hasActiveRejection || !serverHasSolicitudAdelanto || (options?.allowStateRollback === false);
+                const shouldUseServerVisita = hasActiveRejection || !serverHasSolicitudVisita || (options?.allowStateRollback === false);
+                
+                solicitudLiquidacion: shouldUseServerSolicitudLiqui 
                     ? serverMeta.solicitudLiquidacion 
                     : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection && !options?.allowStateRollback)
+                solicitudAdelanto: shouldUseServerAdelanto
                     ? serverMeta.solicitudAdelanto
                     : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPagoVisita: (hasActiveRejection && !options?.allowStateRollback)
+                solicitudPagoVisita: shouldUseServerVisita
                     ? serverMeta.solicitudPagoVisita
                     : (businessData.solicitudPagoVisita || serverMeta.solicitudPagoVisita),
                 

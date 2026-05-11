@@ -293,19 +293,39 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                         const incomingMeta = pNew.metadata || {};
                                         const existingMeta = t.metadata || {};
                                         
-                                        // Merge metadata: el payload nuevo gana.
+                                        // ★ FIX: Merge metadata con protección contra null del servidor
+                                        // Si el servidor tiene null (rechazado/limpio), ese null debe win sobre valores stale
+                                        const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
+                                        const incomingHasPagoVista = incomingMeta.solicitudPagoVista !== undefined;
+                                        const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
+                                        const existingHasPagoVista = existingMeta.solicitudPagoVista !== undefined;
+                                        
+                                        // Si el servidor tiene null (rechazado), ese null wins
+                                        const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
+                                        const serverClearedPagoVista = incomingMeta.solicitudPagoVista === null || (incomingHasPagoVista && !incomingMeta.solicitudPagoVista);
+                                        
                                         const mergedMeta = {
                                             ...existingMeta,
                                             ...incomingMeta,
-                                            solicitudAdelanto: incomingMeta.solicitudAdelanto !== undefined
-                                                ? incomingMeta.solicitudAdelanto
-                                                : existingMeta.solicitudAdelanto,
-                                            adelantoPagado: incomingMeta.adelantoPagado !== undefined
-                                                ? incomingMeta.adelantoPagado
-                                                : existingMeta.adelantoPagado,
-                                            solicitudPagoVisita: incomingMeta.solicitudPagoVisita !== undefined
-                                                ? incomingMeta.solicitudPagoVisita
-                                                : existingMeta.solicitudPagoVisita,
+                                            // Si el servidor tiene null (rechazado), usar null del servidor
+                                            solicitudAdelanto: serverClearedAdelanto 
+                                                ? null 
+                                                : (incomingHasAdelanto 
+                                                    ? incomingMeta.solicitudAdelanto 
+                                                    : (existingHasAdelanto 
+                                                        ? existingMeta.solicitudAdelanto 
+                                                        : undefined)),
+                                            solicitudPagoVista: serverClearedPagoVista 
+                                                ? null 
+                                                : (incomingHasPagoVista 
+                                                    ? incomingMeta.solicitudPagoVista 
+                                                    : (existingHasPagoVista 
+                                                        ? existingMeta.solicitudPagoVista 
+                                                        : undefined)),
+                                            // Otros campos del incoming siempre ganan
+                                            pagoRechazado: incomingMeta.pagoRechazado !== undefined 
+                                                ? incomingMeta.pagoRechazado 
+                                                : existingMeta.pagoRechazado,
                                         };
                                         return {
                                             ...t,

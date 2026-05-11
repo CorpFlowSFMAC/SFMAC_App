@@ -780,6 +780,7 @@ export default function PaymentsPage() {
                     let nextStatus = null;
                     const cat = (item.categoria || '').toUpperCase();
                     const currentId = ticketRef.status_id;
+                    const meta = ticketRef.metadata || {};
 
                     if ((cat.includes('VISITA') || cat.includes('MOVILIDAD') || cat.includes('VIÁTICO')) && currentId === 'esperando_pago_visita') {
                         nextStatus = 'tecnico_asignado';
@@ -789,17 +790,30 @@ export default function PaymentsPage() {
                     }
 
                     if (nextStatus) {
+                        // ★ FIX: Limpiar todas las solicitudes de pago al denegar
+                        // Esto evita que la solicitud reaparezca después de la denegación
                         const newMeta = { 
-                            ...ticketRef.metadata, 
+                            ...meta, 
                             estadoId: nextStatus,
-                            solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : ticketRef.metadata?.solicitudLiquidacion,
-                            solicitudPagoVisita: nextStatus === 'tecnico_asignado' ? null : ticketRef.metadata?.solicitudPagoVisita,
+                            // Limpiar solicitudes de pago al denegar
+                            solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : meta.solicitudLiquidacion,
+                            solicitudPagoVisita: nextStatus === 'tecnico_asignado' ? null : meta.solicitudPagoVisita,
+                            solicitudAdelanto: null, // Limpiar also adelanto
+                            // Registrar rechazo
                             pagoRechazado: {
                                 fecha: new Date().toISOString(),
                                 monto: item.monto,
                                 tipo: item.tipo,
                                 concepto: item.concepto || 'Denegado por Tesorería'
-                            }
+                            },
+                            // Guardar en historial
+                            historialRechazos: [...(meta.historialRechazos || []), {
+                                fecha: new Date().toISOString(),
+                                monto: item.monto,
+                                tipo: item.tipo,
+                                categoria: item.categoria,
+                                concepto: item.concepto || 'Denegado por Tesorería'
+                            }]
                         };
                         await supabase.from('tickets').update({ 
                             status_id: nextStatus,
