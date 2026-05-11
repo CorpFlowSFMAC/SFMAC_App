@@ -654,10 +654,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     // 1. Empezamos con la metadata del servidor (la más fresca de la DB)
                     ...meta,
                     // 2. Preservamos SOLO los campos de edición local (User Input) que el usuario puede estar tipeando
-                    diagnostico: prev.diagnostico || prev.metadata?.diagnostico || meta.diagnostico,
-                    partidas: prev.partidas || prev.metadata?.partidas || meta.partidas,
-                    montoFinal: prev.montoFinal || prev.metadata?.montoFinal || meta.montoFinal,
-                    documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || meta.documentosChecklist,
+                    // Usamos ?? en lugar de || para permitir strings vacíos "" (borrado intencional)
+                    diagnostico: (prev.diagnostico !== undefined) ? prev.diagnostico : (prev.metadata?.diagnostico ?? meta.diagnostico),
+                    partidas: (prev.partidas !== undefined) ? prev.partidas : (prev.metadata?.partidas ?? meta.partidas),
+                    montoFinal: (prev.montoFinal !== undefined) ? prev.montoFinal : (prev.metadata?.montoFinal ?? meta.montoFinal),
+                    documentosChecklist: (prev.documentosChecklist !== undefined) ? prev.documentosChecklist : (prev.metadata?.documentosChecklist ?? meta.documentosChecklist),
                     // 3. Los campos de flujo financiero (pagoRechazado, solicitudes) SIEMPRE mandan los del servidor
                     // para evitar el "parpadeo" donde el estado local viejo sobreescribe al servidor limpio.
                     pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
