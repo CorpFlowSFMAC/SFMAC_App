@@ -614,8 +614,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             return {
                 ...prev,
                 ...ticket,
-                estadoId: corregidoEstadoId,
-                status_id: corregidoEstadoId,
                 // PREVENIR PARPADEO: Conservar valores financieros del backend si el prop no los tiene actualizados
                 saldo_tecnico: prev.saldo_tecnico !== undefined ? prev.saldo_tecnico : ticket.saldo_tecnico,
                 utilidad_neta: prev.utilidad_neta !== undefined ? prev.utilidad_neta : ticket.utilidad_neta,
@@ -2056,8 +2054,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estado_pago: estadoInicial,
                 solicitado_por: myProfileId || undefined,
                 specialist_id: ticketData.technician_id,
-                proveedor: 'Rescate Financiero',
-                metadata: { riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 }
+                proveedor: 'Rescate Financiero'
             });
 
             // También marcar el ticket principal si es riesgoso

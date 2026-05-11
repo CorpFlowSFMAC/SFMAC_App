@@ -6,7 +6,7 @@ import {
     DollarSign, CreditCard, ChevronDown, ChevronUp,
     Building2, User, Upload, Eye, X, Search, Filter,
     AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw,
-    Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle
+    Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle, ShieldAlert
 } from "lucide-react";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
@@ -75,6 +75,7 @@ interface PaymentTicketGroup {
     margen?: number; // Porcentaje de rentabilidad
     gastosOperativos: number; // ★ NUEVO: para desglose
     descripcion?: string;
+    riesgoFinanciero?: boolean; // ★ NUEVO: indica riesgo por falta de aprobación de cliente
 }
 
 // ─────────────────────────────────────────────────────────
