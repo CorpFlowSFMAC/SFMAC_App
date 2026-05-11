@@ -603,7 +603,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // SIEMPRE gana el más avanzado (nunca retroceder de estado automáticamente)
             // EXCEPCIÓN: Si hay una denegación de pago reciente, permitimos el retroceso para que la UI se sincronice
             const hasRejection = !!meta.pagoRechazado;
-            const shouldPreservePrevState = prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current;
+            const shouldPreservePrevState = prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current;
 
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
             // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
@@ -698,6 +698,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const isSyncing = useRef(false);
     // Bloqueo durante transacciones de adelanto para evitar parpadeo por race condition
     const isProcessingAdvance = useRef(false);
+    const isIntentionalRollback = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -1208,18 +1209,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
     };
 
-    const handleReadjustQuote = () => {
-        const readjust = {
-            ...ticketData,
-            estadoId: "en_cotizacion",
-            pausadoSLA: false,
-            fechaReactivacion: new Date().toISOString(),
-            modificacionAutorizada: true
-        };
-        setTicketData(readjust);
-        // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion para reajuste.
-        syncToSupabase(readjust, { allowStateRollback: true });
-        showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición para realizar ajustes.", "info");
+    const handleReadjustQuote = async () => {
+        isIntentionalRollback.current = true;
+        try {
+            const readjust = {
+                ...ticketData,
+                estadoId: "en_cotizacion",
+                pausadoSLA: false,
+                fechaReactivacion: new Date().toISOString(),
+                modificacionAutorizada: true
+            };
+            setTicketData(readjust);
+            // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion para reajuste.
+            await syncToSupabase(readjust, { allowStateRollback: true });
+            showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición para realizar ajustes.", "info");
+        } finally {
+            // Dar margen para que el refetch de Supabase traiga el nuevo estado
+            setTimeout(() => {
+                isIntentionalRollback.current = false;
+            }, 2000);
+        }
     };
 
     const [showCancelModal, setShowCancelModal] = useState(false);
