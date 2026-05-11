@@ -859,23 +859,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
                 // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
                 // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
-                const serverHasSolicitudLiqui = serverMeta.solicitudLiquidacion != null;
-                const serverHasSolicitudAdelanto = serverMeta.solicitudAdelanto != null;
-                const serverHasSolicitudVisita = serverMeta.solicitudPagoVisita != null;
                 
-                const shouldUseServerSolicitudLiqui = hasActiveRejection || !serverHasSolicitudLiqui || (options?.allowStateRollback === false);
-                const shouldUseServerAdelanto = hasActiveRejection || !serverHasSolicitudAdelanto || (options?.allowStateRollback === false);
-                const shouldUseServerVisita = hasActiveRejection || !serverHasSolicitudVisita || (options?.allowStateRollback === false);
-                
-                solicitudLiquidacion: shouldUseServerSolicitudLiqui 
-                    ? serverMeta.solicitudLiquidacion 
+                solicitudLiquidacion: (hasActiveRejection || !serverMeta.solicitudLiquidacion || options?.allowStateRollback === false)
+                    ? serverMeta.solicitudLiquidacion
                     : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: shouldUseServerAdelanto
+                solicitudAdelanto: (hasActiveRejection || !serverMeta.solicitudAdelanto || options?.allowStateRollback === false)
                     ? serverMeta.solicitudAdelanto
                     : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPagoVisita: shouldUseServerVisita
-                    ? serverMeta.solicitudPagoVisita
-                    : (businessData.solicitudPagoVisita || serverMeta.solicitudPagoVisita),
+                solicitudPagoVista: (hasActiveRejection || !serverMeta.solicitudPagoVista || options?.allowStateRollback === false)
+                    ? serverMeta.solicitudPagoVista
+                    : (businessData.solicitudPagoVista || serverMeta.solicitudPagoVista),
                 
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
