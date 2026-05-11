@@ -800,11 +800,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const serverStateOrder = TICKET_STATE_ORDER[serverStatusId] ?? 0;
         
         // 🔁 REGLA DE SINCRONIZACIÓN: 
-        // 1. Si el caller pide rollback (p.ej. Reajuste o nueva solicitud), gana el local.
         // 2. Si el servidor tiene una denegación activa (pagoRechazado), el servidor MANDA (evita re-envíos automáticos).
         // 3. Por defecto, el estado más avanzado gana.
         // ★ ENHANCED: payment denegado activa limpieza de solicitudes
-        const hasActiveRejection = !!serverMeta.pagoRechazado;
+        // FIX 2026-05-11: Si lo local ha limpiado el rechazo (pagoRechazado === null), la denegación ya no es 'activa' para el flujo local.
+        const hasActiveRejection = !!serverMeta.pagoRechazado && businessData.pagoRechazado !== null;
         
         const resolvedStatusId = options?.allowStateRollback
             ? businessData.estadoId
@@ -2322,24 +2322,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             ), [ticketData, ticketCosts, availableRescue, isQuotationCollapsed, userRole, myGestoraId, isAdmin])}
                         </div>
 
-                        <div className={styles.operationalArea}>
-                            {ticketData.pagoRechazado && (
-                                <div className={styles.rejectionBanner}>
-                                    <div className={styles.rejectionIcon}><Ban size={24} /></div>
-                                    <div className={styles.rejectionContent}>
-                                        <h4>SOLICITUD DE PAGO DENEGADA</h4>
-                                        <p>La solicitud de <strong>{ticketData.pagoRechazado.tipo}</strong> por <strong>S/ {formatSoles(ticketData.pagoRechazado.monto)}</strong> fue denegada.</p>
-                                        <div style={{ background: '#FFF1F2', padding: '8px 12px', borderRadius: '8px', borderLeft: '4px solid #E11D48', marginTop: '8px' }}>
-                                            <span style={{ color: '#9F1239', fontWeight: 800, fontSize: '11px', display: 'block', marginBottom: '2px' }}>MOTIVO DEL RECHAZO:</span>
-                                            <p style={{ margin: 0, color: '#BE123C', fontSize: '13px', fontWeight: 600 }}>
-                                                {ticketData.pagoRechazado.motivo || ticketData.pagoRechazado.mensajeRechazo || "No se especificó un motivo."}
-                                            </p>
-                                        </div>
-                                        <span style={{ display: 'block', marginTop: '8px', fontSize: '11px', color: '#64748B' }}>Acción Requerida: Revise las observaciones y genere una nueva solicitud corregida.</span>
+                        {/* REJECTION BANNER - MOVED ABOVE FOR VISIBILITY */}
+                        {ticketData.pagoRechazado && (
+                            <div className={styles.rejectionBanner}>
+                                <div className={styles.rejectionIcon}><Ban size={24} /></div>
+                                <div className={styles.rejectionContent}>
+                                    <h4>SOLICITUD DE PAGO DENEGADA</h4>
+                                    <p>La solicitud de <strong>{ticketData.pagoRechazado.tipo}</strong> por <strong>S/ {formatSoles(ticketData.pagoRechazado.monto)}</strong> fue denegada.</p>
+                                    <div style={{ background: '#FFF1F2', padding: '8px 12px', borderRadius: '8px', borderLeft: '4px solid #E11D48', marginTop: '8px' }}>
+                                        <span style={{ color: '#9F1239', fontWeight: 800, fontSize: '11px', display: 'block', marginBottom: '2px' }}>MOTIVO DEL RECHAZO:</span>
+                                        <p style={{ margin: 0, color: '#BE123C', fontSize: '13px', fontWeight: 600 }}>
+                                            {ticketData.pagoRechazado.motivo || ticketData.pagoRechazado.mensajeRechazo || "No se especificó un motivo."}
+                                        </p>
                                     </div>
-                                    <button onClick={handleDismissRejection} className={styles.dismissRejection}>Entendido</button>
+                                    <span style={{ display: 'block', marginTop: '8px', fontSize: '11px', color: '#64748B' }}>Acción Requerida: Revise las observaciones y genere una nueva solicitud corregida.</span>
                                 </div>
-                            )}
+                                <button onClick={handleDismissRejection} className={styles.dismissRejection}>Entendido</button>
+                            </div>
+                        )}
+
+                        <div className={styles.operationalArea}>
 
                             {children || (
                                 <>
