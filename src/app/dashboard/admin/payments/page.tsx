@@ -606,12 +606,13 @@ export default function PaymentsPage() {
                     });
                 }
 
-                const isPorLiquidar = ['por_liquidar', 'esperando_pago_final'].includes(t.status_id);
+                const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
+                const hasPendingRequests = meta.solicitudAdelanto || meta.solicitudPago;
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
-                const hasPendingTableCosts = pendingItems.some(i => i.isTableCost);
-
-                if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingTableCosts) {
+                // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
+                if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
                     // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
+                    // Solo mostrar si NO hay solicitudes pendientes de aprobación
                     const liqMonto = round2(netLaborBalance);
                     if (liqMonto > 0.01) {
                         pendingItems.push({
