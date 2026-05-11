@@ -608,8 +608,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
             // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
             const localSolicitud = prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto;
-            const serverSolicitud = meta.solicitudAdelanto;
-            const finalSolicitud = (localSolicitud && !serverSolicitud) ? localSolicitud : serverSolicitud;
+            const serverSolicitud = meta.solicitudAdelanto || ticket.solicitudAdelanto;
+            const finalSolicitud = (localSolicitud && !serverSolicitud) ? localSolicitud : (serverSolicitud || localSolicitud);
 
             return {
                 ...prev,
@@ -3193,7 +3193,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         <button
                                                                             className={styles.requestAdvanceBtnPremium}
                                                                             onClick={handleRequestAdvance}
-                                                                            disabled={!porcentajeAdelanto && !montoAdelantoManual}
+                                                                            disabled={!!ticketData.solicitudAdelanto || (!porcentajeAdelanto && !montoAdelantoManual)}
                                                                         >
                                                                             <Send size={18} />
                                                                             <span>Solicitar Adelanto a Gerencia</span>
