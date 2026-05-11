@@ -575,9 +575,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     // Efecto de sincronización con el prop 'ticket' (viene del contexto global realtime)
     useEffect(() => {
         if (!ticket || !isInitialLoadComplete) return;
-        // Si hay una transacción de adelanto en curso, ignorar el update del prop
-        // para evitar el parpadeo entre pantallas por race condition
-        if (isProcessingAdvance.current) return;
+
+        // 🔍 DEBUG LOG: ¿Quién está actualizando el ticket?
+        if (DEBUG_GESTION) console.log("🔄 Realtime Update Recibido:", { 
+            ticketId: ticket.id, 
+            status: ticket.status_id, 
+            isProcessing: isProcessingAdvance.current 
+        });
+
+        if (isProcessingAdvance.current) {
+            if (DEBUG_GESTION) console.warn("🚫 Realtime Bloqueado: Transacción en curso");
+            return;
+        }
 
         // Solo actualizar si el estado, técnico o metadata importante cambió en el prop
         setTicketData((prev: any) => {
@@ -611,9 +620,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const serverSolicitud = meta.solicitudAdelanto || ticket.solicitudAdelanto;
             const finalSolicitud = (localSolicitud && !serverSolicitud) ? localSolicitud : (serverSolicitud || localSolicitud);
 
+            if (DEBUG_GESTION && hasMetaChanged) {
+                console.log("🧩 Metadata Diferente detectada en Realtime. Syncing...");
+            }
+
             return {
                 ...prev,
                 ...ticket,
+                // ... (existing mappings)
                 // PREVENIR PARPADEO: Conservar valores financieros del backend si el prop no los tiene actualizados
                 saldo_tecnico: prev.saldo_tecnico !== undefined ? prev.saldo_tecnico : ticket.saldo_tecnico,
                 utilidad_neta: prev.utilidad_neta !== undefined ? prev.utilidad_neta : ticket.utilidad_neta,
@@ -768,6 +782,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
         if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return;
+
+        // 🛡️ BLOQUEO CRÍTICO: No sincronizar si el usuario está editando activamente un monto
+        const isEditingMonto = !!montoAdelantoManual || !!porcentajeAdelanto;
+        if (isEditingMonto && !dataOverride) {
+            if (DEBUG_GESTION) console.warn("⏳ Sync Suspendido: Usuario editando monto");
+            return;
+        }
+
+        if (DEBUG_GESTION) console.log("📤 Iniciando Sync a Supabase...", { isOverride: !!dataOverride });
 
         const {
             isMaximized, isMinimized, position, zIndex,
@@ -1001,14 +1024,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const handleDismissRejection = async () => {
         try {
-            // Actualizar localmente primero para feedback instantáneo
+            // ✅ LIMPIEZA FORZADA: Limpiar en el servidor ANTES de permitir nueva edición
+            if (DEBUG_GESTION) console.log("🧹 Limpieza Forzada de Rechazo...");
+            
+            // 1. Update local instantáneo
             setTicketData((prev: any) => ({
                 ...prev,
                 pagoRechazado: null
             }));
             
-            // Persistir en Supabase limpiando el campo en metadata
-            await ticketsAPI.patchMetadata(ticketData.id, { pagoRechazado: null });
+            // 2. Update persistente en Supabase (campo exacto)
+            const { error } = await supabase
+                .from('tickets')
+                .update({ 
+                    metadata: { 
+                        ...(ticketData.metadata || {}), 
+                        pagoRechazado: null,
+                        mensajeRechazo: null,
+                        motivoRechazo: null 
+                    } 
+                })
+                .eq('id', ticketData.id);
+
+            if (error) throw error;
             
             showToast("Observación Archivada", "Ya puede generar una nueva solicitud.", "success");
         } catch (err) {
@@ -3091,7 +3129,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     )}
 
                                     {["cotizacion_aprobada", "en_ejecucion"].includes(ticketData.estadoId) && (
-                                        <div className={styles.stepActions}>
+                                        <div 
+                                            className={styles.stepActions}
+                                            key={`pay_form_${ticketData.solicitudAdelanto ? 'pending' : 'new'}_${ticketData.pagoRechazado ? 'rejected' : 'ok'}`}
+                                        >
                                             <div className={styles.operationalFlowCard}>
                                                 {ticketData.estadoId === "cotizacion_aprobada" && (
                                                     <div className={styles.premiumApprovedNotice}>
