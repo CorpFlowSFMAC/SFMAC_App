@@ -248,7 +248,7 @@ export default function PaymentsPage() {
                     const relatedCosts = t.costos || [];
                     flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
                     flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
-                    flat.exceedanceRequests = relatedCosts.filter((c: any) => c.estado_pago === 'REQUIERE_APROBACION_ADMIN');
+                    flat.exceedanceRequests = relatedCosts.filter((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
 
                     flat.isOpen = !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id);
                     return flat;
@@ -532,7 +532,7 @@ export default function PaymentsPage() {
 
         allTickets.forEach(t => {
             try {
-                const ticketNum = t.numeroTicketCliente || t.client_ticket_number || (t.id ? `TK-${t.id.slice(-8).toUpperCase()}` : "S/N");
+                const ticketNum = (t.numeroTicketCliente || t.client_ticket_number || (t.id ? `TK-${t.id.slice(-8).toUpperCase()}` : "S/N")).toUpperCase();
                 const meta = t.metadata || {};
                 
                 // 🚀 MOTOR FINANCIERO V3: Fuente de Verdad Inmutable

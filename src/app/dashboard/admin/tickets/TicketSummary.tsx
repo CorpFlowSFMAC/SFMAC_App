@@ -51,7 +51,7 @@ export const InfoBarBase = memo(function InfoBarBase({ ticket, title, icon: Icon
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Ticket</span>
                 <span className={styles.infoValue}>
-                    {ticket.numeroTicketCliente ? ticket.numeroTicketCliente : `#${ticket.id.slice(-8)}`}
+                    {ticket.numeroTicketCliente ? ticket.numeroTicketCliente : `TK-${ticket.id.slice(-8).toUpperCase()}`}
                 </span>
             </div>
 
