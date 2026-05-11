@@ -6,7 +6,7 @@ import {
     DollarSign, CreditCard, ChevronDown, ChevronUp,
     Building2, User, Upload, Eye, X, Search, Filter,
     AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw,
-    Smartphone, Copy, ExternalLink, Camera, CheckCheck
+    Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle
 } from "lucide-react";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
@@ -398,6 +398,12 @@ export default function PaymentsPage() {
 
     // Toast flash (1s) para confirmar que el número fue copiado
     const [toast, setToast] = useState<{ msg: string; visible: boolean }>({ msg: '', visible: false });
+    const [riskAlert, setRiskAlert] = useState<{ show: boolean, title: string, message: string, onConfirm: () => void }>({
+        show: false,
+        title: "",
+        message: "",
+        onConfirm: () => {}
+    });
     const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const showToast = useCallback((msg: string) => {
@@ -957,9 +963,23 @@ export default function PaymentsPage() {
         const isVisitPayment = item.tipo?.toLowerCase().includes('visita') || item.concepto?.toLowerCase().includes('visita');
         
         if (isPreApproved && !isVisitPayment) {
-            const riskMsg = "⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente. Realizar este abono representa un RIESGO FINANCIERO para la empresa. ¿Desea proceder de todas formas?";
-            if (!window.confirm(riskMsg)) return;
+            setRiskAlert({
+                show: true,
+                title: "⚠️ ALERTA DE RIESGO FINANCIERO",
+                message: `El ticket ${group.ticketNum} de ${group.cliente} aún no ha sido aprobado por el cliente. Realizar abonos en esta etapa representa un riesgo financiero. ¿Desea proceder con la operación?`,
+                onConfirm: () => {
+                    setRiskAlert(prev => ({ ...prev, show: false }));
+                    executeSmartPayment(group, item, phone);
+                }
+            });
+            return;
         }
+
+        executeSmartPayment(group, item, phone);
+    };
+
+    const executeSmartPayment = (group: PaymentTicketGroup, item: PaymentItem, phone: string) => {
+        const montoStr = formatSoles(item.monto);
 
         // Si el técnico tiene Yape o Plin, intentamos Deep Link
         if (phone && (group.tecnico.yape || group.tecnico.plin)) {
@@ -1697,6 +1717,72 @@ export default function PaymentsPage() {
             </div>
 
 
+
+            {/* --- MODAL DE ALERTA DE RIESGO (PROFESIONAL) --- */}
+            {riskAlert.show && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                    background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)',
+                    zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'white', borderRadius: '24px', width: '100%', maxWidth: '450px',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: '1px solid #E2E8F0', overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            background: 'linear-gradient(135deg, #F59E0B, #D97706)', padding: '24px',
+                            display: 'flex', alignItems: 'center', gap: '16px', color: 'white'
+                        }}>
+                            <div style={{ background: 'rgba(255,255,255,0.2)', padding: '10px', borderRadius: '12px' }}>
+                                <AlertTriangle size={24} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{riskAlert.title}</h3>
+                                <p style={{ margin: '4px 0 0', fontSize: '13px', opacity: 0.9 }}>Control de Autorización Crítica</p>
+                            </div>
+                        </div>
+
+                        <div style={{ padding: '24px' }}>
+                            <p style={{ margin: 0, fontSize: '15px', color: '#475569', lineHeight: 1.6, fontWeight: 500 }}>
+                                {riskAlert.message}
+                            </p>
+                            <div style={{
+                                marginTop: '20px', padding: '16px', background: '#FFF7ED',
+                                borderRadius: '16px', border: '1px solid #FFEDD5', display: 'flex', gap: '12px'
+                            }}>
+                                <Clock size={20} color="#D97706" style={{ flexShrink: 0 }} />
+                                <p style={{ margin: 0, fontSize: '12px', color: '#9A3412', lineHeight: 1.5 }}>
+                                    Esta acción será auditada y vinculada a su perfil de administrador para trazabilidad financiera.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style={{ padding: '16px 24px 24px', display: 'flex', gap: '12px' }}>
+                            <button
+                                onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))}
+                                style={{
+                                    flex: 1, padding: '12px', borderRadius: '14px', border: '1.5px solid #E2E8F0',
+                                    background: 'white', color: '#64748B', fontWeight: 600, cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={riskAlert.onConfirm}
+                                style={{
+                                    flex: 2, padding: '12px', borderRadius: '14px', border: 'none',
+                                    background: 'linear-gradient(135deg, #F59E0B, #D97706)', color: 'white',
+                                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', gap: '8px'
+                                }}
+                            >
+                                <CheckCircle2 size={18} />
+                                Confirmar y Proceder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ─── TOAST ZERO-FEE ──────────────────────────────── */}
             <div className={`${styles.toastZeroFee} ${toast.visible ? styles.toastVisible : ''}`}>

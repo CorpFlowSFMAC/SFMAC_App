@@ -145,6 +145,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [targetTicketSearch, setTargetTicketSearch] = useState("");
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [selectedTargetTicket, setSelectedTargetTicket] = useState<any>(null);
+    const [riskAlert, setRiskAlert] = useState<{ show: boolean, title: string, message: string, onConfirm: () => void }>({
+        show: false,
+        title: "",
+        message: "",
+        onConfirm: () => {}
+    });
 
     const checkAndHardDelete = async () => {
         if (!ticketData?.id) return;
@@ -1461,13 +1467,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita adelanto antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
         if (currentStageOrder < 7) {
-            const riskMsg = "⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente (Etapa < 7). Realizar una solicitud de adelanto en esta fase representa un RIESGO FINANCIERO para la empresa. ¿Desea proceder bajo su responsabilidad?";
-            if (!window.confirm(riskMsg)) {
-                requestAdvanceRef.current = false;
-                return;
-            }
+            setRiskAlert({
+                show: true,
+                title: "⚠️ RIESGO FINANCIERO DETECTADO",
+                message: "Esta cotización aún no ha sido aprobada por el cliente. Realizar una solicitud de adelanto en esta fase representa un riesgo para la rentabilidad de la empresa. ¿Desea proceder bajo su responsabilidad?",
+                onConfirm: () => {
+                    setRiskAlert(prev => ({ ...prev, show: false }));
+                    // Re-ejecutar la lógica original tras confirmar
+                    executeRequestAdvance();
+                }
+            });
+            return;
         }
 
+        executeRequestAdvance();
+    };
+
+    const executeRequestAdvance = async () => {
         requestAdvanceRef.current = true;
 
         let amount = 0;
@@ -1863,10 +1879,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita gasto/compra antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
         if (currentStageOrder < 7) {
-            const riskMsg = "⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente. Registrar una compra o gasto operativo antes de la aprobación representa un RIESGO FINANCIERO. ¿Desea proceder?";
-            if (!window.confirm(riskMsg)) return;
+            setRiskAlert({
+                show: true,
+                title: "⚠️ ALERTA DE COSTO PREMATURO",
+                message: "Usted está registrando una compra o gasto operativo antes de la aprobación formal del presupuesto por el cliente. Esto podría generar pérdidas si el ticket es rechazado. ¿Desea continuar?",
+                onConfirm: () => {
+                    setRiskAlert(prev => ({ ...prev, show: false }));
+                    executeSubmitMaterials();
+                }
+            });
+            return;
         }
 
+        executeSubmitMaterials();
+    };
+
+    const executeSubmitMaterials = async () => {
         setIsSavingMaterials(true);
         try {
             const montoGasto = parseFloat(materialsForm.monto);
@@ -1995,10 +2023,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita rescate antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
         if (currentStageOrder < 7) {
-            const riskMsg = "⚠️ RIESGO FINANCIERO: La cotización no ha sido aprobada por el cliente. Solicitar un rescate financiero ahora es prematuro y riesgoso. ¿Desea continuar?";
-            if (!window.confirm(riskMsg)) return;
+            setRiskAlert({
+                show: true,
+                title: "⚠️ ALERTA DE RESCATE FINANCIERO",
+                message: "La cotización no ha sido aprobada por el cliente. Solicitar un rescate financiero ahora es prematuro y riesgoso. ¿Está seguro de autorizar esta solicitud?",
+                onConfirm: () => {
+                    setRiskAlert(prev => ({ ...prev, show: false }));
+                    executeSubmitRescue(montoNum, isExceeding);
+                }
+            });
+            return;
         }
 
+        executeSubmitRescue(montoNum, isExceeding);
+    };
+
+    const executeSubmitRescue = async (montoNum: number, isExceeding: boolean) => {
         setIsSavingRescue(true);
         try {
             const estadoInicial = isExceeding ? 'REQUIERE_APROBACION_ADMIN' : 'pendiente';
@@ -4493,6 +4533,51 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 >
                                     {isCancelling ? <Clock size={18} className={styles.spinner} /> : <Trash2 size={18} />}
                                     <span>CONFIRMAR ANULACIÓN DEFINITIVA</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- MODAL DE ALERTA DE RIESGO (PROFESIONAL) --- */}
+                {riskAlert.show && (
+                    <div className={styles.negotiationModal} style={{ zIndex: 9999 }}>
+                        <div className={styles.negotiationModalCard} style={{ maxWidth: '450px', border: '2px solid #F59E0B' }}>
+                            <div className={styles.negotiationModalHeader} style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
+                                <div className={styles.negoHeaderTitle}>
+                                    <ShieldAlert size={24} color="#FFF" />
+                                    <div>
+                                        <h3 style={{ color: '#FFF' }}>{riskAlert.title}</h3>
+                                        <p style={{ color: 'rgba(255,255,255,0.8)' }}>Validación de Seguridad Financiera</p>
+                                    </div>
+                                </div>
+                                <button className={styles.negoCloseBtn} onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className={styles.negotiationModalContent}>
+                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                                    <div style={{ background: '#FFF7ED', padding: '12px', borderRadius: '12px' }}>
+                                        <AlertTriangle size={32} color="#D97706" />
+                                    </div>
+                                    <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
+                                        {riskAlert.message}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className={styles.negotiationModalActions}>
+                                <button className={styles.negoCancelBtn} onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))}>
+                                    Cancelar
+                                </button>
+                                <button 
+                                    className={styles.negoConfirmBtn} 
+                                    onClick={riskAlert.onConfirm}
+                                    style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}
+                                >
+                                    <CheckCircle2 size={18} />
+                                    <span>SÍ, PROCEDER BAJO MI RESPONSABILIDAD</span>
                                 </button>
                             </div>
                         </div>
