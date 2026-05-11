@@ -293,19 +293,39 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                         const incomingMeta = pNew.metadata || {};
                                         const existingMeta = t.metadata || {};
                                         
-                                        // Merge metadata: el payload nuevo gana.
+                                        // ★ FIX: Merge metadata con protección contra null del servidor
+                                        // Si el servidor tiene null (rechazado/limpio), ese null debe win sobre valores stale
+                                        const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
+                                        const incomingHasPagoVista = incomingMeta.solicitudPago !== undefined;
+                                        const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
+                                        const existingHasPagoVista = existingMeta.solicitudPago !== undefined;
+                                        
+                                        // Si el servidor tiene null (rechazado), ese null wins
+                                        const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
+                                        const serverClearedPagoVista = incomingMeta.solicitudPago === null || (incomingHasPagoVista && !incomingMeta.solicitudPago);
+                                        
                                         const mergedMeta = {
                                             ...existingMeta,
                                             ...incomingMeta,
-                                            solicitudAdelanto: incomingMeta.solicitudAdelanto !== undefined
-                                                ? incomingMeta.solicitudAdelanto
-                                                : existingMeta.solicitudAdelanto,
-                                            adelantoPagado: incomingMeta.adelantoPagado !== undefined
-                                                ? incomingMeta.adelantoPagado
-                                                : existingMeta.adelantoPagado,
-                                            solicitudPagoVisita: incomingMeta.solicitudPagoVisita !== undefined
-                                                ? incomingMeta.solicitudPagoVisita
-                                                : existingMeta.solicitudPagoVisita,
+                                            // Si el servidor tiene null (rechazado), usar null del servidor
+                                            solicitudAdelanto: serverClearedAdelanto 
+                                                ? null 
+                                                : (incomingHasAdelanto 
+                                                    ? incomingMeta.solicitudAdelanto 
+                                                    : (existingHasAdelanto 
+                                                        ? existingMeta.solicitudAdelanto 
+                                                        : undefined)),
+                                            solicitudPago: serverClearedPagoVista 
+                                                ? null 
+                                                : (incomingHasPagoVista 
+                                                    ? incomingMeta.solicitudPago 
+                                                    : (existingHasPagoVista 
+                                                        ? existingMeta.solicitudPago 
+                                                        : undefined)),
+                                            // Otros campos del incoming siempre ganan
+                                            pagoRechazado: incomingMeta.pagoRechazado !== undefined 
+                                                ? incomingMeta.pagoRechazado 
+                                                : existingMeta.pagoRechazado,
                                         };
                                         return {
                                             ...t,
@@ -372,18 +392,36 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
                                 const incomingMeta = pNew.metadata || {};
                                 const existingMeta = old.metadata || {};
+                                
+                                // ★ FIX: Segunda ubicación - misma lógica de protección
+                                const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
+                                const incomingHasPagoVista = incomingMeta.solicitudPago !== undefined;
+                                const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
+                                const existingHasPagoVista = existingMeta.solicitudPago !== undefined;
+                                
+                                const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
+                                const serverClearedPagoVista = incomingMeta.solicitudPago === null || (incomingHasPagoVista && !incomingMeta.solicitudPago);
+                                
                                 const mergedMeta = {
                                     ...existingMeta,
                                     ...incomingMeta,
-                                    solicitudAdelanto: incomingMeta.solicitudAdelanto !== undefined
-                                        ? incomingMeta.solicitudAdelanto
-                                        : existingMeta.solicitudAdelanto,
-                                    adelantoPagado: incomingMeta.adelantoPagado !== undefined
-                                        ? incomingMeta.adelantoPagado
-                                        : existingMeta.adelantoPagado,
-                                    solicitudPagoVisita: incomingMeta.solicitudPagoVisita !== undefined
-                                        ? incomingMeta.solicitudPagoVisita
-                                        : existingMeta.solicitudPagoVisita,
+                                    solicitudAdelanto: serverClearedAdelanto 
+                                        ? null 
+                                        : (incomingHasAdelanto 
+                                            ? incomingMeta.solicitudAdelanto 
+                                            : (existingHasAdelanto 
+                                                ? existingMeta.solicitudAdelanto 
+                                                : undefined)),
+                                    solicitudPago: serverClearedPagoVista 
+                                        ? null 
+                                        : (incomingHasPagoVista 
+                                            ? incomingMeta.solicitudPago 
+                                            : (existingHasPagoVista 
+                                                ? existingMeta.solicitudPago 
+                                                : undefined)),
+                                    pagoRechazado: incomingMeta.pagoRechazado !== undefined 
+                                        ? incomingMeta.pagoRechazado 
+                                        : existingMeta.pagoRechazado,
                                 };
                                 return {
                                     ...old,
@@ -392,7 +430,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     tecnico: patchedTecnico,
                                     gestora: patchedGestora,
                                     solicitudAdelanto: mergedMeta.solicitudAdelanto,
-                                    adelantoPagado: mergedMeta.adelantoPagado ?? old.adelantoPagado,
+                                    solicitudPago: mergedMeta.solicitudPago,
                                     pagoRechazado: mergedMeta.pagoRechazado,
                                 };
                             }
@@ -617,9 +655,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 adelantoPagado: newMeta.adelantoPagado !== undefined
                                     ? newMeta.adelantoPagado
                                     : existingMeta.adelantoPagado,
-                                solicitudPagoVisita: newMeta.solicitudPagoVisita !== undefined
-                                    ? newMeta.solicitudPagoVisita
-                                    : existingMeta.solicitudPagoVisita,
+                                solicitudPago: newMeta.solicitudPago !== undefined
+                                    ? newMeta.solicitudPago
+                                    : existingMeta.solicitudPago,
                                 solicitudLiquidacion: newMeta.solicitudLiquidacion !== undefined
                                     ? newMeta.solicitudLiquidacion
                                     : existingMeta.solicitudLiquidacion,

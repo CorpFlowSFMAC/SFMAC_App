@@ -188,7 +188,7 @@ function flattenTicketForPayments(t: any) {
         solicitudAdelanto: meta.solicitudAdelanto ?? null,
         solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
         solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
-        solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+        solicitudPago: meta.solicitudPago ?? null,
         // ✅ Solicitudes de depósito creadas por la Gestora (pendientes de aprobación del Admin)
         solicitudesDeposito: (meta.solicitudesDeposito || []).filter((s: any) => s.estado === 'pendiente'),
         historialPagosTecnico: history,
@@ -782,6 +782,7 @@ export default function PaymentsPage() {
                     let nextStatus = null;
                     const cat = (item.categoria || '').toUpperCase();
                     const currentId = ticketRef.status_id;
+                    const meta = ticketRef.metadata || {};
 
                     if ((cat.includes('VISITA') || cat.includes('MOVILIDAD') || cat.includes('VIÁTICO')) && currentId === 'esperando_pago_visita') {
                         nextStatus = 'tecnico_asignado';
@@ -791,17 +792,30 @@ export default function PaymentsPage() {
                     }
 
                     if (nextStatus) {
+                        // ★ FIX: Limpiar todas las solicitudes de pago al denegar
+                        // Esto evita que la solicitud reaparezca después de la denegación
                         const newMeta = { 
-                            ...ticketRef.metadata, 
+                            ...meta, 
                             estadoId: nextStatus,
-                            solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : ticketRef.metadata?.solicitudLiquidacion,
-                            solicitudPagoVisita: nextStatus === 'tecnico_asignado' ? null : ticketRef.metadata?.solicitudPagoVisita,
+                            // Limpiar solicitudes de pago al denegar
+                            solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : meta.solicitudLiquidacion,
+                            solicitudPago: nextStatus === 'tecnico_asignado' ? null : meta.solicitudPago,
+                            solicitudAdelanto: null, // Limpiar also adelanto
+                            // Registrar rechazo
                             pagoRechazado: {
                                 fecha: new Date().toISOString(),
                                 monto: item.monto,
                                 tipo: item.tipo,
                                 concepto: item.concepto || 'Denegado por Tesorería'
-                            }
+                            },
+                            // Guardar en historial
+                            historialRechazos: [...(meta.historialRechazos || []), {
+                                fecha: new Date().toISOString(),
+                                monto: item.monto,
+                                tipo: item.tipo,
+                                categoria: item.categoria,
+                                concepto: item.concepto || 'Denegado por Tesorería'
+                            }]
                         };
                         await supabase.from('tickets').update({ 
                             status_id: nextStatus,
@@ -855,8 +869,8 @@ export default function PaymentsPage() {
                     newStatusId = 'documentacion_enviada';
                 }
             } else if (isVisita) {
-                meta.historialRechazosVisita = [...(meta.historialRechazosVisita || []), { ...(meta.solicitudPagoVisita || item), ...rechazoBase }];
-                meta.solicitudPagoVisita = null;
+                meta.historialRechazosVisita = [...(meta.historialRechazosVisita || []), { ...(meta.solicitudPago || item), ...rechazoBase }];
+                meta.solicitudPago = null;
                 if (currentStatus === 'esperando_pago_visita') {
                     newStatusId = 'tecnico_asignado';
                 }
@@ -1106,7 +1120,7 @@ export default function PaymentsPage() {
                 }
                 meta.visitPaymentConfirmed = true;
                 meta.fechaPagoVisita = finalDate;
-                meta.solicitudPagoVisita = null;
+                meta.solicitudPago = null;
             } else if (item.solicitudId) {
                 const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
                 meta.solicitudesAprobadas = [...(meta.solicitudesAprobadas || []), { ...(found || item), ...aprobacionBase }];

@@ -538,7 +538,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             adelantoPagado: meta.adelantoPagado ?? false,
                             visitPaymentConfirmed: visitConfirmed,
                             solicitudAdelanto: meta.solicitudAdelanto ?? null,
-                            solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
+                            solicitudPago: visitConfirmed ? null : (meta.solicitudPago ?? null),
                             historialPagosTecnico: meta.historialPagosTecnico ?? [],
                             gestora: fullTicket.gestora || meta.gestora || null
                         };
@@ -663,13 +663,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     // para evitar el "parpadeo" donde el estado local viejo sobreescribe al servidor limpio.
                     pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
                     solicitudAdelanto: finalSolicitud,
-                    solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
+                    solicitudPago: meta.solicitudPago !== undefined ? meta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
                     solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 },
                 
                 // Mapeo a nivel de raíz para consistencia
                 solicitudAdelanto: finalSolicitud,
-                solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
+                solicitudPago: meta.solicitudPago !== undefined ? meta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
                 solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
 
@@ -803,6 +803,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // 1. Si el caller pide rollback (p.ej. Reajuste o nueva solicitud), gana el local.
         // 2. Si el servidor tiene una denegación activa (pagoRechazado), el servidor MANDA (evita re-envíos automáticos).
         // 3. Por defecto, el estado más avanzado gana.
+        // ★ ENHANCED: payment denegado activa limpieza de solicitudes
         const hasActiveRejection = !!serverMeta.pagoRechazado;
         
         const resolvedStatusId = options?.allowStateRollback
@@ -857,16 +858,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
                 // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
-                // Si el servidor ha limpiado la solicitud (denegación), no la re-inyectamos desde el local stale.
-                solicitudLiquidacion: (hasActiveRejection && !options?.allowStateRollback) 
-                    ? serverMeta.solicitudLiquidacion 
+                // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
+                // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
+                
+                solicitudLiquidacion: (hasActiveRejection || !serverMeta.solicitudLiquidacion || options?.allowStateRollback === false)
+                    ? serverMeta.solicitudLiquidacion
                     : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection && !options?.allowStateRollback)
+                solicitudAdelanto: (hasActiveRejection || !serverMeta.solicitudAdelanto || options?.allowStateRollback === false)
                     ? serverMeta.solicitudAdelanto
                     : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPagoVisita: (hasActiveRejection && !options?.allowStateRollback)
-                    ? serverMeta.solicitudPagoVisita
-                    : (businessData.solicitudPagoVisita || serverMeta.solicitudPagoVisita),
+                solicitudPago: (hasActiveRejection || !serverMeta.solicitudPago || options?.allowStateRollback === false)
+                    ? serverMeta.solicitudPago
+                    : (businessData.solicitudPago || serverMeta.solicitudPago),
                 
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
@@ -926,7 +929,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         visitPaymentConfirmed,
                         solicitudAdelanto,
                         fechaPagoVisita,
-                        solicitudPagoVisita,
+                        solicitudPago,
                         montoFinal,
                         ...safeToRestore
                     } = parsed;
