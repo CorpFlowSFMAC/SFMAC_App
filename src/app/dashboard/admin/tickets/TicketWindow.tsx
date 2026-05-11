@@ -651,20 +651,25 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 })(),
                 
                 metadata: {
+                    // 1. Empezamos con la metadata del servidor (la más fresca de la DB)
                     ...meta,
-                    ...prev.metadata, // La metadata local (con los cambios del usuario) GANA
+                    // 2. Preservamos SOLO los campos de edición local (User Input) que el usuario puede estar tipeando
+                    diagnostico: prev.diagnostico || prev.metadata?.diagnostico || meta.diagnostico,
+                    partidas: prev.partidas || prev.metadata?.partidas || meta.partidas,
+                    montoFinal: prev.montoFinal || prev.metadata?.montoFinal || meta.montoFinal,
+                    documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || meta.documentosChecklist,
+                    // 3. Los campos de flujo financiero (pagoRechazado, solicitudes) SIEMPRE mandan los del servidor
+                    // para evitar el "parpadeo" donde el estado local viejo sobreescribe al servidor limpio.
+                    pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
                     solicitudAdelanto: finalSolicitud,
                     solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
                     solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 },
                 
-                // Mapeo a nivel de raíz para que la UI lo detecte correctamente y no parpadee
+                // Mapeo a nivel de raíz para consistencia
                 solicitudAdelanto: finalSolicitud,
                 solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
                 solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
-                
-                // Extraer pagoRechazado desde metadata para que la UI lo detecte
-                // FIX: Usar asignación directa desde meta para permitir que el servidor lo limpie (null)
                 pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
 
                 // Si el local está más avanzado, NO LO RETROCEDEMOS
@@ -816,8 +821,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             technician_id: tecnico?.id || serverTicket?.technician_id,
             gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
-                ...serverMeta,
+                // 1. Empezamos con la metadata local (cambios del usuario)
                 ...sourceMetadata,
+                // 2. Aplicamos la metadata del servidor encima (fuente de verdad para finanzas)
+                ...serverMeta,
+                // 3. Pero preservamos los campos que el usuario está editando en esta ventana
+                diagnostico: businessData.diagnostico || sourceMetadata.diagnostico,
+                partidas: businessData.partidas || sourceMetadata.partidas,
+                montoFinal: businessData.montoFinal || sourceMetadata.montoFinal,
+                documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist,
+                // 4. Protección específica: si lo local acaba de limpiar un rechazo, no dejar que el servidor lo restaure
+                // y viceversa: si el servidor tiene un rechazo nuevo, lo local debe aceptarlo.
+                pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
                 // PROTECCIÓN DE HISTORIAL: Nunca sobreescribir con datos locales viejos
                 historialPagosTecnico: (() => {
                     const localPagos = businessData?.historialPagosTecnico || businessData?.historialPagosTécnico || [];
@@ -854,7 +869,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
                 evidenciasEjecucion,
-                documentosChecklist,
                 metadata: undefined // Evitar anidación infinita
             }
         };
