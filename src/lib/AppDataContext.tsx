@@ -296,13 +296,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                         // ★ FIX: Merge metadata con protección contra null del servidor
                                         // Si el servidor tiene null (rechazado/limpio), ese null debe win sobre valores stale
                                         const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
-                                        const incomingHasPagoVista = incomingMeta.solicitudPagoVista !== undefined;
+                                        const incomingHasPagoVista = incomingMeta.solicitudPago !== undefined;
                                         const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
-                                        const existingHasPagoVista = existingMeta.solicitudPagoVista !== undefined;
+                                        const existingHasPagoVista = existingMeta.solicitudPago !== undefined;
                                         
                                         // Si el servidor tiene null (rechazado), ese null wins
                                         const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
-                                        const serverClearedPagoVista = incomingMeta.solicitudPagoVista === null || (incomingHasPagoVista && !incomingMeta.solicitudPagoVista);
+                                        const serverClearedPagoVista = incomingMeta.solicitudPago === null || (incomingHasPagoVista && !incomingMeta.solicitudPago);
                                         
                                         const mergedMeta = {
                                             ...existingMeta,
@@ -315,12 +315,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                                     : (existingHasAdelanto 
                                                         ? existingMeta.solicitudAdelanto 
                                                         : undefined)),
-                                            solicitudPagoVista: serverClearedPagoVista 
+                                            solicitudPago: serverClearedPagoVista 
                                                 ? null 
                                                 : (incomingHasPagoVista 
-                                                    ? incomingMeta.solicitudPagoVista 
+                                                    ? incomingMeta.solicitudPago 
                                                     : (existingHasPagoVista 
-                                                        ? existingMeta.solicitudPagoVista 
+                                                        ? existingMeta.solicitudPago 
                                                         : undefined)),
                                             // Otros campos del incoming siempre ganan
                                             pagoRechazado: incomingMeta.pagoRechazado !== undefined 
@@ -395,12 +395,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 
                                 // ★ FIX: Segunda ubicación - misma lógica de protección
                                 const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
-                                const incomingHasPagoVista = incomingMeta.solicitudPagoVista !== undefined;
+                                const incomingHasPagoVista = incomingMeta.solicitudPago !== undefined;
                                 const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
-                                const existingHasPagoVista = existingMeta.solicitudPagoVista !== undefined;
+                                const existingHasPagoVista = existingMeta.solicitudPago !== undefined;
                                 
                                 const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
-                                const serverClearedPagoVista = incomingMeta.solicitudPagoVista === null || (incomingHasPagoVista && !incomingMeta.solicitudPagoVista);
+                                const serverClearedPagoVista = incomingMeta.solicitudPago === null || (incomingHasPagoVista && !incomingMeta.solicitudPago);
                                 
                                 const mergedMeta = {
                                     ...existingMeta,
@@ -412,12 +412,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             : (existingHasAdelanto 
                                                 ? existingMeta.solicitudAdelanto 
                                                 : undefined)),
-                                    solicitudPagoVista: serverClearedPagoVista 
+                                    solicitudPago: serverClearedPagoVista 
                                         ? null 
                                         : (incomingHasPagoVista 
-                                            ? incomingMeta.solicitudPagoVista 
+                                            ? incomingMeta.solicitudPago 
                                             : (existingHasPagoVista 
-                                                ? existingMeta.solicitudPagoVista 
+                                                ? existingMeta.solicitudPago 
                                                 : undefined)),
                                     pagoRechazado: incomingMeta.pagoRechazado !== undefined 
                                         ? incomingMeta.pagoRechazado 
@@ -430,7 +430,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     tecnico: patchedTecnico,
                                     gestora: patchedGestora,
                                     solicitudAdelanto: mergedMeta.solicitudAdelanto,
-                                    solicitudPagoVista: mergedMeta.solicitudPagoVista,
+                                    solicitudPago: mergedMeta.solicitudPago,
                                     pagoRechazado: mergedMeta.pagoRechazado,
                                 };
                             }

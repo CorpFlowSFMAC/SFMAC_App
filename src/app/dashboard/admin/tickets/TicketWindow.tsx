@@ -803,6 +803,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // 1. Si el caller pide rollback (p.ej. Reajuste o nueva solicitud), gana el local.
         // 2. Si el servidor tiene una denegación activa (pagoRechazado), el servidor MANDA (evita re-envíos automáticos).
         // 3. Por defecto, el estado más avanzado gana.
+        // ★ ENHANCED: payment denegado activa limpieza de solicitudes
         const hasActiveRejection = !!serverMeta.pagoRechazado;
         
         const resolvedStatusId = options?.allowStateRollback
@@ -866,9 +867,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 solicitudAdelanto: (hasActiveRejection || !serverMeta.solicitudAdelanto || options?.allowStateRollback === false)
                     ? serverMeta.solicitudAdelanto
                     : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPagoVista: (hasActiveRejection || !serverMeta.solicitudPagoVista || options?.allowStateRollback === false)
-                    ? serverMeta.solicitudPagoVista
-                    : (businessData.solicitudPagoVista || serverMeta.solicitudPagoVista),
+                solicitudPago: (hasActiveRejection || !serverMeta.solicitudPago || options?.allowStateRollback === false)
+                    ? serverMeta.solicitudPago
+                    : (businessData.solicitudPago || serverMeta.solicitudPago),
                 
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
