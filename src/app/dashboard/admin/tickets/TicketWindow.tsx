@@ -2329,7 +2329,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <div className={styles.rejectionContent}>
                                         <h4>SOLICITUD DE PAGO DENEGADA</h4>
                                         <p>La solicitud de <strong>{ticketData.pagoRechazado.tipo}</strong> por <strong>S/ {formatSoles(ticketData.pagoRechazado.monto)}</strong> fue denegada.</p>
-                                        <span>Acción Requerida: Revise las observaciones y genere una nueva solicitud desde cero.</span>
+                                        <div style={{ background: '#FFF1F2', padding: '8px 12px', borderRadius: '8px', borderLeft: '4px solid #E11D48', marginTop: '8px' }}>
+                                            <span style={{ color: '#9F1239', fontWeight: 800, fontSize: '11px', display: 'block', marginBottom: '2px' }}>MOTIVO DEL RECHAZO:</span>
+                                            <p style={{ margin: 0, color: '#BE123C', fontSize: '13px', fontWeight: 600 }}>
+                                                {ticketData.pagoRechazado.motivo || ticketData.pagoRechazado.mensajeRechazo || "No se especificó un motivo."}
+                                            </p>
+                                        </div>
+                                        <span style={{ display: 'block', marginTop: '8px', fontSize: '11px', color: '#64748B' }}>Acción Requerida: Revise las observaciones y genere una nueva solicitud corregida.</span>
                                     </div>
                                     <button onClick={handleDismissRejection} className={styles.dismissRejection}>Entendido</button>
                                 </div>

@@ -743,9 +743,9 @@ export default function PaymentsPage() {
     const denyPaymentRef = useRef(false);
 
     const handleDenyPayment = async (group: PaymentTicketGroup, item: PaymentItem) => {
-        if (!confirm(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}? Esta acción cancelará la solicitud permanentemente.`)) {
-            return;
-        }
+        const motivoRechazo = prompt(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}?\n\nIngrese el motivo del rechazo:`, "No cumple con los requisitos");
+        
+        if (motivoRechazo === null) return; // Cancelado por el usuario
 
         if (denyPaymentRef.current) return;
         denyPaymentRef.current = true;
@@ -756,9 +756,11 @@ export default function PaymentsPage() {
             // Determinar reversión de estado basada en el tipo de pago
             const isVisita = item.tipo?.toLowerCase().includes('movilidad') || item.tipo?.toLowerCase().includes('visita') || (item.categoria || '').toLowerCase().includes('viático') || (item.categoria || '').toLowerCase().includes('movilidad');
             const isFinal = item.tipo?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('final') || (item.categoria || '').toLowerCase().includes('mano de obra') || (item.categoria || '').toLowerCase().includes('pago mo');
+            const isAdelanto = item.tipo?.toLowerCase().includes('adelanto') || (item.categoria || '').toLowerCase().includes('adelanto');
 
             if (isVisita) newStatusId = 'tecnico_asignado';
             else if (isFinal) newStatusId = 'documentacion_enviada';
+            else if (isAdelanto) newStatusId = 'cotizacion_aprobada';
 
             // 1. SI ES COSTO DE TABLA (ticket_costs)
             // 1. DENEGAR COSTO DE TABLA (V3 / Canal 2 / Specialists)
@@ -801,7 +803,7 @@ export default function PaymentsPage() {
                             // Limpiar solicitudes de pago al denegar
                             solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : meta.solicitudLiquidacion,
                             solicitudPago: nextStatus === 'tecnico_asignado' ? null : meta.solicitudPago,
-                            solicitudAdelanto: null, // Limpiar also adelanto
+                            solicitudAdelanto: null, 
                             // Registrar rechazo
                             pagoRechazado: {
                                 fecha: new Date().toISOString(),
@@ -849,17 +851,20 @@ export default function PaymentsPage() {
                 ...item,
                 fechaRechazo: new Date().toISOString(),
                 estado: 'rechazado',
-                motivo: item.concepto || 'Denegado por Tesorería'
+                motivo: motivoRechazo || item.concepto || 'Denegado por Tesorería'
             };
 
             if (item.solicitudId) {
                 const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
                 meta.solicitudesRechazadas = [...(meta.solicitudesRechazadas || []), { ...(found || item), ...rechazoBase }];
                 meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
-            } else if (item.id === `${group.realTicketId}_adelanto` || item.tipo === 'Adelanto') {
+            } else if (item.id === `${group.realTicketId}_adelanto` || item.tipo === 'Adelanto' || isAdelanto) {
                 meta.historialRechazosAdelanto = [...(meta.historialRechazosAdelanto || []), { ...(meta.solicitudAdelanto || item), ...rechazoBase }];
                 meta.solicitudAdelanto = null;
                 meta.adelantoRechazado = true;
+                if (currentStatus === 'en_ejecucion') {
+                    newStatusId = 'cotizacion_aprobada';
+                }
             } else if (item.id === `${group.realTicketId}_refuerzo` || item.tipo === 'Refuerzo') {
                 meta.solicitudAdelantoExtra = null;
                 meta.historialRechazosAdelanto = [...(meta.historialRechazosAdelanto || []), { ...rechazoBase, tipo: 'Refuerzo' }];
@@ -885,7 +890,7 @@ export default function PaymentsPage() {
                         monto: item.monto,
                         tipo: item.tipo,
                         concepto: item.concepto || 'Denegado por Tesorería',
-                        mensajeRechazo: item.motivoRechazo || 'Pago denegado por Tesorería'
+                        mensajeRechazo: motivoRechazo || 'Pago denegado por Tesorería'
                     }
                 } 
             };
@@ -900,7 +905,7 @@ export default function PaymentsPage() {
                 id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 tipo: 'SOLICITUD_DENEGADA',
                 titulo: '❌ Solicitud de Pago Denegada',
-                mensaje: `Tu solicitud de ${item.tipo || 'pago'} por S/ ${formatSoles(item.monto)} ha sido denegada.${item.motivoRechazo ? ' Motivo: ' + item.motivoRechazo : ''}`,
+                mensaje: `Tu solicitud de ${item.tipo || 'pago'} por S/ ${formatSoles(item.monto)} ha sido denegada. Motivo: ${motivoRechazo}`,
                 ticketId: group.realTicketId,
                 ticketNum: group.ticketNum,
                 fecha: new Date().toISOString(),
