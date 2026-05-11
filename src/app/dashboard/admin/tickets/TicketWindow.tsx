@@ -1603,6 +1603,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     monto: amount,
                     excedeTope: isExceeding
                 },
+                isAdminRevision: isExceeding,
                 estadoId: newState // Sincronizar estado interno en metadata
             };
 
@@ -1677,6 +1678,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 excepcionPresupuestoAprobada: true,
                 fechaAprobacionExcepcion: new Date().toISOString(),
                 aprobadoPor: myProfileId,
+                isAdminRevision: false,
                 is_frozen: false // Asegurar limpieza de bandera si existe
             };
 
@@ -3512,6 +3514,32 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     </button>
                                                 </div>
                                             )}
+                                                </div>
+                                            )}
+
+                                            {ticketData.estadoId === "por_liquidar" && (
+                                                <div className={styles.adminReviewAlert} style={{ 
+                                                    background: '#F0F9FF', 
+                                                    border: '1.5px solid #7DD3FC', 
+                                                    borderRadius: '16px', 
+                                                    padding: '24px', 
+                                                    marginBottom: '20px',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '16px',
+                                                    boxShadow: '0 4px 12px rgba(14, 165, 233, 0.1)'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                        <div style={{ background: '#0EA5E9', color: 'white', padding: '10px', borderRadius: '12px' }}>
+                                                            <Clock size={24} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 style={{ color: '#075985', fontSize: '16px', fontWeight: 800, margin: 0 }}>LIQUIDACIÓN EN PROCESO DE PAGO</h4>
+                                                            <p style={{ color: '#0369A1', fontSize: '13px', margin: '4px 0 0 0', fontWeight: 500 }}>
+                                                                El expediente ha sido validado y se encuentra en la bandeja de Tesorería para el depósito final.
+                                                            </p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
                                             <div className={styles.liquidationCardPremium}>

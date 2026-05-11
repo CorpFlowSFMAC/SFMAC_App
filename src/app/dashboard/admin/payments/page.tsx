@@ -606,9 +606,11 @@ export default function PaymentsPage() {
                     });
                 }
 
-                const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
+                const isPorLiquidar = ['por_liquidar', 'esperando_pago_final'].includes(t.status_id);
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
-                if (isPorLiquidar && !hasLiquidacionPaid) {
+                const hasPendingTableCosts = pendingItems.some(i => i.isTableCost);
+
+                if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingTableCosts) {
                     // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
                     const liqMonto = round2(netLaborBalance);
                     if (liqMonto > 0.01) {

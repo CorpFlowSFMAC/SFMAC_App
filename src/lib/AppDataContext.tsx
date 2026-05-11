@@ -432,8 +432,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                         });
                         // El summary también podría cambiar (totales), pero lo hacemos silencioso
                         queryClient.invalidateQueries({
-                            queryKey: queryKeys.tickets.summary(),
-                            refetchType: 'none'
+                            queryKey: queryKeys.tickets.summary()
                         });
                     }
                 }
