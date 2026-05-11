@@ -614,6 +614,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             return {
                 ...prev,
                 ...ticket,
+                estadoId: corregidoEstadoId,
+                status_id: corregidoEstadoId,
                 // PREVENIR PARPADEO: Conservar valores financieros del backend si el prop no los tiene actualizados
                 saldo_tecnico: prev.saldo_tecnico !== undefined ? prev.saldo_tecnico : ticket.saldo_tecnico,
                 utilidad_neta: prev.utilidad_neta !== undefined ? prev.utilidad_neta : ticket.utilidad_neta,
@@ -1522,9 +1524,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     porcentaje: pctVal,
                     monto: amount,
                     fecha: new Date().toISOString(),
-                    classification: advanceClassification // pocket vs materials
+                    classification: advanceClassification, // pocket vs materials
+                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7
                 },
-                pagoRechazado: null
+                pagoRechazado: null,
+                metadata: {
+                    ...(ticketData.metadata || {}),
+                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero
+                }
             };
             setTicketData(updated);
             await syncToSupabase(updated);
@@ -1910,18 +1917,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 concepto: materialsForm.concepto.trim(),
                 specialist_id: materialsForm.specialist_id,
                 proveedor: materialsForm.specialistName,
-                estado_pago: "pendiente",
+                estado_pago: excedePresupuesto ? "REQUIERE_APROBACION_ADMIN" : "pendiente",
                 solicitado_por: myProfileId || undefined
             });
 
-            if (excedePresupuesto) {
-                const frozenTicket = {
-                   ...ticketData,
-                   estadoId: "requiere_revision_admin",
-                };
-                setTicketData(frozenTicket);
-                await onUpdate?.(ticketData.id, { status_id: "requiere_revision_admin" });
-            }
+            // ELIMINADO: No mover el ticket a "requiere_revision_admin" por una compra intermedia.
+            // Esto evita que el ticket pase prematuramente a la etapa de liquidación en la UI.
+            // El administrador gestionará la aprobación directamente desde el módulo de Tesorería.
 
             await loadCosts();
             setShowMaterialsModal(false);
@@ -2054,8 +2056,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estado_pago: estadoInicial,
                 solicitado_por: myProfileId || undefined,
                 specialist_id: ticketData.technician_id,
-                proveedor: 'Rescate Financiero'
+                proveedor: 'Rescate Financiero',
+                metadata: { riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 }
             });
+
+            // También marcar el ticket principal si es riesgoso
+            if ((TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7) {
+                await supabase.from('tickets').update({
+                    metadata: { ...ticketData.metadata, riesgoFinanciero: true }
+                }).eq('id', ticketData.id);
+            }
 
             if (isExceeding) {
                 showToast("Aprobación Requerida", "Esta solicitud excede el pactado. Se ha enviado al Administrador para su autorización.", "info");
@@ -4567,17 +4577,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 </div>
                             </div>
 
-                            <div className={styles.negotiationModalActions}>
-                                <button className={styles.negoCancelBtn} onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))}>
-                                    Cancelar
+                            <div className={styles.negotiationModalActions} style={{ background: '#FFF7ED', borderTop: '1px solid #FFEDD5', padding: '20px' }}>
+                                <button className={styles.negoCancelBtn} onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))} style={{ color: '#9A3412', fontWeight: 800, border: '1px solid #FED7AA' }}>
+                                    CANCELAR OPERACIÓN
                                 </button>
                                 <button 
                                     className={styles.negoConfirmBtn} 
                                     onClick={riskAlert.onConfirm}
-                                    style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}
+                                    style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', boxShadow: '0 4px 12px rgba(217, 119, 6, 0.3)', padding: '12px 24px', gap: '8px' }}
                                 >
                                     <CheckCircle2 size={18} />
-                                    <span>SÍ, PROCEDER BAJO MI RESPONSABILIDAD</span>
+                                    <span>PROCEDER BAJO MI RESPONSABILIDAD</span>
                                 </button>
                             </div>
                         </div>

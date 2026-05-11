@@ -180,7 +180,7 @@ function flattenTicketForPayments(t: any) {
         metadata: meta, // Aseguramos que el metadata del objeto retornado esté aplanado
         descripcionServicio: meta.descripcion || meta.titulo || t.description || "", 
         estadoId: normalizeStateId(t.status_id || meta.estadoId || "nuevo"),
-        numeroTicketCliente: t.client_ticket_number || meta.numeroTicketCliente || "",
+        numeroTicketCliente: t.client_ticket_number || meta.numeroTicketCliente || (t.id ? `TK-${t.id.slice(-8).toUpperCase()}` : ""),
         costoManoObra: parseFloat(t.labor_cost ?? meta.costoManoObra ?? 0),
         costoMateriales: parseFloat(t.materials_cost ?? meta.costoMateriales ?? 0),
         costoVisita: parseFloat(t.visit_cost ?? meta.costoVisita ?? meta.costoPasaje ?? 0),
@@ -216,6 +216,7 @@ function flattenTicketForPayments(t: any) {
         cliente: { nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente' },
         sede: { nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede' },
         montoFacturado: parseFloat(t.total_quoted_amount || t.montoFinal || meta.montoFinal || 0),
+        riesgoFinanciero: !!meta.riesgoFinanciero || (meta.solicitudAdelanto?.riesgoFinanciero === true)
     };
 }
 
@@ -531,7 +532,7 @@ export default function PaymentsPage() {
 
         allTickets.forEach(t => {
             try {
-                const ticketNum = t.client_ticket_number || `#${t.ticket_number}` || `#${t.id.toString().slice(-6).toUpperCase()}`;
+                const ticketNum = t.numeroTicketCliente || t.client_ticket_number || (t.id ? `TK-${t.id.slice(-8).toUpperCase()}` : "S/N");
                 const meta = t.metadata || {};
                 
                 // 🚀 MOTOR FINANCIERO V3: Fuente de Verdad Inmutable
@@ -781,8 +782,8 @@ export default function PaymentsPage() {
 
                     if ((cat.includes('VISITA') || cat.includes('MOVILIDAD') || cat.includes('VIÁTICO')) && currentId === 'esperando_pago_visita') {
                         nextStatus = 'tecnico_asignado';
-                    } else if ((cat.includes('MANO DE OBRA') || cat.includes('PAGO MO') || cat.includes('LIQUIDACIÓN')) && 
-                             ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin'].includes(currentId)) {
+                    } else if ((cat.includes('MANO DE OBRA') || cat.includes('PAGO MO') || cat.includes('LIQUIDACIÓN') || cat.includes('RESCATE')) && 
+                             ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'documentacion_enviada'].includes(currentId)) {
                         nextStatus = 'documentacion_enviada';
                     }
 
@@ -1030,8 +1031,8 @@ export default function PaymentsPage() {
         try {
             if (item.isTableCost && item.costId) {
                 const additionalUpdates: any = { metadataFields: {} };
-                const isAdvance = item.concepto?.toLowerCase().includes('adelanto');
-                const isFinal = item.concepto?.toLowerCase().includes('liquidación final');
+                const isAdvance = item.concepto?.toLowerCase().includes('adelanto') || item.tipo?.toLowerCase().includes('adelanto');
+                const isFinal = item.concepto?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('liquidación') || item.id?.endsWith('_final');
 
                 if (isAdvance) {
                     // ELIMINADO: No forzar estado 'en_ejecucion' por pago
@@ -1508,7 +1509,23 @@ export default function PaymentsPage() {
                                                         background: '#EFF6FF', padding: '4px 10px', borderRadius: '8px', 
                                                         fontSize: '0.9rem', width: 'fit-content' 
                                                     }}>
+                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         {group.ticketNum}
+                                                        {group.riesgoFinanciero && (
+                                                            <div 
+                                                                title="ALERTA: Solicitud de pago prematura (Presupuesto NO aprobado)"
+                                                                style={{ 
+                                                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                                                    background: '#FEF2F2', color: '#EF4444', 
+                                                                    padding: '4px 10px', borderRadius: '8px',
+                                                                    fontSize: '0.75rem', fontWeight: 800, border: '1px solid #FEE2E2'
+                                                                }}
+                                                            >
+                                                                <ShieldAlert size={14} />
+                                                                <span>RIESGO</span>
+                                                            </div>
+                                                        )}
+                                                     </div>
                                                     </span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
                                                         <Building2 size={14} color="#64748B" />
