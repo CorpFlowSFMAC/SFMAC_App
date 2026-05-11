@@ -538,7 +538,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             adelantoPagado: meta.adelantoPagado ?? false,
                             visitPaymentConfirmed: visitConfirmed,
                             solicitudAdelanto: meta.solicitudAdelanto ?? null,
-                            solicitudPagoVisita: visitConfirmed ? null : (meta.solicitudPagoVisita ?? null),
+                            solicitudPago: visitConfirmed ? null : (meta.solicitudPago ?? null),
                             historialPagosTecnico: meta.historialPagosTecnico ?? [],
                             gestora: fullTicket.gestora || meta.gestora || null
                         };
@@ -663,13 +663,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     // para evitar el "parpadeo" donde el estado local viejo sobreescribe al servidor limpio.
                     pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
                     solicitudAdelanto: finalSolicitud,
-                    solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
+                    solicitudPago: meta.solicitudPago !== undefined ? meta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
                     solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 },
                 
                 // Mapeo a nivel de raíz para consistencia
                 solicitudAdelanto: finalSolicitud,
-                solicitudPagoVisita: meta.solicitudPagoVisita !== undefined ? meta.solicitudPagoVisita : (prev.solicitudPagoVisita || prev.metadata?.solicitudPagoVisita),
+                solicitudPago: meta.solicitudPago !== undefined ? meta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
                 solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
 
@@ -929,7 +929,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         visitPaymentConfirmed,
                         solicitudAdelanto,
                         fechaPagoVisita,
-                        solicitudPagoVisita,
+                        solicitudPago,
                         montoFinal,
                         ...safeToRestore
                     } = parsed;

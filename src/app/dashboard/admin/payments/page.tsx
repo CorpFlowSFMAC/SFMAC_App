@@ -188,7 +188,7 @@ function flattenTicketForPayments(t: any) {
         solicitudAdelanto: meta.solicitudAdelanto ?? null,
         solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
         solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
-        solicitudPagoVisita: meta.solicitudPagoVisita ?? null,
+        solicitudPago: meta.solicitudPago ?? null,
         // ✅ Solicitudes de depósito creadas por la Gestora (pendientes de aprobación del Admin)
         solicitudesDeposito: (meta.solicitudesDeposito || []).filter((s: any) => s.estado === 'pendiente'),
         historialPagosTecnico: history,
@@ -797,7 +797,7 @@ export default function PaymentsPage() {
                             estadoId: nextStatus,
                             // Limpiar solicitudes de pago al denegar
                             solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : meta.solicitudLiquidacion,
-                            solicitudPagoVisita: nextStatus === 'tecnico_asignado' ? null : meta.solicitudPagoVisita,
+                            solicitudPago: nextStatus === 'tecnico_asignado' ? null : meta.solicitudPago,
                             solicitudAdelanto: null, // Limpiar also adelanto
                             // Registrar rechazo
                             pagoRechazado: {
@@ -867,8 +867,8 @@ export default function PaymentsPage() {
                     newStatusId = 'documentacion_enviada';
                 }
             } else if (isVisita) {
-                meta.historialRechazosVisita = [...(meta.historialRechazosVisita || []), { ...(meta.solicitudPagoVisita || item), ...rechazoBase }];
-                meta.solicitudPagoVisita = null;
+                meta.historialRechazosVisita = [...(meta.historialRechazosVisita || []), { ...(meta.solicitudPago || item), ...rechazoBase }];
+                meta.solicitudPago = null;
                 if (currentStatus === 'esperando_pago_visita') {
                     newStatusId = 'tecnico_asignado';
                 }
@@ -1118,7 +1118,7 @@ export default function PaymentsPage() {
                 }
                 meta.visitPaymentConfirmed = true;
                 meta.fechaPagoVisita = finalDate;
-                meta.solicitudPagoVisita = null;
+                meta.solicitudPago = null;
             } else if (item.solicitudId) {
                 const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
                 meta.solicitudesAprobadas = [...(meta.solicitudesAprobadas || []), { ...(found || item), ...aprobacionBase }];

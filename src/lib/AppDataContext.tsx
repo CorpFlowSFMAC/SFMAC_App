@@ -656,9 +656,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 adelantoPagado: newMeta.adelantoPagado !== undefined
                                     ? newMeta.adelantoPagado
                                     : existingMeta.adelantoPagado,
-                                solicitudPagoVisita: newMeta.solicitudPagoVisita !== undefined
-                                    ? newMeta.solicitudPagoVisita
-                                    : existingMeta.solicitudPagoVisita,
+                                solicitudPago: newMeta.solicitudPago !== undefined
+                                    ? newMeta.solicitudPago
+                                    : existingMeta.solicitudPago,
                                 solicitudLiquidacion: newMeta.solicitudLiquidacion !== undefined
                                     ? newMeta.solicitudLiquidacion
                                     : existingMeta.solicitudLiquidacion,
