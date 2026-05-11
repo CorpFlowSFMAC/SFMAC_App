@@ -8,7 +8,7 @@ import {
     AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw,
     Smartphone, Copy, ExternalLink, Camera, CheckCheck
 } from "lucide-react";
-import { normalizeStateId } from "@/lib/ticketStates";
+import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
@@ -950,6 +950,17 @@ export default function PaymentsPage() {
         const montoStr = formatSoles(item.monto);
         const phone = group.tecnico.plin || group.tecnico.yape || "";
         
+        // ⚠️ ADVERTENCIA RIESGO FINANCIERO (ANTES DE APROBACIÓN - ETAPA < 7)
+        // Se excluyen los pagos de visita (Stage 4) que son normales antes de cotizar.
+        const currentOrder = TICKET_STATE_ORDER[normalizeStateId(group.statusId)] || 0;
+        const isPreApproved = currentOrder < 7;
+        const isVisitPayment = item.tipo?.toLowerCase().includes('visita') || item.concepto?.toLowerCase().includes('visita');
+        
+        if (isPreApproved && !isVisitPayment) {
+            const riskMsg = "⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente. Realizar este abono representa un RIESGO FINANCIERO para la empresa. ¿Desea proceder de todas formas?";
+            if (!window.confirm(riskMsg)) return;
+        }
+
         // Si el técnico tiene Yape o Plin, intentamos Deep Link
         if (phone && (group.tecnico.yape || group.tecnico.plin)) {
             const wallet = group.tecnico.yape ? 'yape' : 'plin';
@@ -969,16 +980,11 @@ export default function PaymentsPage() {
             return;
         }
 
-        // ⚠️ ADVERTENCIA RIESGO FINANCIERO (ETAPA 6)
-        const isStage6 = group.statusId === 'cotizacion_enviada';
-        
         // Si no tiene billetera móvil, vamos a confirmación directa
         setPendingConfirmation({
             group,
             item,
-            message: isStage6 
-                ? '⚠️ Atención: Esta cotización aún no ha sido aprobada por el cliente. ¿Desea proceder con el gasto bajo riesgo de la empresa?'
-                : `¿Desea registrar el pago de S/ ${montoStr} para ${group.tecnico.nombre}?`,
+            message: `¿Desea registrar el pago de S/ ${montoStr} para ${group.tecnico.nombre}?`,
             voucher: null
         });
     };

@@ -1458,7 +1458,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
     const handleRequestAdvance = async () => {
         // ✅ FIX 2026-04-27: Prevenir ejecución doble
-        if (requestAdvanceRef.current) return;
+        // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita adelanto antes de aprobación de cliente
+        const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
+        if (currentStageOrder < 7) {
+            const riskMsg = "⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente (Etapa < 7). Realizar una solicitud de adelanto en esta fase representa un RIESGO FINANCIERO para la empresa. ¿Desea proceder bajo su responsabilidad?";
+            if (!window.confirm(riskMsg)) {
+                requestAdvanceRef.current = false;
+                return;
+            }
+        }
+
         requestAdvanceRef.current = true;
 
         let amount = 0;
@@ -1851,6 +1860,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Técnico requerido", "Seleccione el técnico de la lista desplegable para esta solicitud.", "error");
             return;
         }
+        // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita gasto/compra antes de aprobación de cliente
+        const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
+        if (currentStageOrder < 7) {
+            const riskMsg = "⚠️ ATENCIÓN: Esta cotización aún no ha sido aprobada por el cliente. Registrar una compra o gasto operativo antes de la aprobación representa un RIESGO FINANCIERO. ¿Desea proceder?";
+            if (!window.confirm(riskMsg)) return;
+        }
+
         setIsSavingMaterials(true);
         try {
             const montoGasto = parseFloat(materialsForm.monto);
@@ -1974,6 +1990,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (isExceeding && !rescueForm.motivo.trim()) {
             showToast("Motivo Obligatorio", "Para solicitudes que exceden el saldo pactado, debe indicar el motivo detallado.", "error");
             return;
+        }
+
+        // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita rescate antes de aprobación de cliente
+        const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
+        if (currentStageOrder < 7) {
+            const riskMsg = "⚠️ RIESGO FINANCIERO: La cotización no ha sido aprobada por el cliente. Solicitar un rescate financiero ahora es prematuro y riesgoso. ¿Desea continuar?";
+            if (!window.confirm(riskMsg)) return;
         }
 
         setIsSavingRescue(true);
