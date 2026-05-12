@@ -147,8 +147,9 @@ function GestoraBar({ name, count, max, color }: any) {
 // MAIN EXECUTIVE DASHBOARD
 // ════════════════════════════════════════════
 export default function AdminDashboard() {
-    const { tickets, loadingTickets, technicians, gestoras } = useAppData();
+    const { tickets, loadingTickets, technicians, gestoras, updateTicket, refreshTickets } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [now] = useState(() => new Date());
 
     // Estados para el Modal de Seguimiento (General)
@@ -163,12 +164,20 @@ export default function AdminDashboard() {
     // Handler para actualizar tickets desde el modal (Dashboard Admin)
     const handleUpdateTicket = async (id: string, updates: any) => {
         try {
-            const { data, error } = await ticketsAPI.update(id, updates);
-            if (error) throw error;
-            return data;
+            const result = await updateTicket(id, updates);
+            return result;
         } catch (err) {
             console.error("Error updating ticket from dashboard:", err);
             throw err;
+        }
+    };
+
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            await refreshTickets();
+        } finally {
+            setTimeout(() => setIsRefreshing(false), 800);
         }
     };
 
@@ -212,11 +221,11 @@ export default function AdminDashboard() {
 
         // REGLA 2: Lectura Inmutable (Backend Single Source of Truth)
         // Está estrictamente prohibido calcular IGV o sumar costos en el Frontend.
-        const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
+        const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
 
         // REGLA 3: Inversión Ejecutada (Costos Devengados del Periodo)
         // Suma inmutable calculada por el backend (total_costs_agg = Flujo A + Flujo B)
-        const inversionEjecutada = closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || 0), 0);
+        const inversionEjecutada = closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
 
         // Utilidad y Margen se leen de la suma global para consistencia, 
         // aunque el Backend ya calcula por ticket.
@@ -377,12 +386,13 @@ export default function AdminDashboard() {
     const EN_PROCESO_STATES_RRHH = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado"];
 
     const rrhh = useMemo(() => {
-        const active = tickets.filter((t: any) =>
+        const inPeriod = tickets.filter((t: any) => isInRange(t.created_at || t.createdAt || t.fechaCreacion));
+        const active = inPeriod.filter((t: any) =>
             !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId))
         );
 
-        const closed = tickets.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado");
-        const total = tickets.length || 1;
+        const closed = inPeriod.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado");
+        const total = inPeriod.length || 1;
 
         // SLA global
         const expired = active.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS);
@@ -448,13 +458,31 @@ export default function AdminDashboard() {
                         <BarChart3 size={26} color={lightColor} />
                     </div>
                     <div>
-                        <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
-                            <h1 style={{ color: "white", fontWeight: 900, fontSize: "1.35rem", margin: 0 }}>
-                                Dashboard Estratégico — Alta Gerencia
-                            </h1>
-                            <span style={{ fontSize: "0.65rem", fontWeight: 800, padding: "2px 10px", borderRadius: "999px", background: `${lightColor}20`, color: lightColor, border: `1px solid ${lightColor}40`, letterSpacing: "0.1em" }}>
-                                ESTADO: {globalLight}
-                            </span>
+                        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                            <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+                                <h1 style={{ color: "white", fontWeight: 900, fontSize: "1.35rem", margin: 0 }}>
+                                    Dashboard Estratégico — Alta Gerencia
+                                </h1>
+                                <span style={{ fontSize: "0.65rem", fontWeight: 800, padding: "2px 10px", borderRadius: "999px", background: `${lightColor}20`, color: lightColor, border: `1px solid ${lightColor}40`, letterSpacing: "0.1em" }}>
+                                    ESTADO: {globalLight}
+                                </span>
+                            </div>
+                            
+                            <button 
+                                onClick={handleManualRefresh}
+                                disabled={isRefreshing}
+                                style={{
+                                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                                    borderRadius: "8px", padding: "0.4rem 0.8rem", color: "white",
+                                    display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer",
+                                    fontSize: "0.72rem", fontWeight: 700, transition: "all 0.2s"
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                            >
+                                <RefreshCw size={12} className={isRefreshing ? "animate-spin" : ""} />
+                                {isRefreshing ? "..." : "Sincronizar"}
+                            </button>
                         </div>
                         <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.8rem", margin: "4px 0 0" }}>
                             {new Date().toLocaleDateString("es-PE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · Tiempo real

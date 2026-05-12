@@ -440,15 +440,15 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // Consulta simple - evita errores de relaciones FK
+        // Usar la vista estratégica que ya tiene los cálculos financieros (ROI, Margen, etc.)
         const { data, error } = await supabase
-            .from('tickets')
+            .from('vw_tickets_strategic')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(200);
+            .limit(300);
 
         if (error) {
-            
+            console.error('[ticketsAPI] Error fetching strategic summary:', error.message);
             throw error;
         }
         return data || [];

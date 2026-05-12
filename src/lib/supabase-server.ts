@@ -96,10 +96,10 @@ export async function getAllTicketsLite(gestorId?: string) {
     }
     
     let query = client
-        .from('tickets')
-        .select('id, status_id, estadoId, service_type, description, descripcionProblema, diagnosis, client_ticket_number, created_at, labor_cost, materials_cost, visit_cost, total_quoted_amount, priority, current_step, created_by, client_id, branch_id, technician_id, gestora_id, metadata')
+        .from('vw_tickets_strategic')
+        .select('*')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(300);
     
     if (gestorId) {
         query = query.eq('gestora_id', gestorId);
@@ -108,7 +108,7 @@ export async function getAllTicketsLite(gestorId?: string) {
     const { data, error } = await query;
     
     if (error) {
-        console.error('[Supabase Server] Error fetching tickets:', error.message);
+        console.error('[Supabase Server] Error fetching tickets from strategic view:', error.message);
         return [];
     }
     
@@ -125,15 +125,15 @@ export async function getTicketsSummary() {
         return [];
     }
     
-    // Consulta simple sin relaciones complejas
+    // Consulta enriquecida con datos financieros del backend
     const { data, error } = await client
-        .from('tickets')
+        .from('vw_tickets_strategic')
         .select('*')
-        .order('creado_el', { ascending: false })
-        .limit(100);
+        .order('created_at', { ascending: false })
+        .limit(300);
 
     if (error) {
-        console.log('[Supabase Server] Error fetching tickets:', error.message);
+        console.log('[Supabase Server] Error fetching strategic summary:', error.message);
         return [];
     }
 
