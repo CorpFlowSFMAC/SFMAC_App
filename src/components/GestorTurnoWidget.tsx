@@ -28,7 +28,7 @@ export default function GestorTurnoWidget() {
                     if (parts.length === 2) return parts.pop()?.split(';').shift();
                     return null;
                 };
-                email = getCookie('userEmail');
+                email = getCookie('userEmail') || null;
             }
             
             if (!email) {
