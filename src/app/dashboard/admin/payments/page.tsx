@@ -185,10 +185,11 @@ function flattenTicketForPayments(t: any) {
         costoManoObra: parseFloat(t.labor_cost ?? meta.costoManoObra ?? 0),
         costoMateriales: parseFloat(t.materials_cost ?? meta.costoMateriales ?? 0),
         costoVisita: parseFloat(t.visit_cost ?? meta.costoVisita ?? meta.costoPasaje ?? 0),
-        solicitudAdelanto: meta.solicitudAdelanto ?? null,
-        solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
-        solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
-        solicitudPago: meta.solicitudPago ?? null,
+        // ★ ESTANDARIZACIÓN: Normalizar solicitudes - aceptar objetos, strings JSON, onull
+        solicitudAdelanto: meta.solicitudAdelanto ? (typeof meta.solicitudAdelanto === 'string' ? JSON.parse(meta.solicitudAdelanto) : meta.solicitudAdelanto) : null,
+        solicitudAdelantoExtra: meta.solicitudAdelantoExtra ? (typeof meta.solicitudAdelantoExtra === 'string' ? JSON.parse(meta.solicitudAdelantoExtra) : meta.solicitudAdelantoExtra) : null,
+        solicitudLiquidacion: meta.solicitudLiquidacion ? (typeof meta.solicitudLiquidacion === 'string' ? JSON.parse(meta.solicitudLiquidacion) : meta.solicitudLiquidacion) : null,
+        solicitudPago: meta.solicitudPago ? (typeof meta.solicitudPago === 'string' ? JSON.parse(meta.solicitudPago) : meta.solicitudPago) : null,
         // ✅ Solicitudes de depósito creadas por la Gestora (pendientes de aprobación del Admin)
         solicitudesDeposito: (meta.solicitudesDeposito || []).filter((s: any) => s.estado === 'pendiente'),
         historialPagosTecnico: history,
@@ -597,41 +598,40 @@ export default function PaymentsPage() {
                 });
 
                 // B. Solicitudes en Metadata (Adelanto/Liquidación/Visita)
-                // ★ MEJORA 2026-05-12: Validar si la solicitud ya está en el historial (evita zombies)
-                const adelantoMonto = meta.solicitudAdelanto?.monto || 0;
-                const adelantoInHistory = adelantoMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('adelanto') && Math.abs(i.monto - adelantoMonto) < 1);
-                
-                const pagoMonto = meta.solicitudPago?.monto || 0;
-                const pagoInHistory = pagoMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('visita') && Math.abs(i.monto - pagoMonto) < 1);
+                // ★ ESTANDARIZACIÓN 2026-05-12: Detección robusta usando campos normalizados de flat
+                const f = flat as any;
+                const hasSolicitudAdelanto = f.solicitudAdelanto && (f.solicitudAdelanto.monto > 0 || f.solicitudAdelanto.porcentaje > 0);
+                const hasSolicitudLiquidacion = f.solicitudLiquidacion && f.solicitudLiquidacion.monto > 0;
+                const hasSolicitudPago = f.solicitudPago && f.solicitudPago.monto > 0;
 
-                if (meta.solicitudAdelanto && !adelantoInHistory) {
+                if (hasSolicitudAdelanto) {
                     pendingItems.push({
                         id: `${t.id}_adelanto`,
                         tipo: 'Adelanto',
-                        monto: round2(adelantoMonto),
+                        monto: round2(f.solicitudAdelanto.monto || 0),
                         estado: 'pendiente',
-                        fecha: meta.solicitudAdelanto.fecha || t.created_at
+                        fecha: f.solicitudAdelanto.fecha || t.created_at
                     });
                 }
 
-                if (meta.solicitudPago && !pagoInHistory) {
+                if (hasSolicitudPago) {
                     pendingItems.push({
                         id: `${t.id}_visita`,
                         tipo: 'Pago de Visita',
-                        monto: round2(pagoMonto),
+                        monto: round2(f.solicitudPago.monto || 0),
                         estado: 'pendiente',
-                        fecha: meta.solicitudPago.fecha || t.created_at
+                        fecha: f.solicitudPago.fecha || t.created_at
                     });
                 }
 
-                if (meta.solicitudLiquidacion) {
+                if (hasSolicitudLiquidacion) {
                     pendingItems.push({
                         id: `${t.id}_liquidacion_manual`,
                         tipo: 'Liquidación Final',
-                        monto: round2(meta.solicitudLiquidacion.monto || 0),
+                        monto: round2(f.solicitudLiquidacion.monto || 0),
                         estado: 'pendiente',
-                        fecha: meta.solicitudLiquidacion.fecha || t.created_at,
-                        concepto: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
+                        fecha: f.solicitudLiquidacion.fecha || t.created_at,
+                        concepto: f.solicitudLiquidacion.concepto || "Saldo Solicitado"
                     });
                 }
 
