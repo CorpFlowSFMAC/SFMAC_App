@@ -866,15 +866,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             technician_id: tecnico?.id || serverTicket?.technician_id,
             gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
-                // 1. Empezamos con la metadata local (cambios del usuario)
-                ...sourceMetadata,
-                // 2. Aplicamos la metadata del servidor encima (fuente de verdad para finanzas)
+                // 1. Empezamos con la metadata del servidor (fuente de verdad base)
                 ...serverMeta,
+                // 2. Aplicamos la metadata local (cambios del usuario) encima
+                ...sourceMetadata,
                 // 3. Pero preservamos los campos que el usuario está editando en esta ventana
-                diagnostico: businessData.diagnostico || sourceMetadata.diagnostico,
-                partidas: businessData.partidas || sourceMetadata.partidas,
-                montoFinal: businessData.montoFinal || sourceMetadata.montoFinal,
-                documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist,
+                diagnostico: businessData.diagnostico || sourceMetadata.diagnostico || serverMeta.diagnostico,
+                partidas: businessData.partidas || sourceMetadata.partidas || serverMeta.partidas,
+                montoFinal: businessData.montoFinal || sourceMetadata.montoFinal || serverMeta.montoFinal,
+                documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist || serverMeta.documentosChecklist,
                 // 4. Protección específica: si lo local acaba de limpiar un rechazo, no dejar que el servidor lo restaure
                 // y viceversa: si el servidor tiene un rechazo nuevo, lo local debe aceptarlo.
                 pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
@@ -903,15 +903,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
                 // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
                 
-                solicitudLiquidacion: (hasActiveRejection || (!serverMeta.solicitudLiquidacion && !dataOverride?.solicitudLiquidacion) || options?.allowStateRollback === false)
+                solicitudLiquidacion: (hasActiveRejection || options?.allowStateRollback === false)
                     ? serverMeta.solicitudLiquidacion
-                    : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection || (!serverMeta.solicitudAdelanto && !dataOverride?.solicitudAdelanto) || options?.allowStateRollback === false)
+                    : (businessData.solicitudLiquidacion || dataToProcess.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
+                solicitudAdelanto: (hasActiveRejection || options?.allowStateRollback === false)
                     ? serverMeta.solicitudAdelanto
-                    : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPago: (hasActiveRejection || (!serverMeta.solicitudPago && !dataOverride?.solicitudPago) || options?.allowStateRollback === false)
+                    : (businessData.solicitudAdelanto || dataToProcess.solicitudAdelanto || serverMeta.solicitudAdelanto),
+                solicitudPago: (hasActiveRejection || options?.allowStateRollback === false)
                     ? serverMeta.solicitudPago
-                    : (businessData.solicitudPago || serverMeta.solicitudPago),
+                    : (businessData.solicitudPago || dataToProcess.solicitudPago || serverMeta.solicitudPago),
                 
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
@@ -1760,6 +1760,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estadoId: newState,
                 status_id: newState,
                 final_balance: amount,
+                solicitudLiquidacion: finalMetadata.solicitudLiquidacion, // ★ FIX: Root level for sync
                 metadata: finalMetadata
             };
 
@@ -2337,27 +2338,38 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <span>
                                         {ticket.cliente?.nombre || 'Sin cliente'} 
                                         <span style={{ 
-                                            opacity: 0.7, 
+                                            opacity: 1, 
                                             fontSize: '0.65rem', 
                                             marginLeft: '8px',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '4px',
-                                            background: isRealtimeConnected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)',
-                                            color: isRealtimeConnected ? '#059669' : '#6b7280',
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
-                                            fontWeight: 800
+                                            gap: '6px',
+                                            background: isRealtimeConnected ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.1)',
+                                            color: isRealtimeConnected ? '#10B981' : '#ef4444',
+                                            padding: '3px 8px',
+                                            borderRadius: '20px',
+                                            fontWeight: 800,
+                                            border: `1px solid ${isRealtimeConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                                            transition: 'all 0.3s ease',
+                                            boxShadow: isRealtimeConnected ? '0 0 10px rgba(16, 185, 129, 0.2)' : 'none'
                                         }}>
                                             <span style={{ 
-                                                width: '6px', 
-                                                height: '6px', 
+                                                width: '8px', 
+                                                height: '8px', 
                                                 borderRadius: '50%', 
-                                                backgroundColor: isRealtimeConnected ? '#10B981' : '#9ca3af',
-                                                boxShadow: isRealtimeConnected ? '0 0 4px #10B981' : 'none'
+                                                backgroundColor: isRealtimeConnected ? '#10B981' : '#ef4444',
+                                                boxShadow: isRealtimeConnected ? '0 0 8px #10B981' : 'none',
+                                                animation: isRealtimeConnected ? 'pulse-green 2s infinite' : 'none'
                                             }} />
-                                            {isRealtimeConnected ? 'VIVO' : 'SINCRONIZANDO...'}
+                                            {isRealtimeConnected ? 'CONECTADO' : 'DESCONECTADO'}
                                         </span>
+                                        <style dangerouslySetInnerHTML={{ __html: `
+                                            @keyframes pulse-green {
+                                                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+                                                70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+                                                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+                                            }
+                                        `}} />
                                     </span>
                                 </div>
                             </>

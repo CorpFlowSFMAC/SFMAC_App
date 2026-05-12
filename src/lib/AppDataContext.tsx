@@ -322,6 +322,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                                     : (existingHasPagoVista 
                                                         ? existingMeta.solicitudPago 
                                                         : undefined)),
+                                            solicitudLiquidacion: incomingMeta.solicitudLiquidacion !== undefined
+                                                ? incomingMeta.solicitudLiquidacion
+                                                : existingMeta.solicitudLiquidacion,
                                             // Otros campos del incoming siempre ganan
                                             pagoRechazado: incomingMeta.pagoRechazado !== undefined 
                                                 ? incomingMeta.pagoRechazado 
@@ -337,6 +340,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             gestora: patchedGestora,
                                             // Propagar campos clave a nivel raiz
                                             solicitudAdelanto: mergedMeta.solicitudAdelanto,
+                                            solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
                                             adelantoPagado: mergedMeta.adelantoPagado ?? t.adelantoPagado,
                                             pagoRechazado: mergedMeta.pagoRechazado,
                                         };
@@ -419,6 +423,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             : (existingHasPagoVista 
                                                 ? existingMeta.solicitudPago 
                                                 : undefined)),
+                                    solicitudLiquidacion: incomingMeta.solicitudLiquidacion !== undefined
+                                        ? incomingMeta.solicitudLiquidacion
+                                        : existingMeta.solicitudLiquidacion,
                                     pagoRechazado: incomingMeta.pagoRechazado !== undefined 
                                         ? incomingMeta.pagoRechazado 
                                         : existingMeta.pagoRechazado,
@@ -431,6 +438,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     gestora: patchedGestora,
                                     solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                     solicitudPago: mergedMeta.solicitudPago,
+                                    solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
                                     pagoRechazado: mergedMeta.pagoRechazado,
                                 };
                             }

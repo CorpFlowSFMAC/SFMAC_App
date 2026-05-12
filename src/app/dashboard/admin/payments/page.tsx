@@ -634,20 +634,25 @@ export default function PaymentsPage() {
                 }
 
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
+                
+                const liqMonto = meta.solicitudLiquidacion?.monto || 0;
+                const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
+
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
                                           (meta.solicitudPago && !pagoInHistory) || 
-                                          meta.solicitudLiquidacion;
+                                          (meta.solicitudLiquidacion && !liqInHistory);
+
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
                     // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
                     // Solo mostrar si NO hay solicitudes pendientes de aprobación
-                    const liqMonto = round2(netLaborBalance);
-                    if (liqMonto > 0.01) {
+                    const autoLiqMonto = round2(netLaborBalance);
+                    if (autoLiqMonto > 0.01) {
                         pendingItems.push({
                             id: `${t.id}_final`,
                             tipo: 'Liquidación Final',
-                            monto: liqMonto,
+                            monto: autoLiqMonto,
                             estado: 'pendiente',
                             fecha: new Date().toISOString(),
                             concepto: "Saldo de Mano de Obra"
@@ -864,7 +869,7 @@ export default function PaymentsPage() {
             // 2. LOGICA PARA METADATA (LEGACY / SOLICITUDES GESTORA)
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
-                .select('metadata, status_id')
+                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
                 .eq('id', group.realTicketId)
                 .single();
 
@@ -969,7 +974,7 @@ export default function PaymentsPage() {
         try {
             const { data: currentTicket } = await supabase
                 .from('tickets')
-                .select('metadata')
+                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
                 .eq('id', group.realTicketId)
                 .single();
 
@@ -1081,24 +1086,48 @@ export default function PaymentsPage() {
         };
 
         try {
+            // Fetch fresh ticket data with ALL financial columns to ensure accurate balance calculations
+            const { data: currentTicket, error: fetchErr } = await supabase
+                .from('tickets')
+                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
+                .eq('id', group.realTicketId)
+                .single();
+
+            if (fetchErr || !currentTicket) throw new Error("Ticket no encontrado");
+
             if (item.isTableCost && item.costId) {
                 const additionalUpdates: any = { metadataFields: {} };
                 const isAdvance = item.concepto?.toLowerCase().includes('adelanto') || item.tipo?.toLowerCase().includes('adelanto');
                 const isFinal = item.concepto?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('liquidación') || item.id?.endsWith('_final');
 
                 if (isAdvance) {
-                    // ELIMINADO: No forzar estado 'en_ejecucion' por pago
                     additionalUpdates.metadataFields.adelantoPagado = true;
                     additionalUpdates.metadataFields.fechaPagoAdelanto = finalDate;
                     additionalUpdates.metadataFields.solicitudAdelanto = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
                 } else if (isFinal) {
-                    // RESTAURADO: El pago final SÍ cierra el ticket automáticamente
                     additionalUpdates.status_id = 'ticket_cerrado';
                     additionalUpdates.closure_date = finalDate;
                     additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
                     additionalUpdates.metadataFields.solicitudLiquidacion = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
+                }
+
+                // ★ MEJORA: Auto-cerrar si el saldo es 0 (para costos de tabla)
+                const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'cotizacion_aprobada', 'en_ejecucion'].includes(currentTicket.status_id);
+                if (isNearingClosure && !additionalUpdates.status_id) {
+                    const { data: currentCosts } = await supabase.from('ticket_costs').select('*').eq('ticket_id', group.realTicketId);
+                    const updatedCosts = (currentCosts || []).map(c => c.id === item.costId ? { ...c, estado_pago: 'pagado' } : c);
+                    const fin = calculateTicketFinances(currentTicket, updatedCosts);
+                    
+                    if (fin.netLaborBalance < 1) {
+                        additionalUpdates.status_id = 'ticket_cerrado';
+                        additionalUpdates.closure_date = finalDate;
+                        if (!currentTicket.metadata?.fechaPagoFinal) {
+                            additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
+                        }
+                        console.log(`[Payments] Auto-closing ticket ${group.realTicketId} (table cost path) due to zero balance.`);
+                    }
                 }
 
                 const { error: costErr } = await supabase
@@ -1118,13 +1147,6 @@ export default function PaymentsPage() {
                 return;
             }
 
-            const { data: currentTicket } = await supabase
-                .from('tickets')
-                .select('metadata, status_id')
-                .eq('id', group.realTicketId)
-                .single();
-
-            if (!currentTicket) return;
             const meta = { ...currentTicket.metadata };
             const additionalUpdates: any = { metadataFields: {} };
 

@@ -633,7 +633,7 @@ export const ticketsAPI = {
         // 1. Leer metadata actual del servidor — es la única fuente de verdad
         const { data: current, error: fetchErr } = await supabase
             .from('tickets')
-            .select('metadata, status_id')
+            .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
             .eq('id', id)
             .single();
 
@@ -679,7 +679,7 @@ export const ticketsAPI = {
     async patchMetadata(id: string, metadataUpdates: Record<string, any>, columnUpdates: Record<string, any> = {}) {
         const { data: current, error: fetchErr } = await supabase
             .from('tickets')
-            .select('metadata')
+            .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
             .eq('id', id)
             .single();
 
