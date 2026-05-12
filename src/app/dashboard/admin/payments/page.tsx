@@ -598,8 +598,9 @@ export default function PaymentsPage() {
                 });
 
                 // B. Solicitudes en Metadata (Adelanto/Liquidación/Visita)
-                // ★ ESTANDARIZACIÓN 2026-05-12: Detección robusta usando campos normalizados de flat
-                const f = flat as any;
+                // ★ ESTANDARIZACIÓN 2026-05-12: Detección robusta
+                // Los campos ya vienen normalizados del flatten (solicitudAdelanto, solicitudLiquidacion, solicitudPago)
+                const f = t as any;
                 const hasSolicitudAdelanto = f.solicitudAdelanto && (f.solicitudAdelanto.monto > 0 || f.solicitudAdelanto.porcentaje > 0);
                 const hasSolicitudLiquidacion = f.solicitudLiquidacion && f.solicitudLiquidacion.monto > 0;
                 const hasSolicitudPago = f.solicitudPago && f.solicitudPago.monto > 0;
@@ -636,15 +637,10 @@ export default function PaymentsPage() {
                 }
 
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
-                // ★ OPTIMIZACIÓN: Mostrar SIEMPRE si hay solicitudes pendientes, sin importar el estado
-                // Esto asegura que tickets en cualquier estado (documentacion_enviada, en_ejecucion, etc) aparezcan
-                const hasActiveRequest = meta.solicitudLiquidacion || meta.solicitudAdelanto || meta.solicitudPago;
-                const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
-                                          (meta.solicitudPago && !pagoInHistory) || 
-                                          meta.solicitudLiquidacion || hasActiveRequest;
+                // ★ OPTIMIZACIÓN: Si hay solicitudes directas, mostrar siempre
+                const hasDirectRequests = hasSolicitudAdelanto || hasSolicitudLiquidacion || hasSolicitudPago;
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
-                // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
-                if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
+                if (isPorLiquidar && !hasLiquidacionPaid && !hasDirectRequests) {
                     // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
                     // Solo mostrar si NO hay solicitudes pendientes de aprobación
                     const liqMonto = round2(netLaborBalance);
