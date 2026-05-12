@@ -12,32 +12,58 @@ export default function GestorTurnoWidget() {
     const [showBanner6PM, setShowBanner6PM] = useState(false);
     const [turnoTickle, setTurnoTickle] = useState(0);
     const [justClickedIngreso, setJustClickedIngreso] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
 
     // Cargar turno activo al montar
     useEffect(() => {
-        const email = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        if (!email) return;
-        
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        
-        supabase
-            .from('turnos')
-            .select('id, hora_ingreso, estado')
-            .eq('usuario_email', email)
-            .gte('fecha', today.toISOString().split('T')[0])
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-            .then(({ data }) => {
-                if (data) {
-                    if (data.estado === 'EN_CURSO') {
-                        setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso });
-                    } else {
-                        setTurnoHoyCerrado(true);
+        const loadInitialData = async () => {
+            setIsMounted(true);
+            
+            // Intentar obtener email desde localStorage, luego cookies, luego sesión
+            let email = localStorage.getItem('userEmail');
+            if (!email) {
+                const getCookie = (name: string) => {
+                    const value = `; ${document.cookie}`;
+                    const parts = value.split(`; ${name}=`);
+                    if (parts.length === 2) return parts.pop()?.split(';').shift();
+                    return null;
+                };
+                email = getCookie('userEmail');
+            }
+            
+            if (!email) {
+                const { data: { user } } = await supabase.auth.getUser();
+                email = user?.email || null;
+            }
+
+            if (!email) return;
+            
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            // Usar API V3 para evitar bloqueos RLS en la carga inicial si es posible
+            // O usar el cliente si estamos seguros de la sesión.
+            // Para lectura, el cliente suele funcionar si hay RLS para "sus propios turnos"
+            supabase
+                .from('turnos')
+                .select('id, hora_ingreso, estado')
+                .eq('usuario_email', email)
+                .gte('fecha', today.toISOString().split('T')[0])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+                .then(({ data }) => {
+                    if (data) {
+                        if (data.estado === 'EN_CURSO') {
+                            setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso });
+                        } else {
+                            setTurnoHoyCerrado(true);
+                        }
                     }
-                }
-            });
+                });
+        };
+        
+        loadInitialData();
     }, []);
 
     // Verificar banner 6PM cada minuto
@@ -65,39 +91,64 @@ export default function GestorTurnoWidget() {
 
     const handleIngreso = async () => {
         setTurnoLoading(true);
-        const email = localStorage.getItem('userEmail') || '';
-        const nombre = localStorage.getItem('userName') || '';
         
+        // Obtener datos actualizados
+        const getCookie = (name: string) => {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop()?.split(';').shift();
+            return null;
+        };
+
+        const email = localStorage.getItem('userEmail') || getCookie('userEmail') || '';
+        const nombre = localStorage.getItem('userName') || getCookie('userName') || '';
+        
+        if (!email) {
+            alert("No se pudo detectar tu sesión. Por favor, reinicia la página.");
+            setTurnoLoading(false);
+            return;
+        }
+
         try {
+            console.log('[Turno] Intentando marcar ingreso para:', email);
             const response = await fetch('/api/v3/gestor', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'ingreso', email, nombre })
             });
             const result = await response.json();
+            
             if (result.success && result.turno) {
+                console.log('[Turno] Ingreso exitoso:', result.turno);
                 setTurnoActivo({ id: result.turno.id, hora_ingreso: result.turno.hora_ingreso });
                 setJustClickedIngreso(true);
                 setTurnoLoading(false);
                 return;
+            } else {
+                console.error('[Turno] API devolvió error:', result.error);
+                throw new Error(result.error || 'Error desconocido en API');
             }
-        } catch (e) {
-            console.log('[Gestor] V3 ingreso failed, trying client:', e);
-        }
-        
-        // Fallback
-        const { data, error } = await supabase
-            .from('turnos')
-            .insert({ usuario_email: email, usuario_nombre: nombre, fecha: new Date().toISOString().split('T')[0] })
-            .select('id, hora_ingreso')
-            .single();
-        if (!error && data) {
-            setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso });
-            setJustClickedIngreso(true);
-        } else if (error && error.code === '23505') {
-            // Error de duplicado: significa que ya había registrado hoy.
-            // Si hubo error, podemos intentar simplemente hacer select.
-            console.log('[Gestor] Error insertando turno:', error);
+        } catch (e: any) {
+            console.log('[Turno] V3 ingreso failed, trying direct client:', e);
+            
+            // Fallback directo a Supabase
+            const { data, error } = await supabase
+                .from('turnos')
+                .insert({ 
+                    usuario_email: email, 
+                    usuario_nombre: nombre, 
+                    fecha: new Date().toISOString().split('T')[0] 
+                })
+                .select('id, hora_ingreso')
+                .single();
+                
+            if (!error && data) {
+                setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso });
+                setJustClickedIngreso(true);
+            } else {
+                console.error('[Turno] Error crítico en marcación:', error || e);
+                alert("Error al marcar ingreso: " + (error?.message || e.message || "Error de conexión"));
+            }
         }
         setTurnoLoading(false);
     };
