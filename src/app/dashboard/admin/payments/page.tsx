@@ -607,7 +607,7 @@ export default function PaymentsPage() {
                 }
 
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
-                const hasPendingRequests = meta.solicitudAdelanto || meta.solicitudPago;
+                const hasPendingRequests = meta.solicitudAdelanto || meta.solicitudPago || meta.solicitudLiquidacion;
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {

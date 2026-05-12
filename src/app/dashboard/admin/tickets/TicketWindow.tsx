@@ -884,13 +884,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
                 // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
                 
-                solicitudLiquidacion: (hasActiveRejection || !serverMeta.solicitudLiquidacion || options?.allowStateRollback === false)
+                solicitudLiquidacion: (hasActiveRejection || !serverMeta.solicitudLiquidacion && !dataOverride || options?.allowStateRollback === false)
                     ? serverMeta.solicitudLiquidacion
                     : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection || !serverMeta.solicitudAdelanto || options?.allowStateRollback === false)
+                solicitudAdelanto: (hasActiveRejection || !serverMeta.solicitudAdelanto && !dataOverride || options?.allowStateRollback === false)
                     ? serverMeta.solicitudAdelanto
                     : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPago: (hasActiveRejection || !serverMeta.solicitudPago || options?.allowStateRollback === false)
+                solicitudPago: (hasActiveRejection || !serverMeta.solicitudPago && !dataOverride || options?.allowStateRollback === false)
                     ? serverMeta.solicitudPago
                     : (businessData.solicitudPago || serverMeta.solicitudPago),
                 
