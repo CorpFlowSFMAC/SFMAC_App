@@ -1625,7 +1625,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             
             // 🔥 FORZAR UPDATE LOCAL PRIMERO
             setTicketData(updated);
-            
+
+            // 🚨 GUARDAR EN LOCALSTORAGE PARA PRESERVACIÓN
+            try {
+                const existing = JSON.parse(localStorage.getItem(`ticket_state_${ticketData.id}`) || '{}');
+                localStorage.setItem(`ticket_state_${ticketData.id}`, JSON.stringify({
+                    ...existing,
+                    solicitudAdelanto: updated.solicitudAdelanto,
+                    metadata: updated.metadata
+                }));
+            } catch(e) { console.warn("localStorage save failed:", e); }
+
             // ✅ SINCRONIZAR CON OVERRIDE EXPLÍCITO
             await syncToSupabase(updated, { allowStateRollback: true });
             
