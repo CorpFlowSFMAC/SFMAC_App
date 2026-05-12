@@ -182,6 +182,19 @@ export const queryKeys = {
 };
 
 // ─────────────────────────────────────────────
+// useStrategicMetrics — Hook para KPIs globales (Cash Flow & ROI)
+// ─────────────────────────────────────────────
+export function useStrategicMetrics(startDate: string, endDate: string) {
+    return useQuery({
+        queryKey: [...queryKeys.tickets.all, "strategic-metrics", startDate, endDate],
+        queryFn: async () => {
+            return await ticketsAPI.getStrategicMetrics(startDate, endDate);
+        },
+        staleTime: 1000 * 60, // 60s
+    });
+}
+
+// ─────────────────────────────────────────────
 // useTickets — Hook principal para lista/kanban
 // ─────────────────────────────────────────────
 // Usa fallback: intenta primero la API, si falla usa server endpoint

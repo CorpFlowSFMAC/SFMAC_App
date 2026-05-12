@@ -454,6 +454,20 @@ export const ticketsAPI = {
         return data || [];
     },
 
+    async getStrategicMetrics(startDate: string, endDate: string) {
+        const { data, error } = await supabase
+            .rpc('get_strategic_metrics', {
+                p_start_date: startDate,
+                p_end_date: endDate
+            });
+
+        if (error) {
+            console.error('[ticketsAPI] Error calling get_strategic_metrics:', error.message);
+            throw error;
+        }
+        return data;
+    },
+
     async getForPayments() {
         // ════════════════════════════════════════════════════════════════════
         // MOTOR PRINCIPAL V3: Consulta directa JS con Joins (SINFIMAC V3)

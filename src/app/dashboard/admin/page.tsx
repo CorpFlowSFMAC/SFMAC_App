@@ -13,6 +13,7 @@ import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
 import { ticketsAPI } from "@/lib/supabase-api";
+import { useStrategicMetrics } from "@/lib/useQueryHooks";
 
 // ── Helpers ──────────────────────────────────
 const SLA_HOURS = 72;
@@ -181,6 +182,27 @@ export default function AdminDashboard() {
         }
     };
 
+    // ── Rango de Fechas para Métricas Globales (Cash Flow) ──
+    const rangeDates = useMemo(() => {
+        const end = new Date();
+        const start = new Date();
+        if (dateRange === "today") {
+            start.setHours(0, 0, 0, 0);
+        } else if (dateRange === "week") {
+            const day = start.getDay() || 7;
+            start.setDate(start.getDate() - (day - 1));
+            start.setHours(0, 0, 0, 0);
+        } else if (dateRange === "month") {
+            start.setDate(1);
+            start.setHours(0, 0, 0, 0);
+        } else {
+            start.setFullYear(2020);
+        }
+        return { start: start.toISOString(), end: end.toISOString() };
+    }, [dateRange]);
+
+    const { data: strategicMetrics } = useStrategicMetrics(rangeDates.start, rangeDates.end);
+
     const isInRange = (dateStr: string) => {
         if (dateRange === "all") return true;
         const d = new Date(dateStr);
@@ -223,9 +245,10 @@ export default function AdminDashboard() {
         // Está estrictamente prohibido calcular IGV o sumar costos en el Frontend.
         const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
 
-        // REGLA 3: Inversión Ejecutada (Costos Devengados del Periodo)
-        // Suma inmutable calculada por el backend (total_costs_agg = Flujo A + Flujo B)
-        const inversionEjecutada = closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
+        // REGLA 3: Inversión Ejecutada (CASH FLOW — Depósitos realizados en el periodo)
+        // Se prioriza la métrica estratégica (suma de pagos realizados) sobre la suma de costos de tickets cerrados.
+        const inversionEjecutada = strategicMetrics?.inversion_ejecutada ?? 
+                                   closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
 
         // Utilidad y Margen se leen de la suma global para consistencia, 
         // aunque el Backend ya calcula por ticket.
@@ -531,7 +554,7 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub={`${roi.closed} tickets cerrados (Monto Real)`} color="#3B82F6"
+                    sub="Depósitos totales realizados en el periodo" color="#3B82F6"
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
