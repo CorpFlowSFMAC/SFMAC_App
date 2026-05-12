@@ -656,9 +656,7 @@ export const ticketsAPI = {
         const serverMeta = current?.metadata || {};
 
         // 2. Merge del historial: nunca pisamos pagos existentes
-        // 2. Unificar historial (evitar duplicados y manejar ambos nombres de campo)
         const existingPagos: any[] = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
-        // Evitar duplicados en caso de doble-click
         const alreadyExists = existingPagos.some((p: any) => p.id === newPago.id);
         const mergedPagos = alreadyExists ? existingPagos : [...existingPagos, newPago];
 
@@ -684,8 +682,59 @@ export const ticketsAPI = {
             .single();
 
         if (error) throw error;
+
+        // ★★★ SYNC TO TICKET_COSTS (Strategic Metrics Mirror) ★★★
+        // Si el pago es exitoso, nos aseguramos de que exista en la tabla de costos
+        // para que aparezca en las métricas ejecutivas de Gerencia.
+        if (newPago.estado === 'pagado') {
+            try {
+                // Verificar si ya existe un costo similar en la tabla (para evitar duplicados)
+                // Buscamos coincidencia de monto y fecha (truncada a día)
+                const targetDate = newPago.fecha || new Date().toISOString().split('T')[0];
+                const { data: existingCosts } = await supabase
+                    .from('ticket_costs')
+                    .select('id, concepto, categoria')
+                    .eq('ticket_id', id)
+                    .eq('monto', newPago.monto)
+                    .eq('estado_pago', 'pagado');
+
+                const isAlreadyMirrored = existingCosts?.some(ec => {
+                    const ecConcept = (ec.concepto || '').toLowerCase();
+                    const lpTipo = (newPago.tipo || '').toLowerCase();
+                    // Si el concepto contiene "Sync" y el tipo coincide, o si es un "Autorizado Admin" previo
+                    return ecConcept.includes('sync') && ecConcept.includes(lpTipo) || 
+                           ecConcept.includes('autorizado') && ecConcept.includes(lpTipo);
+                });
+
+                if (!isAlreadyMirrored) {
+
+                    // Determinar categoría
+                    let categoria = 'Otros';
+                    const tipo = (newPago.tipo || '').toLowerCase();
+                    if (tipo.includes('adelanto')) categoria = 'Adelanto';
+                    else if (tipo.includes('visita') || tipo.includes('pasaje') || tipo.includes('movilidad')) categoria = 'Viáticos / Movilidad';
+                    else if (tipo.includes('liquidación') || tipo.includes('final') || tipo.includes('mano de obra')) categoria = 'Mano de Obra';
+
+                    await supabase.from('ticket_costs').insert({
+                        ticket_id: id,
+                        monto: newPago.monto,
+                        categoria,
+                        concepto: `Sync: ${newPago.tipo} (${newPago.referencia || 'S/R'})`,
+                        estado_pago: 'pagado',
+                        fecha_pago: newPago.fecha,
+                        specialist_id: current?.technician_id || null,
+                        url_comprobante: newPago.voucherRef || null
+                    });
+                    console.log(`[Sync] Legacy payment ${newPago.id} mirrored to ticket_costs for metrics parity.`);
+                }
+            } catch (syncErr) {
+                console.warn('[Sync] Failed to mirror payment to ticket_costs:', syncErr);
+            }
+        }
+
         return data;
     },
+
 
     // ★★★ METADATA-SAFE GENERIC UPDATE ★★★
     // Permite actualizar campos de la metadata sin borrar el resto del JSON.

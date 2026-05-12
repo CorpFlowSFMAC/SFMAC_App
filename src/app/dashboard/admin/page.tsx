@@ -243,7 +243,9 @@ export default function AdminDashboard() {
 
         // REGLA 2: Lectura Inmutable (Backend Single Source of Truth)
         // Está estrictamente prohibido calcular IGV o sumar costos en el Frontend.
-        const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
+        const ingresosGenerados = strategicMetrics?.ingresos_generados ?? 
+                                  closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
+
 
         // REGLA 3: Inversión Ejecutada (CASH FLOW — Depósitos realizados en el periodo)
         // Se prioriza la métrica estratégica (suma de pagos realizados) sobre la suma de costos de tickets cerrados.
@@ -290,7 +292,8 @@ export default function AdminDashboard() {
             })).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
-    }, [tickets]);
+    }, [tickets, strategicMetrics]);
+
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
     const tesoreria = useMemo(() => {

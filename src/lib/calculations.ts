@@ -132,9 +132,30 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     });
     
     const legacyPayments = Array.from(allById.values());
-    const filteredLegacy = legacyPayments.filter((lp: any) => 
-        !safeCosts.some(mc => mc.id === lp.id) && isConfirmed(lp.estado)
-    );
+    const filteredLegacy = legacyPayments.filter((lp: any) => {
+        // Bloqueo de duplicidad: si ya existe en ticket_costs, no lo mostramos de la metadata
+        const alreadyInModern = safeCosts.some(mc => {
+            if (mc.id && lp.id && mc.id === lp.id) return true;
+            
+            // Heurística para pagos migrados/espejo sin ID compartido:
+            // Mismo monto y misma fecha (día)
+            const sameMonto = toNum(mc.monto) === toNum(lp.monto);
+            const dateModern = new Date(mc.fecha_pago || mc.fecha || 0).toDateString();
+            const dateLegacy = new Date(lp.fecha || lp.date || 0).toDateString();
+            const sameDate = dateModern === dateLegacy;
+            
+            // Si el monto y la fecha coinciden, es altamente probable que sea el mismo registro
+            // especialmente si la referencia de ticket_costs menciona que fue autorizado por admin
+            const isMirror = sameMonto && sameDate && (
+                mc.referencia?.toLowerCase().includes('autorizado') ||
+                mc.referencia?.toLowerCase().includes(lp.tipo?.toLowerCase())
+            );
+
+            return isMirror;
+        });
+        return !alreadyInModern && isConfirmed(lp.estado);
+    });
+
 
     const modernLabor = confirmedModern.map(normalizePayment).filter(isLabor);
     const modernOp = confirmedModern.map(normalizePayment).filter(isOperating);
