@@ -846,6 +846,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             : (serverHasActiveRejection 
                 ? serverStatusId 
                 : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId));
+        
+        // PROTOCOLO DE AUTORIDAD: Limpiar localStorage si hay rechazo activo ANTES de construir updates
+        if (serverHasActiveRejection) {
+            try {
+                localStorage.removeItem(`ticket_state_${ticketData.id}`);
+            } catch(e) {}
+        }
 
         const updates: any = {
             status_id: resolvedStatusId,
@@ -892,23 +899,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 })(),
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
-                // 4. PROTOCOLO DE AUTORIDAD DE DATOS: Sanitización agresiva
-                // Si el servidor tiene rechazo activo, limpiar CUALQUIER dato local de solicitud
-                // y limpiar localStorage - el servidor es la única fuente de verdad
-                const shouldSanitize = serverHasActiveRejection;
-                
-                // Limpiar localStorage si hay rechazo activo
-                if (shouldSanitize) {
-                    try {
-                        localStorage.removeItem(`ticket_state_${ticketData.id}`);
-                    } catch(e) {}
-                }
-                
-                // Los campos financieros son SERVER-ONLY - nunca restaurar desde local
-                // Si hay rechazo, el servidor es la fuente de verdad (serverMeta yaAppliedAbove)
-                solicitudLiquidacion: shouldSanitize ? null : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: shouldSanitize ? null : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPago: shouldSanitize ? null : (businessData.solicitudPago || serverMeta.solicitudPago),
+                // Los campos financieros son SERVER-ONLY - si hay rechazo forzamos null, si no usamos servidor o local
+                solicitudLiquidacion: serverHasActiveRejection ? null : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
+                solicitudAdelanto: serverHasActiveRejection ? null : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
+                solicitudPago: serverHasActiveRejection ? null : (businessData.solicitudPago || serverMeta.solicitudPago),
                 
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
