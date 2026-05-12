@@ -38,56 +38,104 @@ export default function AdminLayout({
         window.location.href = "/login";
     };
 
+    const [gestoraNombre, setGestoraNombre] = useState<string | null>(null);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
     const [realUserName, setRealUserName] = useState<string | null>(null);
-
     const [userAvatar, setUserAvatar] = useState<string | null>(null);
 
     useEffect(() => {
         setIsMounted(true);
         
-        // Primero intentarlocalStorage, luego cookies
-        let role = localStorage.getItem("userRole");
-        let name = localStorage.getItem("userName");
-        let avatar = localStorage.getItem("userAvatar");
-        let email = localStorage.getItem("userEmail");
-        
-        // Sino está enlocalStorage, leer cookies (Azure AD callback solo escribe cookies)
-        const cookies = document.cookie;
-        if (!role) {
-            const roleMatch = cookies.match(/userRole=([^;]+)/);
-            role = roleMatch ? decodeURIComponent(roleMatch[1]) : null;
-        }
-        if (!name) {
-            const nameMatch = cookies.match(/userName=([^;]+)/);
-            if (nameMatch) name = decodeURIComponent(nameMatch[1]);
-        }
-        if (!avatar) {
-            const avatarMatch = cookies.match(/userAvatar=([^;]+)/);
-            if (avatarMatch) avatar = decodeURIComponent(avatarMatch[1]);
-        }
-        if (!email) {
-            const emailMatch = cookies.match(/userEmail=([^;]+)/);
-            if (emailMatch) email = decodeURIComponent(emailMatch[1]);
-        }
+        const loadUserData = async () => {
+            // 1. Intentar desde localStorage
+            let role = localStorage.getItem("userRole");
+            let name = localStorage.getItem("userName");
+            let avatar = localStorage.getItem("userAvatar");
+            let email = localStorage.getItem("userEmail");
+            
+            // 2. Fallback a cookies (Azure AD redirecciones no setean localStorage)
+            const getCookie = (cookieName: string): string | null => {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${cookieName}=`);
+                if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+                return null;
+            };
 
-        // 🔧 BUGFIX: Sincronizar cookies → localStorage para que todos los componentes hijos
-        // (e.g. admin/tickets/page.tsx) que leen localStorage funcionen correctamente.
-        // Sin esto, la bandeja del admin queda vacía porque isAdminState=false y myGestoraId=null.
-        if (role) localStorage.setItem("userRole", role);
-        if (name) localStorage.setItem("userName", name);
-        if (avatar) localStorage.setItem("userAvatar", avatar);
-        if (email) localStorage.setItem("userEmail", email);
-        
-        setUserRole(role);
-        setRealUserName(name);
-        setUserAvatar(avatar);
+            if (!role) role = getCookie('userRole');
+            if (!name) name = getCookie('userName');
+            if (!avatar) avatar = getCookie('userAvatar');
+            if (!email) email = getCookie('userEmail');
+
+            // 3. Fallback definitivo: Sesión de Supabase
+            if (!email) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    email = user.email || null;
+                    if (!role) role = user.user_metadata?.role || 'admin';
+                }
+            }
+            
+            // Sincronizar cookies → localStorage
+            if (role) localStorage.setItem("userRole", role);
+            if (name) localStorage.setItem("userName", name || '');
+            if (avatar) localStorage.setItem("userAvatar", avatar || '');
+            if (email) localStorage.setItem("userEmail", email || '');
+            
+            setUserRole(role);
+            setRealUserName(name);
+            setUserAvatar(avatar);
+            setUserEmail(email);
+
+            // Buscar nombre real siempre que tengamos un email
+            if (email) {
+                fetchPerfilNombre(email);
+            } else if (name && !name.includes('@')) {
+                setGestoraNombre(name);
+            }
+        };
+
+        loadUserData();
     }, []);
 
+    // Buscar nombre real desde perfil o gestora
+    const fetchPerfilNombre = async (email: string | null) => {
+        if (!email) return;
+        try {
+            // Buscar en perfiles primero
+            const { data: p } = await supabase
+                .from('perfiles')
+                .select('id, nombre_completo, nombre')
+                .ilike('email', email)
+                .maybeSingle();
+            
+            if (p?.nombre_completo || p?.nombre) {
+                setGestoraNombre(p.nombre_completo || p.nombre);
+                return;
+            }
+
+            // Fallback a gestoras
+            const { data: g } = await supabase
+                .from('gestoras')
+                .select('id, name, nombre')
+                .ilike('email', email)
+                .maybeSingle();
+            
+            if (g?.name || g?.nombre) {
+                setGestoraNombre(g.name || g.nombre);
+            } else {
+                setGestoraNombre(email.split('@')[0]);
+            }
+        } catch (e) {
+            setGestoraNombre(email.split('@')[0]);
+        }
+    };
+
     const isAdmin = isMounted && userRole?.toLowerCase() === 'admin';
-    const avatarLetter = isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isAdmin ? 'A' : 'G');
-    const fullDisplayName = isMounted && realUserName ? realUserName : (isAdmin ? 'Administrador' : 'Gestora Operativa');
+    const avatarLetter = isMounted && gestoraNombre ? gestoraNombre.charAt(0).toUpperCase() : (isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isAdmin ? 'A' : 'G'));
+    const displayGestora = isMounted && gestoraNombre ? gestoraNombre : (isMounted && realUserName ? realUserName : (isMounted && userEmail ? userEmail.split('@')[0] : (isAdmin ? 'Administrador' : 'Gestora')));
+    const fullDisplayName = displayGestora;
     const displayName = fullDisplayName.split(' ')[0]; // Solo el primer nombre
-    const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(fullDisplayName)}&background=f97316&color=fff&bold=true` : null);
+    const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName && fullDisplayName !== 'Gestora' && fullDisplayName !== 'Administrador' ? `https://ui-avatars.com/api/?name=${encodeURIComponent(fullDisplayName)}&background=f97316&color=fff&bold=true` : null);
     const dashboardHref = isAdmin ? "/dashboard/admin" : "/dashboard/gestor";
 
     const motivationalPhrases = [

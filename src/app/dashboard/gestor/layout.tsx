@@ -24,27 +24,53 @@ export default function GestorLayout({
     const [userAvatar, setUserAvatar] = useState<string | null>(null);
     const [gestoraNombre, setGestoraNombre] = useState<string | null>(null);
 
-    // Cargar datos del usuario desde localStorage y perfil
+    // Cargar datos del usuario desde cookies, localStorage y sesión de Supabase
     useEffect(() => {
         setIsMounted(true);
-        const role = localStorage.getItem("userRole");
-        const storedName = localStorage.getItem("userName");
-        const storedEmail = localStorage.getItem("userEmail");
-        const storedAvatar = localStorage.getItem("userAvatar");
         
-        setUserRole(role);
-        setRealUserName(storedName);
-        setUserEmail(storedEmail);
-        setUserAvatar(storedAvatar);
-        
-        // Si el nombre de localStorage parece un email, intentar buscar en perfiles
-        if (storedName && storedName.includes('@')) {
-            // El nombre guardado es el email, buscar nombre real desde perfil/gestora
-            fetchPerfilNombre(storedEmail);
-        } else if (storedName) {
-            // Usar el nombre almacenado
-            setGestoraNombre(storedName);
-        }
+        const loadUserData = async () => {
+            // 1. Intentar desde localStorage
+            let role = localStorage.getItem("userRole");
+            let storedName = localStorage.getItem("userName");
+            let storedEmail = localStorage.getItem("userEmail");
+            let storedAvatar = localStorage.getItem("userAvatar");
+            
+            // 2. Fallback a cookies (Azure AD redirecciones no setean localStorage)
+            if (!storedEmail || !role) {
+            const getCookie = (name: string): string | null => {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+                return null;
+            };
+            
+            if (!role) role = getCookie('userRole');
+            if (!storedEmail) storedEmail = getCookie('userEmail');
+            }
+
+            // 3. Fallback definitivo: Sesión de Supabase
+            if (!storedEmail) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    storedEmail = user.email || null;
+                    if (!role) role = user.user_metadata?.role || 'gestor';
+                }
+            }
+            
+            setUserRole(role);
+            setRealUserName(storedName);
+            setUserEmail(storedEmail);
+            setUserAvatar(storedAvatar);
+            
+            // Buscar nombre real siempre que tengamos un email
+            if (storedEmail) {
+                fetchPerfilNombre(storedEmail);
+            } else if (storedName && !storedName.includes('@')) {
+                setGestoraNombre(storedName);
+            }
+        };
+
+        loadUserData();
     }, []);
 
     // Buscar nombre real desde perfil o gestora
@@ -83,12 +109,12 @@ export default function GestorLayout({
         }
     };
 
-    const avatarLetter = isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isMounted && userRole === 'admin' ? 'A' : 'G');
+    const avatarLetter = isMounted && gestoraNombre ? gestoraNombre.charAt(0).toUpperCase() : (isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isMounted && userRole === 'admin' ? 'A' : 'G'));
     // Usar el nombre de la gestora desde la DB o fallback
-    const displayGestora = isMounted && gestoraNombre ? gestoraNombre : (isMounted && realUserName ? realUserName : 'Gestora');
+    const displayGestora = isMounted && gestoraNombre ? gestoraNombre : (isMounted && realUserName ? realUserName : (isMounted && userEmail ? userEmail.split('@')[0] : 'Gestora'));
     const displayName = displayGestora.split(' ')[0]; // Solo el primer nombre
     const fullDisplayName = displayGestora;
-    const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(fullDisplayName)}&background=f97316&color=fff&bold=true` : null);
+    const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName && fullDisplayName !== 'Gestora' ? `https://ui-avatars.com/api/?name=${encodeURIComponent(fullDisplayName)}&background=f97316&color=fff&bold=true` : null);
     const dashboardHref = isMounted && userRole === 'admin' ? "/dashboard/admin" : "/dashboard/gestor";
 
     const motivationalPhrases = [
