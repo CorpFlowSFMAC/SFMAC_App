@@ -538,7 +538,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             status_id: finalStatusId,
                             adelantoPagado: meta.adelantoPagado ?? false,
                             visitPaymentConfirmed: visitConfirmed,
-                            solicitudAdelanto: meta.solicitudAdelanto ?? null,
+                            // 🚨 PRESERVAR de localStorage si existe para evitar regressión
+                solicitudAdelanto: (() => {
+                    const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            if (parsed.solicitudAdelanto) return parsed.solicitudAdelanto;
+                        } catch(e) {}
+                    }
+                    return meta.solicitudAdelanto || ticket?.solicitudAdelanto || null;
+                })(),
                             solicitudPago: visitConfirmed ? null : (meta.solicitudPago ?? null),
                             historialPagosTecnico: meta.historialPagosTecnico ?? [],
                             gestora: fullTicket.gestora || meta.gestora || null
@@ -618,8 +628,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
             // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
             const localSolicitud = prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto;
+            // 🚨 PRESERVAR de localStorage en realtime sync también
+            const savedLS = (() => {
+                try {
+                    const s = localStorage.getItem(`ticket_state_${ticket.id}`);
+                    return s ? JSON.parse(s).solicitudAdelanto : null;
+                } catch(e) { return null; }
+            })();
             const serverSolicitud = meta.solicitudAdelanto || ticket.solicitudAdelanto;
-            const finalSolicitud = (localSolicitud && !serverSolicitud) ? localSolicitud : (serverSolicitud || localSolicitud);
+            // Priority: localStorage > local > server
+            const finalSolicitud = savedLS || localSolicitud || serverSolicitud;
 
             if (DEBUG_GESTION && hasMetaChanged) {
                 console.log("🧩 Metadata Diferente detectada en Realtime. Syncing...");
@@ -1645,7 +1663,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             return;
         }
 
-        // Bloquear actualizaciones del prop durante la transacción para evitar parpadeo
+        // 🚀 FORZAR SINCRONIZACIÓN: Asegurar que el override llega a la DB
         isProcessingAdvance.current = true;
         try {
             const updated = {
@@ -1657,14 +1675,36 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     classification: advanceClassification, // pocket vs materials
                     riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7
                 },
-                pagoRechazado: null,
+                pagoRechazado: null, // ← LIMPIAR rechazo antes de enviar
                 metadata: {
                     ...(ticketData.metadata || {}),
-                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero
+                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero,
+                    solicitudAdelanto: {
+                        porcentaje: pctVal,
+                        monto: amount,
+                        fecha: new Date().toISOString(),
+                        classification: advanceClassification,
+                        riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7
+                    },
+                    pagoRechazado: null
                 }
             };
+            
+            // 🔥 FORZAR UPDATE LOCAL PRIMERO
             setTicketData(updated);
-            await syncToSupabase(updated);
+
+            // 🚨 GUARDAR EN LOCALSTORAGE PARA PRESERVACIÓN
+            try {
+                const existing = JSON.parse(localStorage.getItem(`ticket_state_${ticketData.id}`) || '{}');
+                localStorage.setItem(`ticket_state_${ticketData.id}`, JSON.stringify({
+                    ...existing,
+                    solicitudAdelanto: updated.solicitudAdelanto,
+                    metadata: updated.metadata
+                }));
+            } catch(e) { console.warn("localStorage save failed:", e); }
+
+            // ✅ SINCRONIZAR CON OVERRIDE EXPLÍCITO
+            await syncToSupabase(updated, { allowStateRollback: true });
             
             // ✅ FIX 2026-04-27: Esperar a que Supabase procese antes de limpiar estado
             await new Promise(resolve => setTimeout(resolve, 1200));
