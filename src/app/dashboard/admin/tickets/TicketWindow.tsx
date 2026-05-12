@@ -537,7 +537,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             status_id: finalStatusId,
                             adelantoPagado: meta.adelantoPagado ?? false,
                             visitPaymentConfirmed: visitConfirmed,
-                            solicitudAdelanto: meta.solicitudAdelanto ?? null,
+                            // 🚨 PRESERVAR de localStorage si existe para evitar regressión
+                solicitudAdelanto: (() => {
+                    const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            if (parsed.solicitudAdelanto) return parsed.solicitudAdelanto;
+                        } catch(e) {}
+                    }
+                    return meta.solicitudAdelanto || ticket?.solicitudAdelanto || null;
+                })(),
                             solicitudPago: visitConfirmed ? null : (meta.solicitudPago ?? null),
                             historialPagosTecnico: meta.historialPagosTecnico ?? [],
                             gestora: fullTicket.gestora || meta.gestora || null
@@ -617,8 +627,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
             // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
             const localSolicitud = prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto;
+            // 🚨 PRESERVAR de localStorage en realtime sync también
+            const savedLS = (() => {
+                try {
+                    const s = localStorage.getItem(`ticket_state_${ticket.id}`);
+                    return s ? JSON.parse(s).solicitudAdelanto : null;
+                } catch(e) { return null; }
+            })();
             const serverSolicitud = meta.solicitudAdelanto || ticket.solicitudAdelanto;
-            const finalSolicitud = (localSolicitud && !serverSolicitud) ? localSolicitud : (serverSolicitud || localSolicitud);
+            // Priority: localStorage > local > server
+            const finalSolicitud = savedLS || localSolicitud || serverSolicitud;
 
             if (DEBUG_GESTION && hasMetaChanged) {
                 console.log("🧩 Metadata Diferente detectada en Realtime. Syncing...");
