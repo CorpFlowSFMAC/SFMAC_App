@@ -629,7 +629,7 @@ export default function PaymentsPage() {
                         monto: round2(meta.solicitudLiquidacion.monto || 0),
                         estado: 'pendiente',
                         fecha: meta.solicitudLiquidacion.fecha || t.created_at,
-                        concept: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
+                        concepto: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
                     });
                 }
 
