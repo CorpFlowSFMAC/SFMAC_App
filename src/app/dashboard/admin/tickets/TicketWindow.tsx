@@ -884,13 +884,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
                 // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
                 
-                solicitudLiquidacion: (hasActiveRejection || !serverMeta.solicitudLiquidacion && !dataOverride || options?.allowStateRollback === false)
+                solicitudLiquidacion: (hasActiveRejection || (!serverMeta.solicitudLiquidacion && !dataOverride) || options?.allowStateRollback === false)
                     ? serverMeta.solicitudLiquidacion
                     : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection || !serverMeta.solicitudAdelanto && !dataOverride || options?.allowStateRollback === false)
+                solicitudAdelanto: (hasActiveRejection || (!serverMeta.solicitudAdelanto && !dataOverride) || options?.allowStateRollback === false)
                     ? serverMeta.solicitudAdelanto
                     : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPago: (hasActiveRejection || !serverMeta.solicitudPago && !dataOverride || options?.allowStateRollback === false)
+                solicitudPago: (hasActiveRejection || (!serverMeta.solicitudPago && !dataOverride) || options?.allowStateRollback === false)
                     ? serverMeta.solicitudPago
                     : (businessData.solicitudPago || serverMeta.solicitudPago),
                 
@@ -1578,7 +1578,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             return;
         }
 
-        // Bloquear actualizaciones del prop durante la transacción para evitar parpadeo
+        // 🚀 FORZAR SINCRONIZACIÓN: Asegurar que el override llega a la DB
         isProcessingAdvance.current = true;
         try {
             const updated = {
@@ -1590,14 +1590,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     classification: advanceClassification, // pocket vs materials
                     riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7
                 },
-                pagoRechazado: null,
+                pagoRechazado: null, // ← LIMPIAR rechazo antes de enviar
                 metadata: {
                     ...(ticketData.metadata || {}),
-                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero
+                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero,
+                    solicitudAdelanto: {
+                        porcentaje: pctVal,
+                        monto: amount,
+                        fecha: new Date().toISOString(),
+                        classification: advanceClassification,
+                        riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7
+                    },
+                    pagoRechazado: null
                 }
             };
+            
+            // 🔥 FORZAR UPDATE LOCAL PRIMERO
             setTicketData(updated);
-            await syncToSupabase(updated);
+            
+            // ✅ SINCRONIZAR CON OVERRIDE EXPLÍCITO
+            await syncToSupabase(updated, { allowStateRollback: true });
             
             // ✅ FIX 2026-04-27: Esperar a que Supabase procese antes de limpiar estado
             await new Promise(resolve => setTimeout(resolve, 1200));
