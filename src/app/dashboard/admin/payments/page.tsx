@@ -869,7 +869,7 @@ export default function PaymentsPage() {
             // 2. LOGICA PARA METADATA (LEGACY / SOLICITUDES GESTORA)
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
-                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
+                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
                 .eq('id', group.realTicketId)
                 .single();
 
@@ -974,7 +974,7 @@ export default function PaymentsPage() {
         try {
             const { data: currentTicket } = await supabase
                 .from('tickets')
-                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
+                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
                 .eq('id', group.realTicketId)
                 .single();
 
@@ -1089,7 +1089,7 @@ export default function PaymentsPage() {
             // Fetch fresh ticket data with ALL financial columns to ensure accurate balance calculations
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
-                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, monto_pactado_mo, costoManoObra, monto_acordado, ingresos_reales, monto_presupuesto, montoFinal, montoTotalCotizado, montoIGV, igv')
+                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
                 .eq('id', group.realTicketId)
                 .single();
 
