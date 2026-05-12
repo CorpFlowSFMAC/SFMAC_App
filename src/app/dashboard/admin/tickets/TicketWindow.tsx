@@ -101,6 +101,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [zIndex, setZIndex] = useState(1001 + (index || 0));
     const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
     const [showGestoraDrawer, setShowGestoraDrawer] = useState(false);
+    const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -884,13 +885,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
                 // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
                 
-                solicitudLiquidacion: (hasActiveRejection || !serverMeta.solicitudLiquidacion || options?.allowStateRollback === false)
+                solicitudLiquidacion: (hasActiveRejection || (!serverMeta.solicitudLiquidacion && !dataOverride?.solicitudLiquidacion) || options?.allowStateRollback === false)
                     ? serverMeta.solicitudLiquidacion
                     : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection || !serverMeta.solicitudAdelanto || options?.allowStateRollback === false)
+                solicitudAdelanto: (hasActiveRejection || (!serverMeta.solicitudAdelanto && !dataOverride?.solicitudAdelanto) || options?.allowStateRollback === false)
                     ? serverMeta.solicitudAdelanto
                     : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPago: (hasActiveRejection || !serverMeta.solicitudPago || options?.allowStateRollback === false)
+                solicitudPago: (hasActiveRejection || (!serverMeta.solicitudPago && !dataOverride?.solicitudPago) || options?.allowStateRollback === false)
                     ? serverMeta.solicitudPago
                     : (businessData.solicitudPago || serverMeta.solicitudPago),
                 
@@ -985,6 +986,72 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             window.removeEventListener('ticket-reopen', handleReopen as EventListener);
         };
     }, [ticket.id]);
+
+    // ★ V4: REALTIME DIRECT SYNC - Recibir actualizaciones del servidor al instante
+    useEffect(() => {
+        if (!ticketData?.id) return;
+
+        const channel = supabase
+            .channel(`ticket_realtime_${ticketData.id}`)
+            .on('postgres_changes',
+                { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'tickets', 
+                    filter: `id=eq.${ticketData.id}` 
+                },
+                (payload) => {
+                    const freshServerData = payload.new as any;
+                    if (DEBUG_GESTION) console.log("⚡ [Realtime] Cambio detectado en servidor:", freshServerData);
+
+                    setTicketData((prev: any) => {
+                        // MERGE INTELIGENTE: Solo actualizar si hay cambios reales en campos clave
+                        // para evitar perder lo que el usuario está escribiendo en el momento.
+                        const serverMeta = freshServerData.metadata || {};
+                        const prevMeta = prev.metadata || {};
+
+                        // Campos que MANDA el servidor (Finanzas, Pagos, Estado)
+                        const serverFields = {
+                            status_id: freshServerData.status_id,
+                            estadoId: normalizeStateId(freshServerData.status_id),
+                            technician_id: freshServerData.technician_id,
+                            gestora_id: freshServerData.gestora_id,
+                            labor_cost: freshServerData.labor_cost,
+                            materials_cost: freshServerData.materials_cost,
+                            visit_cost: freshServerData.visit_cost,
+                            total_quoted_amount: freshServerData.total_quoted_amount,
+                        };
+
+                        const mergedMeta = {
+                            ...prevMeta,
+                            ...serverMeta,
+                            // PRESERVAR campos locales activos de edición
+                            diagnostico: prevMeta.diagnostico,
+                            partidas: prevMeta.partidas,
+                            montoFinal: prevMeta.montoFinal,
+                            documentosChecklist: prevMeta.documentosChecklist,
+                            pagoRechazado: (prevMeta.pagoRechazado === null && !serverMeta.pagoRechazado) ? null : serverMeta.pagoRechazado,
+                        };
+
+                        return {
+                            ...prev,
+                            ...serverFields,
+                            metadata: mergedMeta
+                        };
+                    });
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') setIsRealtimeConnected(true);
+                if (status === 'CLOSED' || status === 'CHANNEL_ERROR') setIsRealtimeConnected(false);
+            });
+
+        return () => {
+            if (DEBUG_GESTION) console.log("🔌 [Realtime] Cerrando canal para ticket:", ticketData.id);
+            setIsRealtimeConnected(false);
+            supabase.removeChannel(channel);
+        };
+    }, [ticketData?.id]);
 
 
     const handleAssignment = async (assignmentData: any) => {
@@ -2227,7 +2294,31 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 : `Ticket #${ticketData.id.slice(-6)}`)
                                         }
                                     </h3>
-                                    <span>{ticket.cliente?.nombre || 'Sin cliente'} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>v1.3.4 - Sincronizado</span></span>
+                                    <span>
+                                        {ticket.cliente?.nombre || 'Sin cliente'} 
+                                        <span style={{ 
+                                            opacity: 0.7, 
+                                            fontSize: '0.65rem', 
+                                            marginLeft: '8px',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            background: isRealtimeConnected ? 'rgba(16, 185, 129, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                                            color: isRealtimeConnected ? '#059669' : '#6b7280',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            fontWeight: 800
+                                        }}>
+                                            <span style={{ 
+                                                width: '6px', 
+                                                height: '6px', 
+                                                borderRadius: '50%', 
+                                                backgroundColor: isRealtimeConnected ? '#10B981' : '#9ca3af',
+                                                boxShadow: isRealtimeConnected ? '0 0 4px #10B981' : 'none'
+                                            }} />
+                                            {isRealtimeConnected ? 'VIVO' : 'SINCRONIZANDO...'}
+                                        </span>
+                                    </span>
                                 </div>
                             </>
                         ) : (

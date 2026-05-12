@@ -273,7 +273,7 @@ export default function PaymentsPage() {
         if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
         fetchTimerRef.current = setTimeout(() => {
             fetchPaymentTickets(true); // Refresco silencioso en segundo plano
-        }, 1000);
+        }, 300);
     }, [fetchPaymentTickets]);
 
     const handleApproveExceedance = async (costId: string) => {
@@ -594,20 +594,49 @@ export default function PaymentsPage() {
                     }
                 });
 
-                // B. Solicitudes en Metadata (Adelanto/Liquidación) - Solo si no están ya en el historial confirmado
-                const hasAdelantoPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('adelanto'));
-                if (!hasAdelantoPaid && meta.solicitudAdelanto) {
+                // B. Solicitudes en Metadata (Adelanto/Liquidación/Visita)
+                // ★ MEJORA 2026-05-12: Validar si la solicitud ya está en el historial (evita zombies)
+                const adelantoMonto = meta.solicitudAdelanto?.monto || 0;
+                const adelantoInHistory = adelantoMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('adelanto') && Math.abs(i.monto - adelantoMonto) < 1);
+                
+                const pagoMonto = meta.solicitudPago?.monto || 0;
+                const pagoInHistory = pagoMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('visita') && Math.abs(i.monto - pagoMonto) < 1);
+
+                if (meta.solicitudAdelanto && !adelantoInHistory) {
                     pendingItems.push({
                         id: `${t.id}_adelanto`,
                         tipo: 'Adelanto',
-                        monto: round2(meta.solicitudAdelanto.monto || 0),
+                        monto: round2(adelantoMonto),
                         estado: 'pendiente',
                         fecha: meta.solicitudAdelanto.fecha || t.created_at
                     });
                 }
 
+                if (meta.solicitudPago && !pagoInHistory) {
+                    pendingItems.push({
+                        id: `${t.id}_visita`,
+                        tipo: 'Pago de Visita',
+                        monto: round2(pagoMonto),
+                        estado: 'pendiente',
+                        fecha: meta.solicitudPago.fecha || t.created_at
+                    });
+                }
+
+                if (meta.solicitudLiquidacion) {
+                    pendingItems.push({
+                        id: `${t.id}_liquidacion_manual`,
+                        tipo: 'Liquidación Final',
+                        monto: round2(meta.solicitudLiquidacion.monto || 0),
+                        estado: 'pendiente',
+                        fecha: meta.solicitudLiquidacion.fecha || t.created_at,
+                        concept: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
+                    });
+                }
+
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
-                const hasPendingRequests = meta.solicitudAdelanto || meta.solicitudPago;
+                const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
+                                          (meta.solicitudPago && !pagoInHistory) || 
+                                          meta.solicitudLiquidacion;
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
@@ -1131,6 +1160,27 @@ export default function PaymentsPage() {
                 const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
                 meta.solicitudesAprobadas = [...(meta.solicitudesAprobadas || []), { ...(found || item), ...aprobacionBase }];
                 meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
+            }
+
+            // ★ MEJORA 2026-05-12: Auto-cerrar si el saldo es 0 y el ticket ya estaba para liquidar
+            // Esto cubre casos donde los adelantos/excedentes cubrieron el 100% de la mano de obra.
+            const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'cotizacion_aprobada', 'en_ejecucion'].includes(currentTicket.status_id);
+            if (isNearingClosure && item.id !== `${group.realTicketId}_visita`) {
+                // Simulamos el historial actualizado para el cálculo
+                const currentHistory = Array.isArray(meta.historialPagosTecnico) ? meta.historialPagosTecnico : [];
+                const simulatedHistory = [...currentHistory, nuevoPago];
+                const simulatedTicket = { ...currentTicket, metadata: { ...meta, historialPagosTecnico: simulatedHistory } };
+                
+                // Obtenemos costos de la tabla si existen para un cálculo preciso
+                const { data: currentCosts } = await supabase.from('ticket_costs').select('*').eq('ticket_id', group.realTicketId);
+                const fin = calculateTicketFinances(simulatedTicket, currentCosts || []);
+                
+                if (fin.netLaborBalance < 1) { // Margen de error de 1 sol
+                    additionalUpdates.status_id = 'ticket_cerrado';
+                    additionalUpdates.closure_date = finalDate;
+                    if (!meta.fechaPagoFinal) meta.fechaPagoFinal = finalDate;
+                    console.log(`[Payments] Auto-closing ticket ${group.realTicketId} due to zero balance.`);
+                }
             }
 
             meta.pagoRechazado = null;
