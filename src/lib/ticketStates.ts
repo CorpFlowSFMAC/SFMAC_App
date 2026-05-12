@@ -197,6 +197,21 @@ export const TICKET_STATES: TicketState[] = [
         ]
     },
     {
+        id: "esperando_pago_visita",
+        order: 2.5,
+        nombre: "Esperando Pago de Visita",
+        nombreCorto: "Pago Visita",
+        descripcion: "Pago de movilidad/visita pendiente de tesorería",
+        actor: "Gestor(a)",
+        tipo: "operativo",
+        color: "#F59E0B",
+        icon: Clock,
+        transiciones: ["tecnico_asignado", "en_inspeccion"],
+        reglas: [
+            "Esperando confirmación de pago de movilidad"
+        ]
+    },
+    {
         id: "por_liquidar",
         order: 10,
         nombre: "Por Liquidar / Validación Final",
@@ -206,7 +221,7 @@ export const TICKET_STATES: TicketState[] = [
         tipo: "operativo",
         color: "#A855F7",
         icon: Scale,
-        transiciones: ["ticket_cerrado"],
+        transiciones: ["esperando_pago_final", "ticket_cerrado"],
         reglas: [
             "Genera Orden de Pago del saldo pendiente",
             "Consolida gastos y costos"
@@ -225,6 +240,22 @@ export const TICKET_STATES: TicketState[] = [
         transiciones: [],
         reglas: [
             "Cálculo de: Rentabilidad, Productividad del técnico, Cumplimiento de SLA"
+        ]
+    },
+    {
+        id: "esperando_pago_final",
+        order: 11.5,
+        nombre: "Esperando Pago de Liquidación",
+        nombreCorto: "Esperando Pago",
+        descripcion: "Liquidación solicitada, pendiente de pago por tesorería",
+        actor: "Gestor(a)",
+        tipo: "operativo",
+        color: "#0891B2",
+        icon: Clock,
+        transiciones: ["ticket_cerrado"],
+        reglas: [
+            "Genera Solicitud de Pago de Liquidación",
+            "Esperando confirmación de tesorería"
         ]
     },
     {
@@ -334,6 +365,7 @@ export const normalizeStateId = (stateId: any): string => {
         "9": "documentacion_enviada",
         "10": "por_liquidar",
         "11": "requiere_revision_admin",
+        "11.5": "esperando_pago_final",
         "12": "ticket_cerrado",
         "13": "vencido",
         "14": "ticket_rechazado",
@@ -363,6 +395,7 @@ export const TICKET_STATE_ORDER: Record<string, number> = {
     'documentacion_enviada': 9,
     'requiere_revision_admin': 10,
     'por_liquidar': 11,
+    'esperando_pago_final': 11.5,
     'ticket_cerrado': 12,
     'vencido': 13,
     'ticket_rechazado': 14,

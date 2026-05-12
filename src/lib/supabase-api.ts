@@ -461,8 +461,7 @@ export const ticketsAPI = {
         // ════════════════════════════════════════════════════════════════════
         const ESTADOS_EXCLUIDOS = [
             'borrador',
-            // NO excluir estados terminales aquí, ya que se necesitan para el historial (PAGADOS)
-            // y para el cálculo de estadísticas globales.
+            'ticket_rechazado',  // Los rechazados no deben ver pagos
         ];
 
         const { data: ticketsData, error: tErr } = await supabase

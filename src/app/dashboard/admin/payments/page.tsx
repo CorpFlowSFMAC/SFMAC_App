@@ -567,10 +567,12 @@ export default function PaymentsPage() {
 
                 // 1. Identificar ítems PENDIENTES (No están en finances.laborItems ni finances.operatingItems porque no están confirmados)
                 
-                // A. Costos de Tabla Pendientes
+                // A. Costos de Tabla Pendientes - MOSTRAR SIEMPRE aunque el ticket esté "cerrado"
                 (t.costos || []).forEach((c: any) => {
                     const st = (c.estado_pago || '').toUpperCase();
-                    if (st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN') {
+                    // ★ FIX: Mostrar SIEMPRE costos pendientes, sin importar el estado del ticket
+                    // Esto permite ver pagamentos aunque el ticket técnicamente esté "cerrado"
+                    if (st !== 'PAGADO' && st !== 'CERRADO') {
                         const isSpecialist = c.specialist_id && c.specialist_id !== t.technician_id;
                         const specialistName = isSpecialist ? (c.technicians?.name || c.proveedor || 'Especialista') : undefined;
 
@@ -634,9 +636,12 @@ export default function PaymentsPage() {
                 }
 
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
+                // ★ OPTIMIZACIÓN: Mostrar SIEMPRE si hay solicitudes pendientes, sin importar el estado
+                // Esto asegura que tickets en cualquier estado (documentacion_enviada, en_ejecucion, etc) aparezcan
+                const hasActiveRequest = meta.solicitudLiquidacion || meta.solicitudAdelanto || meta.solicitudPago;
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
                                           (meta.solicitudPago && !pagoInHistory) || 
-                                          meta.solicitudLiquidacion;
+                                          meta.solicitudLiquidacion || hasActiveRequest;
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
