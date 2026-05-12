@@ -1218,7 +1218,9 @@ export default function PaymentsPage() {
 
     const totalPendingAmount = round2(paymentGroups.reduce((acc, g) => {
         const isClosed = ['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(g.statusId || '');
-        if (isClosed) return acc;
+        // ★ CORRECCIÓN: No excluir tickets con solicitudes de pago pendientes
+        const hasPendingItemsForDisplay = g.items.some(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && !i.isReference);
+        if (isClosed && !hasPendingItemsForDisplay) return acc;
         return acc + g.items.filter(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && i.monto > 0 && !i.isReference).reduce((s, i) => s + i.monto, 0);
     }, 0));
 
