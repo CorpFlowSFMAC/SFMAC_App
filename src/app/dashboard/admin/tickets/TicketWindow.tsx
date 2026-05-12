@@ -537,19 +537,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             status_id: finalStatusId,
                             adelantoPagado: meta.adelantoPagado ?? false,
                             visitPaymentConfirmed: visitConfirmed,
-                            // 🚨 PRESERVAR de localStorage si existe para evitar regressión
-                solicitudAdelanto: (() => {
-                    const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
-                    if (saved) {
-                        try {
-                            const parsed = JSON.parse(saved);
-                            if (parsed.solicitudAdelanto) return parsed.solicitudAdelanto;
-                        } catch(e) {}
-                    }
-                    return meta.solicitudAdelanto || ticket?.solicitudAdelanto || null;
-                })(),
+                            // 🚨 PROTOCOLO DE AUTORIDAD DE DATOS (Server-First Init)
+                            // Estos campos son SERVER-ONLY - nunca restaurar desde localStorage
+                            // El componente nace vacío hasta que el servidor confirme el estado real
+                            solicitudAdelanto: null,
                             solicitudPago: visitConfirmed ? null : (meta.solicitudPago ?? null),
+                            solicitudLiquidacion: null,
                             historialPagosTecnico: meta.historialPagosTecnico ?? [],
+                            // Solo preserve datos de negocio que el usuario ingresa manualmente
+                            // Pero NUNCA solicitudes financieras desde cache local
                             gestora: fullTicket.gestora || meta.gestora || null
                         };
                         // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
@@ -841,15 +837,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const serverStateOrder = TICKET_STATE_ORDER[serverStatusId] ?? 0;
         
         // 🔁 REGLA DE SINCRONIZACIÓN: 
-        // 2. Si el servidor tiene una denegación activa (pagoRechazado), el servidor MANDA (evita re-envíos automáticos).
-        // 3. Por defecto, el estado más avanzado gana.
-        // ★ ENHANCED: payment denegado activa limpieza de solicitudes
-        // FIX 2026-05-11: Si lo local ha limpiado el rechazo (pagoRechazado === null), la denegación ya no es 'activa' para el flujo local.
-        const hasActiveRejection = !!serverMeta.pagoRechazado && businessData.pagoRechazado !== null;
+        // Si el servidor tiene una denegación activa (pagoRechazado), el servidor MANDA (evita re-envíos automáticos).
+        // FIX 2026-05-12: Mejorar detección de rechazos - usar serverMeta directamente ya que businessData puede no estar actualizado
+        const serverHasActiveRejection = !!serverMeta.pagoRechazado;
         
         const resolvedStatusId = options?.allowStateRollback
             ? businessData.estadoId
-            : (hasActiveRejection 
+            : (serverHasActiveRejection 
                 ? serverStatusId 
                 : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId));
 
@@ -874,9 +868,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 partidas: businessData.partidas || sourceMetadata.partidas,
                 montoFinal: businessData.montoFinal || sourceMetadata.montoFinal,
                 documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist,
-                // 4. Protección específica: si lo local acaba de limpiar un rechazo, no dejar que el servidor lo restaure
-                // y viceversa: si el servidor tiene un rechazo nuevo, lo local debe aceptarlo.
-                pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
+                // 4. Protección específica: si el servidor tiene rechazo activo, usarlo; de lo contrario respetar lo local
+                // FIX 2026-05-12: Usar serverMeta directamente para detección de rechazos
+                pagoRechazado: serverHasActiveRejection ? serverMeta.pagoRechazado : ((sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado),
                 // PROTECCIÓN DE HISTORIAL: Nunca sobreescribir con datos locales viejos
                 historialPagosTecnico: (() => {
                     const localPagos = businessData?.historialPagosTecnico || businessData?.historialPagosTécnico || [];
@@ -898,19 +892,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 })(),
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
-                // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
-                // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
-                // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
+                // 4. PROTOCOLO DE AUTORIDAD DE DATOS: Sanitización agresiva
+                // Si el servidor tiene rechazo activo, limpiar CUALQUIER dato local de solicitud
+                // y limpiar localStorage - el servidor es la única fuente de verdad
+                const shouldSanitize = serverHasActiveRejection;
                 
-                solicitudLiquidacion: (hasActiveRejection || (!serverMeta.solicitudLiquidacion && !dataOverride) || options?.allowStateRollback === false)
-                    ? serverMeta.solicitudLiquidacion
-                    : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection || (!serverMeta.solicitudAdelanto && !dataOverride) || options?.allowStateRollback === false)
-                    ? serverMeta.solicitudAdelanto
-                    : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
-                solicitudPago: (hasActiveRejection || (!serverMeta.solicitudPago && !dataOverride) || options?.allowStateRollback === false)
-                    ? serverMeta.solicitudPago
-                    : (businessData.solicitudPago || serverMeta.solicitudPago),
+                // Limpiar localStorage si hay rechazo activo
+                if (shouldSanitize) {
+                    try {
+                        localStorage.removeItem(`ticket_state_${ticketData.id}`);
+                    } catch(e) {}
+                }
+                
+                // Los campos financieros son SERVER-ONLY - nunca restaurar desde local
+                // Si hay rechazo, el servidor es la fuente de verdad (serverMeta yaAppliedAbove)
+                solicitudLiquidacion: shouldSanitize ? null : (businessData.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
+                solicitudAdelanto: shouldSanitize ? null : (businessData.solicitudAdelanto || serverMeta.solicitudAdelanto),
+                solicitudPago: shouldSanitize ? null : (businessData.solicitudPago || serverMeta.solicitudPago),
                 
                 visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
                 adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
@@ -962,15 +960,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     const parsed = JSON.parse(saved);
 
                     const {
-                        adelantoPagado,
+                        // Excluir campos financieros y de estado que vienen del servidor como fuente de verdad
+                        // FIX 2026-05-12: pagoRechazado también debe excluirse para evitar restauración de rechazos
+                        pagoRechazado,
+                        AdelantoPagado,
+                        adelantarPagado,
                         fechaPagoAdelanto,
                         historialPagosTécnico,
+                        historialPagosTecnico,
                         estadoId,
                         status_id,
                         visitPaymentConfirmed,
                         solicitudAdelanto,
-                        fechaPagoVisita,
                         solicitudPago,
+                        solicitudLiquidacion,
+                        fechaPagoVisita,
                         montoFinal,
                         ...safeToRestore
                     } = parsed;
@@ -1042,16 +1046,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const handleDismissRejection = async () => {
         try {
-            // ✅ LIMPIEZA FORZADA: Limpiar en el servidor ANTES de permitir nueva edición
+            // ✅ PROTOCOLO DE AUTORIDAD: Limpieza total
             if (DEBUG_GESTION) console.log("🧹 Limpieza Forzada de Rechazo...");
             
             // 1. Update local instantáneo
             setTicketData((prev: any) => ({
                 ...prev,
-                pagoRechazado: null
+                pagoRechazado: null,
+                solicitudAdelanto: null,
+                solicitudPago: null,
+                solicitudLiquidacion: null
             }));
             
-            // 2. Update persistente en Supabase (campo exacto)
+            // 2. LIMPIEZA TOTAL de localStorage - eliminar rastro completo
+            try {
+                localStorage.removeItem(`ticket_state_${ticketData.id}`);
+            } catch(e) {}
+            
+            // 3. Update persistente en Supabase (campo exacto)
             const { error } = await supabase
                 .from('tickets')
                 .update({ 
@@ -1059,7 +1071,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         ...(ticketData.metadata || {}), 
                         pagoRechazado: null,
                         mensajeRechazo: null,
-                        motivoRechazo: null 
+                        motivoRechazo: null,
+                        solicitudAdelanto: null,
+                        solicitudPago: null,
+                        solicitudLiquidacion: null
                     } 
                 })
                 .eq('id', ticketData.id);
