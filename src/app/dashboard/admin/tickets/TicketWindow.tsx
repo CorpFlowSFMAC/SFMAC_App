@@ -628,7 +628,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // SIEMPRE gana el más avanzado (nunca retroceder de estado automáticamente)
             // EXCEPCIÓN: Si hay una denegación de pago reciente, permitimos el retroceso para que la UI se sincronice
             const hasRejection = !!meta.pagoRechazado;
-            const shouldPreservePrevState = prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current;
+            const shouldPreservePrevState = (prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current)
+                                          || (prevStatusOrder < serverStatusOrder && isIntentionalRollback.current);
 
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
             // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
@@ -1311,6 +1312,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         };
 
         setTicketData(updated);
+        syncToSupabase(updated);
         showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
     };
 
@@ -1339,6 +1341,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const readjust = {
                 ...ticketData,
                 estadoId: "en_cotizacion",
+                status_id: "en_cotizacion",
                 pausadoSLA: false,
                 fechaReactivacion: new Date().toISOString(),
                 modificacionAutorizada: true
