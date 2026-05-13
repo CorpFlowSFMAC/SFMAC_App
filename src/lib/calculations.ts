@@ -146,28 +146,35 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         const matchingModernIndex = confirmedModern.findIndex((mc: any) => {
             if (usedModernIds.has(mc.id)) return false;
 
-            // 1. Prioridad: Coincidencia por ID Único o Referencia Directa
-            const isSameId = (mc.id && lp.id && mc.id === lp.id) || (mc.metadata?.legacy_id === lp.id);
-            if (isSameId) return true;
-
-            // 2. Heurística de Seguridad (5-minuto para alta latencia como Iquitos)
-            // Solo deduplicamos automáticamente si el monto coincide Y el tiempo es casi idéntico
-            // ⚡️ MEJORA V3: Aumentado de 1min a 5min para zonas con alta latencia (Iquitos)
-            const sameMonto = toNum(mc.monto) === toNum(lp.monto);
-            const dateM = new Date(mc.fecha_pago || mc.fecha || mc.created_at);
-            const dateL = new Date(lp.fecha || lp.date);
+            // 1. ★ PRIORIDAD ABSOLUTTA: Si ambos tienen ID diferentes, SON transacciones distintas
+            // No deduplicar si al menos uno tiene ID único - sumar ambos
+            const hasIdModern = !!(mc.id);
+            const hasIdLegacy = !!(lp.id);
             
-            const diffMs = Math.abs(dateM.getTime() - dateL.getTime());
-            const sameTime = diffMs < 300000; // < 5 minutos (300,000 ms) para alta latencia
+            // Si ambos tienen IDs diferentes → NO es duplicado, son transacciones separadas
+            if (hasIdModern && hasIdLegacy && mc.id !== lp.id) return false;
+            
+            // Si el moderno tiene ID pero el legacy NO → podría ser migración del mismo registro
+            if (hasIdModern && !hasIdLegacy) {
+                // Verificar coincidencia por ID de referencia en metadata
+                const isSameId = mc.metadata?.legacy_id === lp.id;
+                if (isSameId) return true;
+            }
 
-            // 3. Fallback: Espejo de sincronización (mismo día + concepto 'Sync' o 'Autorizado')
-            // Esto captura las migraciones donde el timestamp pudo cambiar pero el día y monto son fijos.
-            const mcDesc = (mc.concepto || mc.motivo || mc.referencia || '').toLowerCase();
-            const isSyncMirror = sameMonto && 
-                               (dateM.toDateString() === dateL.toDateString()) && 
-                               (mcDesc.includes('sync') || mcDesc.includes('autorizado'));
+            // 2. Solo para REGISTROS LEGACY sin ID: margen de 30 segundos
+            // Esto aplica solo para registros que realmente no tengan identificador único
+            if (!hasIdModern && !hasIdLegacy) {
+                const sameMonto = toNum(mc.monto) === toNum(lp.monto);
+                const dateM = new Date(mc.fecha_pago || mc.fecha || mc.created_at);
+                const dateL = new Date(lp.fecha || lp.date);
+                
+                const diffMs = Math.abs(dateM.getTime() - dateL.getTime());
+                const sameTime = diffMs < 30000; // < 30 segundos (30,000 ms) para legacy sin ID
 
-            return (sameMonto && sameTime) || isSyncMirror;
+                return sameMonto && sameTime;
+            }
+
+            return false;
         });
 
         if (matchingModernIndex !== -1) {
