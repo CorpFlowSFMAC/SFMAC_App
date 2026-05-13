@@ -2,6 +2,8 @@
 // Forced redeploy: v1.2 - Sincronizado con Flujo de Cotización y Borrado Inteligente
 
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys, normalizeTicket } from "@/lib/useQueryHooks";
 
 import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck } from "lucide-react";
@@ -1346,6 +1348,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
     };
 
+    const queryClient = useQueryClient();
+
     const handleReadjustQuote = async () => {
         // 🔒 ACTIVAR BLOQUEO DE TRANSICIÓN - silencia todos los WS updates mientras dure el proceso
         isTransitioning.current = true;
@@ -1358,29 +1362,43 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
         showToast("⏳ Sincronizando Reajuste", "Devolviendo cotización al modo edición...", "info");
 
+        const readjust = {
+            ...ticketData,
+            estadoId: "en_cotizacion",
+            status_id: "en_cotizacion",
+            pausadoSLA: false,
+            fechaReactivacion: new Date().toISOString(),
+            modificacionAutorizada: true,
+            // 🧹 LIMPIEZA DE RASTRO DE ENVÍO
+            fechaCotización: null,
+            solicitudModificacion: false,
+            pagoRechazado: null
+        };
+
+        // 🚀 OPTIMISTIC UPDATE #1: Estado local del componente
+        setTicketData(readjust);
+
+        // 🚀 OPTIMISTIC UPDATE #2: Cache de TanStack Query para que el padre no sobreescriba con datos viejos
+        queryClient.setQueryData(
+            queryKeys.tickets.summary(),
+            (old: any[] | undefined) => old
+                ? old.map((t: any) => t.id === ticketData.id
+                    ? { ...t, status_id: "en_cotizacion", estadoId: "en_cotizacion", metadata: { ...(t.metadata || {}), modificacionAutorizada: true } }
+                    : t)
+                : old
+        );
+        queryClient.setQueryData(
+            queryKeys.tickets.detail(ticketData.id),
+            (old: any) => old ? { ...old, status_id: "en_cotizacion", estadoId: "en_cotizacion", metadata: { ...(old.metadata || {}), modificacionAutorizada: true } } : old
+        );
+
+        // Sincronizar estados paralelos de la UI para que el editor se refresque
+        if (readjust.metadata?.partidas) setPartidasCotización(readjust.metadata.partidas);
+        if (readjust.metadata?.montoFinal) setMontoTotalCotizado(readjust.metadata.montoFinal);
+        if (readjust.costoManoObra) setCostoManoObra(readjust.costoManoObra.toString());
+        if (readjust.costoMateriales) setCostoMateriales(readjust.costoMateriales.toString());
+
         try {
-            const readjust = {
-                ...ticketData,
-                estadoId: "en_cotizacion",
-                status_id: "en_cotizacion",
-                pausadoSLA: false,
-                fechaReactivacion: new Date().toISOString(),
-                modificacionAutorizada: true,
-                // 🧹 LIMPIEZA DE RASTRO DE ENVÍO
-                fechaCotización: null,
-                solicitudModificacion: false,
-                pagoRechazado: null
-            };
-
-            // 🚀 OPTIMISTIC UPDATE: Cambiar UI local instantáneamente
-            setTicketData(readjust);
-
-            // Sincronizar estados paralelos de la UI para que el editor se refresque
-            if (readjust.metadata?.partidas) setPartidasCotización(readjust.metadata.partidas);
-            if (readjust.metadata?.montoFinal) setMontoTotalCotizado(readjust.metadata.montoFinal);
-            if (readjust.costoManoObra) setCostoManoObra(readjust.costoManoObra.toString());
-            if (readjust.costoMateriales) setCostoMateriales(readjust.costoMateriales.toString());
-
             // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion
             await syncToSupabase(readjust, { allowStateRollback: true });
             showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
