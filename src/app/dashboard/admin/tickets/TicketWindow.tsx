@@ -420,6 +420,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
     
+    // ⚡️ LOADING OVERLAY: Estado de bloqueo para sync con servidor
+    const [isSaving, setIsSaving] = useState(false);
+    
     const showToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ visible: true, title, message, type });
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
@@ -812,14 +815,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const requestAdvanceRef = useRef(false);
     const confirmAdvanceRef = useRef(false);
 
-    const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean }) => {
+    const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean, manual?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
-        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return;
+        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return false;
 
         // 🛡️ BLOQUEO CRÍTICO: No sincronizar si el usuario está editando activamente un monto
         const isEditingMonto = !!montoAdelantoManual || !!porcentajeAdelanto;
         if (isEditingMonto && !dataOverride) {
-            return;
+            return false;
         }
 
 
@@ -933,9 +936,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         };
 
         const currentDataStr = JSON.stringify(updates);
-        if (currentDataStr === lastSyncData.current && !dataOverride) return;
+        if (currentDataStr === lastSyncData.current && !dataOverride) return false;
 
         isSyncing.current = true;
+        let success = false;
         try {
             if (onUpdate) {
                 await onUpdate(ticketData.id, updates);
@@ -943,11 +947,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 await ticketsAPI.update(ticketData.id, updates);
             }
             lastSyncData.current = currentDataStr;
+            success = true;
         } catch (err) {
             console.error("Error syncing ticket to Supabase:", err);
+            success = false;
         } finally {
             isSyncing.current = false;
         }
+        return success;
     }, [ticketData, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
 
     useEffect(() => {
@@ -1399,17 +1406,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (readjust.costoMateriales) setCostoMateriales(readjust.costoMateriales.toString());
 
         try {
+            // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
+            setIsSaving(true);
             // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion
-            await syncToSupabase(readjust, { allowStateRollback: true });
-            showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
+            const success = await syncToSupabase(readjust, { allowStateRollback: true, manual: true });
+            if (success) {
+                showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
+            } else {
+                showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
+            }
         } catch (err) {
             showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
         } finally {
-            // Liberar bloqueos: WS + Rollback
-            setTimeout(() => {
-                isTransitioning.current = false;
-                isIntentionalRollback.current = false;
-            }, 3000);
+            // Liberar bloqueos solo después de confirmar
+            setIsSaving(false);
+            isTransitioning.current = false;
+            isIntentionalRollback.current = false;
         }
     };
 
@@ -1425,7 +1437,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const handleCancelQuote = async () => {
         const mobility = parseFloat(cancelForm.mobilityCost) || 0;
         
+        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
+        if (isSaving) {
+            showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
+            return;
+        }
+        
         setIsCancelling(true);
+        setIsSaving(true);
         try {
             const currentId = ticket.id || ticketData.id;
             const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
@@ -1459,19 +1478,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             };
 
             setTicketData(cancelled);
-            await syncToSupabase(cancelled);
+            const success = await syncToSupabase(cancelled, { manual: true });
             
-            showToast("Ticket Anulado", mobility > 0 
-                ? `Servicio cancelado. Se registró un egreso de S/ ${mobility.toFixed(2)} por movilidad.`
-                : "Servicio cancelado sin costos asociados.", "info");
+            if (success) {
+                showToast("Ticket Anulado", mobility > 0 
+                    ? `Servicio cancelado. Se registró un egreso de S/ ${mobility.toFixed(2)} por movilidad.`
+                    : "Servicio cancelado sin costos asociados.", "info");
+            } else {
+                showToast("Error", "No se pudo sincronizar la anulación.", "error");
+            }
             
             setShowCancelModal(false);
-            onClose();
         } catch (err) {
             console.error("Error cancelling ticket:", err);
             showToast("Error", "No se pudo anular el ticket correctamente.", "error");
         } finally {
             setIsCancelling(false);
+            setIsSaving(false);
         }
     };
 
@@ -1483,12 +1506,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
+        
+        // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
+        setIsSaving(true);
         try {
-            await syncToSupabase(authorized);
-            showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+            const success = await syncToSupabase(authorized, { manual: true });
+            if (success) {
+                showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+            } else {
+                showToast("Error", "No se pudo guardar la autorización.", "error");
+            }
         } catch (err) {
             console.error("Error authorizing modification:", err);
             showToast("Error", "No se pudo guardar la autorización.", "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -1498,12 +1530,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             solicitudModificacion: true
         };
         setTicketData(requested);
+        
+        // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
+        setIsSaving(true);
         try {
-            await syncToSupabase(requested);
-            showToast("Solicitud Enviada", "Se ha solicitado autorización a Gerencia para modificar esta cotización.", "success");
+            const success = await syncToSupabase(requested, { manual: true });
+            if (success) {
+                showToast("Solicitud Enviada", "Se ha solicitado autorización a Gerencia para modificar esta cotización.", "success");
+            } else {
+                showToast("Error", "No se pudo enviar la solicitud.", "error");
+            }
         } catch (err) {
             console.error("Error requesting modification:", err);
             showToast("Error", "No se pudo enviar la solicitud.", "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -2189,6 +2230,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const capitalExposed = finances.totalExpenses;
 
     const handleCloseInternal = () => {
+        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
+        if (isSaving) {
+            showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
+            return;
+        }
+        
         // Optimismo visual: Cerramos la interfaz inmediatamente
         // y dejamos que la sincronización ocurra en segundo plano
         // si no hay transiciones de estado críticas pendientes.
@@ -2204,6 +2251,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleCompleteClosure = async () => {
+        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
+        if (isSaving) {
+            showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
+            return;
+        }
+        
+        setIsSaving(true);
         try {
             const updated = {
                 ...ticketData,
@@ -2217,12 +2271,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             localStorage.removeItem(`ticket_ui_${ticketData.id}`);
 
             setTicketData(updated);
-            await syncToSupabase(updated);
-            showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
-            onClose();
+            const success = await syncToSupabase(updated, { manual: true });
+            
+            if (success) {
+                showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
+                onClose();
+            } else {
+                showToast("Error", "No se pudo cerrar el ticket.", "error");
+            }
         } catch (err) {
             console.error("Error al cerrar ticket:", err);
             showToast("Error", "No se pudo cerrar el ticket.", "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -3037,9 +3098,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         <button
                                                                             className={`${styles.authorizeBtn} ${ticketData.solicitudModificacion ? styles.pulseAlert : ''}`}
                                                                             onClick={handleAuthorizeModification}
+                                                                            disabled={isSaving}
                                                                         >
-                                                                            {ticketData.solicitudModificacion ? <Sparkles size={18} /> : null}
-                                                                            <span>{ticketData.solicitudModificacion ? 'APROBAR SOLICITUD DE CAMBIO' : 'AUTORIZAR MODIFICACIÓN'}</span>
+                                                                            {isSaving ? <Clock size={18} className={styles.spinner} /> : (ticketData.solicitudModificacion ? <Sparkles size={18} /> : null)}
+                                                                            <span>{isSaving ? 'GUARDANDO...' : (ticketData.solicitudModificacion ? 'APROBAR SOLICITUD DE CAMBIO' : 'AUTORIZAR MODIFICACIÓN')}</span>
                                                                         </button>
                                                                     ) : (
                                                                         ticketData.solicitudModificacion ? (
@@ -3051,9 +3113,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                             <button
                                                                                 className={styles.requestAuthBtn}
                                                                                 onClick={handleRequestModification}
+                                                                                disabled={isSaving}
                                                                             >
-                                                                                <Send size={18} />
-                                                                                <span>SOLICITAR AUTORIZACIÓN PARA EDITAR</span>
+                                                                                {isSaving ? <Clock size={18} className={styles.spinner} /> : <Send size={18} />}
+                                                                                <span>{isSaving ? 'ENVIANDO...' : 'SOLICITAR AUTORIZACIÓN PARA EDITAR'}</span>
                                                                             </button>
                                                                         )
                                                                     )}
@@ -3308,10 +3371,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 <button
                                                     className={styles.secondaryActionBtn}
                                                     onClick={handleReadjustQuote}
+                                                    disabled={isSaving}
                                                     style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', color: '#475569' }}
                                                 >
-                                                    <RefreshCw size={18} />
-                                                    <span>SOLICITA REAJUSTE / REPROGRAMAR</span>
+                                                    {isSaving ? <Clock size={18} className={styles.spinner} /> : <RefreshCw size={18} />}
+                                                    <span>{isSaving ? 'REAJUSTANDO...' : 'SOLICITA REAJUSTE / REPROGRAMAR'}</span>
                                                 </button>
 
                                                 <button
