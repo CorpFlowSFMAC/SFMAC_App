@@ -1296,11 +1296,19 @@ export default function PaymentsPage() {
 
         const isTicketClosed = g.statusId === 'ticket_cerrado' || g.statusId === 'ticket_cancelado' || g.statusId === 'ticket_rechazado';
         
-        // 1. Identificar si hay ítems realmente pendientes (no históricos/referencia)
-        const hasPendingItems = g.items.some(i => (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') && !i.isReference);
+        // ★ FIX: Mejorar detección de items pendientes
+        // Excluir items que ya tienen voucherRef (ya fueron abonados)
+        const hasPendingItems = g.items.some(i => 
+            (i.estado === 'pendiente' || i.estado === 'requiere_aprobacion') 
+            && !i.isReference 
+            && !i.voucherRef
+        );
         
-        // 2. Identificar si tiene historial de pagos (o ítems ya marcados como pagados)
-        const hasPaidItems = g.items.some(i => i.estado === 'pagado' && !i.isReference) || (g.historialDepositos || []).length > 0;
+        // ★ FIX: Mejorar detección de items pagados
+        // Incluye items con estado 'pagado' O con voucherRef ya generado O que están en historialDepositos
+        const hasPaidItems = g.items.some(i => 
+            i.estado === 'pagado' || i.voucherRef
+        ) || (g.historialDepositos || []).length > 0;
 
         let matchesStatus = false;
         if (filter === 'todos') {
@@ -1634,7 +1642,12 @@ export default function PaymentsPage() {
                             gap: '24px'
                         }}>
                             {filteredGroups.map((group) => {
-                                const hasPending = group.items.some(i => i.estado === 'pendiente');
+                                // ★ FIX: Verificar estado real de pending incluyendo historialDepositos
+                                // Un grupo está pendiente si tiene al menos 1 item con estado 'pendiente' O no tiene historial
+                                const trulyHasPending = group.items.some(i => i.estado === 'pendiente' && !i.voucherRef);
+                                const hasAnyPaidHistory = (group.historialDepositos || []).length > 0;
+                                const hasPaidItems = group.items.some(i => i.estado === 'pagado');
+                                const hasPending = trulyHasPending || (!hasAnyPaidHistory && !hasPaidItems);
                                 const cardAccentColor = hasPending ? '#F59E0B' : '#10B981';
                                 
                                 return (
@@ -1778,9 +1791,18 @@ export default function PaymentsPage() {
                                                 <p style={{ margin: 0, fontSize: '0.8rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>No hay solicitudes de pago actuales</p>
                                             ) : (
                                                 group.items.map((item, idx) => {
-                                                    const isPending = item.estado === 'pendiente';
+                                                    // ★ VERIFICACIÓN EXTRA: Si es costo de tabla, verificar estado real en DB para evitar parpadeo
+                                                    // El estado 'isPending' ahora verifica también ticket_costs si aplica
+                                                    const isTableCostItem = item.isTableCost && item.costId;
+                                                    const isPending = isTableCostItem 
+                                                        ? item.estado === 'pendiente' || item.estado === 'requiere_aprobacion'
+                                                        : item.estado === 'pendiente' || item.estado === 'requiere_aprobacion';
+                                                    
                                                     const typeCfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F1F5F9', label: item.tipo };
                                                     
+                                                    // ★ FIX: No mostrar botón PAGAR si ya está marcado como ABONADO
+                                                    const isAlreadyPaid = item.estado === 'pagado' || (item.voucherRef && !isPending);
+
                                                     return (
                                                         <div key={idx} style={{ 
                                                             background: isPending ? '#FFFBEB' : '#FFFFFF',
@@ -1799,8 +1821,22 @@ export default function PaymentsPage() {
                                                                 {item.concepto && <span style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>{item.concepto}</span>}
                                                             </div>
                                                             
-                                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                                {isPending ? (
+                                                            {/* ★ FIX: Ocultar opciones de pagar/denegar si ya está pagado */}
+                                                            {isAlreadyPaid ? (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                                    <div style={{ background: '#DCFCE7', borderRadius: '50%', padding: '6px', color: '#10B981' }}>
+                                                                        <CheckCircle2 size={18} />
+                                                                    </div>
+                                                                    <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
+                                                                    {item.voucherRef && (
+                                                                        <button onClick={() => setShowVoucher(item.voucherRef || null)}
+                                                                            style={{ fontSize: '0.65rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
+                                                                            VOUCHER
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                                         <button 
                                                                             onClick={() => handleSmartPayment(group, item)}
@@ -1823,21 +1859,8 @@ export default function PaymentsPage() {
                                                                             DENEGAR
                                                                         </button>
                                                                     </div>
-                                                                ) : (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                                                        <div style={{ background: '#DCFCE7', borderRadius: '50%', padding: '6px', color: '#10B981' }}>
-                                                                            <CheckCircle2 size={18} />
-                                                                        </div>
-                                                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
-                                                                        {item.voucherRef && (
-                                                                            <button onClick={() => setShowVoucher(item.voucherRef || null)}
-                                                                                style={{ fontSize: '0.65rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
-                                                                                VOUCHER
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     );
                                                 })
