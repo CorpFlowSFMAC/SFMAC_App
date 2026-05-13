@@ -132,28 +132,51 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     });
     
     const legacyPayments = Array.from(allById.values());
-    const filteredLegacy = legacyPayments.filter((lp: any) => {
-        // Bloqueo de duplicidad: si ya existe en ticket_costs, no lo mostramos de la metadata
-        const alreadyInModern = safeCosts.some(mc => {
-            if (mc.id && lp.id && mc.id === lp.id) return true;
-            
-            // Heurística para pagos migrados/espejo sin ID compartido:
-            // Mismo monto y misma fecha (día)
-            const sameMonto = toNum(mc.monto) === toNum(lp.monto);
-            const dateModern = new Date(mc.fecha_pago || mc.fecha || 0).toDateString();
-            const dateLegacy = new Date(lp.fecha || lp.date || 0).toDateString();
-            const sameDate = dateModern === dateLegacy;
-            
-            // Si el monto y la fecha coinciden, es altamente probable que sea el mismo registro
-            // especialmente si la referencia de ticket_costs menciona que fue autorizado por admin
-            const isMirror = sameMonto && sameDate && (
-                mc.referencia?.toLowerCase().includes('autorizado') ||
-                mc.referencia?.toLowerCase().includes(lp.tipo?.toLowerCase())
-            );
 
-            return isMirror;
+    // ─────────────────────────────────────────────────────────────────────────────
+    // DEDUPLICACIÓN V3 (Pairing Logic & 1-min Rule)
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Propósito: Evitar doble conteo entre ticket_costs (moderno) y legacy (metadata).
+    // REGLA: Si hay dos pagos de S/ 500 en legacy y uno en modern, se debe contar 
+    // el modern y el RESTANTE de legacy (Total 1000).
+    const usedModernIds = new Set<string>();
+
+    const filteredLegacy = legacyPayments.filter((lp: any) => {
+        // Encontrar un match en modern que no haya sido "usado" ya para deduplicar otro legacy
+        const matchingModernIndex = confirmedModern.findIndex((mc: any) => {
+            if (usedModernIds.has(mc.id)) return false;
+
+            // 1. Prioridad: Coincidencia por ID Único o Referencia Directa
+            const isSameId = (mc.id && lp.id && mc.id === lp.id) || (mc.metadata?.legacy_id === lp.id);
+            if (isSameId) return true;
+
+            // 2. Heurística de Seguridad (1-minuto)
+            // Solo deduplicamos automáticamente si el monto coincide Y el tiempo es casi idéntico
+            const sameMonto = toNum(mc.monto) === toNum(lp.monto);
+            const dateM = new Date(mc.fecha_pago || mc.fecha || mc.created_at);
+            const dateL = new Date(lp.fecha || lp.date);
+            
+            const diffMs = Math.abs(dateM.getTime() - dateL.getTime());
+            const sameTime = diffMs < 60000; // < 1 minuto (60,000 ms)
+
+            // 3. Fallback: Espejo de sincronización (mismo día + concepto 'Sync' o 'Autorizado')
+            // Esto captura las migraciones donde el timestamp pudo cambiar pero el día y monto son fijos.
+            const mcDesc = (mc.concepto || mc.motivo || mc.referencia || '').toLowerCase();
+            const isSyncMirror = sameMonto && 
+                               (dateM.toDateString() === dateL.toDateString()) && 
+                               (mcDesc.includes('sync') || mcDesc.includes('autorizado'));
+
+            return (sameMonto && sameTime) || isSyncMirror;
         });
-        return !alreadyInModern && isConfirmed(lp.estado);
+
+        if (matchingModernIndex !== -1) {
+            // "Consumir" el registro moderno para que no deduplique otros pagos legítimos del mismo monto
+            usedModernIds.add(confirmedModern[matchingModernIndex].id);
+            return false; // Es un duplicado, no incluir este legacy
+        }
+
+        // Si no hubo match, el pago legacy es legítimo (o aún no migrado)
+        return isConfirmed(lp.estado);
     });
 
 

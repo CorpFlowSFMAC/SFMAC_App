@@ -1126,7 +1126,6 @@ export default function PaymentsPage() {
                         if (!currentTicket.metadata?.fechaPagoFinal) {
                             additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
                         }
-                        console.log(`[Payments] Auto-closing ticket ${group.realTicketId} (table cost path) due to zero balance.`);
                     }
                 }
 
@@ -1201,7 +1200,6 @@ export default function PaymentsPage() {
                     additionalUpdates.status_id = 'ticket_cerrado';
                     additionalUpdates.closure_date = finalDate;
                     if (!meta.fechaPagoFinal) meta.fechaPagoFinal = finalDate;
-                    console.log(`[Payments] Auto-closing ticket ${group.realTicketId} due to zero balance.`);
                 }
             }
 

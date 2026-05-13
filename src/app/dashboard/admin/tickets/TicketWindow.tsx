@@ -3,8 +3,6 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 
-// 🚧 DEBUG: Mostrar logs de gestión de tickets en pantalla
-const DEBUG_GESTION = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
 import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
@@ -112,6 +110,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             }));
         }
     }, [isMaximized, isMinimized, position, ticket.id]);
+
+    // ⚡️ SYNC: Propagate Realtime updates from parent (AppDataContext) to local state
+    // This fixes the "tray synchronization" issue where the window stays stale
+    // while the admin tray shows new data.
+    useEffect(() => {
+        if (ticket) {
+            setTicketData((prev: any) => ({
+                ...prev,
+                ...ticket,
+                // Ensure state normalization is preserved
+                estadoId: normalizeStateId(ticket.status_id || ticket.estadoId || prev.estadoId)
+            }));
+        }
+    }, [ticket]);
 
     const [diagnostico, setDiagnostico] = useState("");
     const [costoManoObra, setCostoManoObra] = useState("");
@@ -587,15 +599,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     useEffect(() => {
         if (!ticket || !isInitialLoadComplete) return;
 
-        // 🔍 DEBUG LOG: ¿Quién está actualizando el ticket?
-        if (DEBUG_GESTION) console.log("🔄 Realtime Update Recibido:", { 
-            ticketId: ticket.id, 
-            status: ticket.status_id, 
-            isProcessing: isProcessingAdvance.current 
-        });
 
         if (isProcessingAdvance.current) {
-            if (DEBUG_GESTION) console.warn("🚫 Realtime Bloqueado: Transacción en curso");
             return;
         }
 
@@ -639,9 +644,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // Priority: localStorage > local > server
             const finalSolicitud = savedLS || localSolicitud || serverSolicitud;
 
-            if (DEBUG_GESTION && hasMetaChanged) {
-                console.log("🧩 Metadata Diferente detectada en Realtime. Syncing...");
-            }
 
             return {
                 ...prev,
@@ -805,11 +807,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // 🛡️ BLOQUEO CRÍTICO: No sincronizar si el usuario está editando activamente un monto
         const isEditingMonto = !!montoAdelantoManual || !!porcentajeAdelanto;
         if (isEditingMonto && !dataOverride) {
-            if (DEBUG_GESTION) console.warn("⏳ Sync Suspendido: Usuario editando monto");
             return;
         }
 
-        if (DEBUG_GESTION) console.log("📤 Iniciando Sync a Supabase...", { isOverride: !!dataOverride });
 
         const {
             isMaximized, isMinimized, position, zIndex,
@@ -1020,7 +1020,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 },
                 (payload) => {
                     const freshServerData = payload.new as any;
-                    if (DEBUG_GESTION) console.log("⚡ [Realtime] Cambio detectado en servidor:", freshServerData);
 
                     setTicketData((prev: any) => {
                         // MERGE INTELIGENTE: Solo actualizar si hay cambios reales en campos clave
@@ -1065,7 +1064,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             });
 
         return () => {
-            if (DEBUG_GESTION) console.log("🔌 [Realtime] Cerrando canal para ticket:", ticketData.id);
             setIsRealtimeConnected(false);
             supabase.removeChannel(channel);
         };
@@ -1110,7 +1108,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const handleDismissRejection = async () => {
         try {
             // ✅ LIMPIEZA FORZADA: Limpiar en el servidor ANTES de permitir nueva edición
-            if (DEBUG_GESTION) console.log("🧹 Limpieza Forzada de Rechazo...");
             
             // 1. Update local instantáneo
             setTicketData((prev: any) => ({

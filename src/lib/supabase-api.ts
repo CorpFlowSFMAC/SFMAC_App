@@ -700,10 +700,10 @@ export const ticketsAPI = {
 
                 const isAlreadyMirrored = existingCosts?.some(ec => {
                     const ecConcept = (ec.concepto || '').toLowerCase();
-                    const lpTipo = (newPago.tipo || '').toLowerCase();
-                    // Si el concepto contiene "Sync" y el tipo coincide, o si es un "Autorizado Admin" previo
-                    return ecConcept.includes('sync') && ecConcept.includes(lpTipo) || 
-                           ecConcept.includes('autorizado') && ecConcept.includes(lpTipo);
+                    const paymentId = (newPago.id || '').toLowerCase();
+                    // Bloqueo Quirúrgico: Si el concepto ya contiene este ID de pago específico, es un duplicado.
+                    // Si no lo contiene, es un pago distinto (aunque coincida monto y tipo).
+                    return ecConcept.includes(paymentId);
                 });
 
                 if (!isAlreadyMirrored) {
@@ -719,16 +719,14 @@ export const ticketsAPI = {
                         ticket_id: id,
                         monto: newPago.monto,
                         categoria,
-                        concepto: `Sync: ${newPago.tipo} (${newPago.referencia || 'S/R'})`,
+                        concepto: `Sync: ${newPago.tipo} [ID:${newPago.id}] (${newPago.referencia || 'S/R'})`,
                         estado_pago: 'pagado',
                         fecha_pago: newPago.fecha,
                         specialist_id: current?.technician_id || null,
                         url_comprobante: newPago.voucherRef || null
                     });
-                    console.log(`[Sync] Legacy payment ${newPago.id} mirrored to ticket_costs for metrics parity.`);
                 }
             } catch (syncErr) {
-                console.warn('[Sync] Failed to mirror payment to ticket_costs:', syncErr);
             }
         }
 

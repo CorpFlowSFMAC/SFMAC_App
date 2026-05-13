@@ -951,15 +951,22 @@ function TicketRow({ ticket, onTicketClick }: any) {
     // REVENUE: Lo que fue facturado al cliente (montoFinal o total_quoted_amount)
     const ingresoFacturado = parseFloat(ticket.montoFinal || ticket.total_quoted_amount || 0);
 
-    // COSTO REAL: Total pagado desde historialPagosTecnico (la fuente de verdad)
-    const pagos = ticket.metadata?.historialPagosTecnico || [];
-    const totalCostos = pagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0)
-        + (ticket._ticketCostsSum || 0); // suma de ticket_costs si está disponible
-
-    // Si no hay historial de pagos, usar labor_cost como respaldo
-    const costoDisplay = totalCostos > 0
-        ? totalCostos
-        : parseFloat(ticket.costoManoObra || ticket.labor_cost || 0) + parseFloat(ticket.costoMateriales || ticket.materials_cost || 0);
+    // COSTO REAL: Priorizar total_costs_agg (que viene de vw_tickets_strategic)
+    // El summary ya trae el total pre-calculado para evitar duplicidad Realtime vs Legacy
+    const incomingCostsAgg = parseFloat(ticket.total_costs_agg || ticket.total_costs || 0);
+    
+    let costoDisplay = 0;
+    if (incomingCostsAgg > 0) {
+        costoDisplay = incomingCostsAgg;
+    } else {
+        // Fallback: si no hay costos en la tabla, usar historialPagosTecnico (Legacy)
+        const pagos = ticket.metadata?.historialPagosTecnico || [];
+        const legacyTotal = pagos.reduce((acc: number, p: any) => acc + (parseFloat(p.monto) || 0), 0);
+        
+        costoDisplay = legacyTotal > 0
+            ? legacyTotal
+            : parseFloat(ticket.costoManoObra || ticket.labor_cost || 0) + parseFloat(ticket.costoMateriales || ticket.materials_cost || 0);
+    }
 
     const isAtLoss = costoDisplay > 0 && costoDisplay > ingresoFacturado;
     const utilidadNeta = ingresoFacturado / 1.18 - costoDisplay;
