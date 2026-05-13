@@ -518,8 +518,7 @@ export const ticketsAPI = {
                 branch_offices(*, zonas(*)),
                 technicians(*),
                 gestora:gestoras(*),
-                costos:ticket_costs(*),
-                solicitudesDeposito:solicitudes_deposito(*)
+                costos:ticket_costs(*)
             `)
             .eq('id', id)
             .single();

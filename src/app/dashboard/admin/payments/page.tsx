@@ -660,22 +660,7 @@ export default function PaymentsPage() {
                     }
                 }
 
-                // C. Solicitudes de Depósito (Tabla solicitudes_deposito)
-                if (t.solicitudesDeposito && Array.isArray(t.solicitudesDeposito)) {
-                    t.solicitudesDeposito.forEach((s: any) => {
-                        if (s.estado === 'pendiente') {
-                            pendingItems.push({
-                                id: s.id,
-                                tipo: s.tipo || 'Solicitud de Depósito',
-                                monto: round2(s.monto || 0),
-                                estado: 'pendiente',
-                                fecha: s.fecha || t.created_at,
-                                concepto: s.concepto || 'Petición de fondos',
-                                solicitudId: s.id
-                            });
-                        }
-                    });
-                }
+                // C. Solicitudes de Depósito (Sustituido por ticket_costs en V3)
 
                 // 2. Separar ítems por beneficiario
                 const techItems = pendingItems.filter(i => !i.specialistName);
