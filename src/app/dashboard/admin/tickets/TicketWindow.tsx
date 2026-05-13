@@ -1437,7 +1437,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const handleCancelQuote = async () => {
         const mobility = parseFloat(cancelForm.mobilityCost) || 0;
         
+        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
+        if (isSaving) {
+            showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
+            return;
+        }
+        
         setIsCancelling(true);
+        setIsSaving(true);
         try {
             const currentId = ticket.id || ticketData.id;
             const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
@@ -1471,19 +1478,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             };
 
             setTicketData(cancelled);
-            await syncToSupabase(cancelled);
+            const success = await syncToSupabase(cancelled, { manual: true });
             
-            showToast("Ticket Anulado", mobility > 0 
-                ? `Servicio cancelado. Se registró un egreso de S/ ${mobility.toFixed(2)} por movilidad.`
-                : "Servicio cancelado sin costos asociados.", "info");
+            if (success) {
+                showToast("Ticket Anulado", mobility > 0 
+                    ? `Servicio cancelado. Se registró un egreso de S/ ${mobility.toFixed(2)} por movilidad.`
+                    : "Servicio cancelado sin costos asociados.", "info");
+            } else {
+                showToast("Error", "No se pudo sincronizar la anulación.", "error");
+            }
             
             setShowCancelModal(false);
-            onClose();
         } catch (err) {
             console.error("Error cancelling ticket:", err);
             showToast("Error", "No se pudo anular el ticket correctamente.", "error");
         } finally {
             setIsCancelling(false);
+            setIsSaving(false);
         }
     };
 
@@ -2219,6 +2230,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const capitalExposed = finances.totalExpenses;
 
     const handleCloseInternal = () => {
+        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
+        if (isSaving) {
+            showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
+            return;
+        }
+        
         // Optimismo visual: Cerramos la interfaz inmediatamente
         // y dejamos que la sincronización ocurra en segundo plano
         // si no hay transiciones de estado críticas pendientes.
@@ -2234,6 +2251,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleCompleteClosure = async () => {
+        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
+        if (isSaving) {
+            showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
+            return;
+        }
+        
+        setIsSaving(true);
         try {
             const updated = {
                 ...ticketData,
@@ -2247,12 +2271,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             localStorage.removeItem(`ticket_ui_${ticketData.id}`);
 
             setTicketData(updated);
-            await syncToSupabase(updated);
-            showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
-            onClose();
+            const success = await syncToSupabase(updated, { manual: true });
+            
+            if (success) {
+                showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
+                onClose();
+            } else {
+                showToast("Error", "No se pudo cerrar el ticket.", "error");
+            }
         } catch (err) {
             console.error("Error al cerrar ticket:", err);
             showToast("Error", "No se pudo cerrar el ticket.", "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
