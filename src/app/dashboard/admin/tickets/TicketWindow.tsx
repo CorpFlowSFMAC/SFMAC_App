@@ -420,6 +420,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
     
+    // ⚡️ LOADING OVERLAY: Estado de bloqueo para sync con servidor
+    const [isSaving, setIsSaving] = useState(false);
+    
     const showToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ visible: true, title, message, type });
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
@@ -1399,17 +1402,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (readjust.costoMateriales) setCostoMateriales(readjust.costoMateriales.toString());
 
         try {
+            // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
+            setIsSaving(true);
             // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion
             await syncToSupabase(readjust, { allowStateRollback: true });
             showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
         } catch (err) {
             showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
         } finally {
-            // Liberar bloqueos: WS + Rollback
-            setTimeout(() => {
-                isTransitioning.current = false;
-                isIntentionalRollback.current = false;
-            }, 3000);
+            // Liberar bloqueos solo después de confirmar
+            setIsSaving(false);
+            isTransitioning.current = false;
+            isIntentionalRollback.current = false;
         }
     };
 
@@ -1483,12 +1487,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
+        
+        // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
+        setIsSaving(true);
         try {
             await syncToSupabase(authorized);
             showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
         } catch (err) {
             console.error("Error authorizing modification:", err);
             showToast("Error", "No se pudo guardar la autorización.", "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -1498,12 +1507,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             solicitudModificacion: true
         };
         setTicketData(requested);
+        
+        // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
+        setIsSaving(true);
         try {
             await syncToSupabase(requested);
             showToast("Solicitud Enviada", "Se ha solicitado autorización a Gerencia para modificar esta cotización.", "success");
         } catch (err) {
             console.error("Error requesting modification:", err);
             showToast("Error", "No se pudo enviar la solicitud.", "error");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -3037,9 +3051,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         <button
                                                                             className={`${styles.authorizeBtn} ${ticketData.solicitudModificacion ? styles.pulseAlert : ''}`}
                                                                             onClick={handleAuthorizeModification}
+                                                                            disabled={isSaving}
                                                                         >
-                                                                            {ticketData.solicitudModificacion ? <Sparkles size={18} /> : null}
-                                                                            <span>{ticketData.solicitudModificacion ? 'APROBAR SOLICITUD DE CAMBIO' : 'AUTORIZAR MODIFICACIÓN'}</span>
+                                                                            {isSaving ? <Clock size={18} className={styles.spinner} /> : (ticketData.solicitudModificacion ? <Sparkles size={18} /> : null)}
+                                                                            <span>{isSaving ? 'GUARDANDO...' : (ticketData.solicitudModificacion ? 'APROBAR SOLICITUD DE CAMBIO' : 'AUTORIZAR MODIFICACIÓN')}</span>
                                                                         </button>
                                                                     ) : (
                                                                         ticketData.solicitudModificacion ? (
@@ -3051,9 +3066,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                             <button
                                                                                 className={styles.requestAuthBtn}
                                                                                 onClick={handleRequestModification}
+                                                                                disabled={isSaving}
                                                                             >
-                                                                                <Send size={18} />
-                                                                                <span>SOLICITAR AUTORIZACIÓN PARA EDITAR</span>
+                                                                                {isSaving ? <Clock size={18} className={styles.spinner} /> : <Send size={18} />}
+                                                                                <span>{isSaving ? 'ENVIANDO...' : 'SOLICITAR AUTORIZACIÓN PARA EDITAR'}</span>
                                                                             </button>
                                                                         )
                                                                     )}
@@ -3308,10 +3324,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 <button
                                                     className={styles.secondaryActionBtn}
                                                     onClick={handleReadjustQuote}
+                                                    disabled={isSaving}
                                                     style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', color: '#475569' }}
                                                 >
-                                                    <RefreshCw size={18} />
-                                                    <span>SOLICITA REAJUSTE / REPROGRAMAR</span>
+                                                    {isSaving ? <Clock size={18} className={styles.spinner} /> : <RefreshCw size={18} />}
+                                                    <span>{isSaving ? 'REAJUSTANDO...' : 'SOLICITA REAJUSTE / REPROGRAMAR'}</span>
                                                 </button>
 
                                                 <button
