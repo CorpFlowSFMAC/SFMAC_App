@@ -18,6 +18,7 @@ import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/s
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
+import { ticketsCache } from "@/lib/tickets-cache";
 import styles from "./TicketWindow.module.css";
 
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
@@ -1341,6 +1342,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const handleReadjustQuote = async () => {
         isIntentionalRollback.current = true;
+        // 🚨 INVALIDAR CACHE: Forzar lectura fresca del servidor
+        ticketsCache.invalidate();
+
         try {
             const readjust = {
                 ...ticketData,
@@ -1348,9 +1352,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 status_id: "en_cotizacion",
                 pausadoSLA: false,
                 fechaReactivacion: new Date().toISOString(),
-                modificacionAutorizada: true
+                modificacionAutorizada: true,
+                // 🧹 LIMPIEZA DE RASTRO DE ENVÍO
+                fechaCotización: null,
+                solicitudModificacion: false,
+                pagoRechazado: null
             };
+            
+            // 🚀 OPTIMISTIC UPDATE: Cambiar UI local instantáneamente
             setTicketData(readjust);
+            
             // Sincronizar estados paralelos de la UI para que el editor se refresque
             if (readjust.metadata?.partidas) setPartidasCotización(readjust.metadata.partidas);
             if (readjust.metadata?.montoFinal) setMontoTotalCotizado(readjust.metadata.montoFinal);
@@ -1359,12 +1370,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             
             // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion para reajuste.
             await syncToSupabase(readjust, { allowStateRollback: true });
-            showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición para realizar ajustes.", "info");
+            showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición.", "info");
         } finally {
-            // Dar margen para que el refetch de Supabase traiga el nuevo estado
+            // ⏱️ PAUSA DE SINCRONIZACIÓN: Bloquear Realtime por 3 segundos
             setTimeout(() => {
                 isIntentionalRollback.current = false;
-            }, 2000);
+            }, 3000);
         }
     };
 
