@@ -24,6 +24,7 @@ import { ticketsCache } from "@/lib/tickets-cache";
 import styles from "./TicketWindow.module.css";
 
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
+const SANTANDER_ID = "419d87c8-65e1-434f-8253-d8a226ca5f62";
 
 interface TicketWindowProps {
     ticket: any;
@@ -72,6 +73,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         ...ticket,
         estadoId: normalizeStateId(ticket.estadoId)
     }));
+
+    const isSantander = ticketData.client_id === SANTANDER_ID || (ticketData.numeroTicketCliente || "").startsWith("STD");
 
     const [isMaximized, setIsMaximized] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -1418,10 +1421,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         } catch (err) {
             showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
         } finally {
-            // Liberar bloqueos solo después de confirmar
+            // Liberar bloqueos: WS + Rollback
             setIsSaving(false);
-            isTransitioning.current = false;
-            isIntentionalRollback.current = false;
+            // ✅ BLOQUEO DE 3 SEGUNDOS PARA PREVENIR REGRESIONES DE ESTADO (STAGE 6 -> 5)
+            setTimeout(() => {
+                isTransitioning.current = false;
+                isIntentionalRollback.current = false;
+            }, 3000);
         }
     };
 
@@ -2223,6 +2229,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const isClientTicketFormatValid = useCallback((num?: string) => {
         if (!num || num.trim() === "") return false;
+        if (num.startsWith('STD')) return /^STD\d{4}\.\d{2}$/.test(num);
         if (num.startsWith('#')) return true; 
         return /^MB\d{6}\.\d{2}$/.test(num);
     }, []);
@@ -3727,19 +3734,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <input
                                                                 type="text"
                                                                 className={styles.inlineTicketInput}
-                                                                placeholder={`EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`}
+                                                                placeholder={isSantander 
+                                                                    ? `EJ: STD0001.${new Date().getFullYear().toString().slice(-2)}`
+                                                                    : `EJ: MB000025.${new Date().getFullYear().toString().slice(-2)}`
+                                                                }
                                                                 value={ticketData.numeroTicketCliente || ""}
                                                                 autoComplete="off"
                                                                 spellCheck={false}
                                                                 
                                                                 // Si el ticket ya venía con número asignado (desde props), bloquear edición
-                                                                disabled={ticketData.estadoId !== "documentacion_enviada" && !isAdmin}
-                                                                style={ticketData.estadoId !== "documentacion_enviada" && !isAdmin ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
+                                                                // SANTANDER siempre es readOnly en esta fase
+                                                                disabled={(ticketData.estadoId !== "documentacion_enviada" && !isAdmin) || isSantander}
+                                                                style={(ticketData.estadoId !== "documentacion_enviada" && !isAdmin) || isSantander ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#-]/g, '');
                                                                     setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: val }));
                                                                 }}
                                                                 onClick={(e) => e.stopPropagation()}
+                                                                readOnly={isSantander}
                                                             />
                                                             {!ticketData.numeroTicketCliente && (
                                                                 <span style={{ color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
@@ -3763,7 +3775,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
                                                 <button
                                                     className={styles.proceedToLiquidationBtn}
-                                                    disabled={!Object.values(documentosChecklist).every(v => v) || !isClientTicketFormatValid(ticketData.numeroTicketCliente)}
+                                                    disabled={(!isSantander && !Object.values(documentosChecklist).every(v => v)) || !isClientTicketFormatValid(ticketData.numeroTicketCliente)}
                                                     onClick={handleRequestFinalLiquidation}
                                                 >
                                                     <span>PASAR A LIQUIDACIÓN FINAL</span>

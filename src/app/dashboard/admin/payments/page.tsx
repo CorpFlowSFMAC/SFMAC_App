@@ -1689,7 +1689,7 @@ export default function PaymentsPage() {
                                                         S/ {formatSoles(group.utilidad)}
                                                     </span>
                                                     <span style={{ fontSize: '8px', color: '#94A3B8', fontWeight: 600 }}>
-                                                        ({formatSoles(group.montoFacturado)} - {formatSoles(group.montoPactado)} - {formatSoles(group.gastosOperativos)})
+                                                        ({formatSoles(group.montoFacturado)} Venta - {formatSoles(group.montoAdelantado)} Gasto Real)
                                                     </span>
                                                     {group.margen !== undefined && (
                                                         <span style={{ fontSize: '0.65rem', fontWeight: 800, color: group.margen > 20 ? '#059669' : '#D97706', background: group.margen > 20 ? '#ECFDF5' : '#FFFBEB', padding: '0 4px', borderRadius: '4px', marginTop: '2px' }}>

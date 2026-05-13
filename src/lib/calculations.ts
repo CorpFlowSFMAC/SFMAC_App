@@ -161,7 +161,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
                 if (isSameId) return true;
             }
 
-            // 2. Solo para REGISTROS LEGACY sin ID: margen de 30 segundos
+            // 2. Solo para REGISTROS LEGACY sin ID: margen de 1 segundo (SFMAC V3 Hardening)
             // Esto aplica solo para registros que realmente no tengan identificador único
             if (!hasIdModern && !hasIdLegacy) {
                 const sameMonto = toNum(mc.monto) === toNum(lp.monto);
@@ -169,7 +169,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
                 const dateL = new Date(lp.fecha || lp.date);
                 
                 const diffMs = Math.abs(dateM.getTime() - dateL.getTime());
-                const sameTime = diffMs < 30000; // < 30 segundos (30,000 ms) para legacy sin ID
+                const sameTime = diffMs < 1000; // < 1 segundo (1,000 ms) para evitar falsos positivos
 
                 return sameMonto && sameTime;
             }
@@ -204,7 +204,10 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     );
 
     const netLaborBalance = Math.max(0, round2(pactedMO - totalLaborConfirmed));
-    const realProfitability = round2(montoBase - pactedMO - totalOpConfirmed);
+    
+    // 🚀 LEY DE SFMAC V3: realProfitability SOLO resta lo que tiene ID de transacción CONFIRMADO.
+    // El saldo proyectado (netLaborBalance) NO resta utilidad hasta que se ejecute el pago.
+    const realProfitability = round2(montoBase - totalLaborConfirmed - totalOpConfirmed);
     const margenReal = montoBase > 0 ? round2((realProfitability / montoBase) * 100) : 0;
 
     const pendingLaborItems = pendingModern.map(normalizePayment).filter(isLabor);
@@ -212,6 +215,9 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const totalOpPending = round2(pendingOpItems.reduce((acc, c) => acc + c.monto, 0));
     const totalLaborPending = round2(pendingLaborItems.reduce((acc, c) => acc + c.monto, 0));
     const laborRequested = totalLaborConfirmed + totalLaborPending;
+
+    // 🛡️ RESERVA: Todo lo que es deuda proyectada o pendiente de aprobación.
+    const totalReserva = round2(netLaborBalance + totalLaborPending + totalOpPending);
 
     return {
         pactedMO,
@@ -232,6 +238,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         balance: netLaborBalance, // Alias para compatibilidad V2
         realProfitability,
         margenReal,
+        totalReserva,
         laborItems: [...modernLabor, ...legacyLabor],
         operatingItems: [...modernOp, ...legacyOp],
         pendingCosts: pendingModern,

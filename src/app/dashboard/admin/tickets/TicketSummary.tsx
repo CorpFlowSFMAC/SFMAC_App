@@ -1200,7 +1200,9 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
         margenReal: pctReal,
         laborItems: confirmedLaborItems,
         operatingExpenses,
-        operatingItems
+        operatingItems,
+        totalReserva,
+        totalExpenses: gastosReales
     } = finances;
 
     const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
@@ -1263,7 +1265,21 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
                         S/ {formatSoles(rentabilidadReal)}
                     </span>
                     <span style={{ fontSize: '9px', color: '#64748B', fontWeight: 600, marginTop: '2px' }}>
-                        ({formatSoles(montoTotalCliente)} - {formatSoles(pactadoLaborBase)} - {formatSoles(operatingExpenses)})
+                        ({formatSoles(montoTotalCliente)} Venta - {formatSoles(gastosReales)} Gasto Real)
+                    </span>
+                </div>
+            </div>
+
+            <div className={styles.infoItem} style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '12px' }}>
+                <span className={styles.infoLabel} style={{ color: '#6366F1' }}>
+                    Gastos Reales
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span className={styles.infoValue} style={{ color: '#1E293B', fontWeight: 900 }}>
+                        S/ {formatSoles(gastosReales)}
+                    </span>
+                    <span style={{ fontSize: '9px', color: '#6366F1', fontWeight: 700 }}>
+                        (PAGOS CONFIRMADOS)
                     </span>
                 </div>
             </div>
@@ -1337,9 +1353,17 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
                     )}
                 </div>
                 {montoSaldo > 0 && pactadoLaborBase > 0 && (
-                    <span style={{ fontSize: '9px', color: '#3B82F6', fontStyle: 'italic', marginTop: '2px', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>
-                        * Pendiente de Mano de Obra Pactada
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                        <span style={{ fontSize: '9px', color: '#3B82F6', fontStyle: 'italic', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>
+                            * Saldo Proyectado de M.O.
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F8FAFC', padding: '2px 8px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
+                            <Lightbulb size={10} color="#64748B" />
+                            <span style={{ fontSize: '9px', fontWeight: 800, color: '#64748B' }}>
+                                RESERVA TOTAL: S/ {formatSoles(totalReserva)}
+                            </span>
+                        </div>
+                    </div>
                 )}
             </div>
 

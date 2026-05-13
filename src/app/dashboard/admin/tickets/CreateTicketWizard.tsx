@@ -23,6 +23,9 @@ interface CreateTicketWizardProps {
     creatorGestoraNombre?: string | null;
 }
 
+const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
+const SANTANDER_ID = "419d87c8-65e1-434f-8253-d8a226ca5f62";
+
 export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRole, creatorGestoraId, creatorGestoraNombre }: CreateTicketWizardProps) {
     // Policy: ADMIN starts at step 0 (gestor selection), GESTORA starts at step 1
     const isAdmin = creatorRole === 'ADMIN' || creatorRole === 'SUPERADMIN';
@@ -169,7 +172,8 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
         if (!formData.tieneNumeroCliente) return true;
         if (isTicketClienteDuplicate()) return false;
         const currentYearSuffix = new Date().getFullYear().toString().slice(-2);
-        const regex = new RegExp(`^MB\\d{6}\\.${currentYearSuffix}$`);
+        const prefix = formData.clienteId === SANTANDER_ID ? 'STD' : 'MB';
+        const regex = new RegExp(`^${prefix}\\d{4,6}\\.${currentYearSuffix}$`);
         return regex.test(formData.numeroTicketCliente);
     };
 
@@ -202,12 +206,38 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
     };
 
     const handleSelectCliente = (cliente: any) => {
+        let ticketNum = "";
+        let hasTicket = false;
+
+        if (cliente.id === SANTANDER_ID) {
+            hasTicket = true;
+            // Generar correlativo STD
+            const year = new Date().getFullYear().toString().slice(-2);
+            const stdTickets = (allExistingTickets || []).filter((t: any) => 
+                (t.client_ticket_number || "").startsWith("STD")
+            );
+            
+            let lastNum = 0;
+            stdTickets.forEach((t: any) => {
+                const match = t.client_ticket_number.match(/STD(\d+)\./);
+                if (match) {
+                    const n = parseInt(match[1]);
+                    if (n > lastNum) lastNum = n;
+                }
+            });
+            
+            const nextNum = (lastNum + 1).toString().padStart(4, '0');
+            ticketNum = `STD${nextNum}.${year}`;
+        }
+
         setFormData({
             ...formData,
             cliente,
             clienteId: cliente.id,
             sede: null,
-            sedeId: ""
+            sedeId: "",
+            tieneNumeroCliente: hasTicket || formData.tieneNumeroCliente,
+            numeroTicketCliente: ticketNum || formData.numeroTicketCliente
         });
         setSearchTermSede(""); // Limpiar búsqueda de sede al cambiar de cliente
     };
@@ -742,12 +772,21 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                             <div className={styles.ticketClienteInputWrapper}>
                                                 <input
                                                     type="text"
-                                                    placeholder={`Ej: MB000000.${new Date().getFullYear().toString().slice(-2)}`}
+                                                    placeholder={formData.clienteId === SANTANDER_ID 
+                                                        ? `Ej: STD0001.${new Date().getFullYear().toString().slice(-2)}`
+                                                        : `Ej: MB000000.${new Date().getFullYear().toString().slice(-2)}`
+                                                    }
                                                     value={formData.numeroTicketCliente}
                                                     onChange={(e) => setFormData({ ...formData, numeroTicketCliente: e.target.value.toUpperCase() })}
                                                     className={`${styles.ticketClienteInput} ${formData.numeroTicketCliente && (!isTicketClienteValid() || isTicketClienteDuplicate()) ? styles.inputError : ''}`}
                                                     maxLength={11}
+                                                    readOnly={formData.clienteId === SANTANDER_ID}
                                                 />
+                                                {formData.clienteId === SANTANDER_ID && (
+                                                    <span className={styles.successHint} style={{ color: '#6366f1', fontSize: '11px', fontWeight: 600 }}>
+                                                        ✨ Correlativo STD generado automáticamente.
+                                                    </span>
+                                                )}
                                                 {formData.numeroTicketCliente && isTicketClienteDuplicate() && (
                                                     <span className={styles.errorHint} style={{ color: '#EF4444' }}>
                                                         ✘ Este número de ticket ya existe. Debe ser único.
@@ -755,7 +794,7 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                                 )}
                                                 {formData.numeroTicketCliente && !isTicketClienteValid() && !isTicketClienteDuplicate() && (
                                                     <span className={styles.errorHint}>
-                                                        Formato: MB + 6 dígitos + .{new Date().getFullYear().toString().slice(-2)}
+                                                        Formato: {formData.clienteId === SANTANDER_ID ? 'STD' : 'MB'} + {formData.clienteId === SANTANDER_ID ? '4' : '6'} dígitos + .{new Date().getFullYear().toString().slice(-2)}
                                                     </span>
                                                 )}
                                             </div>
