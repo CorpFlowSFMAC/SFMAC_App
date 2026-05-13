@@ -631,6 +631,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const shouldPreservePrevState = (prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current)
                                           || (prevStatusOrder < serverStatusOrder && isIntentionalRollback.current);
 
+            const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada || meta.modificacionAutorizada || prev.modificacionAutorizada);
+
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
             // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
             const localSolicitud = prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto;
@@ -712,6 +714,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // Si el local está más avanzado, NO LO RETROCEDEMOS
                 estadoId: shouldPreservePrevState ? prev.estadoId : corregidoEstadoId,
                 status_id: shouldPreservePrevState ? prev.status_id : corregidoEstadoId,
+                modificacionAutorizada: finalModificacionAutorizada,
+                solicitudModificacion: ticket.solicitudModificacion || meta.solicitudModificacion || prev.solicitudModificacion,
                 visitPaymentConfirmed: visitConfirmed || prev.visitPaymentConfirmed
             };
         });
@@ -1347,6 +1351,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 modificacionAutorizada: true
             };
             setTicketData(readjust);
+            // Sincronizar estados paralelos de la UI para que el editor se refresque
+            if (readjust.metadata?.partidas) setPartidasCotización(readjust.metadata.partidas);
+            if (readjust.metadata?.montoFinal) setMontoTotalCotizado(readjust.metadata.montoFinal);
+            if (readjust.costoManoObra) setCostoManoObra(readjust.costoManoObra.toString());
+            if (readjust.costoMateriales) setCostoMateriales(readjust.costoMateriales.toString());
+            
             // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion para reajuste.
             await syncToSupabase(readjust, { allowStateRollback: true });
             showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición para realizar ajustes.", "info");
@@ -2838,7 +2848,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         </div>
                                     )}
 
-                                    {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
+                                    {(ticketData.estadoId === "en_cotizacion" || ["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId)) && (
                                         <div className={`${styles.quotationBox} ${isQuotationCollapsed && ticketData.estadoId !== "en_cotizacion" ? styles.collapsedQuotation : ''}`}>
                                             <div className={styles.quotationHeader} onClick={() => ticketData.estadoId !== "en_cotizacion" && setIsQuotationCollapsed(!isQuotationCollapsed)}>
                                                 <FileSpreadsheet size={28} color="#10B981" />
@@ -2854,7 +2864,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     </p>
                                                 </div>
 
-                                                {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && (
+                                                {["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && (
                                                     <div className={styles.headerRightActions}>
                                                         {!ticketData.modificacionAutorizada && (
                                                             <div style={{ background: '#fef2f2', color: '#ef4444', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid #fee2e2' }}>
@@ -2970,7 +2980,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 </p>
                                                             )}
 
-                                                            {["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
+                                                            {["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada && (
                                                                 <div className={styles.authorizationSection}>
                                                                     <div className={styles.authLockIcon}>
                                                                         <Lock size={40} />
@@ -3173,7 +3183,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             // --- VISTA ESTÁNDAR (EDITOR PDF) ---
                                                             <OnlineQuotationEditor
                                                                 ref={quotationEditorRef}
-                                                                isLocked={["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
+                                                                isLocked={["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.estadoId) && !ticketData.modificacionAutorizada}
                                                                 clientInfo={ticketData.cliente}
                                                                 sedeInfo={ticketData.sede}
                                                                 servicioId={ticketData.servicioId}

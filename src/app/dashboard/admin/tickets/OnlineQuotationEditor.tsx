@@ -143,12 +143,15 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
     }, [items, grandTotal, isLocked, onUpdate]);
 
     useEffect(() => {
-        // Solo recargar items si hay datos válidos en initialItems Y no hay items actuales con valores reales
-        // Convertimos a número para evitar problemas con tipos
+        // Al recibir items iniciales o cambiar el estado de bloqueo, sincronizamos
+        // Solo sobreescribimos si está bloqueado (vista oficial) o si lo local está vacío/default
         if (initialItems && initialItems.length > 0) {
-            const hasActualItems = items.some(i => Number(i.precioUnitario) > 0 || (i.descripcion && i.descripcion !== "Mano de obra especializada para el servicio"));
-            // Solo recargar si está bloqueado y NO tiene items actuales o si hay items pero todos están en cero
-            if ((!hasActualItems || isLocked) && !items.every(i => Number(i.precioUnitario) === 0)) {
+            const hasActualLocalContent = items.some(i => 
+                Number(i.precioUnitario) > 0 || 
+                (i.descripcion && !i.descripcion.includes("Mano de obra especializada") && !i.descripcion.includes("Suministro de materiales"))
+            );
+
+            if (isLocked || !hasActualLocalContent) {
                 setItems(initialItems.map((it: any, idx: number) => ({
                     id: it.id || Math.random().toString(36).substr(2, 9),
                     item: it.item || (idx + 1).toString().padStart(2, '0'),
