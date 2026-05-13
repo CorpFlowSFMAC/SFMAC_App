@@ -2235,8 +2235,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         return nombre.includes('SANTANDER') || codigo.includes('SANTANDER');
     }, [ticketData.cliente]);
 
+    // ✅ V3.1: Detectar si es cliente Mibanco
+    const isMibanco = useCallback(() => {
+        const nombre = ticketData.cliente?.nombre?.toUpperCase() || '';
+        const codigo = ticketData.cliente?.codigo?.toUpperCase() || '';
+        return nombre.includes('MIBANCO') || nombre.includes('MICROEMPRESA') || codigo.includes('MIBANCO');
+    }, [ticketData.cliente]);
+
     // ✅ V3.1: Detectar si es cliente BCP
-    const isBCP = useCallback(() => {
+    const isBancoCredito = useCallback(() => {
         const nombre = ticketData.cliente?.nombre?.toUpperCase() || '';
         const codigo = ticketData.cliente?.codigo?.toUpperCase() || '';
         return nombre.includes('BCP') || codigo.includes('BCP');
@@ -2247,11 +2254,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (isSantander()) {
             return 'BANCO SANTANDER PERÚ S.A.';
         }
-        if (isBCP()) {
+        if (isBancoCredito()) {
             return 'BANCO DE CRÉDITO DEL PERÚ S.A.';
         }
+        if (isMibanco()) {
+            return 'BANCO DE LA MICROEMPRESA S.A.C.';
+        }
         return ticketData.cliente?.nombre || ticket.cliente?.nombre || 'Sin cliente';
-    }, [ticketData.cliente, ticket.cliente, isSantander, isBCP]);
+    }, [ticketData.cliente, ticket.cliente, isSantander, isBancoCredito, isMibanco]);
 
     const capitalExposed = finances.totalExpenses;
 

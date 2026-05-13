@@ -90,7 +90,7 @@ export const normalizeTicket = (t: any) => {
             t.client_ticket_number ||
             t.numeroTicketCliente ||
             realMetadata.numeroTicketCliente ||
-            (t.id ? `TK-${t.id.slice(-8).toUpperCase()}` : ""),
+            (t.id ? `Ticket #${t.id.slice(-6)}` : ""),
         fechaCreacion:
             t.created_at || t.fechaCreacion || realMetadata.fechaCreacion,
         createdAt:

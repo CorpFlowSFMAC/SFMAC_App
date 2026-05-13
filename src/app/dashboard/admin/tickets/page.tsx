@@ -795,7 +795,7 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
     const sedeDireccion = ticket.sede?.direccion || ticket.branch_offices?.address || ticket.branch_offices?.direccion || 'Direccion no especificada';
     const clienteLogo = ticket.cliente?.logo || ticket.clients?.logo_url;
     const clienteInitials = clienteNombre.substring(0, 2).toUpperCase();
-    const ticketCode = ticket.numeroTicketCliente || (ticket.id ? `TK-${ticket.id.slice(-8).toUpperCase()}` : "S/N");
+    const ticketCode = ticket.numeroTicketCliente || (ticket.id ? `Ticket #${ticket.id.slice(-6)}` : "S/N");
 
     return (
         <div
