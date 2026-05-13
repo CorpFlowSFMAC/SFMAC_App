@@ -600,7 +600,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (!ticket || !isInitialLoadComplete) return;
 
 
-        if (isProcessingAdvance.current) {
+        // 🔒 Bloqueo TOTAL durante operaciones manuales
+        if (isProcessingAdvance.current || isManualOverride.current) {
             return;
         }
 
@@ -628,7 +629,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // SIEMPRE gana el más avanzado (nunca retroceder de estado automáticamente)
             // EXCEPCIÓN: Si hay una denegación de pago reciente, permitimos el retroceso para que la UI se sincronice
             const hasRejection = !!meta.pagoRechazado;
-            const shouldPreservePrevState = (prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current)
+            // 🔒 Override por Acción: Si el usuario solicitó manualmente un recorte, respetarlo sin interferir
+            const shouldPreservePrevState = (prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current && !isManualRegression.current)
                                           || (prevStatusOrder < serverStatusOrder && isIntentionalRollback.current);
 
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
@@ -736,6 +738,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     // Bloqueo durante transacciones de adelanto para evitar parpadeo por race condition
     const isProcessingAdvance = useRef(false);
     const isIntentionalRollback = useRef(false);
+    // 🔒 Override por Acción: Cuando el usuario solicita expressly un reajuste, ignorar regresiones automáticas por 5 segundos
+    // 🔒 Bloqueo TOTAL durante operações manuais - previne interferência do realtime
+    const isManualOverride = useRef(false);
+    const isManualRegression = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -803,7 +809,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
-        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return;
+        // 🔒 Bloqueo TOTAL: no sincronizar si hay uma operación manual em progresso
+        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current || isManualOverride.current) return;
 
         // 🛡️ BLOQUEO CRÍTICO: No sincronizar si el usuario está editando activamente un monto
         const isEditingMonto = !!montoAdelantoManual || !!porcentajeAdelanto;
@@ -1336,7 +1343,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleReadjustQuote = async () => {
+        // 🔒 Bloqueo TOTAL: parar qualquer sincronização automática
+        isManualOverride.current = true;
+        isManualRegression.current = true;
         isIntentionalRollback.current = true;
+        
+        // 🧹 Limpieza de caché post-reajuste - evitar que "memoria vieja" intente restaurar la cotización
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem(`ticket_state_${ticket.id}`);
+                localStorage.removeItem(`ticket_ui_${ticket.id}`);
+            } catch (e) { console.warn('localStorage cleanup failed', e); }
+        }
+        
         try {
             const readjust = {
                 ...ticketData,
@@ -1348,13 +1367,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             };
             setTicketData(readjust);
             // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion para reajuste.
+            // ⚡ Prioridad de Escritura: await estricto hasta confirmación del servidor
             await syncToSupabase(readjust, { allowStateRollback: true });
             showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición para realizar ajustes.", "info");
         } finally {
-            // Dar margen para que el refetch de Supabase traiga el nuevo estado
+            // 🕐 Margen extendido: 5 segundos para confirmar que el servidor procesó el cambio
             setTimeout(() => {
                 isIntentionalRollback.current = false;
-            }, 2000);
+                isManualRegression.current = false;
+                isManualOverride.current = false;
+            }, 5000);
         }
     };
 
