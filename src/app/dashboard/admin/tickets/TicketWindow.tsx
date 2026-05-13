@@ -599,6 +599,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     // Efecto de sincronización con el prop 'ticket' (viene del contexto global realtime)
     useEffect(() => {
         if (!ticket || !isInitialLoadComplete) return;
+        // 🔒 BLOQUEO DE TRANSICIÓN: Si hay un reajuste en curso, ignorar actualizaciones entrantes
+        if (isTransitioning.current) return;
 
 
         if (isProcessingAdvance.current) {
@@ -741,6 +743,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     // Bloqueo durante transacciones de adelanto para evitar parpadeo por race condition
     const isProcessingAdvance = useRef(false);
     const isIntentionalRollback = useRef(false);
+    // 🔒 BLOQUEO DE TRANSICIÓN: Durante una regresión manual, ignorar TODOS los updates entrantes del WS
+    const isTransitioning = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -1028,6 +1032,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     const freshServerData = payload.new as any;
 
                     setTicketData((prev: any) => {
+                        // 🔒 BLOQUEO DE TRANSICIÓN: Si hay un reajuste en curso, no procesar este WS event
+                        if (isTransitioning.current) return prev;
                         // MERGE INTELIGENTE: Solo actualizar si hay cambios reales en campos clave
                         // para evitar perder lo que el usuario está escribiendo en el momento.
                         const serverMeta = freshServerData.metadata || {};
@@ -1341,9 +1347,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleReadjustQuote = async () => {
+        // 🔒 ACTIVAR BLOQUEO DE TRANSICIÓN - silencia todos los WS updates mientras dure el proceso
+        isTransitioning.current = true;
         isIntentionalRollback.current = true;
-        // 🚨 INVALIDAR CACHE: Forzar lectura fresca del servidor
+
+        // 🚨 INVALIDAR CACHE ESPECÍFICO del ticket + cache global
+        ticketsCache.remove(ticketData.id);
         ticketsCache.invalidate();
+        try { localStorage.removeItem(`ticket_state_${ticketData.id}`); } catch(_) {}
+
+        showToast("⏳ Sincronizando Reajuste", "Devolviendo cotización al modo edición...", "info");
 
         try {
             const readjust = {
@@ -1358,22 +1371,25 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 solicitudModificacion: false,
                 pagoRechazado: null
             };
-            
+
             // 🚀 OPTIMISTIC UPDATE: Cambiar UI local instantáneamente
             setTicketData(readjust);
-            
+
             // Sincronizar estados paralelos de la UI para que el editor se refresque
             if (readjust.metadata?.partidas) setPartidasCotización(readjust.metadata.partidas);
             if (readjust.metadata?.montoFinal) setMontoTotalCotizado(readjust.metadata.montoFinal);
             if (readjust.costoManoObra) setCostoManoObra(readjust.costoManoObra.toString());
             if (readjust.costoMateriales) setCostoMateriales(readjust.costoMateriales.toString());
-            
-            // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion para reajuste.
+
+            // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion
             await syncToSupabase(readjust, { allowStateRollback: true });
-            showToast("Reajuste Solicitado", "La cotización ha sido devuelta al estado de edición.", "info");
+            showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
+        } catch (err) {
+            showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
         } finally {
-            // ⏱️ PAUSA DE SINCRONIZACIÓN: Bloquear Realtime por 3 segundos
+            // Liberar bloqueos: WS + Rollback
             setTimeout(() => {
+                isTransitioning.current = false;
                 isIntentionalRollback.current = false;
             }, 3000);
         }

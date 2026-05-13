@@ -71,21 +71,12 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         return matchesZone && matchesSkill && matchesSearch && isActive;
     }) || [];
 
-    // Load - fetch directo para debug
+    // Technician list is loaded from AppDataContext
     useEffect(() => {
         if (!isOpen) return;
-        
-        fetch('/api/debug/technicians-schema')
-            .then(res => res.json())
-            .then(data => console.log('[Debug] Schema response:', data))
-            .catch(err => console.error('[Debug] Error:', err));
+        // (future: trigger a targeted refresh if data is stale)
     }, [isOpen]);
 
-    // Debug: ver estructura del primer técnico
-    if (technicians && technicians.length > 0) {
-        console.log('[TechnicianDrawer] Primer técnico - todas las keys:', Object.keys(technicians[0]));
-        console.log('[TechnicianDrawer] Primer técnico - datos:', technicians[0]);
-    }
 
     const handleAssign = () => {
         if (!selectedTechnician) return;
@@ -220,7 +211,7 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                                         <div className={styles.techDetails}>
                                             <div className={styles.detailItem}>
                                                 <Phone size={12} />
-                                                <span>{tech.phone || tech.celular || tech.telefono || tech.numero_telefono || tech.contact_phone || tech.mobile || `(keys: ${Object.keys(tech).join(', ')})`}</span>
+                                                <span>{tech.phone || tech.celular || tech.telefono || tech.numero_telefono || tech.contact_phone || tech.mobile || '---'}</span>
                                             </div>
                                             <div className={styles.detailItem}>
                                                 <MapPin size={12} />
