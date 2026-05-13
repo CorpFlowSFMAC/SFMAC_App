@@ -150,14 +150,15 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
             const isSameId = (mc.id && lp.id && mc.id === lp.id) || (mc.metadata?.legacy_id === lp.id);
             if (isSameId) return true;
 
-            // 2. Heurística de Seguridad (1-minuto)
+            // 2. Heurística de Seguridad (5-minuto para alta latencia como Iquitos)
             // Solo deduplicamos automáticamente si el monto coincide Y el tiempo es casi idéntico
+            // ⚡️ MEJORA V3: Aumentado de 1min a 5min para zonas con alta latencia (Iquitos)
             const sameMonto = toNum(mc.monto) === toNum(lp.monto);
             const dateM = new Date(mc.fecha_pago || mc.fecha || mc.created_at);
             const dateL = new Date(lp.fecha || lp.date);
             
             const diffMs = Math.abs(dateM.getTime() - dateL.getTime());
-            const sameTime = diffMs < 60000; // < 1 minuto (60,000 ms)
+            const sameTime = diffMs < 300000; // < 5 minutos (300,000 ms) para alta latencia
 
             // 3. Fallback: Espejo de sincronización (mismo día + concepto 'Sync' o 'Autorizado')
             // Esto captura las migraciones donde el timestamp pudo cambiar pero el día y monto son fijos.
