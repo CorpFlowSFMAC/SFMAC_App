@@ -2224,8 +2224,34 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const isClientTicketFormatValid = useCallback((num?: string) => {
         if (!num || num.trim() === "") return false;
         if (num.startsWith('#')) return true; 
-        return /^MB\d{6}\.\d{2}$/.test(num);
+        // ✅ V3.1: Aceptar formato MB legacy O formato STD moderno
+        return /^MB\d{6}\.\d{2}$/.test(num) || /^STD\d{4}\.\d{2}$/.test(num);
     }, []);
+
+    // ✅ V3.1: Detectar si es cliente Santander por el nombre o código
+    const isSantander = useCallback(() => {
+        const nombre = ticketData.cliente?.nombre?.toUpperCase() || '';
+        const codigo = ticketData.cliente?.codigo?.toUpperCase() || '';
+        return nombre.includes('SANTANDER') || codigo.includes('SANTANDER');
+    }, [ticketData.cliente]);
+
+    // ✅ V3.1: Detectar si es cliente BCP
+    const isBCP = useCallback(() => {
+        const nombre = ticketData.cliente?.nombre?.toUpperCase() || '';
+        const codigo = ticketData.cliente?.codigo?.toUpperCase() || '';
+        return nombre.includes('BCP') || codigo.includes('BCP');
+    }, [ticketData.cliente]);
+
+    // ✅ V3.1: Nombre 显示 del cliente para PDFs
+    const getClientDisplayName = useCallback(() => {
+        if (isSantander()) {
+            return 'BANCO SANTANDER PERÚ S.A.';
+        }
+        if (isBCP()) {
+            return 'BANCO DE CRÉDITO DEL PERÚ S.A.';
+        }
+        return ticketData.cliente?.nombre || ticket.cliente?.nombre || 'Sin cliente';
+    }, [ticketData.cliente, ticket.cliente, isSantander, isBCP]);
 
     const capitalExposed = finances.totalExpenses;
 
@@ -2452,7 +2478,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         }
                                     </h3>
                                     <span>
-                                        {ticket.cliente?.nombre || 'Sin cliente'} 
+                                        {getClientDisplayName()} 
                                         <span style={{ 
                                             opacity: 1, 
                                             fontSize: '0.65rem', 
