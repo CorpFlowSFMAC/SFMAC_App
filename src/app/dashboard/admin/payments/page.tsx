@@ -1052,10 +1052,49 @@ export default function PaymentsPage() {
         });
     };
 
+    // Referencia para prevenir doble clic rápido
+    const isConfirmingPaymentRef = useRef(false);
+
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    // 🔒 PROTECCIÓN ANTI-DOBLE CLIC (V4.3)
+    // Previene duplicados cuando el usuario hace clic múltiples veces por lag de red
+    // ═══════════════════════════════════════════════════════════════════════════════════
     const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null, forcedDate?: string) => {
+        // 🔒 BLOQUEO: Si ya hay una confirmación en proceso, rechazar nuevos clics
+        if (isConfirmingPaymentRef.current) {
+            console.warn('[Payments] Bloqueado: confirmación en progreso (doble clic)');
+            showToast('⚠️ Ya hay una operación en proceso...');
+            return;
+        }
+        isConfirmingPaymentRef.current = true;
+        
+        // 🚀 INICIO: Fetch data ANTES de procesar para validar estado actual
         const finalDate = (forcedDate && forcedDate.trim() !== "") 
             ? new Date(forcedDate + "T12:00:00").toISOString() 
             : new Date().toISOString();
+
+        // ★ Si es costo de tabla, verificar que NO esté ya pagado en la DB
+        if (item.isTableCost && item.costId) {
+            try {
+                const { data: existingCost, error: checkErr } = await supabase
+                    .from('ticket_costs')
+                    .select('id, estado_pago')
+                    .eq('id', item.costId)
+                    .single();
+                
+                // 🔒 Si ya está pagado, rechazar como duplicado
+                if (existingCost && existingCost.estado_pago === 'pagado') {
+                    console.warn('[Payments] Duplicado detectado: costo ya pagado', item.costId);
+                    showToast('⚠️ Este pago ya fue confirmado');
+                    // NO refresh aquí para no causar más tráfico
+                    isConfirmingPaymentRef.current = false; // 🔓 Desbloquear
+                    return;
+                }
+            } catch (checkErr) {
+                console.error('[Payments] Error verificando costo:', checkErr);
+                // Continuar con precaución
+            }
+        }
 
         // ★ FIX: Si es un costo de la tabla ticket_costs, usamos su UUID real como ID en la metadata.
         // Esto permite que el motor de unificación (deduplicación) sepa que son el mismo registro.
@@ -1080,7 +1119,15 @@ export default function PaymentsPage() {
 
             if (fetchErr || !currentTicket) throw new Error("Ticket no encontrado");
 
+            const serverMeta = currentTicket.metadata || {};
+
+            // Si es un costo de tabla, NO agregamos a historialPagosTecnico
+            // porque el costo ya está en ticket_costs con estado 'pagado'.
+            // Agregar a metadata causaría DUPLICADO en la bandeja de pagos.
             if (item.isTableCost && item.costId) {
+                // Ya se actualizó ticket_costs arriba
+                // Solo actualizamos metadataFields sin agregar a historial
+                const meta = { ...currentTicket.metadata };
                 const additionalUpdates: any = { metadataFields: {} };
                 const isAdvance = item.concepto?.toLowerCase().includes('adelanto') || item.tipo?.toLowerCase().includes('adelanto');
                 const isFinal = item.concepto?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('liquidación') || item.id?.endsWith('_final');
@@ -1098,7 +1145,7 @@ export default function PaymentsPage() {
                     additionalUpdates.metadataFields.pagoRechazado = null;
                 }
 
-                // ★ MEJORA: Auto-cerrar si el saldo es 0 (para costos de tabla)
+                // Auto-cerrar si el saldo es 0
                 const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'cotizacion_aprobada', 'en_ejecucion'].includes(currentTicket.status_id);
                 if (isNearingClosure && !additionalUpdates.status_id) {
                     const { data: currentCosts } = await supabase.from('ticket_costs').select('*').eq('ticket_id', group.realTicketId);
@@ -1108,12 +1155,11 @@ export default function PaymentsPage() {
                     if (fin.netLaborBalance < 1) {
                         additionalUpdates.status_id = 'ticket_cerrado';
                         additionalUpdates.closure_date = finalDate;
-                        if (!currentTicket.metadata?.fechaPagoFinal) {
-                            additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
-                        }
+                        additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
                     }
                 }
 
+                // Apenas actualizamos el costo en ticket_costs, sin tocar metadata.historialPagosTecnico
                 const { error: costErr } = await supabase
                     .from('ticket_costs')
                     .update({ 
@@ -1125,9 +1171,20 @@ export default function PaymentsPage() {
                 
                 if (costErr) throw costErr;
                 
-                await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
+                // Solo actualizar campos metadata, sin agregar a historial (evita duplicado)
+                const newMetadata = { ...serverMeta, ...additionalUpdates.metadataFields };
+                await supabase
+                    .from('tickets')
+                    .update({ 
+                        metadata: newMetadata,
+                        ...(additionalUpdates.status_id ? { status_id: additionalUpdates.status_id } : {}),
+                        ...(additionalUpdates.closure_date ? { closure_date: additionalUpdates.closure_date } : {})
+                    })
+                    .eq('id', group.realTicketId);
+                    
                 showToast('✅ Pago de costo registrado');
                 refresh();
+                isConfirmingPaymentRef.current = false; // 🔓 Desbloquear
                 return;
             }
 
@@ -1194,9 +1251,11 @@ export default function PaymentsPage() {
             await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
             showToast('✅ Pago confirmado exitosamente');
             refresh();
+            isConfirmingPaymentRef.current = false; // 🔓 Desbloquear
         } catch (err) {
             console.error('[Payments] Error confirming payment:', err);
             alert('Error al procesar el pago.');
+            isConfirmingPaymentRef.current = false; // 🔓 Desbloquear incluso en error
         }
     };
 

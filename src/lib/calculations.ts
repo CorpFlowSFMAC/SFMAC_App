@@ -151,6 +151,9 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
             const hasIdModern = !!(mc.id);
             const hasIdLegacy = !!(lp.id);
             
+            // ★ FIX: Si ambos tienen el MISMO ID → ES duplicado (mismo registro duplicado en ambas fuentes)
+            if (hasIdModern && hasIdLegacy && mc.id === lp.id) return true;
+            
             // Si ambos tienen IDs diferentes → NO es duplicado, son transacciones separadas
             if (hasIdModern && hasIdLegacy && mc.id !== lp.id) return false;
             
