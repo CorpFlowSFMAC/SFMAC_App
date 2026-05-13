@@ -815,14 +815,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const requestAdvanceRef = useRef(false);
     const confirmAdvanceRef = useRef(false);
 
-    const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean }) => {
+    const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean, manual?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
-        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return;
+        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return false;
 
         // 🛡️ BLOQUEO CRÍTICO: No sincronizar si el usuario está editando activamente un monto
         const isEditingMonto = !!montoAdelantoManual || !!porcentajeAdelanto;
         if (isEditingMonto && !dataOverride) {
-            return;
+            return false;
         }
 
 
@@ -936,9 +936,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         };
 
         const currentDataStr = JSON.stringify(updates);
-        if (currentDataStr === lastSyncData.current && !dataOverride) return;
+        if (currentDataStr === lastSyncData.current && !dataOverride) return false;
 
         isSyncing.current = true;
+        let success = false;
         try {
             if (onUpdate) {
                 await onUpdate(ticketData.id, updates);
@@ -946,11 +947,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 await ticketsAPI.update(ticketData.id, updates);
             }
             lastSyncData.current = currentDataStr;
+            success = true;
         } catch (err) {
             console.error("Error syncing ticket to Supabase:", err);
+            success = false;
         } finally {
             isSyncing.current = false;
         }
+        return success;
     }, [ticketData, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
 
     useEffect(() => {
@@ -1405,8 +1409,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
             setIsSaving(true);
             // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion
-            await syncToSupabase(readjust, { allowStateRollback: true });
-            showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
+            const success = await syncToSupabase(readjust, { allowStateRollback: true, manual: true });
+            if (success) {
+                showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
+            } else {
+                showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
+            }
         } catch (err) {
             showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
         } finally {
@@ -1491,8 +1499,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
         setIsSaving(true);
         try {
-            await syncToSupabase(authorized);
-            showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+            const success = await syncToSupabase(authorized, { manual: true });
+            if (success) {
+                showToast("Edición Habilitada", "La cotización ha sido desbloqueada para realizar ajustes.", "info");
+            } else {
+                showToast("Error", "No se pudo guardar la autorización.", "error");
+            }
         } catch (err) {
             console.error("Error authorizing modification:", err);
             showToast("Error", "No se pudo guardar la autorización.", "error");
@@ -1511,8 +1523,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
         setIsSaving(true);
         try {
-            await syncToSupabase(requested);
-            showToast("Solicitud Enviada", "Se ha solicitado autorización a Gerencia para modificar esta cotización.", "success");
+            const success = await syncToSupabase(requested, { manual: true });
+            if (success) {
+                showToast("Solicitud Enviada", "Se ha solicitado autorización a Gerencia para modificar esta cotización.", "success");
+            } else {
+                showToast("Error", "No se pudo enviar la solicitud.", "error");
+            }
         } catch (err) {
             console.error("Error requesting modification:", err);
             showToast("Error", "No se pudo enviar la solicitud.", "error");
