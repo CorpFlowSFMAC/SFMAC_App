@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient('https://xqnghcdndqicqofnxvuf.supabase.co', process.env.SUPABASE_SERVICE_ROLE_KEY || '');
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://87.99.137.96:8000', process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 async function test() {
     const { data, error } = await supabase.rpc('get_tickets_summary_v2');

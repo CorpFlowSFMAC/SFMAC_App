@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { calculateTicketFinances } from "@/lib/calculations";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase-config";
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  getSupabaseUrl(),
+  getSupabaseAnonKey()
 );
 
 export async function GET(request: Request) {
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
     const report = gestoras.map(g => {
       const myTickets = closedTickets?.filter(t => t.gestora_id === g.id) || [];
       const target = targets?.find(tg => tg.gestora_id === g.id);
-      
+
       const utilityTotal = myTickets.reduce((acc, t) => {
         return acc + calculateTicketFinances(t, t.costos || []).realProfitability;
       }, 0);
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
       const targetAmount = target?.target_amount || 35000;
       const multiplier = target?.bonus_multiplier || 0.1;
       const baseLaboral = parseFloat(g.costo_laboral_mensual || 0);
-      
+
       const percentAchieved = (utilityTotal / targetAmount) * 100;
       const bonusEarned = percentAchieved >= 80 ? (utilityTotal / targetAmount) * (baseLaboral * multiplier) : 0;
 

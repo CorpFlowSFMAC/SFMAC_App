@@ -4,9 +4,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseServiceKey, getSupabaseUrl } from '@/lib/supabase-config';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const supabaseUrl = getSupabaseUrl();
+const supabaseServiceKey = getSupabaseServiceKey();
 const hasServiceKey = !!supabaseServiceKey;
 
 function getClient() {
@@ -18,7 +19,7 @@ function getClient() {
 
 export async function GET(request: NextRequest) {
     const client = getClient();
-    
+
     if (!client || !supabaseUrl) {
         return NextResponse.json({
             success: false,
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
             .select('id', { count: 'exact', head: true });
 
         // Buscar admin específico
-        const admin = perfiles?.find(p => 
+        const admin = perfiles?.find(p =>
             p.email?.toLowerCase() === 'acubas@sinfimac.pe'
         );
 

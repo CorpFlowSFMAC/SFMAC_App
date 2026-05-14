@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'https://corpflow.sinfimac.pe',
   },
-  
+
   // PROHIBIT old domain redirects in production
   // Block any redirect to sinfimac.pe from the server side
   async headers() {
@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://login.microsoftonline.com https://*.microsoftonline.com https://*.supabase.co;",
+            value: "frame-ancestors 'self' https://login.microsoftonline.com https://*.microsoftonline.com http://87.99.137.96:8000;",
           },
           {
             key: 'Access-Control-Allow-Origin',
@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://login.microsoftonline.com https://*.microsoftonline.com https://*.supabase.co;",
+            value: "frame-ancestors 'self' https://login.microsoftonline.com https://*.microsoftonline.com http://87.99.137.96:8000;",
           },
         ],
       },
@@ -49,8 +49,9 @@ const nextConfig: NextConfig = {
         hostname: '*.microsoftonline.com',
       },
       {
-        protocol: 'https',
-        hostname: '*.supabase.co',
+        protocol: 'http',
+        hostname: '87.99.137.96',
+        port: '8000',
       },
     ],
   },

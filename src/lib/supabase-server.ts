@@ -3,6 +3,7 @@
  * Versión resiliente: No crashea si faltan variables
  */
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseServiceKey, getSupabaseUrl } from './supabase-config';
 
 let supabaseServerInstance: ReturnType<typeof createClient> | null = null;
 
@@ -11,8 +12,8 @@ function getSupabaseServerClient() {
         return supabaseServerInstance;
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    const supabaseUrl = getSupabaseUrl();
+    const supabaseServiceKey = getSupabaseServiceKey();
 
     // Si no hay keys, retornar null - no throw
     if (!supabaseUrl || !supabaseServiceKey) {
@@ -49,18 +50,18 @@ export async function getProfileByEmail(email: string): Promise<any> {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    
+
     const { data, error } = await client
         .from('perfiles')
         .select('*')
         .eq('email', normalizedEmail)
         .single();
-    
+
     if (error) {
         console.error('[Supabase Server] Error fetching profile:', error.message);
         return null;
     }
-    
+
     return data;
 }
 
@@ -72,16 +73,16 @@ export async function getTicketsCount() {
     if (!client) {
         return 0;
     }
-    
+
     const { count, error } = await client
         .from('tickets')
         .select('id', { count: 'exact', head: true });
-    
+
     if (error) {
         console.error('[Supabase Server] Error counting tickets:', error.message);
         return 0;
     }
-    
+
     return count || 0;
 }
 
@@ -94,24 +95,24 @@ export async function getAllTicketsLite(gestorId?: string) {
     if (!client) {
         return [];
     }
-    
+
     let query = client
         .from('vw_tickets_strategic')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(300);
-    
+
     if (gestorId) {
         query = query.eq('gestora_id', gestorId);
     }
-    
+
     const { data, error } = await query;
-    
+
     if (error) {
         console.error('[Supabase Server] Error fetching tickets from strategic view:', error.message);
         return [];
     }
-    
+
     return data || [];
 }
 
@@ -124,7 +125,7 @@ export async function getTicketsSummary() {
     if (!client) {
         return [];
     }
-    
+
     // Consulta enriquecida con datos financieros del backend
     const { data, error } = await client
         .from('vw_tickets_strategic')
@@ -141,27 +142,27 @@ export async function getTicketsSummary() {
 }
 
 /**
- * Keep-alive: consulta légère a la DB
- * Usado para evitar pausa por inactividad en Supabase Free Tier
+ * Keep-alive: consulta ligera a la DB
+ * Usado para verificar disponibilidad del backend Supabase self-hosted
  */
 export async function pingDatabase() {
     const client = getSupabaseServerClient() as any;
     if (!client) {
         return false;
     }
-    
+
     try {
         // Consulta muy ligera: solo verificar conexión
         const { error } = await client
             .from('tickets')
             .select('id')
             .limit(1);
-        
+
         if (error) {
             console.error('[Supabase Server] Ping failed:', error.message);
             return false;
         }
-        
+
         return true;
     } catch (e) {
         console.error('[Supabase Server] Ping exception:', e);

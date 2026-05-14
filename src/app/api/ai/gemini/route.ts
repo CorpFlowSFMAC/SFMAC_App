@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase-config";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CORPFLOW - MOTOR DE PRICING + IA MULTIMODAL CON APRENDIZAJE HISTÓRICO
@@ -22,8 +23,8 @@ const VIATICOS_POR_ZONA: Record<string, number> = {
 const MARGEN_DEFAULT = 0.55;
 
 // ── SUPABASE CLIENT (para aprendizaje) ─────────────────────────────────────────
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = getSupabaseUrl();
+const supabaseKey = getSupabaseAnonKey();
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ── INTERFACES ────────────────────────────────────────────────────────────────
