@@ -1255,7 +1255,7 @@ export default function PaymentsPage() {
             console.error('[Payments V3] Error confirming payment:', err);
             alert('Error al procesar el pago.');
         }
-    };
+    }, [refresh, showToast, supabase, pendingPaymentsRef]);
 
     const getVoucherSrc = (ref?: string | null) => {
         if (!ref) return "";
