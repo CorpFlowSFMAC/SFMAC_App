@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import {
     Wallet, History, CheckCircle2, Clock, ArrowUpRight,
     DollarSign, CreditCard, ChevronDown, ChevronUp,
@@ -16,6 +16,100 @@ import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances, toNum } from "@/lib/calculations";
 import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
+
+// ──────────────────────────────────────────────────────────────
+// UTILIDADES DE ESTABILIZACIÓN V4.5
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Hook de Debounce para evitar parpadeos en inputs de valor
+ * @param value - Valor a debounce
+ * @param delay - Delay en ms (default: 500ms)
+ */
+function useDebounce<T>(value: T, delay: number = 500): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+
+    return debouncedValue;
+}
+
+/**
+ * Componente de Fila de Pago con memo y debounce integrado
+ * Evita renders多余的 y parpadeos durante edición rápida
+ */
+const PaymentRow = memo(function PaymentRow({ 
+    item, 
+    onConfirm, 
+    onViewDetails,
+    disabled 
+}: { 
+    item: PaymentItem; 
+    onConfirm?: (item: PaymentItem) => void; 
+    onViewDetails?: (item: PaymentItem) => void;
+    disabled?: boolean;
+}) {
+    // Solo re-render si las props cambian significativamente
+    const config = TIPO_CONFIG[item.tipo] || TIPO_CONFIG['Liquidación Final'];
+    
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px', background: config.bg, borderRadius: '10px',
+            border: `1px solid ${config.color}30`, marginBottom: '8px',
+            opacity: disabled ? 0.6 : 1, transition: 'all 0.2s ease'
+        }}>
+            <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span style={{ 
+                        fontSize: '0.75rem', fontWeight: 800, color: config.color,
+                        background: 'white', padding: '2px 8px', borderRadius: '4px'
+                    }}>
+                        {item.tipo}
+                    </span>
+                    {item.isTableCost && (
+                        <span style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: 600 }}>
+                            📋 tabla_costs
+                        </span>
+                    )}
+                    {item.isLegacy && (
+                        <span style={{ fontSize: '0.65rem', color: '#D97706', fontWeight: 600 }}>
+                            🏛️ legacy
+                        </span>
+                    )}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>
+                    {item.concepto || 'Sin concepto'}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>
+                    {new Date(item.fecha).toLocaleDateString('es-PE', { 
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+                    })}
+                </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '1rem', fontWeight: 900, color: '#1E293B' }}>
+                    S/ {formatSoles(item.monto)}
+                </div>
+                <div style={{ 
+                    fontSize: '0.7rem', fontWeight: 700, 
+                    color: item.estado === 'pagado' ? '#059669' : '#D97706',
+                    marginTop: '4px'
+                }}>
+                    {item.estado === 'pagado' ? '✓ PAGADO' : '⏳ PENDIENTE'}
+                </div>
+            </div>
+        </div>
+    );
+});
 
 // ──────────────────────────────────────────────────────────────
 // MODELO DE DATOS V3 - BANDEJA DE PAGOS
@@ -226,6 +320,7 @@ export default function PaymentsPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingPaymentsRef = useRef<Map<string, number>>(new Map());
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
         try {
@@ -1052,7 +1147,27 @@ export default function PaymentsPage() {
         });
     };
 
-    const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null, forcedDate?: string) => {
+    const handleConfirmPayment = useCallback(async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null, forcedDate?: string) => {
+        // ─────────────────────────────────────────────────────────────────────────────
+        // BLOQUEO ANTIDUPLICADO V4.5 - Test de Resistencia (Triple Clic)
+        // Bloquea cualquier intento de pago duplicado en un intervalo de 2 segundos
+        // ─────────────────────────────────────────────────────────────────────────────
+        const paymentKey = `${group.realTicketId}_${item.id || item.costId}`;
+        const now = Date.now();
+        
+        if (pendingPaymentsRef.current.has(paymentKey)) {
+            showToast('⏳ Hay una operación de pago en progreso. Espere un momento...');
+            return;
+        }
+        
+        // Marcar como en proceso
+        pendingPaymentsRef.current.set(paymentKey, now);
+        
+        // Cleanup después de 2 segundos
+        setTimeout(() => {
+            pendingPaymentsRef.current.delete(paymentKey);
+        }, 2000);
+
         const finalDate = (forcedDate && forcedDate.trim() !== "") 
             ? new Date(forcedDate + "T12:00:00").toISOString() 
             : new Date().toISOString();
