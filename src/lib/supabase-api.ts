@@ -909,6 +909,7 @@ export const ticketCostsAPI = {
         estado_pago: string;
         url_comprobante: string;
         motivo: string;
+        solicitado_por: string;
     }>) {
         if (updates.estado_pago && isConfirmedTicketCostStatus(updates.estado_pago)) {
             const { data: current, error: fetchErr } = await supabase

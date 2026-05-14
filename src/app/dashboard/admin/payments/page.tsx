@@ -289,7 +289,7 @@ export default function PaymentsPage() {
                     const flat = flattenTicketForPayments(t);
                     const relatedCosts = t.costos || [];
                     flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
-                    flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
+                    flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado');
                     flat.exceedanceRequests = relatedCosts.filter((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
 
                     flat.isOpen = !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id);

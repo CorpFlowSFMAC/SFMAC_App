@@ -372,6 +372,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const {
         pactedMO: techPactedTotal,
         totalLaborConfirmed: unifiedPaymentsSum,
+        totalLaborPending,
         netLaborBalance: finalBalance,
         realProfitability: grossMargin,
         margenReal: pctReal,
@@ -385,6 +386,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         pactedMO,
         balance: baseRescue
     } = finances;
+
+    const advanceRequestPending = pendingLaborItems.some((item: any) => {
+        const text = `${item.categoria || ''} ${item.concepto || ''}`.toLowerCase();
+        return text.includes('adelanto') || text.includes('rescate financiero');
+    });
+    const canProceedWithExecution = ticketData.estadoId === "en_ejecucion" || unifiedPaymentsSum > 0;
 
     let availableRescue = baseRescue;
     // 🔓 RESCATE FINANCIERO – DESBLOQUEO DESDE COTIZACIÓN ENVIADA (Estado 6 en adelante).
@@ -583,17 +590,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             status_id: finalStatusId,
                             adelantoPagado: advanceConfirmed,
                             visitPaymentConfirmed: visitConfirmed,
-                            // 🚨 PRESERVAR de localStorage si existe para evitar regressión
-                solicitudAdelanto: (() => {
-                    const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
-                    if (saved) {
-                        try {
-                            const parsed = JSON.parse(saved);
-                            if (parsed.solicitudAdelanto) return parsed.solicitudAdelanto;
-                        } catch(e) {}
-                    }
-                    return safeMeta.solicitudAdelanto || ticket?.solicitudAdelanto || null;
-                })(),
+                            solicitudAdelanto: safeMeta.solicitudAdelanto || ticket?.solicitudAdelanto || null,
                             solicitudPago: visitConfirmed ? null : (safeMeta.solicitudPago ?? null),
                             gestora: fullTicket.gestora || safeMeta.gestora || null
                         };
@@ -685,19 +682,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
             const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada || safeMeta.modificacionAutorizada || prev.modificacionAutorizada);
 
-            // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
-            // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
-            const localSolicitud = prev.solicitudAdelanto || prev.metadata?.solicitudAdelanto;
-            // 🚨 PRESERVAR de localStorage en realtime sync también
-            const savedLS = (() => {
-                try {
-                    const s = localStorage.getItem(`ticket_state_${ticket.id}`);
-                    return s ? JSON.parse(s).solicitudAdelanto : null;
-                } catch(e) { return null; }
-            })();
             const serverSolicitud = safeMeta.solicitudAdelanto || ticket.solicitudAdelanto;
-            // Priority: localStorage > local > server
-            const finalSolicitud = savedLS || localSolicitud || serverSolicitud;
+            const finalSolicitud = serverSolicitud || null;
 
 
             return {
@@ -946,9 +932,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 solicitudLiquidacion: (hasActiveRejection || options?.allowStateRollback === false)
                     ? serverMeta.solicitudLiquidacion
                     : (businessData.solicitudLiquidacion || dataToProcess.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
-                solicitudAdelanto: (hasActiveRejection || options?.allowStateRollback === false)
-                    ? serverMeta.solicitudAdelanto
-                    : (businessData.solicitudAdelanto || dataToProcess.solicitudAdelanto || serverMeta.solicitudAdelanto),
+                solicitudAdelanto: serverMeta.solicitudAdelanto ?? null,
                 solicitudPago: (hasActiveRejection || options?.allowStateRollback === false)
                     ? serverMeta.solicitudPago
                     : (businessData.solicitudPago || dataToProcess.solicitudPago || serverMeta.solicitudPago),
@@ -1634,32 +1618,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         confirmAdvanceRef.current = true;
 
         let amount = 0;
-        let displayLabel = "";
-
         const rawManual = parseFloat(montoAdelantoManual);
         if (montoAdelantoManual && !isNaN(rawManual)) {
             amount = rawManual;
-            displayLabel = `Manual (S/ ${amount.toFixed(2)})`;
         } else {
             const pctReal = ticketData.solicitudAdelanto ? ticketData.solicitudAdelanto.porcentaje : porcentajeAdelanto;
             if (pctReal) {
                 const costoReferencia = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
                 amount = costoReferencia * pctReal;
-                displayLabel = `${(pctReal * 100).toFixed(0)}% (S/ ${amount.toFixed(2)})`;
             } else if (ticketData.solicitudAdelanto?.monto) {
                 amount = ticketData.solicitudAdelanto.monto;
-                displayLabel = `Solicitado (S/ ${amount.toFixed(2)})`;
             }
         }
 
         if (isNaN(amount) || amount <= 0) {
             showToast("Monto Inválido", "El monto del adelanto debe ser mayor a cero. Seleccione un % o ingrese un monto manual.", "error");
+            confirmAdvanceRef.current = false;
             return;
         }
 
         const totalCost = (parseFloat(ticketData.costoManoObra || 0) + parseFloat(ticketData.costoMateriales || 0));
         if (unifiedPaymentsSum + amount > totalCost + 0.01) {
             showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
+            confirmAdvanceRef.current = false;
             return;
         }
 
@@ -1668,14 +1649,69 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
         if (!technicianId) {
             showToast("Técnico no Asignado", "No se encontró el ID del técnico para registrar el pago.", "error");
+            confirmAdvanceRef.current = false;
             return;
+        }
+
+        const pendingRequest = ticketData.solicitudAdelanto;
+        const isForMaterials = pendingRequest?.classification === 'materials' || advanceClassification === 'materials';
+
+        if (isAdmin) {
+            const matchingPendingCost = ticketCosts.find((cost: any) => {
+                const status = (cost.estado_pago || '').toUpperCase();
+                const text = `${cost.categoria || ''} ${cost.concepto || ''}`.toLowerCase();
+                const sameAmount = Math.abs((parseFloat(cost.monto || 0) || 0) - amount) < 0.01;
+                const sameKind = isForMaterials
+                    ? (text.includes('material') || text.includes('operativo'))
+                    : (text.includes('mano de obra') || text.includes('adelanto') || text.includes('rescate financiero'));
+                return status === 'PENDIENTE' && sameAmount && sameKind;
+            });
+
+            if (matchingPendingCost?.id) {
+                const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
+                setIsConfirmingPayment(true);
+                isProcessingAdvance.current = true;
+                try {
+                    await ticketCostsAPI.update(matchingPendingCost.id, {
+                        estado_pago: 'pagado',
+                        solicitado_por: myProfileId || undefined
+                    });
+                    await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null }, { status_id: newState });
+                    setTicketData((prev: any) => ({
+                        ...prev,
+                        estadoId: newState,
+                        status_id: newState,
+                        adelantoPagado: !isForMaterials || prev.adelantoPagado,
+                        solicitudAdelanto: null,
+                        metadata: {
+                            ...(prev.metadata || {}),
+                            solicitudAdelanto: null,
+                        },
+                    }));
+                    localStorage.removeItem(`ticket_state_${ticketData.id}`);
+                    await loadCosts();
+                    setMontoAdelantoManual("");
+                    setPorcentajeAdelanto(null);
+                    showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)}.`, "success");
+                } catch (err) {
+                    console.error("Error confirming pending advance:", err);
+                    const message = err instanceof DuplicateTicketCostError
+                        ? "Ya existe un pago confirmado con el mismo ticket, monto y concepto."
+                        : "No se pudo confirmar el adelanto pendiente.";
+                    showToast("Error de Conexión", message, "error");
+                } finally {
+                    setIsConfirmingPayment(false);
+                    confirmAdvanceRef.current = false;
+                    setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
+                }
+                return;
+            }
         }
 
         setIsConfirmingPayment(true);
         isProcessingAdvance.current = true;
         try {
             // 1. Registro Financiero Inmutable
-            const isForMaterials = ticketData.solicitudAdelanto?.classification === 'materials' || advanceClassification === 'materials';
             const category = isForMaterials ? "Materiales" : "Mano de Obra";
             const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto Operativo (MANO DE OBRA)";
 
@@ -1704,11 +1740,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const updated = {
                 ...ticketData,
                 estadoId: newState,
-                adelantoPagado: true,
-                solicitudAdelanto: null
+                status_id: newState,
+                adelantoPagado: !isForMaterials || ticketData.adelantoPagado,
+                solicitudAdelanto: null,
+                metadata: {
+                    ...(ticketData.metadata || {}),
+                    solicitudAdelanto: null,
+                },
             };
 
             setTicketData(updated);
+            localStorage.removeItem(`ticket_state_${ticketData.id}`);
             await loadCosts();
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
@@ -1728,6 +1770,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
     const handleRequestAdvance = async () => {
         // ✅ FIX 2026-04-27: Prevenir ejecución doble
+        if (requestAdvanceRef.current) return;
         // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita adelanto antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
         if (currentStageOrder < 7) {
@@ -1766,6 +1809,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
         if (isNaN(amount) || amount <= 0) {
             showToast("Monto Inválido", "Por favor ingrese un monto válido mayor a cero.", "error");
+            requestAdvanceRef.current = false;
             return;
         }
 
@@ -1774,51 +1818,51 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         
         if (!technicianId) {
             showToast("Técnico no Asignado", "Debe asignar un técnico antes de solicitar un adelanto.", "error");
+            requestAdvanceRef.current = false;
             return;
         }
 
         // 🚀 FORZAR SINCRONIZACIÓN: Asegurar que el override llega a la DB
         isProcessingAdvance.current = true;
         try {
+            const isForMaterials = advanceClassification === 'materials';
+            const category = isForMaterials ? "Materiales" : "Mano de Obra";
+            const concepto = isForMaterials
+                ? "Adelanto Operativo (MATERIALES)"
+                : "Adelanto Operativo (MANO DE OBRA)";
+
+            await ticketCostsAPI.create({
+                ticket_id: currentId,
+                concepto,
+                categoria: category,
+                specialist_id: technicianId,
+                monto: amount,
+                estado_pago: "pendiente",
+                solicitado_por: myProfileId || undefined
+            });
+
+            const metadataUpdates = {
+                pagoRechazado: null,
+                riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero,
+                solicitudAdelanto: null,
+            };
+
             const updated = {
                 ...ticketData,
-                solicitudAdelanto: {
-                    porcentaje: pctVal,
-                    monto: amount,
-                    fecha: new Date().toISOString(),
-                    classification: advanceClassification, // pocket vs materials
-                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7
-                },
-                pagoRechazado: null, // ← LIMPIAR rechazo antes de enviar
+                solicitudAdelanto: null,
+                pagoRechazado: null,
                 metadata: {
                     ...(ticketData.metadata || {}),
-                    riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero,
-                    solicitudAdelanto: {
-                        porcentaje: pctVal,
-                        monto: amount,
-                        fecha: new Date().toISOString(),
-                        classification: advanceClassification,
-                        riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7
-                    },
-                    pagoRechazado: null
+                    ...metadataUpdates,
                 }
             };
             
             // 🔥 FORZAR UPDATE LOCAL PRIMERO
             setTicketData(updated);
 
-            // 🚨 GUARDAR EN LOCALSTORAGE PARA PRESERVACIÓN
-            try {
-                const existing = JSON.parse(localStorage.getItem(`ticket_state_${ticketData.id}`) || '{}');
-                localStorage.setItem(`ticket_state_${ticketData.id}`, JSON.stringify({
-                    ...existing,
-                    solicitudAdelanto: updated.solicitudAdelanto,
-                    metadata: updated.metadata
-                }));
-            } catch(e) { console.warn("localStorage save failed:", e); }
-
-            // ✅ SINCRONIZAR CON OVERRIDE EXPLÍCITO
-            await syncToSupabase(updated, { allowStateRollback: true });
+            localStorage.removeItem(`ticket_state_${ticketData.id}`);
+            await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates);
+            await loadCosts();
             
             // ✅ FIX 2026-04-27: Esperar a que Supabase procese antes de limpiar estado
             await new Promise(resolve => setTimeout(resolve, 1200));
@@ -2192,7 +2236,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setIsSavingMaterials(true);
         try {
             const montoGasto = parseFloat(materialsForm.monto);
-            const costoPactado = techPactedTotal;
             
             // Si el nuevo gasto hace que el total de honorarios supere el pactado, escalar
             const excedePresupuesto = (unifiedPaymentsSum + montoGasto > techPactedTotal + 0.01);
@@ -2423,7 +2466,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     // Regla: El rescate solo descuenta de la MO Pactada y los adelantos/rescates previos.
     // Las "Compras" (Materiales/Logística) NO afectan este saldo.
     const totalPactadoTecnico = pactedMO;
-    const totalAdelantadoAlTecnico = finances.totalExpenses;
+    const totalAdelantadoAlTecnico = finances.totalLaborConfirmed + finances.totalLaborPending;
     
     // REFUERZO: Si no hay pactado definido aún pero el ticket está en ejecución, permitir un rescate base de S/ 100
     // (Lógica movida arriba a la sección financiera centralizada)
@@ -3434,7 +3477,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
 
                                                         {/* SECCIÓN DE ADELANTO RESTAURADA */}
-                                                        {!ticketData.adelantoPagado && (
+                                                        {(!canProceedWithExecution || !isAdmin) && (
                                                             <div className={styles.advanceRequestPremium}>
                                                                 <div className={styles.advanceInfoGrid}>
                                                                     <div className={styles.advanceMeta}>
@@ -3444,13 +3487,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                             <span className={styles.metaValue}>
                                                                                 {ticketData.solicitudAdelanto 
                                                                                     ? `Solicitado: ${(ticketData.solicitudAdelanto.porcentaje * 100).toFixed(0)}% (S/ ${formatSoles(ticketData.solicitudAdelanto.monto)})`
-                                                                                    : "Seleccione el porcentaje deseado"}
+                                                                                    : advanceRequestPending
+                                                                                        ? `Pendiente en Tesorería: S/ ${formatSoles(totalLaborPending)}`
+                                                                                        : "Seleccione el monto deseado"}
                                                                             </span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
 
-                                                                {!ticketData.solicitudAdelanto && (
+                                                                {!ticketData.solicitudAdelanto && !advanceRequestPending && (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
                                                                         <div className={styles.percentageSelectorPremium}>
                                                                             {[0.4, 0.5, 0.6].map(p => (
@@ -3523,11 +3568,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         <span>{isConfirmingPayment ? 'Cargando...' : (ticketData.solicitudAdelanto ? 'Confirmar Depósito' : 'Registrar Depósito Directo')}</span>
                                                                     </button>
                                                                 ) : (
-                                                                    !ticketData.solicitudAdelanto && (
+                                                                    !ticketData.solicitudAdelanto && !advanceRequestPending && (
                                                                         <button
                                                                             className={styles.requestAdvanceBtnPremium}
                                                                             onClick={handleRequestAdvance}
-                                                                            disabled={!!ticketData.solicitudAdelanto || (!porcentajeAdelanto && !montoAdelantoManual)}
+                                                                            disabled={requestAdvanceRef.current || !!ticketData.solicitudAdelanto || advanceRequestPending || (!porcentajeAdelanto && !montoAdelantoManual)}
                                                                         >
                                                                             <Send size={18} />
                                                                             <span>Solicitar Adelanto a Gerencia</span>
@@ -3535,7 +3580,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                     )
                                                                 )}
 
-                                                                {ticketData.solicitudAdelanto && !isAdmin && (
+                                                                {(ticketData.solicitudAdelanto || advanceRequestPending) && !isAdmin && (
                                                                     <div className={styles.waitingNoticePremium}>
                                                                         <Clock size={16} />
                                                                         <span>Esperando confirmación de Tesorería...</span>
@@ -3546,7 +3591,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     </div>
                                                 )}
 
-                                                {ticketData.adelantoPagado && (
+                                                {canProceedWithExecution && (
                                                     <div className={styles.executionGrid}>
                                                     <div className={styles.evidenceSection}>
                                                         <div className={styles.sectionHeaderMini}>
