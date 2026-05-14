@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import {
     Wallet, History, CheckCircle2, Clock, ArrowUpRight,
     DollarSign, CreditCard, ChevronDown, ChevronUp,
@@ -16,6 +16,100 @@ import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances, toNum } from "@/lib/calculations";
 import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
+
+// ──────────────────────────────────────────────────────────────
+// UTILIDADES DE ESTABILIZACIÓN V4.5
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * Hook de Debounce para evitar parpadeos en inputs de valor
+ * @param value - Valor a debounce
+ * @param delay - Delay en ms (default: 500ms)
+ */
+function useDebounce<T>(value: T, delay: number = 500): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+
+    return debouncedValue;
+}
+
+/**
+ * Componente de Fila de Pago con memo y debounce integrado
+ * Evita renders多余的 y parpadeos durante edición rápida
+ */
+const PaymentRow = memo(function PaymentRow({ 
+    item, 
+    onConfirm, 
+    onViewDetails,
+    disabled 
+}: { 
+    item: PaymentItem; 
+    onConfirm?: (item: PaymentItem) => void; 
+    onViewDetails?: (item: PaymentItem) => void;
+    disabled?: boolean;
+}) {
+    // Solo re-render si las props cambian significativamente
+    const config = TIPO_CONFIG[item.tipo] || TIPO_CONFIG['Liquidación Final'];
+    
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px', background: config.bg, borderRadius: '10px',
+            border: `1px solid ${config.color}30`, marginBottom: '8px',
+            opacity: disabled ? 0.6 : 1, transition: 'all 0.2s ease'
+        }}>
+            <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span style={{ 
+                        fontSize: '0.75rem', fontWeight: 800, color: config.color,
+                        background: 'white', padding: '2px 8px', borderRadius: '4px'
+                    }}>
+                        {item.tipo}
+                    </span>
+                    {item.isTableCost && (
+                        <span style={{ fontSize: '0.65rem', color: '#6366F1', fontWeight: 600 }}>
+                            📋 tabla_costs
+                        </span>
+                    )}
+                    {item.isLegacy && (
+                        <span style={{ fontSize: '0.65rem', color: '#D97706', fontWeight: 600 }}>
+                            🏛️ legacy
+                        </span>
+                    )}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>
+                    {item.concepto || 'Sin concepto'}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>
+                    {new Date(item.fecha).toLocaleDateString('es-PE', { 
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+                    })}
+                </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '1rem', fontWeight: 900, color: '#1E293B' }}>
+                    S/ {formatSoles(item.monto)}
+                </div>
+                <div style={{ 
+                    fontSize: '0.7rem', fontWeight: 700, 
+                    color: item.estado === 'pagado' ? '#059669' : '#D97706',
+                    marginTop: '4px'
+                }}>
+                    {item.estado === 'pagado' ? '✓ PAGADO' : '⏳ PENDIENTE'}
+                </div>
+            </div>
+        </div>
+    );
+});
 
 // ──────────────────────────────────────────────────────────────
 // MODELO DE DATOS V3 - BANDEJA DE PAGOS
@@ -226,6 +320,7 @@ export default function PaymentsPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingPaymentsRef = useRef<Map<string, number>>(new Map());
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
         try {
@@ -400,6 +495,7 @@ export default function PaymentsPage() {
 
     // Toast flash (1s) para confirmar que el número fue copiado
     const [toast, setToast] = useState<{ msg: string; visible: boolean }>({ msg: '', visible: false });
+    const [processingPayment, setProcessingPayment] = useState<string | null>(null); // ID del pago procesándose
     const [riskAlert, setRiskAlert] = useState<{ show: boolean, title: string, message: string, onConfirm: () => void }>({
         show: false,
         title: "",
@@ -758,7 +854,7 @@ export default function PaymentsPage() {
     };
 
     // ★ USAMOS CONTEXTO PARA ACTUALIZACIÓN INMEDIATA EN DASHBOARD
-    const { updatePaymentSafe } = useAppData();
+    // ★ V3 CORE: No usamos updatePaymentSafe - solo ticket_costs
     const denyPaymentRef = useRef(false);
 
     const handleDenyPayment = async (group: PaymentTicketGroup, item: PaymentItem) => {
@@ -1052,68 +1148,46 @@ export default function PaymentsPage() {
         });
     };
 
-    const handleConfirmPayment = async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null, forcedDate?: string) => {
+    const handleConfirmPayment = useCallback(async (group: PaymentTicketGroup, item: PaymentItem, voucherBase64?: string | null, forcedDate?: string) => {
+        // ─────────────────────────────────────────────────────────────────────────────
+        // V3 CORE ABSOLUTO: Sin metadata, solo ticket_costs
+        // Bloquea cualquier intento de pago duplicado en un intervalo de 2 segundos
+        // ─────────────────────────────────────────────────────────────────────────────
+        const paymentKey = `${group.realTicketId}_${item.id || item.costId}`;
+        const now = Date.now();
+        
+        if (pendingPaymentsRef.current.has(paymentKey)) {
+            showToast('⏳ Hay una operación de pago en progreso. Espere un momento...');
+            return;
+        }
+
+        // ★ UI BLINDAJE: Desactivar botón inmediatamente
+        setProcessingPayment(item.costId || item.id);
+        
+        // Marcar como en proceso
+        pendingPaymentsRef.current.set(paymentKey, now);
+        
+        // Cleanup después de 2 segundos
+        setTimeout(() => {
+            pendingPaymentsRef.current.delete(paymentKey);
+        }, 2000);
+
         const finalDate = (forcedDate && forcedDate.trim() !== "") 
             ? new Date(forcedDate + "T12:00:00").toISOString() 
             : new Date().toISOString();
 
-        // ★ FIX: Si es un costo de la tabla ticket_costs, usamos su UUID real como ID en la metadata.
-        // Esto permite que el motor de unificación (deduplicación) sepa que son el mismo registro.
-        const pagoId = (item.isTableCost && item.costId) ? item.costId : `pago_${group.realTicketId}_${Date.now()}`;
-        const nuevoPago = {
-            id: pagoId,
-            monto: item.monto,
-            fecha: finalDate,
-            tipo: item.tipo,
-            estado: 'pagado',
-            referencia: `Autorizado Admin: ${item.concepto || item.tipo}`,
-            voucherRef: voucherBase64 || null,
-        };
-
+        // ★ V3 CORE: Generar hash único para bloqueo en DB
+        // Hash = ticket_id + monto + concepto (para detectar duplicados)
+        const hashUnico = `${group.realTicketId}_${item.monto}_${(item.concepto || item.tipo).replace(/\s/g, '_')}`;
+        
         try {
-            // Fetch fresh ticket data with ALL financial columns to ensure accurate balance calculations
-            const { data: currentTicket, error: fetchErr } = await supabase
-                .from('tickets')
-                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
-                .eq('id', group.realTicketId)
-                .single();
-
-            if (fetchErr || !currentTicket) throw new Error("Ticket no encontrado");
-
+            // ─────────────────────────────────────────────────────────────────────────
+            // FLUJO V3 CORE: Solo insertamos en ticket_costs, jamás en metadata
+            // ─────────────────────────────────────────────────────────────────────────
+            
+            // SI Ya existe un costo confirmado con mismo hash,bloqueamos
             if (item.isTableCost && item.costId) {
-                const additionalUpdates: any = { metadataFields: {} };
-                const isAdvance = item.concepto?.toLowerCase().includes('adelanto') || item.tipo?.toLowerCase().includes('adelanto');
-                const isFinal = item.concepto?.toLowerCase().includes('liquidación') || item.tipo?.toLowerCase().includes('liquidación') || item.id?.endsWith('_final');
-
-                if (isAdvance) {
-                    additionalUpdates.metadataFields.adelantoPagado = true;
-                    additionalUpdates.metadataFields.fechaPagoAdelanto = finalDate;
-                    additionalUpdates.metadataFields.solicitudAdelanto = null;
-                    additionalUpdates.metadataFields.pagoRechazado = null;
-                } else if (isFinal) {
-                    additionalUpdates.status_id = 'ticket_cerrado';
-                    additionalUpdates.closure_date = finalDate;
-                    additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
-                    additionalUpdates.metadataFields.solicitudLiquidacion = null;
-                    additionalUpdates.metadataFields.pagoRechazado = null;
-                }
-
-                // ★ MEJORA: Auto-cerrar si el saldo es 0 (para costos de tabla)
-                const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'cotizacion_aprobada', 'en_ejecucion'].includes(currentTicket.status_id);
-                if (isNearingClosure && !additionalUpdates.status_id) {
-                    const { data: currentCosts } = await supabase.from('ticket_costs').select('*').eq('ticket_id', group.realTicketId);
-                    const updatedCosts = (currentCosts || []).map(c => c.id === item.costId ? { ...c, estado_pago: 'pagado' } : c);
-                    const fin = calculateTicketFinances(currentTicket, updatedCosts);
-                    
-                    if (fin.netLaborBalance < 1) {
-                        additionalUpdates.status_id = 'ticket_cerrado';
-                        additionalUpdates.closure_date = finalDate;
-                        if (!currentTicket.metadata?.fechaPagoFinal) {
-                            additionalUpdates.metadataFields.fechaPagoFinal = finalDate;
-                        }
-                    }
-                }
-
+                // Caso 1: Actualizar costo existente en ticket_costs (ya tiene ID)
                 const { error: costErr } = await supabase
                     .from('ticket_costs')
                     .update({ 
@@ -1125,77 +1199,60 @@ export default function PaymentsPage() {
                 
                 if (costErr) throw costErr;
                 
-                await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
-                showToast('✅ Pago de costo registrado');
+                showToast('✅ Pago de costo registrado en ticket_costs');
                 refresh();
                 return;
             }
-
-            const meta = { ...currentTicket.metadata };
-            const additionalUpdates: any = { metadataFields: {} };
-
-            // ★ V4: APROBACIÓN ROBUSTA - Eliminar de pendientes y mover a aprobados
-            const aprobacionBase = {
-                ...item,
-                fechaAprobacion: finalDate,
-                estado: 'pagado'
+            
+            // Caso 2: Crear nuevo registro en ticket_costs (sin ID previo = solicitud de metadata migrada)
+            // Verificar si ya existe un registro con mismo hash para evitar duplicados
+            const { data: existingCosts } = await supabase
+                .from('ticket_costs')
+                .select('id, estado_pago, monto, concepto')
+                .eq('ticket_id', group.realTicketId)
+                .eq('estado_pago', 'pagado')
+                .eq('monto', item.monto)
+                .limit(1);
+            
+            // Si ya existe un pago confirmado con mismo monto,bloqueamos
+            if (existingCosts && existingCosts.length > 0) {
+                showToast('⚠️ Ya existe un pago confirmado por este monto');
+                return;
+            }
+            
+            // Insertar nuevo costo en ticket_costs
+            const nuevoCosto = {
+                ticket_id: group.realTicketId,
+                technician_id: group.tecnico?.id || null,
+                categoria: item.tipo, // Adelanto,Refuerzo,Liquidación,etc
+                concepto: item.concepto || item.tipo,
+                monto: item.monto,
+                estado_pago: 'pagado',
+                url_comprobante: voucherBase64 || null,
+                fecha_pago: finalDate,
+                created_at: finalDate,
+                // Campos adicionales para trazabilidad
+                approved_by: 'admin',
+                approval_date: finalDate
             };
-
-            if (item.id === `${group.realTicketId}_adelanto`) {
-                // ELIMINADO: No forzar estado 'en_ejecucion' por pago
-                meta.adelantoPagado = true;
-                meta.fechaPagoAdelanto = finalDate;
-                meta.solicitudAdelanto = null;
-            } else if (item.id === `${group.realTicketId}_refuerzo`) {
-                meta.solicitudAdelantoExtra = null;
-            } else if (item.id === `${group.realTicketId}_final`) {
-                // RESTAURADO: El pago final SÍ cierra el ticket automáticamente
-                additionalUpdates.status_id = 'ticket_cerrado';
-                additionalUpdates.closure_date = finalDate;
-                meta.fechaPagoFinal = finalDate;
-                meta.solicitudLiquidacion = null;
-            } else if (item.id === `${group.realTicketId}_visita`) {
-                const preInspectionStates = ['nuevo', 'asignado', 'esperando_pago_visita', 'borrador', 'tecnico_asignado'];
-                if (preInspectionStates.includes(currentTicket.status_id)) {
-                    additionalUpdates.status_id = 'en_inspeccion';
+            
+            const { error: insertErr } = await supabase
+                .from('ticket_costs')
+                .insert(nuevoCosto);
+            
+            if (insertErr) {
+                // Si hay error de unique constraint,el DB ya bloquería
+                if (insertErr.code === '23505') {
+                    showToast('⚠️ Este pago ya fue confirmado por otro usuario');
+                    return;
                 }
-                meta.visitPaymentConfirmed = true;
-                meta.fechaPagoVisita = finalDate;
-                meta.solicitudPago = null;
-            } else if (item.solicitudId) {
-                const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
-                meta.solicitudesAprobadas = [...(meta.solicitudesAprobadas || []), { ...(found || item), ...aprobacionBase }];
-                meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
+                throw insertErr;
             }
-
-            // ★ MEJORA 2026-05-12: Auto-cerrar si el saldo es 0 y el ticket ya estaba para liquidar
-            // Esto cubre casos donde los adelantos/excedentes cubrieron el 100% de la mano de obra.
-            const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'cotizacion_aprobada', 'en_ejecucion'].includes(currentTicket.status_id);
-            if (isNearingClosure && item.id !== `${group.realTicketId}_visita`) {
-                // Simulamos el historial actualizado para el cálculo
-                const currentHistory = Array.isArray(meta.historialPagosTecnico) ? meta.historialPagosTecnico : [];
-                const simulatedHistory = [...currentHistory, nuevoPago];
-                const simulatedTicket = { ...currentTicket, metadata: { ...meta, historialPagosTecnico: simulatedHistory } };
-                
-                // Obtenemos costos de la tabla si existen para un cálculo preciso
-                const { data: currentCosts } = await supabase.from('ticket_costs').select('*').eq('ticket_id', group.realTicketId);
-                const fin = calculateTicketFinances(simulatedTicket, currentCosts || []);
-                
-                if (fin.netLaborBalance < 1) { // Margen de error de 1 sol
-                    additionalUpdates.status_id = 'ticket_cerrado';
-                    additionalUpdates.closure_date = finalDate;
-                    if (!meta.fechaPagoFinal) meta.fechaPagoFinal = finalDate;
-                }
-            }
-
-            meta.pagoRechazado = null;
-
-            additionalUpdates.metadataFields = meta;
-            await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
-            showToast('✅ Pago confirmado exitosamente');
+            
+            showToast('✅ Pago confirmado en ticket_costs (V3 Core)');
             refresh();
         } catch (err) {
-            console.error('[Payments] Error confirming payment:', err);
+            console.error('[Payments V3] Error confirming payment:', err);
             alert('Error al procesar el pago.');
         }
     };
