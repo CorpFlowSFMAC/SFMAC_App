@@ -98,16 +98,25 @@ export async function GET(request: NextRequest) {
         const client = getClient() as any;
         if (!client) throw new Error('Supabase server client is not configured');
 
-        const ticketId = new URL(request.url).searchParams.get('ticket_id');
-        if (!ticketId) {
-            return NextResponse.json({ success: false, error: 'ticket_id es requerido' }, { status: 400 });
+        const params = new URL(request.url).searchParams;
+        const ticketId = params.get('ticket_id');
+        const ticketIds = (params.get('ticket_ids') || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
+
+        if (!ticketId && ticketIds.length === 0) {
+            return NextResponse.json({ success: false, error: 'ticket_id o ticket_ids es requerido' }, { status: 400 });
         }
 
-        const { data, error } = await client
+        let query = client
             .from('ticket_costs')
             .select(TICKET_COST_SELECT)
-            .eq('ticket_id', ticketId)
             .order('created_at', { ascending: true });
+
+        query = ticketId ? query.eq('ticket_id', ticketId) : query.in('ticket_id', ticketIds);
+
+        const { data, error } = await query;
 
         if (error) throw error;
 

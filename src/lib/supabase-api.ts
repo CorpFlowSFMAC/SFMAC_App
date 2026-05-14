@@ -26,11 +26,6 @@ const PAYMENT_TICKET_SELECT = `
     gestoras(id, name)
 `;
 
-const TICKET_COST_SELECT = `
-    *,
-    technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone)
-`;
-
 const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
     const ticketIds = tickets.map((ticket) => ticket.id).filter((id): id is string => Boolean(id));
 
@@ -38,15 +33,12 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
         return tickets.map((ticket) => ({ ...ticket, costos: [] }));
     }
 
-    const { data, error } = await supabase
-        .from('ticket_costs')
-        .select(TICKET_COST_SELECT)
-        .in('ticket_id', ticketIds);
-
-    if (error) throw error;
+    const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`);
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos de tickets');
 
     const costsByTicket = new Map<string, any[]>();
-    (data || []).forEach((cost: any) => {
+    (result.data || []).forEach((cost: any) => {
         const current = costsByTicket.get(cost.ticket_id) || [];
         current.push(cost);
         costsByTicket.set(cost.ticket_id, current);
