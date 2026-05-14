@@ -152,6 +152,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
     const [montoAdelantoManual, setMontoAdelantoManual] = useState<string>("");
+    const quotationDraftRef = useRef<{ items: any[]; total: number } | null>(null);
 
     // --- HARD DELETE & TRANSFER LOGIC ---
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -608,7 +609,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
                     // SYNC QUOTATION STATE
                     const finalPartidas = (meta.partidas && meta.partidas.length > 0) ? meta.partidas : (cachedMetadata.partidas || []);
-                    if (finalPartidas.length > 0) setPartidasCotización(finalPartidas);
+                    if (finalPartidas.length > 0) {
+                        setPartidasCotización(finalPartidas);
+                        quotationDraftRef.current = null;
+                    }
                     
                     const finalMonto = parseFloat(meta.montoFinal || cachedMetadata.montoFinal || 0);
                     if (finalMonto > 0) setMontoTotalCotizado(finalMonto);
@@ -917,7 +921,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             labor_cost: parseFloat(sourceForPayments?.costoManoObra || 0),
             materials_cost: parseFloat(sourceForPayments?.costoMateriales || 0),
             visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
-            total_quoted_amount: parseFloat(montoTotalCotizado || sourceForPayments?.montoFinal || 0),
+            total_quoted_amount: parseFloat(sourceForPayments?.montoFinal ?? montoTotalCotizado ?? 0),
             technician_id: tecnico?.id || serverTicket?.technician_id,
             gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
@@ -928,7 +932,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // 3. Pero preservamos los campos que el usuario está editando en esta ventana
                 diagnostico: businessData.diagnostico || sourceMetadata.diagnostico || serverMeta.diagnostico,
                 partidas: businessData.partidas || sourceMetadata.partidas || serverMeta.partidas,
-                montoFinal: businessData.montoFinal || sourceMetadata.montoFinal || serverMeta.montoFinal,
+                montoFinal: businessData.montoFinal ?? sourceMetadata.montoFinal ?? serverMeta.montoFinal,
                 documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist || serverMeta.documentosChecklist,
                 // 4. Protección específica: si lo local acaba de limpiar un rechazo, no dejar que el servidor lo restaure
                 // y viceversa: si el servidor tiene un rechazo nuevo, lo local debe aceptarlo.
@@ -976,18 +980,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         return success;
     }, [ticketData, onUpdate, evidenciasEjecucion, documentosChecklist, montoTotalCotizado, partidasCotización, isInitialLoadComplete]);
 
+    const syncToSupabaseRef = useRef(syncToSupabase);
+
+    useEffect(() => {
+        syncToSupabaseRef.current = syncToSupabase;
+    }, [syncToSupabase]);
+
     useEffect(() => {
         // Sync de fondo mucho menos agresivo (cada 30s) para evitar 'Sync of Death'
         const syncInterval = setInterval(() => {
-            syncToSupabase();
+            syncToSupabaseRef.current();
         }, 30000);
 
         return () => {
             clearInterval(syncInterval);
             // Sync final al cerrar la ventana (unmount)
-            syncToSupabase();
+            syncToSupabaseRef.current();
         };
-    }, [syncToSupabase]);
+    }, [ticketData.id]);
 
     useEffect(() => {
         const handleStorageUpdate = (e: any) => {
@@ -1322,6 +1332,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const handleSendQuote = async () => {
         const isBCP = ticketData.cliente?.nombre?.toUpperCase().includes("BCP");
+        const currentDraft = quotationDraftRef.current;
+        const currentPartidas = currentDraft?.items || partidasCotización;
+        const currentMontoTotal = currentDraft?.total ?? montoTotalCotizado;
 
         if (isBCP) {
             if (!bcpQuotationFile) {
@@ -1342,10 +1355,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             ...ticketData,
             estadoId: "cotizacion_enviada",
             fechaCotización: new Date().toISOString(),
-            partidas: partidasCotización,
-            montoFinal: montoTotalCotizado,
-            montoSubtotal: montoSubtotal,
-            montoIGV: montoIGV,
+            partidas: currentPartidas,
+            montoFinal: currentMontoTotal,
+            montoSubtotal: round2(currentMontoTotal / 1.18),
+            montoIGV: round2(currentMontoTotal - round2(currentMontoTotal / 1.18)),
             pausadoSLA: true,
             fechaPausa: new Date().toISOString(),
             archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
@@ -1357,6 +1370,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleApproveQuote = () => {
+        const currentDraft = quotationDraftRef.current;
+        const currentPartidas = currentDraft?.items || partidasCotización;
+        const currentMontoTotal = currentDraft?.total ?? montoTotalCotizado;
         const approved = {
             ...ticketData,
             estadoId: "cotizacion_aprobada",
@@ -1367,8 +1383,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             costoAjustadoPostAprobación: false,
             omitirAjusteTécnico: false,
             // BLINDAJE: Asegurar que el monto aprobado se preserve en esta transición
-            montoFinal: montoTotalCotizado,
-            partidas: partidasCotización
+            montoFinal: currentMontoTotal,
+            partidas: currentPartidas
         };
         setTicketData(approved);
         syncToSupabase(approved);
@@ -3306,8 +3322,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 initialItems={partidasCotización}
                                                                 suggestedTotal={round2((round2(ticketData.costoManoObra || 0) + round2(ticketData.costoMateriales || 0) + round2(ticketData.costoVisita || 0)) / 0.45)}
                                                                 onUpdate={(items: any[], total: number) => {
-                                                                    setPartidasCotización(items);
-                                                                    setMontoTotalCotizado(total);
+                                                                    quotationDraftRef.current = { items, total };
+                                                                    setMontoTotalCotizado(prev => prev === total ? prev : total);
                                                                 }}
                                                             />
                                                         )}
