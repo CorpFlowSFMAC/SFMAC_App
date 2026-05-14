@@ -9,81 +9,15 @@ import {
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { formatSoles } from "@/lib/formatters";
+import { calculateTicketFinances } from "@/lib/calculations";
 
 // ── Terminal states that unlock closure_date-based productivity ──
 const TERMINAL_STATES = ["por_liquidar", "ticket_cerrado"];
 // ── Advanced (in-transit) states for rollover / goal tracker ──
 const TRANSIT_STATES = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar"];
 
-// ── Función helper para parseo seguro de números ──
-function safeNum(val: any): number {
-    if (typeof val === 'number') return val;
-    if (typeof val === 'string') {
-        const clean = val.replace(/[^0-9.-]/g, '');
-        return parseFloat(clean) || 0;
-    }
-    return 0;
-}
-
-// ── Utility: calc net profit from a ticket (Subtotal minus real outflows)
-// VERSIÓN MEJORADA - Considera legacy + moderna + pactado
 function netUtility(t: any): number {
-    const meta = t.metadata || {};
-    
-    // 1. INGRESOS: Priorizar ingresos reales confirmados
-    const ingresoBruto = [
-        t.ingresos_reales,
-        t.montoFinal,
-        t.total_quoted_amount,
-        meta.ingresos_reales,
-        meta.total_quoted_amount,
-        meta.montoFinal
-    ].reduce((best: number, val: any) => {
-        const num = safeNum(val);
-        return (num > 0 && (!best || num < best)) ? num : best;
-    }, 0);
-    
-    const subtotal = ingresoBruto / 1.18; // excl. IGV
-    
-    // 2. PAGOS AL TÉCNICO: Unificar legacy + moderna
-    // Legacy payments
-    const legacyPagos = (meta.historialPagosTecnico || meta.historialPagosTécnico || []).reduce((s: number, p: any) => {
-        if (p.estado !== 'anulado' && p.estado !== 'rechazado') {
-            return s + safeNum(p.monto);
-        }
-        return s;
-    }, 0);
-    
-    // Modern costs ( tabla ticket_costs )
-    const modernCosts = (t.costos || []).reduce((s: number, c: any) => {
-        const st = (c.estado_pago || '').toLowerCase();
-        if (!st.includes('anulado') && !st.includes('rechazado')) {
-            return s + safeNum(c.monto);
-        }
-        return s;
-    }, 0);
-    
-    // 3. COSTOS PACTADOS: Mano de obra pactada
-    const pactadoMO = [
-        t.monto_pactado_mo,
-        t.labor_cost,
-        meta.costoManoObra,
-        meta.monto_pactado_mo
-    ].reduce((best: number, val: any) => {
-        const num = safeNum(val);
-        return (num > 0 && (!best || num < best)) ? num : best;
-    }, 0);
-    
-    // 4. COSTOS ADICIONALES: materiales, visita, etc.
-    const materialsCost = safeNum(t.materials_cost || 0);
-    const visitCost = safeNum(t.visit_cost || 0);
-    
-    // Total de salidas reales = máximo entre pactadoMO vs lo realmente pagado 
-    // (para evitar utilidad negativa por pagos mayores al pactado)
-    const totalPagos = legacyPagos + modernCosts;
-    const totalOutflow = Math.max(pactadoMO + materialsCost + visitCost, totalPagos);
-    
-    return Math.max(0, subtotal - totalOutflow);
+    return Math.max(0, calculateTicketFinances(t, t.costos || []).realProfitability);
 }
 
 // ── Days remaining in current month ──
@@ -233,8 +167,8 @@ export default function ClosingPage() {
                             {closingData.achievedTickets.map((t, i) => {
                                 const bruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
                                 const sub = bruto / 1.18;
-                                const pagos = (t.metadata?.historialPagosTecnico || []).reduce((s: number, p: any) => s + parseFloat(p.monto || 0), 0);
-                                const util = sub - pagos;
+                                const util = netUtility(t);
+                                const pagos = sub - util;
                                 const g = closingData.statsByGestora.find(g => g.id === t.gestora_id);
                                 return (
                                     <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
@@ -252,7 +186,7 @@ export default function ClosingPage() {
                     </table>
                     <div style={{ marginTop: '1rem', padding: '12px 16px', background: 'rgba(16,185,129,0.08)', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.2)' }}>
                         <span style={{ color: '#10B981', fontWeight: 900 }}>Total Ingresado (Bruto): S/ {formatSoles(closingData.totalAchieved)}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '20px', fontSize: '0.8rem' }}>Fuente: Sistema de Tickets + Tesorería (historialPagosTecnico)</span>
+                        <span style={{ color: 'rgba(255,255,255,0.4)', marginLeft: '20px', fontSize: '0.8rem' }}>Fuente: Sistema de Tickets + ticket_costs</span>
                     </div>
                 </DrillModal>
             )}

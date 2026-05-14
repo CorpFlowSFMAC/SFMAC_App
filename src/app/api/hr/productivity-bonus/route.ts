@@ -1,9 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { calculateTicketFinances } from "@/lib/calculations";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase-config";
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  getSupabaseUrl(),
+  getSupabaseAnonKey()
 );
 
 export async function GET(request: Request) {
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
     // 1. Fetch closed tickets in range
     const { data: closedTickets, error: tError } = await supabase
       .from("tickets")
-      .select("*, gestoras(*)")
+      .select("*, gestoras(*), costos:ticket_costs(*)")
       .gte("closure_date", startOfMonth)
       .lte("closure_date", endOfMonth);
 
@@ -48,18 +50,15 @@ export async function GET(request: Request) {
     const report = gestoras.map(g => {
       const myTickets = closedTickets?.filter(t => t.gestora_id === g.id) || [];
       const target = targets?.find(tg => tg.gestora_id === g.id);
-      
+
       const utilityTotal = myTickets.reduce((acc, t) => {
-        const totalBruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-        const subtotal = totalBruto / 1.18;
-        const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
-        return acc + (subtotal - pagos);
+        return acc + calculateTicketFinances(t, t.costos || []).realProfitability;
       }, 0);
 
       const targetAmount = target?.target_amount || 35000;
       const multiplier = target?.bonus_multiplier || 0.1;
       const baseLaboral = parseFloat(g.costo_laboral_mensual || 0);
-      
+
       const percentAchieved = (utilityTotal / targetAmount) * 100;
       const bonusEarned = percentAchieved >= 80 ? (utilityTotal / targetAmount) * (baseLaboral * multiplier) : 0;
 

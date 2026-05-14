@@ -16,6 +16,7 @@ import { useAppData } from "@/lib/AppDataContext";
 import { getServiceById, SERVICE_TYPES, SKILL_ICONS, SKILL_COLORS } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 import { formatSoles } from "@/lib/formatters";
+import { calculateTicketFinances } from "@/lib/calculations";
 import { ZONES } from "@/lib/zones";
 import styles from "./gestor.module.css";
 
@@ -962,10 +963,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         const TRANSIT_S = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar"];
                         const myNetUtil = (t: any) => {
-                            const bruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-                            const sub = bruto / 1.18;
-                            const pagos = (t.metadata?.historialPagosTecnico || []).reduce((s: number, p: any) => s + parseFloat(p.monto || 0), 0);
-                            return Math.max(0, sub - pagos);
+                            return Math.max(0, calculateTicketFinances(t, t.costos || []).realProfitability);
                         };
 
                         const achievedTickets = tickets.filter(t => {
@@ -1444,4 +1442,3 @@ function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
 <style>{`
 @keyframes spin { to { transform: rotate(360deg); } }
 `}</style>
-

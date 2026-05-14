@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback, useMemo } from "react";
 import { Plus, Trash2, Calculator, FileSpreadsheet, Download, Hash, Type, Layers, Box, DollarSign, List, FileDown } from "lucide-react";
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -21,7 +21,7 @@ interface Partida {
 interface OnlineQuotationEditorProps {
     onUpdate?: (items: Partida[], total: number) => void;
     suggestedTotal?: number;
-    initialItems?: any[];
+    initialItems?: Partial<Partida>[];
     clientInfo?: any;
     sedeInfo?: any;
     servicioId?: string;
@@ -29,46 +29,79 @@ interface OnlineQuotationEditorProps {
     isLocked?: boolean;
 }
 
+const normalizePartida = (it: Partial<Partida>, idx: number): Partida => ({
+    id: it.id || `partida-${idx + 1}`,
+    item: it.item || (idx + 1).toString().padStart(2, '0'),
+    descripcion: it.descripcion || "",
+    unidad: it.unidad || "GLB",
+    cantidad: Number(it.cantidad) || 1,
+    precioUnitario: Number(it.precioUnitario) || 0,
+    total: Number(it.total) || round2((Number(it.cantidad) || 1) * (Number(it.precioUnitario) || 0))
+});
+
+const normalizePartidas = (source?: Partial<Partida>[]): Partida[] => {
+    if (source && source.length > 0) {
+        return source.map(normalizePartida);
+    }
+
+    return [
+        { id: '1', item: '01', descripcion: "Mano de obra especializada para el servicio", unidad: "GLB", cantidad: 1, precioUnitario: 0, total: 0 },
+        { id: '2', item: '02', descripcion: "Suministro de materiales e insumos necesarios", unidad: "GLB", cantidad: 1, precioUnitario: 0, total: 0 }
+    ];
+};
+
+const arePartidasEqual = (left: Partida[], right: Partida[]) => {
+    if (left.length !== right.length) return false;
+    return left.every((item, idx) => {
+        const other = right[idx];
+        return other &&
+            item.id === other.id &&
+            item.item === other.item &&
+            item.descripcion === other.descripcion &&
+            item.unidad === other.unidad &&
+            Number(item.cantidad) === Number(other.cantidad) &&
+            Number(item.precioUnitario) === Number(other.precioUnitario) &&
+            Number(item.total) === Number(other.total);
+    });
+};
+
 const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onUpdate, suggestedTotal, initialItems, clientInfo, sedeInfo, servicioId, ticketId, isLocked }, ref) => {
     const [focusedField, setFocusedField] = useState<string | null>(null);
     const [isExporting, setIsExporting] = useState(false);
-    const [items, setItems] = useState<Partida[]>(() => {
-        if (initialItems && initialItems.length > 0) {
-            return initialItems.map((it: any, idx: number) => ({
-                id: it.id || Math.random().toString(36).substr(2, 9),
-                item: it.item || (idx + 1).toString().padStart(2, '0'),
-                descripcion: it.descripcion || "",
-                unidad: it.unidad || "GLB",
-                cantidad: Number(it.cantidad) || 1,
-                precioUnitario: Number(it.precioUnitario) || 0,
-                total: Number(it.total) || (Number(it.cantidad) * Number(it.precioUnitario)) || 0
-            }));
-        }
-        return [
-            { id: '1', item: '01', descripcion: "Mano de obra especializada para el servicio", unidad: "GLB", cantidad: 1, precioUnitario: 0, total: 0 },
-            { id: '2', item: '02', descripcion: "Suministro de materiales e insumos necesarios", unidad: "GLB", cantidad: 1, precioUnitario: 0, total: 0 }
-        ];
-    });
+    const [items, setItems] = useState<Partida[]>(() => normalizePartidas(initialItems));
+    const hasLocalEditsRef = useRef(false);
+    const onUpdateRef = useRef(onUpdate);
+    const lastEmittedRef = useRef("");
+    const initialItemsSignature = useMemo(() => JSON.stringify(initialItems || []), [initialItems]);
 
-    const addItem = () => {
-        const nextNum = (items.length + 1).toString().padStart(2, '0');
-        setItems([...items, {
-            id: Math.random().toString(36).substr(2, 9),
-            item: nextNum,
-            descripcion: "",
-            unidad: "UND",
-            cantidad: 1,
-            precioUnitario: 0,
-            total: 0
-        }]);
-    };
+    useEffect(() => {
+        onUpdateRef.current = onUpdate;
+    }, [onUpdate]);
 
-    const removeItem = (id: string) => {
-        setItems(items.filter(i => i.id !== id));
-    };
+    const addItem = useCallback(() => {
+        hasLocalEditsRef.current = true;
+        setItems(current => {
+            const nextNum = (current.length + 1).toString().padStart(2, '0');
+            return [...current, {
+                id: `partida-${Date.now()}-${current.length + 1}`,
+                item: nextNum,
+                descripcion: "",
+                unidad: "UND",
+                cantidad: 1,
+                precioUnitario: 0,
+                total: 0
+            }];
+        });
+    }, []);
 
-    const updateItem = (id: string, field: keyof Partida, value: string | number) => {
-        const newItems = items.map(item => {
+    const removeItem = useCallback((id: string) => {
+        hasLocalEditsRef.current = true;
+        setItems(current => current.filter(i => i.id !== id));
+    }, []);
+
+    const updateItem = useCallback((id: string, field: keyof Partida, value: string | number) => {
+        hasLocalEditsRef.current = true;
+        setItems(current => current.map(item => {
             if (item.id === id) {
                 const updatedItem = { ...item, [field]: value };
                 if (field === 'cantidad' || field === 'precioUnitario') {
@@ -78,9 +111,8 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                 return updatedItem;
             }
             return item;
-        });
-        setItems(newItems);
-    };
+        }));
+    }, []);
 
     const subtotal = round2(items.reduce((sum, item) => sum + item.total, 0));
     const igv = round2(subtotal * 0.18);
@@ -137,33 +169,21 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
     }));
 
     useEffect(() => {
-        if (onUpdate && !isLocked) {
-            onUpdate(items, grandTotal);
-        }
-    }, [items, grandTotal, isLocked, onUpdate]);
+        if (!onUpdateRef.current || isLocked) return;
+        const signature = JSON.stringify({ items, grandTotal });
+        if (signature === lastEmittedRef.current) return;
+        lastEmittedRef.current = signature;
+        onUpdateRef.current(items, grandTotal);
+    }, [items, grandTotal, isLocked]);
 
     useEffect(() => {
-        // Al recibir items iniciales o cambiar el estado de bloqueo, sincronizamos
-        // Solo sobreescribimos si está bloqueado (vista oficial) o si lo local está vacío/default
-        if (initialItems && initialItems.length > 0) {
-            const hasActualLocalContent = items.some(i => 
-                Number(i.precioUnitario) > 0 || 
-                (i.descripcion && !i.descripcion.includes("Mano de obra especializada") && !i.descripcion.includes("Suministro de materiales"))
-            );
-
-            if (isLocked || !hasActualLocalContent) {
-                setItems(initialItems.map((it: any, idx: number) => ({
-                    id: it.id || Math.random().toString(36).substr(2, 9),
-                    item: it.item || (idx + 1).toString().padStart(2, '0'),
-                    descripcion: it.descripcion || "",
-                    unidad: it.unidad || "GLB",
-                    cantidad: Number(it.cantidad) || 1,
-                    precioUnitario: Number(it.precioUnitario) || 0,
-                    total: Number(it.total) || (Number(it.cantidad) * Number(it.precioUnitario)) || 0
-                })));
-            }
+        if (!initialItems || initialItems.length === 0) return;
+        const incomingItems = normalizePartidas(initialItems);
+        if (arePartidasEqual(items, incomingItems)) return;
+        if (isLocked || !hasLocalEditsRef.current) {
+            setItems(incomingItems);
         }
-    }, [initialItems, isLocked]);
+    }, [initialItemsSignature, isLocked, items, initialItems]);
 
     return (
         <div className={styles.editorWrapper}>
