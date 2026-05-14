@@ -1,0 +1,222 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { isConfirmedTicketCostStatus } from '@/lib/calculations';
+import { getClient } from '@/lib/supabase-server';
+
+class DuplicateTicketCostError extends Error {
+    constructor() {
+        super('Ya existe un pago confirmado con el mismo ticket, monto y concepto.');
+        this.name = 'DuplicateTicketCostError';
+    }
+}
+
+const TICKET_COST_SELECT = `
+    *,
+    technicians(id, name, first_name, last_name, document_number, phone, bank_name, account_number, cci, yape_number, plin_number)
+`;
+
+const normalizeCostConcept = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const cleanCostPayload = (cost: Record<string, any>) => {
+    const payload: Record<string, any> = {};
+
+    if (cost.ticket_id) payload.ticket_id = cost.ticket_id;
+    if (cost.concepto) payload.concepto = cost.concepto;
+    if (cost.categoria) payload.categoria = cost.categoria;
+    if (cost.proveedor) payload.proveedor = cost.proveedor;
+    if (cost.specialist_id) payload.specialist_id = cost.specialist_id;
+    if (cost.monto !== undefined) payload.monto = Number(cost.monto);
+    if (cost.estado_pago) payload.estado_pago = cost.estado_pago;
+    if (cost.url_comprobante) payload.url_comprobante = cost.url_comprobante;
+    if (cost.solicitado_por) payload.solicitado_por = cost.solicitado_por;
+    if (cost.motivo) payload.motivo = cost.motivo;
+
+    return payload;
+};
+
+const normalizeRequesterId = async (client: any, requesterId?: string) => {
+    if (!requesterId) return undefined;
+
+    const { data: profile } = await client
+        .from('perfiles')
+        .select('id')
+        .eq('id', requesterId)
+        .maybeSingle();
+
+    if (profile?.id) return profile.id;
+
+    const { data: gestora } = await client
+        .from('gestoras')
+        .select('auth_user_id')
+        .eq('id', requesterId)
+        .maybeSingle();
+
+    return gestora?.auth_user_id || undefined;
+};
+
+const normalizeCostPayload = async (client: any, payload: Record<string, any>) => {
+    if (!payload.solicitado_por) return payload;
+
+    const requesterId = await normalizeRequesterId(client, payload.solicitado_por);
+    if (!requesterId) {
+        const { solicitado_por: _solicitadoPor, ...rest } = payload;
+        return rest;
+    }
+
+    return { ...payload, solicitado_por: requesterId };
+};
+
+const assertUniqueConfirmedTicketCost = async (
+    client: any,
+    ticketId: string,
+    monto: number,
+    concepto: string,
+    ignoredId?: string
+) => {
+    if (!client) {
+        throw new Error('Supabase server client is not configured');
+    }
+
+    const { data, error } = await client
+        .from('ticket_costs')
+        .select('id, concepto, estado_pago')
+        .eq('ticket_id', ticketId)
+        .eq('monto', monto);
+
+    if (error) throw error;
+
+    const targetConcept = normalizeCostConcept(concepto);
+    const exists = (data || []).some((cost: any) => {
+        if (ignoredId && cost.id === ignoredId) return false;
+        return isConfirmedTicketCostStatus(cost.estado_pago) && normalizeCostConcept(cost.concepto || '') === targetConcept;
+    });
+
+    if (exists) throw new DuplicateTicketCostError();
+};
+
+export async function GET(request: NextRequest) {
+    try {
+        const client = getClient() as any;
+        if (!client) throw new Error('Supabase server client is not configured');
+
+        const ticketId = new URL(request.url).searchParams.get('ticket_id');
+        if (!ticketId) {
+            return NextResponse.json({ success: false, error: 'ticket_id es requerido' }, { status: 400 });
+        }
+
+        const { data, error } = await client
+            .from('ticket_costs')
+            .select(TICKET_COST_SELECT)
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        return NextResponse.json({ success: true, data: data || [] });
+    } catch (err: any) {
+        console.error('[Ticket Costs API] GET Error:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    }
+}
+
+export async function POST(request: NextRequest) {
+    try {
+        const client = getClient() as any;
+        if (!client) throw new Error('Supabase server client is not configured');
+
+        const payload = await normalizeCostPayload(client, cleanCostPayload(await request.json()));
+        if (!payload.ticket_id || !payload.concepto || !payload.categoria || !payload.monto || !payload.estado_pago) {
+            return NextResponse.json({ success: false, error: 'Datos incompletos para registrar el costo' }, { status: 400 });
+        }
+
+        if (isConfirmedTicketCostStatus(payload.estado_pago)) {
+            await assertUniqueConfirmedTicketCost(client, payload.ticket_id, payload.monto, payload.concepto);
+        }
+
+        const { data, error } = await client
+            .from('ticket_costs')
+            .insert(payload)
+            .select('*')
+            .single();
+
+        if (error) {
+            if (error.code === '23505') throw new DuplicateTicketCostError();
+            throw error;
+        }
+
+        return NextResponse.json({ success: true, data });
+    } catch (err: any) {
+        console.error('[Ticket Costs API] POST Error:', err);
+        const status = err instanceof DuplicateTicketCostError ? 409 : 500;
+        return NextResponse.json({ success: false, error: err.message, code: err.name }, { status });
+    }
+}
+
+export async function PUT(request: NextRequest) {
+    try {
+        const client = getClient() as any;
+        if (!client) throw new Error('Supabase server client is not configured');
+
+        const { id, updates } = await request.json();
+        if (!id || !updates) {
+            return NextResponse.json({ success: false, error: 'id y updates son requeridos' }, { status: 400 });
+        }
+
+        const safeUpdates = await normalizeCostPayload(client, cleanCostPayload(updates));
+
+        if (safeUpdates.estado_pago && isConfirmedTicketCostStatus(safeUpdates.estado_pago)) {
+            const { data: current, error: fetchErr } = await client
+                .from('ticket_costs')
+                .select('id, ticket_id, monto, concepto')
+                .eq('id', id)
+                .single();
+
+            if (fetchErr) throw fetchErr;
+
+            await assertUniqueConfirmedTicketCost(
+                client,
+                current.ticket_id,
+                safeUpdates.monto ?? current.monto,
+                safeUpdates.concepto ?? current.concepto,
+                id
+            );
+        }
+
+        const { data, error } = await client
+            .from('ticket_costs')
+            .update(safeUpdates)
+            .eq('id', id)
+            .select('*, technicians(*)')
+            .single();
+
+        if (error) {
+            if (error.code === '23505') throw new DuplicateTicketCostError();
+            throw error;
+        }
+
+        return NextResponse.json({ success: true, data });
+    } catch (err: any) {
+        console.error('[Ticket Costs API] PUT Error:', err);
+        const status = err instanceof DuplicateTicketCostError ? 409 : 500;
+        return NextResponse.json({ success: false, error: err.message, code: err.name }, { status });
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const client = getClient() as any;
+        if (!client) throw new Error('Supabase server client is not configured');
+
+        const id = new URL(request.url).searchParams.get('id');
+        if (!id) {
+            return NextResponse.json({ success: false, error: 'id es requerido' }, { status: 400 });
+        }
+
+        const { error } = await client.from('ticket_costs').delete().eq('id', id);
+        if (error) throw error;
+
+        return NextResponse.json({ success: true });
+    } catch (err: any) {
+        console.error('[Ticket Costs API] DELETE Error:', err);
+        return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    }
+}

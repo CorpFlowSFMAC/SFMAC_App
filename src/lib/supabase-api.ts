@@ -1,5 +1,4 @@
 import { supabase } from './supabase'
-import { isConfirmedTicketCostStatus } from './calculations';
 
 export class DuplicateTicketCostError extends Error {
     constructor() {
@@ -7,8 +6,6 @@ export class DuplicateTicketCostError extends Error {
         this.name = 'DuplicateTicketCostError';
     }
 }
-
-const normalizeCostConcept = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
 const TICKET_LIST_SELECT = `
     *,
@@ -59,24 +56,6 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
         ...ticket,
         costos: ticket.id ? (costsByTicket.get(ticket.id) || []) : [],
     }));
-};
-
-const assertUniqueConfirmedTicketCost = async (ticketId: string, monto: number, concepto: string, ignoredId?: string) => {
-    const { data, error } = await supabase
-        .from('ticket_costs')
-        .select('id, concepto, estado_pago')
-        .eq('ticket_id', ticketId)
-        .eq('monto', monto);
-
-    if (error) throw error;
-
-    const targetConcept = normalizeCostConcept(concepto);
-    const exists = (data || []).some((cost: any) => {
-        if (ignoredId && cost.id === ignoredId) return false;
-        return isConfirmedTicketCostStatus(cost.estado_pago) && normalizeCostConcept(cost.concepto || '') === targetConcept;
-    });
-
-    if (exists) throw new DuplicateTicketCostError();
 };
 
 const stripFinancialMetadata = (metadata: Record<string, any> = {}) => {
@@ -892,14 +871,11 @@ export const gestorasTargetsAPI = {
 
 export const ticketCostsAPI = {
     async getByTicket(ticketId: string) {
-        const { data, error } = await supabase
-            .from('ticket_costs')
-            .select('*, technicians(id, name, first_name, last_name, document_number, phone, bank_name, account_number, cci, yape_number, plin_number)')
-            .eq('ticket_id', ticketId)
-            .order('created_at', { ascending: true });
+        const response = await fetch(`/api/v3/ticket-costs?ticket_id=${encodeURIComponent(ticketId)}`);
+        const result = await response.json();
 
-        if (error) throw error;
-        return data || [];
+        if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos del ticket');
+        return result.data || [];
     },
 
     async create(cost: {
@@ -928,22 +904,19 @@ export const ticketCostsAPI = {
         if (cost.solicitado_por)    safePayload.solicitado_por = cost.solicitado_por;
         if (cost.motivo)            safePayload.motivo = cost.motivo;
 
-        if (isConfirmedTicketCostStatus(cost.estado_pago)) {
-            await assertUniqueConfirmedTicketCost(cost.ticket_id, cost.monto, cost.concepto);
-        }
+        const response = await fetch('/api/v3/ticket-costs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(safePayload),
+        });
+        const result = await response.json();
 
-        const { data, error } = await supabase
-            .from('ticket_costs')
-            .insert(safePayload)
-            .select('*')
-            .single();
-
-        if (error) {
-            if (error.code === '23505') throw new DuplicateTicketCostError();
-            console.error("DEBUG: Error in ticketCostsAPI.create:", error.code, error.message, error.details, "Payload:", safePayload);
-            throw error;
+        if (!response.ok || !result.success) {
+            if (response.status === 409 || result.code === 'DuplicateTicketCostError') throw new DuplicateTicketCostError();
+            console.error("DEBUG: Error in ticketCostsAPI.create:", result.error, "Payload:", safePayload);
+            throw new Error(result.error || 'Error al registrar costo del ticket');
         }
-        return data;
+        return result.data;
     },
 
     async update(id: string, updates: Partial<{
@@ -957,43 +930,25 @@ export const ticketCostsAPI = {
         motivo: string;
         solicitado_por: string;
     }>) {
-        if (updates.estado_pago && isConfirmedTicketCostStatus(updates.estado_pago)) {
-            const { data: current, error: fetchErr } = await supabase
-                .from('ticket_costs')
-                .select('id, ticket_id, monto, concepto')
-                .eq('id', id)
-                .single();
+        const response = await fetch('/api/v3/ticket-costs', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, updates }),
+        });
+        const result = await response.json();
 
-            if (fetchErr) throw fetchErr;
-            await assertUniqueConfirmedTicketCost(
-                current.ticket_id,
-                updates.monto ?? current.monto,
-                updates.concepto ?? current.concepto,
-                id
-            );
+        if (!response.ok || !result.success) {
+            if (response.status === 409 || result.code === 'DuplicateTicketCostError') throw new DuplicateTicketCostError();
+            throw new Error(result.error || 'Error al actualizar costo del ticket');
         }
-
-        const { data, error } = await supabase
-            .from('ticket_costs')
-            .update(updates)
-            .eq('id', id)
-            .select('*, technicians(*)')
-            .single();
-
-        if (error) {
-            if (error.code === '23505') throw new DuplicateTicketCostError();
-            throw error;
-        }
-        return data;
+        return result.data;
     },
 
     async delete(id: string) {
-        const { error } = await supabase
-            .from('ticket_costs')
-            .delete()
-            .eq('id', id);
+        const response = await fetch(`/api/v3/ticket-costs?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const result = await response.json();
 
-        if (error) throw error;
+        if (!response.ok || !result.success) throw new Error(result.error || 'Error al eliminar costo del ticket');
     },
 
     // Trasladar todos los costos de un ticket a otro (Blindaje Financiero)
