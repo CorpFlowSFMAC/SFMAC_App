@@ -38,6 +38,40 @@ export const supabaseServer = {
 // Exportar getClient para uso en endpoints - siempre como any para evitar errores de tipo
 export { getSupabaseServerClient as getClient };
 
+const TICKET_SUMMARY_SELECT = `
+    *,
+    clients(*),
+    branch_offices(*, clients(*), zonas(*)),
+    technicians(*),
+    gestora:gestoras(*)
+`;
+
+async function getTicketsSummaryDirect(gestorId?: string) {
+    const client = getSupabaseServerClient();
+    if (!client) {
+        return [];
+    }
+
+    let query = client
+        .from('tickets')
+        .select(TICKET_SUMMARY_SELECT)
+        .order('created_at', { ascending: false })
+        .limit(300);
+
+    if (gestorId) {
+        query = query.eq('gestora_id', gestorId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('[Supabase Server] Error fetching tickets direct fallback:', error.message);
+        return [];
+    }
+
+    return data || [];
+}
+
 /**
  * Helper para obtener perfil usando service role
  * Devuelve null si no hay configuración - no crashea
@@ -91,7 +125,7 @@ export async function getTicketsCount() {
  * Versión ligera para evitar payload masivo
  */
 export async function getAllTicketsLite(gestorId?: string) {
-    const client = getSupabaseServerClient() as any;
+    const client = getSupabaseServerClient();
     if (!client) {
         return [];
     }
@@ -110,7 +144,7 @@ export async function getAllTicketsLite(gestorId?: string) {
 
     if (error) {
         console.error('[Supabase Server] Error fetching tickets from strategic view:', error.message);
-        return [];
+        return getTicketsSummaryDirect(gestorId);
     }
 
     return data || [];
@@ -121,7 +155,7 @@ export async function getAllTicketsLite(gestorId?: string) {
  * Útil para dashboard
  */
 export async function getTicketsSummary() {
-    const client = getSupabaseServerClient() as any;
+    const client = getSupabaseServerClient();
     if (!client) {
         return [];
     }
@@ -135,7 +169,7 @@ export async function getTicketsSummary() {
 
     if (error) {
         console.log('[Supabase Server] Error fetching strategic summary:', error.message);
-        return [];
+        return getTicketsSummaryDirect();
     }
 
     return data || [];
