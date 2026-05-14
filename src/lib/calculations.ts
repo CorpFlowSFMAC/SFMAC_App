@@ -14,7 +14,7 @@ export const toNum = (val: any): number => {
 
 // --- HELPERS DE CATEGORIZACIÓN ---
 
-const isConfirmed = (status: string | null | undefined) => {
+export const isConfirmedTicketCostStatus = (status: string | null | undefined) => {
     const rawSt = (status || '').toLowerCase().trim();
     const valid = [
         'pagado', 'adelanto', 'abonado', 'confirmado', 'auditado',
@@ -23,6 +23,8 @@ const isConfirmed = (status: string | null | undefined) => {
     ];
     return valid.some(v => rawSt.includes(v));
 };
+
+const isConfirmed = isConfirmedTicketCostStatus;
 
 const isOperating = (item: any) => {
     const cat = (item.categoria || '').toLowerCase();
@@ -126,7 +128,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     const netLaborBalance = Math.max(0, round2(pactedMO - totalLaborConfirmed));
     
-    // ★ V3 CORE: Rentabilidad Real = Venta - Sum(ticket_costs donde estado = 'pagado')
+    // V3 CORE: rentabilidad real = ingresos totales - pagos confirmados en ticket_costs.
     const realProfitability = round2(montoBase - totalLaborConfirmed - totalOpConfirmed);
     const margenReal = montoBase > 0 ? round2((realProfitability / montoBase) * 100) : 0;
 

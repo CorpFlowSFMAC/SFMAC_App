@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { calculateTicketFinances } from "@/lib/calculations";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
     // 1. Fetch closed tickets in range
     const { data: closedTickets, error: tError } = await supabase
       .from("tickets")
-      .select("*, gestoras(*)")
+      .select("*, gestoras(*), costos:ticket_costs(*)")
       .gte("closure_date", startOfMonth)
       .lte("closure_date", endOfMonth);
 
@@ -50,10 +51,7 @@ export async function GET(request: Request) {
       const target = targets?.find(tg => tg.gestora_id === g.id);
       
       const utilityTotal = myTickets.reduce((acc, t) => {
-        const totalBruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-        const subtotal = totalBruto / 1.18;
-        const pagos = (t.metadata?.historialPagosTecnico || []).reduce((sum: number, p: any) => sum + (parseFloat(p.monto) || 0), 0);
-        return acc + (subtotal - pagos);
+        return acc + calculateTicketFinances(t, t.costos || []).realProfitability;
       }, 0);
 
       const targetAmount = target?.target_amount || 35000;

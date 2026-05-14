@@ -16,7 +16,7 @@ import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { calculateTicketFinances, toNum } from "@/lib/calculations";
 import { supabase } from "@/lib/supabase";
-import { ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
+import { DuplicateTicketCostError, ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
@@ -415,7 +415,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     if (pactedMO <= 0 && ['visita_realizada', 'en_cotizacion', 'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion'].includes(ticketData.estadoId)) {
         if (availableRescue <= 0) availableRescue = 100;
     }
-    const isVisitPaid = ticketData.visitPaymentConfirmed || ticketCosts.some(c => 
+    const isVisitPaid = ticketCosts.some(c =>
         (c.categoria || '').toLowerCase().includes('movilidad') && 
         (c.estado_pago || '').toLowerCase() === 'pagado'
     );
@@ -514,7 +514,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     delete meta.metadata;
                 }
                 const rawEstadoId = normalizeStateId(fullTicket.status_id || meta.estadoId || 'nuevo');
-                const visitConfirmed = meta.visitPaymentConfirmed ?? false;
+                const visitConfirmed = (fullTicket.costos || []).some((c: any) => {
+                    const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
+                    return (c.estado_pago || '').toLowerCase() === 'pagado' && (text.includes('movilidad') || text.includes('visita'));
+                });
+                const advanceConfirmed = (fullTicket.costos || []).some((c: any) => {
+                    const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
+                    return (c.estado_pago || '').toLowerCase() === 'pagado' && text.includes('adelanto');
+                });
 
                 const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
                 const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
@@ -551,13 +558,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     const finalStatusId = finalEstadoId;
 
                     setTicketData((prev: any) => {
+                        const {
+                            adelantoPagado,
+                            visitPaymentConfirmed,
+                            montoAdelanto,
+                            fechaPagoAdelanto,
+                            AdelantoPagado,
+                            ...safeMeta
+                        } = meta;
+                        const {
+                            adelantoPagado: cachedAdelantoPagado,
+                            visitPaymentConfirmed: cachedVisitPaymentConfirmed,
+                            montoAdelanto: cachedMontoAdelanto,
+                            fechaPagoAdelanto: cachedFechaPagoAdelanto,
+                            AdelantoPagado: cachedUpperAdelantoPagado,
+                            ...safeCachedMetadata
+                        } = cachedMetadata;
                         const merged = {
-                            ...prev, ...fullTicket, ...meta, ...cachedMetadata,
-                            numeroTicketCliente: fullTicket.client_ticket_number || meta.numeroTicketCliente || cachedMetadata.numeroTicketCliente || prev.numeroTicketCliente,
-                            metadata: { ...meta, ...cachedMetadata },
+                            ...prev, ...fullTicket, ...safeMeta, ...safeCachedMetadata,
+                            numeroTicketCliente: fullTicket.client_ticket_number || safeMeta.numeroTicketCliente || safeCachedMetadata.numeroTicketCliente || prev.numeroTicketCliente,
+                            metadata: { ...safeMeta, ...safeCachedMetadata },
                             estadoId: finalEstadoId,
                             status_id: finalStatusId,
-                            adelantoPagado: meta.adelantoPagado ?? false,
+                            adelantoPagado: advanceConfirmed,
                             visitPaymentConfirmed: visitConfirmed,
                             // 🚨 PRESERVAR de localStorage si existe para evitar regressión
                 solicitudAdelanto: (() => {
@@ -568,11 +591,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             if (parsed.solicitudAdelanto) return parsed.solicitudAdelanto;
                         } catch(e) {}
                     }
-                    return meta.solicitudAdelanto || ticket?.solicitudAdelanto || null;
+                    return safeMeta.solicitudAdelanto || ticket?.solicitudAdelanto || null;
                 })(),
-                            solicitudPago: visitConfirmed ? null : (meta.solicitudPago ?? null),
-                            historialPagosTecnico: meta.historialPagosTecnico ?? [],
-                            gestora: fullTicket.gestora || meta.gestora || null
+                            solicitudPago: visitConfirmed ? null : (safeMeta.solicitudPago ?? null),
+                            gestora: fullTicket.gestora || safeMeta.gestora || null
                         };
                         // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
                         if (cachedMetadata.costoManoObra > 0 && merged.costoManoObra <= 20) {
@@ -626,7 +648,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             
             let meta = ticket.metadata || {};
             const rawEstadoId = normalizeStateId(ticket.status_id || meta.estadoId || 'nuevo');
-            const visitConfirmed = meta.visitPaymentConfirmed ?? false;
+            const visitConfirmed = (ticket.costos || []).some((c: any) => {
+                const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
+                return (c.estado_pago || '').toLowerCase() === 'pagado' && (text.includes('movilidad') || text.includes('visita'));
+            });
+            const advanceConfirmed = (ticket.costos || []).some((c: any) => {
+                const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
+                return (c.estado_pago || '').toLowerCase() === 'pagado' && text.includes('adelanto');
+            });
+            const {
+                adelantoPagado,
+                visitPaymentConfirmed,
+                montoAdelanto,
+                fechaPagoAdelanto,
+                AdelantoPagado,
+                ...safeMeta
+            } = meta;
             
             const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
             const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
@@ -638,11 +675,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const prevStatusOrder = TICKET_STATE_ORDER[prev.estadoId] || 0;
             // SIEMPRE gana el más avanzado (nunca retroceder de estado automáticamente)
             // EXCEPCIÓN: Si hay una denegación de pago reciente, permitimos el retroceso para que la UI se sincronice
-            const hasRejection = !!meta.pagoRechazado;
+            const hasRejection = !!safeMeta.pagoRechazado;
             const shouldPreservePrevState = (prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current)
                                           || (prevStatusOrder < serverStatusOrder && isIntentionalRollback.current);
 
-            const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada || meta.modificacionAutorizada || prev.modificacionAutorizada);
+            const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada || safeMeta.modificacionAutorizada || prev.modificacionAutorizada);
 
             // BLINDAJE DE SOLICITUDES: Si tenemos una solicitud local y el servidor aún no la ve, preservarla
             // Esto elimina el parpadeo "Solicitar -> Esperando -> Solicitar"
@@ -654,7 +691,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     return s ? JSON.parse(s).solicitudAdelanto : null;
                 } catch(e) { return null; }
             })();
-            const serverSolicitud = meta.solicitudAdelanto || ticket.solicitudAdelanto;
+            const serverSolicitud = safeMeta.solicitudAdelanto || ticket.solicitudAdelanto;
             // Priority: localStorage > local > server
             const finalSolicitud = savedLS || localSolicitud || serverSolicitud;
 
@@ -671,14 +708,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 monto_pactado_mo: prev.monto_pactado_mo !== undefined ? prev.monto_pactado_mo : ticket.monto_pactado_mo,
                 
                 // BLINDAJE DE EDICIÓN LOCAL: No permitir que el caché global borre lo que el usuario está escribiendo o cargó vía getById
-                partidas: prev.partidas || prev.metadata?.partidas || meta.partidas,
-                montoFinal: prev.montoFinal || prev.metadata?.montoFinal || meta.montoFinal,
-                costoManoObra: prev.costoManoObra || prev.metadata?.costoManoObra || meta.costoManoObra,
-                diagnostico: prev.diagnostico || prev.metadata?.diagnostico || meta.diagnostico,
-                evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || meta.evidenciasEjecucion,
-                documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || meta.documentosChecklist,
-                historialPagosTecnico: prev.historialPagosTecnico || prev.metadata?.historialPagosTecnico || meta.historialPagosTecnico,
-                numeroTicketCliente: prev.numeroTicketCliente || ticket.client_ticket_number || meta.numeroTicketCliente,
+                partidas: prev.partidas || prev.metadata?.partidas || safeMeta.partidas,
+                montoFinal: prev.montoFinal || prev.metadata?.montoFinal || safeMeta.montoFinal,
+                costoManoObra: prev.costoManoObra || prev.metadata?.costoManoObra || safeMeta.costoManoObra,
+                diagnostico: prev.diagnostico || prev.metadata?.diagnostico || safeMeta.diagnostico,
+                evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || safeMeta.evidenciasEjecucion,
+                documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || safeMeta.documentosChecklist,
+                numeroTicketCliente: prev.numeroTicketCliente || ticket.client_ticket_number || safeMeta.numeroTicketCliente,
                 
                 // BLINDAJE DE TÉCNICO Y GESTORA:
                 // Si el ID del prop coincide con el ID que ya tenemos en el estado local (prev),
@@ -693,7 +729,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     return incomingTech || prev.tecnico;
                 })(),
                 gestora: (() => {
-                    const incomingGestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado || ticket.metadata?.gestora;
+                    const incomingGestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado || safeMeta.gestora;
                     if (incomingGestora?.id === ticket.gestora_id) return incomingGestora;
                     if (prev.gestora?.id === ticket.gestora_id) return prev.gestora;
                     return incomingGestora || prev.gestora;
@@ -701,33 +737,34 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 
                 metadata: {
                     // 1. Empezamos con la metadata del servidor (la más fresca de la DB)
-                    ...meta,
+                    ...safeMeta,
                     // 2. Preservamos SOLO los campos de edición local (User Input) que el usuario puede estar tipeando
                     // Usamos ?? en lugar de || para permitir strings vacíos "" (borrado intencional)
-                    diagnostico: (prev.diagnostico !== undefined) ? prev.diagnostico : (prev.metadata?.diagnostico ?? meta.diagnostico),
-                    partidas: (prev.partidas !== undefined) ? prev.partidas : (prev.metadata?.partidas ?? meta.partidas),
-                    montoFinal: (prev.montoFinal !== undefined) ? prev.montoFinal : (prev.metadata?.montoFinal ?? meta.montoFinal),
-                    documentosChecklist: (prev.documentosChecklist !== undefined) ? prev.documentosChecklist : (prev.metadata?.documentosChecklist ?? meta.documentosChecklist),
+                    diagnostico: (prev.diagnostico !== undefined) ? prev.diagnostico : (prev.metadata?.diagnostico ?? safeMeta.diagnostico),
+                    partidas: (prev.partidas !== undefined) ? prev.partidas : (prev.metadata?.partidas ?? safeMeta.partidas),
+                    montoFinal: (prev.montoFinal !== undefined) ? prev.montoFinal : (prev.metadata?.montoFinal ?? safeMeta.montoFinal),
+                    documentosChecklist: (prev.documentosChecklist !== undefined) ? prev.documentosChecklist : (prev.metadata?.documentosChecklist ?? safeMeta.documentosChecklist),
                     // 3. Los campos de flujo financiero (pagoRechazado, solicitudes) SIEMPRE mandan los del servidor
                     // para evitar el "parpadeo" donde el estado local viejo sobreescribe al servidor limpio.
-                    pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
+                    pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
                     solicitudAdelanto: finalSolicitud,
-                    solicitudPago: meta.solicitudPago !== undefined ? meta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
-                    solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
+                    solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
+                    solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
                 },
                 
                 // Mapeo a nivel de raíz para consistencia
                 solicitudAdelanto: finalSolicitud,
-                solicitudPago: meta.solicitudPago !== undefined ? meta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
-                solicitudLiquidacion: meta.solicitudLiquidacion !== undefined ? meta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
-                pagoRechazado: meta.pagoRechazado !== undefined ? meta.pagoRechazado : prev.pagoRechazado,
+                solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
+                solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
+                pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
 
                 // Si el local está más avanzado, NO LO RETROCEDEMOS
                 estadoId: shouldPreservePrevState ? prev.estadoId : corregidoEstadoId,
                 status_id: shouldPreservePrevState ? prev.status_id : corregidoEstadoId,
                 modificacionAutorizada: finalModificacionAutorizada,
-                solicitudModificacion: ticket.solicitudModificacion || meta.solicitudModificacion || prev.solicitudModificacion,
-                visitPaymentConfirmed: visitConfirmed || prev.visitPaymentConfirmed
+                solicitudModificacion: ticket.solicitudModificacion || safeMeta.solicitudModificacion || prev.solicitudModificacion,
+                visitPaymentConfirmed: visitConfirmed,
+                adelantoPagado: advanceConfirmed,
             };
         });
     }, [ticket, isInitialLoadComplete]);
@@ -896,25 +933,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // 4. Protección específica: si lo local acaba de limpiar un rechazo, no dejar que el servidor lo restaure
                 // y viceversa: si el servidor tiene un rechazo nuevo, lo local debe aceptarlo.
                 pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
-                // PROTECCIÓN DE HISTORIAL: Nunca sobreescribir con datos locales viejos
-                historialPagosTecnico: (() => {
-                    const localPagos = businessData?.historialPagosTecnico || businessData?.historialPagosTécnico || [];
-                    const serverPagos = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
-                    const allById = new Map();
-                    [...serverPagos, ...localPagos].forEach(p => {
-                        if (p?.id) allById.set(p.id, p);
-                    });
-                    return Array.from(allById.values());
-                })(),
-                historialPagosTécnico: (() => {
-                    const localPagos = businessData?.historialPagosTecnico || businessData?.historialPagosTécnico || [];
-                    const serverPagos = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
-                    const allById = new Map();
-                    [...serverPagos, ...localPagos].forEach(p => {
-                        if (p?.id) allById.set(p.id, p);
-                    });
-                    return Array.from(allById.values());
-                })(),
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
                 // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
@@ -931,8 +949,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     ? serverMeta.solicitudPago
                     : (businessData.solicitudPago || dataToProcess.solicitudPago || serverMeta.solicitudPago),
                 
-                visitPaymentConfirmed: serverMeta.visitPaymentConfirmed || businessData.visitPaymentConfirmed,
-                adelantoPagado: serverMeta.adelantoPagado || businessData.adelantoPagado,
                 evidenciasEjecucion,
                 metadata: undefined // Evitar anidación infinita
             }
@@ -987,7 +1003,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     const {
                         adelantoPagado,
                         fechaPagoAdelanto,
-                        historialPagosTécnico,
+                        montoAdelanto,
+                        AdelantoPagado,
                         estadoId,
                         status_id,
                         visitPaymentConfirmed,
@@ -1648,7 +1665,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
             await ticketCostsAPI.create({
                 ticket_id: currentId,
-                concepto: `${conceptPrefix} - ${displayLabel}`,
+                concepto: conceptPrefix,
                 categoria: category,
                 specialist_id: technicianId,
                 monto: amount,
@@ -1658,26 +1675,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
             const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
 
-            // ✅ FIX 2026-04-27: Agregar el pago también a historialPagosTecnico para módulo Tesorería
-            const nuevoPagoHistorial = {
-                id: `adv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                monto: amount,
-                fecha: new Date().toISOString(),
-                tipo: 'Adelanto Operativo',
-                estado: 'confirmado',
-                referencia: displayLabel,
-                voucherRef: null
-            };
-            const historialActual = ticketData.historialPagosTecnico || ticketData.historialPagosTécnico || [];
-            const nuevoHistorial = [...historialActual, nuevoPagoHistorial];
-
-
             const metadataUpdates = {
-                AdelantoPagado: true,
-                montoAdelanto: unifiedPaymentsSum + amount,
-                fechaPagoAdelanto: new Date().toISOString(),
                 solicitudAdelanto: null,
-                historialPagosTecnico: nuevoHistorial
             };
 
             const columnUpdates = {
@@ -1686,16 +1685,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
             await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates, columnUpdates);
 
-            // ✅ FIX 2026-04-27: Esperar a que Supabase procese la actualización antes de recargar
-            // Esto evita el parpadeo entre estados al发送确认 de adelanto
-            await new Promise(resolve => setTimeout(resolve, 1200));
-            
             const updated = {
                 ...ticketData,
                 estadoId: newState,
                 adelantoPagado: true,
-                montoAdelanto: unifiedPaymentsSum + amount,
-                fechaPagoAdelanto: new Date().toISOString(),
                 solicitudAdelanto: null
             };
 
@@ -1706,7 +1699,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)} en el desglose de costos.`, "success");
         } catch (err) {
             console.error("Error confirming advance:", err);
-            showToast("Error de Conexión", "No se pudo registrar el adelanto correctamente.", "error");
+            const message = err instanceof DuplicateTicketCostError
+                ? "Ya existe un pago confirmado con el mismo ticket, monto y concepto."
+                : "No se pudo registrar el adelanto correctamente.";
+            showToast("Error de Conexión", message, "error");
         } finally {
             setIsConfirmingPayment(false);
             // ✅ Limpiar flags
@@ -2221,8 +2217,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
 
     const jobCostBase = finances.totalPactedDebt;
-    const visitPayment = round2(parseFloat(ticketData.costoVisita || ticketData.costoPasaje || 0));
-    const classicAdvance = round2(parseFloat(ticketData.montoAdelantoManual || ticketData.adelantoMonto || 0));
+    const visitPayment = finances.operatingItems
+        .filter((c: any) => `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase().includes('visita'))
+        .reduce((sum: number, c: any) => round2(sum + (parseFloat(c.monto || 0) || 0)), 0);
+    const classicAdvance = finances.laborItems
+        .filter((c: any) => `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase().includes('adelanto'))
+        .reduce((sum: number, c: any) => round2(sum + (parseFloat(c.monto || 0) || 0)), 0);
     const rentabilidadReal = grossMargin;
     const paymentsSummary = unifiedPaymentsSum;
     const costPercentage = 100 - pctReal;
@@ -3504,7 +3504,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         disabled={isConfirmingPayment || (!ticketData.solicitudAdelanto && !porcentajeAdelanto && !montoAdelantoManual)}
                                                                     >
                                                                         {isConfirmingPayment ? <Clock size={18} className={styles.spinner} /> : <CheckCircle size={18} />}
-                                                                        <span>{ticketData.solicitudAdelanto ? 'Confirmar Depósito' : 'Registrar Depósito Directo'}</span>
+                                                                        <span>{isConfirmingPayment ? 'Cargando...' : (ticketData.solicitudAdelanto ? 'Confirmar Depósito' : 'Registrar Depósito Directo')}</span>
                                                                     </button>
                                                                 ) : (
                                                                     !ticketData.solicitudAdelanto && (

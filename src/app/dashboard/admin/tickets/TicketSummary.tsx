@@ -145,13 +145,12 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
 
     const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || 0);
 
-    // Memoizar el voucher de visita para evitar búsquedas repetitivas en cada render
     const voucherVisita = useMemo(() => {
-        return (ticket.historialPagosTecnico || []).find((p: any) => {
-            const low = (p.tipo || p.referencia || "").toLowerCase();
+        return (ticket.costos || []).find((p: any) => {
+            const low = `${p.categoria || ""} ${p.concepto || ""}`.toLowerCase();
             return low.includes('movilidad') || low.includes('visita') || low.includes('pasaje');
-        })?.voucherRef;
-    }, [ticket.historialPagosTecnico]);
+        })?.url_comprobante;
+    }, [ticket.costos]);
 
     const [showFullVoucher, setShowFullVoucher] = useState<string | null>(null);
 
@@ -864,20 +863,8 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
     const subtotalLocal = round2(totalFinal / 1.18);
     const igvLocal = round2(totalFinal - subtotalLocal);
 
-    // 4. Rentabilidad Real y Dinámica — Política de Desembolsos (Rule 4)
-    const historialPagos = ticket.historialPagosTecnico || [];
-    const totalPagadoEfectivo = historialPagos.reduce((sum: number, p: any) => {
-        // Solo sumamos pagos que han sido efectivamente ejecutados (estado 'pagado' o sin estado por ser previos)
-        if (p.estado === 'anulado') return sum;
-        return sum + round2(p.monto || 0);
-    }, 0);
-
-    // Los costos totales son lo mayor entre lo presupuestado (MO + Mat) y lo que realmente se ha pagado en Tesorería.
-    // Esto garantiza que si hay gastos extra (movilidad, materiales adicionales), la rentabilidad baje en tiempo real.
-    const baseBudgetedCost = round2(round2(ticket.costoManoObra || 0) + round2(ticket.costoMateriales || 0));
-    const totalRealCosts = Math.max(baseBudgetedCost, round2(totalPagadoEfectivo));
-    
-    const profit = round2(subtotalLocal - totalRealCosts);
+    const finances = calculateTicketFinances(ticket, ticket.costos || []);
+    const profit = finances.realProfitability;
     const margin = subtotalLocal > 0 ? (profit / subtotalLocal) * 100 : 0;
 
     return (

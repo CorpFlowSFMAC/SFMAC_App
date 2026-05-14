@@ -46,7 +46,6 @@ interface AppDataContextType {
     refreshTickets: () => Promise<void>;
     createTicket: (data: any) => Promise<any>;
     updateTicket: (id: string, updates: any) => Promise<any>;
-    updatePaymentSafe: (id: string, newPago: any, additionalUpdates?: any) => Promise<any>;
     deleteTicket: (id: string) => Promise<void>;
 
     // Gestoras
@@ -341,7 +340,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             // Propagar campos clave a nivel raiz
                                             solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                             solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
-                                            adelantoPagado: mergedMeta.adelantoPagado ?? t.adelantoPagado,
                                             pagoRechazado: mergedMeta.pagoRechazado,
                                         };
                                     })
@@ -660,16 +658,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 solicitudAdelanto: newMeta.solicitudAdelanto !== undefined
                                     ? newMeta.solicitudAdelanto
                                     : existingMeta.solicitudAdelanto,
-                                adelantoPagado: newMeta.adelantoPagado !== undefined
-                                    ? newMeta.adelantoPagado
-                                    : existingMeta.adelantoPagado,
                                 solicitudPago: newMeta.solicitudPago !== undefined
                                     ? newMeta.solicitudPago
                                     : existingMeta.solicitudPago,
                                 solicitudLiquidacion: newMeta.solicitudLiquidacion !== undefined
                                     ? newMeta.solicitudLiquidacion
                                     : existingMeta.solicitudLiquidacion,
-                                // Eliminamos la restricción de historialPagosTecnico para permitir borrados
                             };
                             return {
                                 ...t, // Preservar campos locales como paidCosts, pendingCosts
@@ -677,7 +671,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 metadata: mergedMeta,
                                 // Propagar a nivel raiz para que TicketWindow los detecte
                                 solicitudAdelanto: mergedMeta.solicitudAdelanto,
-                                adelantoPagado: mergedMeta.adelantoPagado ?? t.adelantoPagado,
                             };
                         })
                         : old
@@ -687,22 +680,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 queryKeys.tickets.detail(id),
                 normalized
             );
-            return normalized;
-        },
-        [queryClient]
-    );
-
-    const updatePaymentSafe = useCallback(
-        async (id: string, newPago: any, additionalUpdates: any = {}) => {
-            const updated = await ticketsAPI.updatePaymentSafe(id, newPago, additionalUpdates);
-            const normalized = normalizeTicket(updated);
-            // Actualización inmediata en caché local
-            queryClient.setQueryData(
-                queryKeys.tickets.summary(),
-                (old: any[] | undefined) =>
-                    old ? old.map((t) => (t.id === id ? { ...t, ...normalized } : t)) : old
-            );
-            queryClient.setQueryData(queryKeys.tickets.detail(id), normalized);
             return normalized;
         },
         [queryClient]
@@ -740,7 +717,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 refreshTickets,
                 createTicket,
                 updateTicket,
-                updatePaymentSafe,
                 deleteTicket,
                 gestoras,
                 loadingGestoras,
