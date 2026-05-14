@@ -1,4 +1,4 @@
-export const HETZNER_SUPABASE_URL = 'http://87.99.137.96:8000';
+export const HETZNER_SUPABASE_URL = 'https://api.sinfimac.pe';
 
 const isSupabaseCloudUrl = (value: string) => /\.supabase\.co(?:\/|$)/i.test(value);
 

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { stripFinancialMetadata } from './financialMetadata'
 
 export class DuplicateTicketCostError extends Error {
     constructor() {
@@ -48,21 +49,6 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
         ...ticket,
         costos: ticket.id ? (costsByTicket.get(ticket.id) || []) : [],
     }));
-};
-
-const stripFinancialMetadata = (metadata: Record<string, any> = {}) => {
-    const clean = { ...metadata };
-    delete clean.historialPagosTecnico;
-    delete clean.historialPagosTécnico;
-    delete clean.montoAdelanto;
-    delete clean.AdelantoPagado;
-    delete clean.adelantoPagado;
-    delete clean.fechaPagoAdelanto;
-    delete clean.visitPaymentConfirmed;
-    delete clean.fechaPagoVisita;
-    delete clean.voucherVisita;
-    delete clean.pagosConfirmados;
-    return clean;
 };
 
 // ============================================
@@ -682,6 +668,15 @@ export const ticketsAPI = {
     },
 
     async patchMetadata(id: string, metadataUpdates: Record<string, any>, columnUpdates: Record<string, any> = {}) {
+        const response = await fetch('/api/v3/tickets-server?action=patch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, metadataUpdates, columnUpdates }),
+        });
+        const result = await response.json();
+
+        if (response.ok && result.success) return result.data;
+
         const { data: current, error: fetchErr } = await supabase
             .from('tickets')
             .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
