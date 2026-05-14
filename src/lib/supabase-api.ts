@@ -10,6 +10,57 @@ export class DuplicateTicketCostError extends Error {
 
 const normalizeCostConcept = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
+const TICKET_LIST_SELECT = `
+    *,
+    clients(*),
+    branch_offices(*, clients(*), zonas(*)),
+    technicians(*),
+    gestora:gestoras(*)
+`;
+
+const PAYMENT_TICKET_SELECT = `
+    id, ticket_number, status_id, service_type, description,
+    client_ticket_number, created_at, labor_cost, materials_cost, visit_cost,
+    total_quoted_amount, client_id, branch_id, technician_id, gestora_id,
+    diagnosis, priority, sede_reportada_cliente, metadata,
+    clients(id, name, ruc),
+    branch_offices(id, name),
+    technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
+    gestoras(id, name)
+`;
+
+const TICKET_COST_SELECT = `
+    *,
+    technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone)
+`;
+
+const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
+    const ticketIds = tickets.map((ticket) => ticket.id).filter((id): id is string => Boolean(id));
+
+    if (ticketIds.length === 0) {
+        return tickets.map((ticket) => ({ ...ticket, costos: [] }));
+    }
+
+    const { data, error } = await supabase
+        .from('ticket_costs')
+        .select(TICKET_COST_SELECT)
+        .in('ticket_id', ticketIds);
+
+    if (error) throw error;
+
+    const costsByTicket = new Map<string, any[]>();
+    (data || []).forEach((cost: any) => {
+        const current = costsByTicket.get(cost.ticket_id) || [];
+        current.push(cost);
+        costsByTicket.set(cost.ticket_id, current);
+    });
+
+    return tickets.map((ticket) => ({
+        ...ticket,
+        costos: ticket.id ? (costsByTicket.get(ticket.id) || []) : [],
+    }));
+};
+
 const assertUniqueConfirmedTicketCost = async (ticketId: string, monto: number, concepto: string, ignoredId?: string) => {
     const { data, error } = await supabase
         .from('ticket_costs')
@@ -492,7 +543,15 @@ export const ticketsAPI = {
 
         if (error) {
             console.error('[ticketsAPI] Error fetching strategic summary:', error.message);
-            throw error;
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('tickets')
+                .select(TICKET_LIST_SELECT)
+                .order('created_at', { ascending: false })
+                .limit(300);
+
+            if (fallbackError) throw fallbackError;
+
+            return fallbackData || [];
         }
         return data || [];
     },
@@ -524,26 +583,18 @@ export const ticketsAPI = {
 
         const { data: ticketsData, error: tErr } = await supabase
             .from('tickets')
-            .select(`
-                id, ticket_number, status_id, service_type, description,
-                client_ticket_number, created_at, labor_cost, materials_cost, visit_cost,
-                total_quoted_amount, client_id, branch_id, technician_id, gestora_id,
-                diagnosis, priority, sede_reportada_cliente, metadata,
-                clients(id, name, ruc),
-                branch_offices(id, name),
-                technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
-                gestoras(id, name),
-                costos:ticket_costs(*, technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone))
-            `)
+            .select(PAYMENT_TICKET_SELECT)
             .not('status_id', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`)
             .order('created_at', { ascending: false })
             .limit(200);
 
         if (tErr) throw tErr;
 
+        const ticketsWithCosts = await attachTicketCosts(ticketsData || []);
+
         // Normalizar: costos siempre es array; ticket_cerrado sin pagos pendientes
         // se filtra en el lado JS (processTicketsToGroups) según negocio.
-        return (ticketsData || []).map((t: any) => ({
+        return ticketsWithCosts.map((t: any) => ({
             ...t,
             costos: Array.isArray(t.costos) ? t.costos : [],
         }));
@@ -555,23 +606,18 @@ export const ticketsAPI = {
         // ════════════════════════════════════════════════════════════════════
         const { data, error } = await supabase
             .from('tickets')
-            .select(`
-                *,
-                clients(*),
-                branch_offices(*, zonas(*)),
-                technicians(*),
-                gestora:gestoras(*),
-                costos:ticket_costs(*)
-            `)
+            .select(TICKET_LIST_SELECT)
             .eq('id', id)
             .single();
 
         if (error) throw error;
+
+        const [ticketWithCosts] = await attachTicketCosts([data]);
         
         // Normalizar costos para el motor de cálculos
         const ticket = {
-            ...data,
-            costos: Array.isArray(data.costos) ? data.costos : []
+            ...ticketWithCosts,
+            costos: Array.isArray(ticketWithCosts.costos) ? ticketWithCosts.costos : []
         };
         
         return ticket;
