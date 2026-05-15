@@ -117,19 +117,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
     }, [isMaximized, isMinimized, position, ticket.id]);
 
-    // ⚡️ SYNC: Propagate Realtime updates from parent (AppDataContext) to local state
-    // This fixes the "tray synchronization" issue where the window stays stale
-    // while the admin tray shows new data.
-    useEffect(() => {
-        if (ticket) {
-            setTicketData((prev: any) => ({
-                ...prev,
-                ...ticket,
-                // Ensure state normalization is preserved
-                estadoId: normalizeStateId(ticket.status_id || ticket.estadoId || prev.estadoId)
-            }));
-        }
-    }, [ticket]);
+    // (El useEffect de sync obsoleto ha sido eliminado en favor del V4 Realtime Sync)
 
     const [diagnostico, setDiagnostico] = useState("");
     const [costoManoObra, setCostoManoObra] = useState("");
@@ -149,6 +137,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
+    const [isSendingQuote, setIsSendingQuote] = useState(false);
     const [isSavingNegotiation, setIsSavingNegotiation] = useState(false);
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
     const [montoAdelantoManual, setMontoAdelantoManual] = useState<string>("");
@@ -1312,6 +1301,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 return;
             }
         } else {
+            const editorTotal = partidasCotización.reduce((s, i) => s + (Number(i.total) || 0), 0);
+            if (partidasCotización.length === 0 || editorTotal <= 0) {
+                showToast("Partidas Vacías", "Debe ingresar el detalle y precio de las partidas en la cotización antes de enviarla.", "error");
+                return;
+            }
+
             if (quotationEditorRef.current) {
                 try {
                     await quotationEditorRef.current.downloadPDF();
@@ -1321,22 +1316,31 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             }
         }
 
-        const updated = {
-            ...ticketData,
-            estadoId: "cotizacion_enviada",
-            fechaCotización: new Date().toISOString(),
-            partidas: partidasCotización,
-            montoFinal: montoTotalCotizado,
-            montoSubtotal: montoSubtotal,
-            montoIGV: montoIGV,
-            pausadoSLA: true,
-            fechaPausa: new Date().toISOString(),
-            archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
-        };
+        setIsSendingQuote(true);
+        try {
+            const updated = {
+                ...ticketData,
+                estadoId: "cotizacion_enviada",
+                fechaCotización: new Date().toISOString(),
+                partidas: partidasCotización,
+                montoFinal: montoTotalCotizado,
+                montoSubtotal: montoSubtotal,
+                montoIGV: montoIGV,
+                pausadoSLA: true,
+                fechaPausa: new Date().toISOString(),
+                archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
+            };
 
-        setTicketData(updated);
-        syncToSupabase(updated);
-        showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
+            const success = await syncToSupabase(updated);
+            if (success) {
+                setTicketData(updated);
+                showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
+            } else {
+                showToast("Error de Conexión", "No se pudo sincronizar la cotización con el servidor.", "error");
+            }
+        } finally {
+            setIsSendingQuote(false);
+        }
     };
 
     const handleApproveQuote = () => {
@@ -2967,7 +2971,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 <FileSpreadsheet size={28} color="#10B981" />
                                                 <div style={{ textAlign: 'left', flex: 1 }}>
                                                     <h3 className={styles.quotationTitle} style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-                                                        {ticketData.estadoId === "en_cotizacion" ? "Elaboración de Cotización Formal" : "Cotización Aprobada y Registrada"}
+                                                        {ticketData.estadoId === "en_cotizacion" ? "Elaboración de Cotización Formal" : (ticketData.estadoId === "cotizacion_enviada" ? "Cotización Emitida al Cliente" : "Cotización Aprobada y Registrada")}
                                                     </h3>
                                                     <p className={styles.quotationSubtitle} style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
                                                         {ticketData.estadoId === "en_cotizacion"
@@ -3316,11 +3320,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             {ticketData.estadoId === "en_cotizacion" ? (
                                                                 <button
                                                                     className={styles.sendQuoteBtnFinal}
-                                                                    disabled={ticketData.cliente?.nombre?.toUpperCase().includes("BCP") ? (!bcpQuotationFile || montoTotalCotizado <= 0) : montoTotalCotizado <= 0}
+                                                                    disabled={isSendingQuote || (ticketData.cliente?.nombre?.toUpperCase().includes("BCP") ? (!bcpQuotationFile || montoTotalCotizado <= 0) : (partidasCotización.length === 0 || partidasCotización.reduce((s, i) => s + (Number(i.total) || 0), 0) <= 0))}
                                                                     onClick={handleSendQuote}
                                                                 >
-                                                                    <Send size={18} />
-                                                                    <span>ENVIAR PRESUPUESTO FORMAL AL CLIENTE</span>
+                                                                    {isSendingQuote ? <Clock size={18} className={styles.spinner} /> : <Send size={18} />}
+                                                                    <span>{isSendingQuote ? 'ENVIANDO...' : 'ENVIAR PRESUPUESTO FORMAL AL CLIENTE'}</span>
                                                                 </button>
                                                             ) : ticketData.modificacionAutorizada ? (
                                                                 <button

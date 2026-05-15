@@ -12,6 +12,7 @@ import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { useAppData } from "@/lib/AppDataContext";
 import { useBranches } from "@/hooks/useSupabaseData";
 import { gestorasAPI } from "@/lib/routing-api";
+import { ticketsAPI } from "@/lib/supabase-api";
 import { compressImage } from "@/lib/imageCompression";
 
 interface CreateTicketWizardProps {
@@ -104,6 +105,64 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
     const [isDraftRestored, setIsDraftRestored] = useState(false);
     const [showRestoreDraft, setShowRestoreDraft] = useState(false);
     const [draftData, setDraftData] = useState<any>(null);
+    const [isGeneratingSTD, setIsGeneratingSTD] = useState(false);
+    const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+    const [dbDuplicateFound, setDbDuplicateFound] = useState(false);
+
+    // 🚀 GENERACIÓN AUTOMÁTICA SANTANDER (STD) - Fuente de Verdad Inmutable
+    useEffect(() => {
+        if (formData.clienteId === SANTANDER_ID) {
+            const generateSTD = async () => {
+                setIsGeneratingSTD(true);
+                try {
+                    const lastNumStr = await ticketsAPI.getLastClientTicketNumber('STD');
+                    const year = new Date().getFullYear().toString().slice(-2);
+                    let nextNum = 1;
+                    
+                    if (lastNumStr) {
+                        const match = lastNumStr.match(/STD(\d+)\./);
+                        if (match) {
+                            nextNum = parseInt(match[1]) + 1;
+                        }
+                    }
+                    
+                    const paddedNum = nextNum.toString().padStart(4, '0');
+                    const generated = `STD${paddedNum}.${year}`;
+                    
+                    setFormData(prev => ({
+                        ...prev,
+                        tieneNumeroCliente: true,
+                        numeroTicketCliente: generated
+                    }));
+                } catch (err) {
+                    console.error("[Wizard] Error generating STD number:", err);
+                } finally {
+                    setIsGeneratingSTD(false);
+                }
+            };
+            generateSTD();
+        }
+    }, [formData.clienteId]);
+
+    // 🔍 VALIDACIÓN DE DUPLICADOS EN BASE DE DATOS (Real-time Debounced)
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (formData.numeroTicketCliente && formData.tieneNumeroCliente && formData.numeroTicketCliente !== "GENERANDO...") {
+                setIsCheckingDuplicate(true);
+                try {
+                    const exists = await ticketsAPI.checkClientTicketExists(formData.numeroTicketCliente);
+                    setDbDuplicateFound(exists);
+                } catch (err) {
+                    console.error("[Wizard] Error checking duplicate:", err);
+                } finally {
+                    setIsCheckingDuplicate(false);
+                }
+            } else {
+                setDbDuplicateFound(false);
+            }
+        }, 600);
+        return () => clearTimeout(timer);
+    }, [formData.numeroTicketCliente, formData.tieneNumeroCliente]);
 
     // Auto-guardar borrador
     useEffect(() => {
@@ -160,20 +219,28 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
 
     const isTicketClienteDuplicate = (): boolean => {
         if (!formData.tieneNumeroCliente || !formData.numeroTicketCliente) return false;
+        if (formData.numeroTicketCliente === "GENERANDO...") return false;
         
+        // Combinar cache local + resultado de base de datos
         const search = formData.numeroTicketCliente.trim().toUpperCase();
-        return (allExistingTickets || []).some((t: any) => 
+        const localDuplicate = (allExistingTickets || []).some((t: any) => 
             t.client_ticket_number?.trim().toUpperCase() === search ||
             t.metadata?.numeroTicketCliente?.trim().toUpperCase() === search
         );
+        
+        return localDuplicate || dbDuplicateFound;
     };
 
     const isTicketClienteValid = (): boolean => {
         if (!formData.tieneNumeroCliente) return true;
         if (isTicketClienteDuplicate()) return false;
         const currentYearSuffix = new Date().getFullYear().toString().slice(-2);
-        const prefix = formData.clienteId === SANTANDER_ID ? 'STD' : 'MB';
-        const regex = new RegExp(`^${prefix}\\d{4,6}\\.${currentYearSuffix}$`);
+        
+        // Reglas estrictas V3: STD=4 dígitos, MB=6 dígitos
+        const regex = formData.clienteId === SANTANDER_ID 
+            ? new RegExp(`^STD\\d{4}\\.${currentYearSuffix}$`)
+            : new RegExp(`^MB\\d{6}\\.${currentYearSuffix}$`);
+            
         return regex.test(formData.numeroTicketCliente);
     };
 
@@ -186,7 +253,9 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                 !!formData.tipoServicio &&
                 formData.descripcionProblema.trim().length >= 10 &&
                 isTicketClienteValid() &&
-                !isTicketClienteDuplicate()
+                !isTicketClienteDuplicate() &&
+                !isCheckingDuplicate &&
+                !isGeneratingSTD
             );
             case 4: return true;
             case 5: return true;
@@ -206,38 +275,16 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
     };
 
     const handleSelectCliente = (cliente: any) => {
-        let ticketNum = "";
-        let hasTicket = false;
-
-        if (cliente.id === SANTANDER_ID) {
-            hasTicket = true;
-            // Generar correlativo STD
-            const year = new Date().getFullYear().toString().slice(-2);
-            const stdTickets = (allExistingTickets || []).filter((t: any) => 
-                (t.client_ticket_number || "").startsWith("STD")
-            );
-            
-            let lastNum = 0;
-            stdTickets.forEach((t: any) => {
-                const match = t.client_ticket_number.match(/STD(\d+)\./);
-                if (match) {
-                    const n = parseInt(match[1]);
-                    if (n > lastNum) lastNum = n;
-                }
-            });
-            
-            const nextNum = (lastNum + 1).toString().padStart(4, '0');
-            ticketNum = `STD${nextNum}.${year}`;
-        }
-
         setFormData({
             ...formData,
             cliente,
             clienteId: cliente.id,
             sede: null,
             sedeId: "",
-            tieneNumeroCliente: hasTicket || formData.tieneNumeroCliente,
-            numeroTicketCliente: ticketNum || formData.numeroTicketCliente
+            // Si es Santander, el useEffect se encargará de la generación async
+            // Para otros, mantenemos el estado previo
+            tieneNumeroCliente: cliente.id === SANTANDER_ID ? true : formData.tieneNumeroCliente,
+            numeroTicketCliente: cliente.id === SANTANDER_ID ? "GENERANDO..." : formData.numeroTicketCliente
         });
         setSearchTermSede(""); // Limpiar búsqueda de sede al cambiar de cliente
     };
@@ -778,21 +825,31 @@ export default function CreateTicketWizard({ onClose, onCreateTicket, creatorRol
                                                     }
                                                     value={formData.numeroTicketCliente}
                                                     onChange={(e) => setFormData({ ...formData, numeroTicketCliente: e.target.value.toUpperCase() })}
-                                                    className={`${styles.ticketClienteInput} ${formData.numeroTicketCliente && (!isTicketClienteValid() || isTicketClienteDuplicate()) ? styles.inputError : ''}`}
+                                                    className={`${styles.ticketClienteInput} ${(formData.numeroTicketCliente && formData.numeroTicketCliente !== 'GENERANDO...' && (!isTicketClienteValid() || isTicketClienteDuplicate())) ? styles.inputError : ''}`}
                                                     maxLength={11}
-                                                    readOnly={formData.clienteId === SANTANDER_ID}
+                                                    readOnly={formData.clienteId === SANTANDER_ID || isGeneratingSTD}
                                                 />
-                                                {formData.clienteId === SANTANDER_ID && (
+                                                {isGeneratingSTD && (
+                                                    <span className={styles.successHint} style={{ color: '#6366f1', fontSize: '11px', fontWeight: 600 }}>
+                                                        <RefreshCw size={12} className={styles.spin} /> Generando correlativo STD...
+                                                    </span>
+                                                )}
+                                                {formData.clienteId === SANTANDER_ID && !isGeneratingSTD && (
                                                     <span className={styles.successHint} style={{ color: '#6366f1', fontSize: '11px', fontWeight: 600 }}>
                                                         ✨ Correlativo STD generado automáticamente.
                                                     </span>
                                                 )}
-                                                {formData.numeroTicketCliente && isTicketClienteDuplicate() && (
+                                                {isCheckingDuplicate && (
+                                                    <span className={styles.successHint} style={{ color: '#94A3B8', fontSize: '11px' }}>
+                                                        🔍 Verificando disponibilidad...
+                                                    </span>
+                                                )}
+                                                {formData.numeroTicketCliente && formData.numeroTicketCliente !== "GENERANDO..." && isTicketClienteDuplicate() && (
                                                     <span className={styles.errorHint} style={{ color: '#EF4444' }}>
                                                         ✘ Este número de ticket ya existe. Debe ser único.
                                                     </span>
                                                 )}
-                                                {formData.numeroTicketCliente && !isTicketClienteValid() && !isTicketClienteDuplicate() && (
+                                                {formData.numeroTicketCliente && formData.numeroTicketCliente !== "GENERANDO..." && !isTicketClienteValid() && !isTicketClienteDuplicate() && (
                                                     <span className={styles.errorHint}>
                                                         Formato: {formData.clienteId === SANTANDER_ID ? 'STD' : 'MB'} + {formData.clienteId === SANTANDER_ID ? '4' : '6'} dígitos + .{new Date().getFullYear().toString().slice(-2)}
                                                     </span>

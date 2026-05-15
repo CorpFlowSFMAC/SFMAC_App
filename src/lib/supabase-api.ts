@@ -494,7 +494,7 @@ export const ticketsAPI = {
             `)
             .not('status_id', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`)
             .order('created_at', { ascending: false })
-            .limit(200);
+            .limit(500);
 
         if (tErr) throw tErr;
 
@@ -584,6 +584,32 @@ export const ticketsAPI = {
 
         if (error) throw error;
         return data;
+    },
+
+    /**
+     * Obtiene el último número de ticket correlativo para un prefijo dado (ej. 'STD')
+     * Se usa para la generación automática de números de Santander.
+     */
+    async getLastClientTicketNumber(prefix: string) {
+        const { data, error } = await supabase
+            .from('tickets')
+            .select('client_ticket_number')
+            .ilike('client_ticket_number', `${prefix}%`)
+            .order('client_ticket_number', { ascending: false })
+            .limit(1);
+        
+        if (error) throw error;
+        return data?.[0]?.client_ticket_number || null;
+    },
+
+    async checkClientTicketExists(ticketNumber: string) {
+        const { count, error } = await supabase
+            .from('tickets')
+            .select('*', { count: 'exact', head: true })
+            .eq('client_ticket_number', ticketNumber);
+        
+        if (error) throw error;
+        return (count || 0) > 0;
     },
 
     async update(id: string, updates: Partial<{

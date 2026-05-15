@@ -633,14 +633,46 @@ export default function PaymentsPage() {
                     });
                 }
 
+                // B. Solicitud de Adelanto Extra (Refuerzo)
+                if (meta.solicitudAdelantoExtra) {
+                    pendingItems.push({
+                        id: `${t.id}_refuerzo`,
+                        tipo: 'Refuerzo / Adelanto Extra',
+                        monto: parseFloat(meta.solicitudAdelantoExtra.monto || 0),
+                        estado: 'pendiente',
+                        fecha: meta.solicitudAdelantoExtra.fecha || t.created_at,
+                        concepto: meta.solicitudAdelantoExtra.concepto || "Refuerzo Solicitado"
+                    });
+                }
+
+                // C. Solicitudes de Depósito (Legacy but still used by some gestoras)
+                (meta.solicitudesDeposito || []).forEach((s: any) => {
+                    if (s.estado === 'pendiente') {
+                        pendingItems.push({
+                            id: `${t.id}_deposito_${s.id}`,
+                            solicitudId: s.id,
+                            tipo: 'Solicitud de Depósito',
+                            monto: parseFloat(s.monto || 0),
+                            estado: 'pendiente',
+                            fecha: s.fecha || t.created_at,
+                            concepto: s.concepto || "Petición de Fondos"
+                        });
+                    }
+                });
+
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
                 
                 const liqMonto = meta.solicitudLiquidacion?.monto || 0;
                 const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
 
+                // ✅ V3: Detectar si hay cualquier solicitud pendiente (Metadata o ticket_costs)
+                const hasExceedancePending = (t.costos || []).some((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
-                                          (meta.solicitudPago && !pagoInHistory) || 
-                                          (meta.solicitudLiquidacion && !liqInHistory);
+                                           (meta.solicitudPago && !pagoInHistory) || 
+                                           (meta.solicitudLiquidacion && !liqInHistory) ||
+                                           (meta.solicitudAdelantoExtra && parseFloat(meta.solicitudAdelantoExtra.monto || 0) > 0) ||
+                                           (meta.solicitudesDeposito || []).some((s: any) => s.estado === 'pendiente') ||
+                                           hasExceedancePending;
 
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
@@ -1057,9 +1089,13 @@ export default function PaymentsPage() {
             ? new Date(forcedDate + "T12:00:00").toISOString() 
             : new Date().toISOString();
 
-        // ★ FIX: Si es un costo de la tabla ticket_costs, usamos su UUID real como ID en la metadata.
-        // Esto permite que el motor de unificación (deduplicación) sepa que son el mismo registro.
-        const pagoId = (item.isTableCost && item.costId) ? item.costId : `pago_${group.realTicketId}_${Date.now()}`;
+        // ★ LEY DE SFMAC V3: Identidad Única (Diferentes IDs = Diferentes Pagos)
+        // Si es un costo de la tabla ticket_costs, usamos su UUID real.
+        // Si es una solicitud de depósito legacy, usamos su solicitudId original.
+        const pagoId = (item.isTableCost && item.costId) 
+            ? item.costId 
+            : (item.solicitudId ? item.solicitudId : `pago_${group.realTicketId}_${Date.now()}`);
+
         const nuevoPago = {
             id: pagoId,
             monto: item.monto,
@@ -1247,8 +1283,8 @@ export default function PaymentsPage() {
         if (filter === 'todos') {
             matchesStatus = true;
         } else if (filter === 'pendiente') {
-            // Bandeja PENDIENTE: Tickets no cerrados que tienen solicitudes de pago activas
-            matchesStatus = hasPendingItems && !isTicketClosed;
+            // Bandeja PENDIENTE: Tickets que tienen solicitudes de pago activas (incluso si el ticket se cerró por error)
+            matchesStatus = hasPendingItems;
         } else if (filter === 'pagado') {
             // Bandeja PAGADOS: Tickets (abiertos o cerrados) donde todo lo solicitado ya se pagó
             // Incluimos referencias históricas para que el Admin pueda ver qué se pagó recientemente.
