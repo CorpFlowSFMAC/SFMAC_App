@@ -39,7 +39,11 @@ const isOperating = (item: any) => {
     
     // Si tiene un specialist_id y NO es el técnico principal del ticket (si se conoce),
     // o si el concepto indica explícitamente un pago a tercero/compra.
-    const isExternalSpecialist = item.specialist_id && item.specialist_id !== item.main_technician_id;
+    const isExternalSpecialist = Boolean(
+        item.specialist_id &&
+        item.main_technician_id &&
+        item.specialist_id !== item.main_technician_id
+    );
 
     if (con.includes('adelanto operativo')) {
         return con.includes('materiales');
@@ -73,7 +77,17 @@ const isLabor = (item: any) => {
 export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     // ★ V3 CORE: Ignorar metadata completamente para cálculos financieros
     // La única fuente de verdad es ticket_costs
-    const safeCosts = Array.isArray(costs) ? costs : [];
+    const mainTechnicianId =
+        ticket.technician_id ||
+        ticket.technicians?.id ||
+        ticket.metadata?.tecnico?.id;
+
+    const safeCosts = Array.isArray(costs)
+        ? costs.map((cost) => ({
+            ...cost,
+            main_technician_id: cost.main_technician_id || mainTechnicianId,
+        }))
+        : [];
 
     // 1. MONTOS PACTADOS - Desde columnas directas del ticket (no metadata)
     const pactedMO = [

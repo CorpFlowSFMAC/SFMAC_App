@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isConfirmedTicketCostStatus } from '@/lib/calculations';
 import { getClient } from '@/lib/supabase-server';
+import { normalizeTicketCostCategory } from '@/lib/ticketCostCategories';
 
 class DuplicateTicketCostError extends Error {
     constructor() {
@@ -21,7 +22,7 @@ const cleanCostPayload = (cost: Record<string, any>) => {
 
     if (cost.ticket_id) payload.ticket_id = cost.ticket_id;
     if (cost.concepto) payload.concepto = cost.concepto;
-    if (cost.categoria) payload.categoria = cost.categoria;
+    if (cost.categoria || cost.concepto) payload.categoria = normalizeTicketCostCategory(cost);
     if (cost.proveedor) payload.proveedor = cost.proveedor;
     if (cost.specialist_id) payload.specialist_id = cost.specialist_id;
     if (cost.monto !== undefined) payload.monto = Number(cost.monto);

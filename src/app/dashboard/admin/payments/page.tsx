@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
 import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances, toNum } from "@/lib/calculations";
+import { normalizeTicketCostCategory } from "@/lib/ticketCostCategories";
 import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
 
@@ -203,6 +204,17 @@ const TIPO_CONFIG: { [key: string]: { color: string; bg: string; label: string }
     'Refuerzo': { color: '#2563EB', bg: '#EFF6FF', label: '🔵 Refuerzo' },
     'Liquidación Final': { color: '#059669', bg: '#ECFDF5', label: '🟢 Liquidación' },
     'Saldo Pendiente (Auto)': { color: '#059669', bg: '#ECFDF5', label: '🟢 Liquidación' },
+    'Gasto: Materiales': { color: '#BE185D', bg: '#FCE7F3', label: '🧾 Materiales' },
+    'Gasto: Mano de Obra': { color: '#059669', bg: '#ECFDF5', label: '🟢 Mano de Obra' },
+    'Gasto: Logística': { color: '#475569', bg: '#F1F5F9', label: '📦 Logística' },
+    'Gasto: Viáticos': { color: '#D97706', bg: '#FFF7ED', label: '🟠 Viáticos' },
+    'Gasto: Movilidad': { color: '#D97706', bg: '#FFF7ED', label: '🟠 Movilidad' },
+    'Gasto: Viáticos / Movilidad': { color: '#D97706', bg: '#FFF7ED', label: '🟠 Movilidad' },
+    'Gasto: Envíos': { color: '#2563EB', bg: '#EFF6FF', label: '🚚 Envíos' },
+    'Gasto: Adelanto': { color: '#7C3AED', bg: '#F5F3FF', label: '🟣 Adelanto' },
+    'Gasto: Adelanto Operativo': { color: '#7C3AED', bg: '#F5F3FF', label: '🟣 Adelanto' },
+    'Gasto: Rescate Financiero': { color: '#DC2626', bg: '#FEF2F2', label: '🚨 Rescate' },
+    'Gasto: Otros': { color: '#64748B', bg: '#F8FAFC', label: '📌 Otros' },
     'Movilidad / Visita': { color: '#D97706', bg: '#FFF7ED', label: '🟠 Movilidad' },
     'Viáticos / Movilidad': { color: '#D97706', bg: '#FFF7ED', label: '🟠 Viáticos' }
 };
@@ -760,7 +772,6 @@ export default function PaymentsPage() {
                 let nextStatus = null;
                 const cat = (item.categoria || '').toUpperCase();
                 const currentId = ticketRef.status_id;
-                const meta = ticketRef.metadata || {};
 
                 if ((cat.includes('VISITA') || cat.includes('MOVILIDAD') || cat.includes('VIÁTICO')) && currentId === 'esperando_pago_visita') {
                     nextStatus = 'tecnico_asignado';
@@ -772,8 +783,7 @@ export default function PaymentsPage() {
                 }
 
                 if (nextStatus) {
-                    const newMeta = {
-                        ...meta,
+                    await ticketsAPI.patchMetadata(group.realTicketId, {
                         estadoId: nextStatus,
                         pagoRechazado: {
                             fecha: new Date().toISOString(),
@@ -782,11 +792,7 @@ export default function PaymentsPage() {
                             concepto: item.concepto || 'Denegado por Tesorería',
                             mensajeRechazo: motivoRechazo || 'Pago denegado por Tesorería'
                         }
-                    };
-                    await supabase.from('tickets').update({
-                        status_id: nextStatus,
-                        metadata: newMeta
-                    }).eq('id', group.realTicketId);
+                    }, { status_id: nextStatus });
                 }
             }
 
@@ -892,7 +898,7 @@ export default function PaymentsPage() {
             await ticketCostsAPI.create({
                 ticket_id: group.realTicketId,
                 specialist_id: group.tecnico?.id,
-                categoria: item.tipo,
+                categoria: normalizeTicketCostCategory(item),
                 concepto: item.concepto || item.tipo,
                 monto: item.monto,
                 estado_pago: 'pagado',
