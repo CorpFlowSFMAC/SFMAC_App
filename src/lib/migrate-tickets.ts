@@ -4,9 +4,10 @@
 // ═════════════════════════════════════════════════════════════
 
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAnonKey, getSupabaseUrl } from './supabase-config';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = getSupabaseUrl();
+const supabaseKey = getSupabaseAnonKey();
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Campos requeridos por la V3
@@ -16,22 +17,22 @@ const DEFAULT_VALUES = {
     service_type: 'Mantenimiento',
     priority: 'media',
     current_step: 1,
-    
+
     // Financial fields
     labor_cost: 0,
     materials_cost: 0,
     visit_cost: 0,
     total_quoted_amount: 0,
-    
+
     // Assignment fields
     gestor_id: null,
     technician_id: null,
-    
-    // Location fields  
+
+    // Location fields
     id_sucursal: null,
     branch_id: null,
     zona_id: null,
-    
+
     // Dates
     creado_en: new Date().toISOString(),
     actualizado_en: new Date().toISOString(),
@@ -40,32 +41,32 @@ const DEFAULT_VALUES = {
 // Run migration
 export async function migrateOldTickets() {
     console.log('[Migration] Starting tickets migration...');
-    
+
     // Get all tickets
     const { data: tickets, error } = await supabase
         .from('tickets')
         .select('id, status_id, service_type, priority, created_at')
         .order('created_at', { ascending: false });
-    
+
     if (error) {
         console.error('[Migration] Error fetching tickets:', error);
         return;
     }
-    
+
     console.log(`[Migration] Found ${tickets?.length || 0} tickets`);
-    
+
     // Find tickets missing critical fields
-    const toMigrate = tickets?.filter(t => 
+    const toMigrate = tickets?.filter(t =>
         !t.status_id && !t.service_type
     ) || [];
-    
+
     if (toMigrate.length === 0) {
         console.log('[Migration] No tickets need migration');
         return;
     }
-    
+
     console.log(`[Migration] Migrating ${toMigrate.length} tickets...`);
-    
+
     // Update each ticket with defaults
     for (const ticket of toMigrate) {
         const { error: updateError } = await supabase
@@ -83,14 +84,14 @@ export async function migrateOldTickets() {
                 actualizado_en: new Date().toISOString(),
             })
             .eq('id', ticket.id);
-        
+
         if (updateError) {
             console.error(`[Migration] Error updating ticket ${ticket.id}:`, updateError);
         }
     }
-    
+
     console.log('[Migration] Migration complete');
-    
+
     return {
         total: tickets?.length || 0,
         migrated: toMigrate.length
@@ -102,7 +103,7 @@ export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    
+
     try {
         const result = await migrateOldTickets();
         res.status(200).json(result);

@@ -14,6 +14,7 @@ import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
 import { ticketsAPI } from "@/lib/supabase-api";
 import { useStrategicMetrics } from "@/lib/useQueryHooks";
+import { calculateTicketFinances } from "@/lib/calculations";
 
 // ── Helpers ──────────────────────────────────
 const SLA_HOURS = 72;
@@ -323,7 +324,7 @@ export default function AdminDashboard() {
         // Cuellos de botella detallados
         const espCot = pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.status_id || t.estadoId)));
         const espApro = pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.status_id || t.estadoId)));
-        const espAde = approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.status_id || t.estadoId)) && !(t.metadata?.historialPagosTecnico?.length));
+        const espAde = approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.status_id || t.estadoId)) && calculateTicketFinances(t, t.costos || []).totalExpenses <= 0);
         const enEjec = approvedTickets.filter(t => normalizeStateId(t.status_id || t.estadoId) === "en_ejecucion");
         const penLiq = approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado", "requiere_revision_admin"].includes(normalizeStateId(t.status_id || t.estadoId)));
 
@@ -359,16 +360,13 @@ export default function AdminDashboard() {
         const ticketsConAdelantos = tickets
             .filter((t: any) => {
                 const sid = normalizeStateId(t.estadoId);
-                // Exluir cerrados/rechazados/cancelados
                 const isActive = !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
-                // Debe tener al menos un pago registrado
-                const pagos = t.metadata?.historialPagosTecnico || [];
-                const totalPagado = pagos.reduce((s: number, p: any) => s + (parseFloat(p.monto) || 0), 0);
+                const totalPagado = calculateTicketFinances(t, t.costos || []).totalExpenses;
                 return isActive && totalPagado > 0;
             })
             .map((t: any) => {
-                const pagos = t.metadata?.historialPagosTecnico || [];
-                const totalAdelantado = pagos.reduce((s: number, p: any) => s + (parseFloat(p.monto) || 0), 0);
+                const costs = t.costos || [];
+                const totalAdelantado = calculateTicketFinances(t, costs).totalExpenses;
 
                 // Resolver nombre de gestora
                 const gestoraId = t.gestora_id || t.metadata?.gestora_id;
@@ -377,8 +375,7 @@ export default function AdminDashboard() {
                     ? (gestoraObj.name || gestoraObj.nombre || gestoraObj.full_name || "Gestora")
                     : (t.gestora?.nombre || t.gestora?.name || "Sin asignar");
 
-                // Resolver especialista (priorizar objeto normalizado, luego historial, luego metadata)
-                const especialista = t.tecnico?.nombre || pagos[0]?.tecnico || pagos[0]?.destinatario || t.metadata?.tecnicoAsignado?.name || t.metadata?.tecnico_nombre || "Sin especialista";
+                const especialista = t.tecnico?.nombre || costs[0]?.technicians?.name || costs[0]?.proveedor || t.metadata?.tecnicoAsignado?.name || t.metadata?.tecnico_nombre || "Sin especialista";
 
                 // Sede
                 const sede = t.sede?.nombre || t.cliente?.nombre || "Sin sede";
@@ -395,7 +392,7 @@ export default function AdminDashboard() {
                     _sede: sede,
                     _ageH: ageH,
                     _isRiesgo: isRiesgo,
-                    _pagos: pagos,
+                    _pagos: costs,
                 };
             })
             .sort((a: any, b: any) => b._totalAdelantado - a._totalAdelantado);

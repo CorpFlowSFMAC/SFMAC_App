@@ -1,4 +1,55 @@
 import { supabase } from './supabase'
+import { stripFinancialMetadata } from './financialMetadata'
+
+export class DuplicateTicketCostError extends Error {
+    constructor() {
+        super('Ya existe un pago confirmado con el mismo ticket, monto y concepto.');
+        this.name = 'DuplicateTicketCostError';
+    }
+}
+
+const TICKET_LIST_SELECT = `
+    *,
+    clients(*),
+    branch_offices(*, clients(*), zonas(*)),
+    technicians(*),
+    gestora:gestoras(*)
+`;
+
+const PAYMENT_TICKET_SELECT = `
+    id, ticket_number, status_id, service_type, description,
+    client_ticket_number, created_at, labor_cost, materials_cost, visit_cost,
+    total_quoted_amount, client_id, branch_id, technician_id, gestora_id,
+    diagnosis, priority, sede_reportada_cliente, metadata,
+    clients(id, name, ruc),
+    branch_offices(id, name),
+    technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
+    gestoras(id, name)
+`;
+
+const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
+    const ticketIds = tickets.map((ticket) => ticket.id).filter((id): id is string => Boolean(id));
+
+    if (ticketIds.length === 0) {
+        return tickets.map((ticket) => ({ ...ticket, costos: [] }));
+    }
+
+    const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`);
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos de tickets');
+
+    const costsByTicket = new Map<string, any[]>();
+    (result.data || []).forEach((cost: any) => {
+        const current = costsByTicket.get(cost.ticket_id) || [];
+        current.push(cost);
+        costsByTicket.set(cost.ticket_id, current);
+    });
+
+    return tickets.map((ticket) => ({
+        ...ticket,
+        costos: ticket.id ? (costsByTicket.get(ticket.id) || []) : [],
+    }));
+};
 
 // ============================================
 // CLIENTS API
@@ -449,7 +500,15 @@ export const ticketsAPI = {
 
         if (error) {
             console.error('[ticketsAPI] Error fetching strategic summary:', error.message);
-            throw error;
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('tickets')
+                .select(TICKET_LIST_SELECT)
+                .order('created_at', { ascending: false })
+                .limit(300);
+
+            if (fallbackError) throw fallbackError;
+
+            return fallbackData || [];
         }
         return data || [];
     },
@@ -481,26 +540,18 @@ export const ticketsAPI = {
 
         const { data: ticketsData, error: tErr } = await supabase
             .from('tickets')
-            .select(`
-                id, ticket_number, status_id, service_type, description,
-                client_ticket_number, created_at, labor_cost, materials_cost, visit_cost,
-                total_quoted_amount, client_id, branch_id, technician_id, gestora_id,
-                diagnosis, priority, sede_reportada_cliente, metadata,
-                clients(id, name, ruc),
-                branch_offices(id, name),
-                technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
-                gestoras(id, name),
-                costos:ticket_costs(*, technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone))
-            `)
+            .select(PAYMENT_TICKET_SELECT)
             .not('status_id', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`)
             .order('created_at', { ascending: false })
             .limit(500);
 
         if (tErr) throw tErr;
 
+        const ticketsWithCosts = await attachTicketCosts(ticketsData || []);
+
         // Normalizar: costos siempre es array; ticket_cerrado sin pagos pendientes
         // se filtra en el lado JS (processTicketsToGroups) según negocio.
-        return (ticketsData || []).map((t: any) => ({
+        return ticketsWithCosts.map((t: any) => ({
             ...t,
             costos: Array.isArray(t.costos) ? t.costos : [],
         }));
@@ -512,23 +563,18 @@ export const ticketsAPI = {
         // ════════════════════════════════════════════════════════════════════
         const { data, error } = await supabase
             .from('tickets')
-            .select(`
-                *,
-                clients(*),
-                branch_offices(*, zonas(*)),
-                technicians(*),
-                gestora:gestoras(*),
-                costos:ticket_costs(*)
-            `)
+            .select(TICKET_LIST_SELECT)
             .eq('id', id)
             .single();
 
         if (error) throw error;
+
+        const [ticketWithCosts] = await attachTicketCosts([data]);
         
         // Normalizar costos para el motor de cálculos
         const ticket = {
-            ...data,
-            costos: Array.isArray(data.costos) ? data.costos : []
+            ...ticketWithCosts,
+            costos: Array.isArray(ticketWithCosts.costos) ? ticketWithCosts.costos : []
         };
         
         return ticket;
@@ -647,122 +693,16 @@ export const ticketsAPI = {
         return data;
     },
 
-    // ★★★ PAYMENT-SAFE UPDATE ★★★
-    // Uso exclusivo del módulo de pagos cuando se confirma un depósito.
-    // A diferencia de update() — que sobreescribe toda la metadata —
-    // esta función SIEMPRE:
-    //   1. Lee la metadata actual del servidor (fuente de verdad)
-    //   2. Hace un merge profundo del historialPagosTecnico (append-only, nunca destruye)
-    //   3. Solo actualiza los campos de pago relevantes
-    // Esto evita la race condition donde TicketWindow.syncToSupabase() borra pagos recién confirmados.
-    async updatePaymentSafe(id: string, newPago: {
-        id: string;
-        monto: number;
-        fecha: string;
-        tipo: string;
-        estado: string;
-        referencia: string;
-        voucherRef?: string | null;
-    }, additionalUpdates: {
-        status_id?: string;
-        execution_date?: string;
-        closure_date?: string;
-        metadataFields?: Record<string, any>;
-    } = {}) {
-        // 1. Leer metadata actual del servidor — es la única fuente de verdad
-        const { data: current, error: fetchErr } = await supabase
-            .from('tickets')
-            .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
-            .eq('id', id)
-            .single();
-
-        if (fetchErr) throw fetchErr;
-
-        const serverMeta = current?.metadata || {};
-
-        // 2. Merge del historial: nunca pisamos pagos existentes
-        const existingPagos: any[] = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
-        const alreadyExists = existingPagos.some((p: any) => p.id === newPago.id);
-        const mergedPagos = alreadyExists ? existingPagos : [...existingPagos, newPago];
-
-        // 3. Metadata final: merge inteligente del servidor + cambios de pago
-        const newMetadata = {
-            ...serverMeta,
-            ...additionalUpdates.metadataFields,
-            historialPagosTecnico: mergedPagos,
-            historialPagosTécnico: mergedPagos
-        };
-
-        // 4. Preparar updates de columnas
-        const updates: any = { metadata: newMetadata };
-        if (additionalUpdates.status_id) updates.status_id = additionalUpdates.status_id;
-        if (additionalUpdates.execution_date) updates.execution_date = additionalUpdates.execution_date;
-        if (additionalUpdates.closure_date) updates.closure_date = additionalUpdates.closure_date;
-
-        const { data, error } = await supabase
-            .from('tickets')
-            .update(updates)
-            .eq('id', id)
-            .select('id, status_id, metadata')
-            .single();
-
-        if (error) throw error;
-
-        // ★★★ SYNC TO TICKET_COSTS (Strategic Metrics Mirror) ★★★
-        // Si el pago es exitoso, nos aseguramos de que exista en la tabla de costos
-        // para que aparezca en las métricas ejecutivas de Gerencia.
-        if (newPago.estado === 'pagado') {
-            try {
-                // Verificar si ya existe un costo similar en la tabla (para evitar duplicados)
-                // Buscamos coincidencia de monto y fecha (truncada a día)
-                const targetDate = newPago.fecha || new Date().toISOString().split('T')[0];
-                const { data: existingCosts } = await supabase
-                    .from('ticket_costs')
-                    .select('id, concepto, categoria')
-                    .eq('ticket_id', id)
-                    .eq('monto', newPago.monto)
-                    .eq('estado_pago', 'pagado');
-
-                const isAlreadyMirrored = existingCosts?.some(ec => {
-                    const ecConcept = (ec.concepto || '').toLowerCase();
-                    const paymentId = (newPago.id || '').toLowerCase();
-                    // Bloqueo Quirúrgico: Si el concepto ya contiene este ID de pago específico, es un duplicado.
-                    // Si no lo contiene, es un pago distinto (aunque coincida monto y tipo).
-                    return ecConcept.includes(paymentId);
-                });
-
-                if (!isAlreadyMirrored) {
-
-                    // Determinar categoría
-                    let categoria = 'Otros';
-                    const tipo = (newPago.tipo || '').toLowerCase();
-                    if (tipo.includes('adelanto')) categoria = 'Adelanto';
-                    else if (tipo.includes('visita') || tipo.includes('pasaje') || tipo.includes('movilidad')) categoria = 'Viáticos / Movilidad';
-                    else if (tipo.includes('liquidación') || tipo.includes('final') || tipo.includes('mano de obra')) categoria = 'Mano de Obra';
-
-                    await supabase.from('ticket_costs').insert({
-                        ticket_id: id,
-                        monto: newPago.monto,
-                        categoria,
-                        concepto: `Sync: ${newPago.tipo} [ID:${newPago.id}] (${newPago.referencia || 'S/R'})`,
-                        estado_pago: 'pagado',
-                        fecha_pago: newPago.fecha,
-                        specialist_id: current?.technician_id || null,
-                        url_comprobante: newPago.voucherRef || null
-                    });
-                }
-            } catch (syncErr) {
-            }
-        }
-
-        return data;
-    },
-
-
-    // ★★★ METADATA-SAFE GENERIC UPDATE ★★★
-    // Permite actualizar campos de la metadata sin borrar el resto del JSON.
-    // Especialmente útil para no borrar el historial de pagos al reasignar gestoras.
     async patchMetadata(id: string, metadataUpdates: Record<string, any>, columnUpdates: Record<string, any> = {}) {
+        const response = await fetch('/api/v3/tickets-server?action=patch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, metadataUpdates, columnUpdates }),
+        });
+        const result = await response.json();
+
+        if (response.ok && result.success) return result.data;
+
         const { data: current, error: fetchErr } = await supabase
             .from('tickets')
             .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
@@ -771,24 +711,12 @@ export const ticketsAPI = {
 
         if (fetchErr) return this.update(id, { ...columnUpdates, metadata: metadataUpdates });
 
-        const serverMeta = current?.metadata || {};
-        
-        // Manejar ambos nombres de campo (con y sin acento) y unificar a sin acento
-        let mergedPagos = serverMeta.historialPagosTecnico || serverMeta.historialPagosTécnico || [];
-        if (metadataUpdates.historialPagosTecnico || metadataUpdates.historialPagosTécnico) {
-            const incoming = metadataUpdates.historialPagosTecnico || metadataUpdates.historialPagosTécnico || [];
-            const allById = new Map();
-            [...mergedPagos, ...incoming].forEach(p => {
-                if (p?.id) allById.set(p.id, p);
-            });
-            mergedPagos = Array.from(allById.values());
-        }
+        const serverMeta = stripFinancialMetadata(current?.metadata || {});
+        const safeMetadataUpdates = stripFinancialMetadata(metadataUpdates);
 
         const finalMetadata = {
             ...serverMeta,
-            ...metadataUpdates,
-            historialPagosTecnico: mergedPagos,
-            historialPagosTécnico: mergedPagos
+            ...safeMetadataUpdates,
         };
 
         const updates = {
@@ -956,14 +884,11 @@ export const gestorasTargetsAPI = {
 
 export const ticketCostsAPI = {
     async getByTicket(ticketId: string) {
-        const { data, error } = await supabase
-            .from('ticket_costs')
-            .select('*, technicians(id, name, first_name, last_name, document_number, phone, bank_name, account_number, cci, yape_number, plin_number)')
-            .eq('ticket_id', ticketId)
-            .order('created_at', { ascending: true });
+        const response = await fetch(`/api/v3/ticket-costs?ticket_id=${encodeURIComponent(ticketId)}`);
+        const result = await response.json();
 
-        if (error) throw error;
-        return data || [];
+        if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos del ticket');
+        return result.data || [];
     },
 
     async create(cost: {
@@ -992,17 +917,19 @@ export const ticketCostsAPI = {
         if (cost.solicitado_por)    safePayload.solicitado_por = cost.solicitado_por;
         if (cost.motivo)            safePayload.motivo = cost.motivo;
 
-        const { data, error } = await supabase
-            .from('ticket_costs')
-            .insert(safePayload)
-            .select('*')
-            .single();
+        const response = await fetch('/api/v3/ticket-costs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(safePayload),
+        });
+        const result = await response.json();
 
-        if (error) {
-            console.error("DEBUG: Error in ticketCostsAPI.create:", error.code, error.message, error.details, "Payload:", safePayload);
-            throw error;
+        if (!response.ok || !result.success) {
+            if (response.status === 409 || result.code === 'DuplicateTicketCostError') throw new DuplicateTicketCostError();
+            console.error("DEBUG: Error in ticketCostsAPI.create:", result.error, "Payload:", safePayload);
+            throw new Error(result.error || 'Error al registrar costo del ticket');
         }
-        return data;
+        return result.data;
     },
 
     async update(id: string, updates: Partial<{
@@ -1014,25 +941,27 @@ export const ticketCostsAPI = {
         estado_pago: string;
         url_comprobante: string;
         motivo: string;
+        solicitado_por: string;
     }>) {
-        const { data, error } = await supabase
-            .from('ticket_costs')
-            .update(updates)
-            .eq('id', id)
-            .select('*, technicians(*)')
-            .single();
+        const response = await fetch('/api/v3/ticket-costs', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, updates }),
+        });
+        const result = await response.json();
 
-        if (error) throw error;
-        return data;
+        if (!response.ok || !result.success) {
+            if (response.status === 409 || result.code === 'DuplicateTicketCostError') throw new DuplicateTicketCostError();
+            throw new Error(result.error || 'Error al actualizar costo del ticket');
+        }
+        return result.data;
     },
 
     async delete(id: string) {
-        const { error } = await supabase
-            .from('ticket_costs')
-            .delete()
-            .eq('id', id);
+        const response = await fetch(`/api/v3/ticket-costs?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const result = await response.json();
 
-        if (error) throw error;
+        if (!response.ok || !result.success) throw new Error(result.error || 'Error al eliminar costo del ticket');
     },
 
     // Trasladar todos los costos de un ticket a otro (Blindaje Financiero)
@@ -1047,4 +976,3 @@ export const ticketCostsAPI = {
         return data;
     }
 };
-

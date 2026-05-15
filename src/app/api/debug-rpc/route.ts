@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAuthKey, getSupabaseUrl } from '@/lib/supabase-config';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = getSupabaseUrl();
+const supabaseKey = getSupabaseAuthKey();
 
 /**
  * DEBUG ENDPOINT — SINFIMAC V3
  * Valida el motor principal de pagos (JS directo con Joins).
  * La RPC get_payment_tickets_ultra_light está DEPRECADA como motor primario.
- * 
+ *
  * POST /api/debug-rpc
  */
 export async function POST(request: Request) {

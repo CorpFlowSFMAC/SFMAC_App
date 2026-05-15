@@ -142,7 +142,6 @@ export const normalizeTicket = (t: any) => {
         // Esto evita el parpadeo en la UI al asegurar que el objeto ticket siempre
         // tenga estas propiedades disponibles para los componentes que las consumen.
         solicitudAdelanto: realMetadata.solicitudAdelanto,
-        adelantoPagado: realMetadata.adelantoPagado,
         solicitudPagoVisita: realMetadata.solicitudPagoVisita,
         solicitudLiquidacion: realMetadata.solicitudLiquidacion,
         pagoRechazado: realMetadata.pagoRechazado,
