@@ -790,8 +790,39 @@ export default function PaymentsPage() {
     };
 
     // ★ USAMOS CONTEXTO PARA ACTUALIZACIÓN INMEDIATA EN DASHBOARD
-    const { updatePaymentSafe } = useAppData();
+    const { refreshTickets } = useAppData();
     const denyPaymentRef = useRef(false);
+
+    const updatePaymentSafe = async (ticketId: string, nuevoPago: any, additionalUpdates?: any) => {
+        const { data: ticket } = await supabase.from('tickets').select('metadata').eq('id', ticketId).single();
+        if (!ticket) throw new Error("Ticket not found");
+        
+        const meta = ticket.metadata || {};
+        const history = meta.historialPagosTecnico || [];
+        
+        const filtered = history.filter((p: any) => p.id !== nuevoPago.id);
+        filtered.push(nuevoPago);
+        
+        const newMeta = {
+            ...meta,
+            ...additionalUpdates?.metadataFields,
+            historialPagosTecnico: filtered,
+            historialPagosTécnico: filtered, // fallback
+            montoAdelanto: filtered.reduce((s: number, p: any) => s + (p.monto || 0), 0)
+        };
+        
+        const updates: any = { metadata: newMeta };
+        if (additionalUpdates?.status_id) {
+            updates.status_id = additionalUpdates.status_id;
+            newMeta.estadoId = additionalUpdates.status_id;
+        }
+        if (additionalUpdates?.closure_date) updates.closure_date = additionalUpdates.closure_date;
+        
+        const { error } = await supabase.from('tickets').update(updates).eq('id', ticketId);
+        if (error) throw error;
+        
+        refreshTickets();
+    };
 
     const handleDenyPayment = async (group: PaymentTicketGroup, item: PaymentItem) => {
         const motivoRechazo = prompt(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}?\n\nIngrese el motivo del rechazo:`, "No cumple con los requisitos");
