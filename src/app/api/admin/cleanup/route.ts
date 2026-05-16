@@ -13,12 +13,17 @@ export async function GET() {
         console.log('[Cleanup] Starting deletion of tickets:', ticketsToDelete);
         
         const results = [];
-        const processedIds = new Set();
+        const processedIds = new Set<string>();
+
+        interface TicketRecord {
+            id: string;
+            ticket_number: string | null;
+            client_ticket_number: string | null;
+        }
 
         for (const identifier of ticketsToDelete) {
             console.log(`[Cleanup] Searching for ticket: ${identifier}`);
             
-            // Usar consultas individuales para evitar errores de sintaxis Postgrest .or()
             const { data: res1 } = await client
                 .from('tickets')
                 .select('id, ticket_number, client_ticket_number')
@@ -29,7 +34,10 @@ export async function GET() {
                 .select('id, ticket_number, client_ticket_number')
                 .eq('client_ticket_number', identifier);
 
-            const foundTickets = [...(res1 || []), ...(res2 || [])];
+            const foundTickets = [
+                ...((res1 as TicketRecord[]) || []), 
+                ...((res2 as TicketRecord[]) || [])
+            ];
 
             if (foundTickets.length === 0) {
                 console.log(`[Cleanup] No ticket found for: ${identifier}`);
@@ -43,7 +51,7 @@ export async function GET() {
                 const displayName = ticket.ticket_number || ticket.client_ticket_number || ticket.id;
                 console.log(`[Cleanup] Deleting ticket ${displayName} (${ticket.id})...`);
                 
-                // Eliminar dependencias manualmente para asegurar limpieza en cascada
+                // Eliminar dependencias
                 await client.from('ticket_costs').delete().eq('ticket_id', ticket.id);
                 await client.from('ticket_payments').delete().eq('ticket_id', ticket.id);
                 await client.from('ticket_evidences').delete().eq('ticket_id', ticket.id);
