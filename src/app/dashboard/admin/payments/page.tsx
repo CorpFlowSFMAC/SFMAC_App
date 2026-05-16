@@ -1283,6 +1283,7 @@ export default function PaymentsPage() {
                     predicate: (query) => query.queryKey.some((key) => 
                         key === 'tickets' || 
                         (typeof key === 'string' && key.startsWith('tickets'))
+                    )
                 });
                 
                 refresh();
@@ -1380,6 +1381,7 @@ export default function PaymentsPage() {
                 predicate: (query) => query.queryKey.some((key) => 
                     key === 'tickets' || 
                     (typeof key === 'string' && key.startsWith('tickets'))
+                )
             });
             
             refresh();
