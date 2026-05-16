@@ -3379,7 +3379,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             {ticketData.estadoId === "en_cotizacion" ? (
                                                                 <button
                                                                     className={styles.sendQuoteBtnFinal}
-                                                                    disabled={isSendingQuote || (ticketData.cliente?.nombre?.toUpperCase().includes("BCP") ? (!bcpQuotationFile || montoTotalCotizado <= 0) : (partidasCotización.length === 0 || partidasCotización.reduce((s, i) => s + (Number(i.total) || 0), 0) <= 0))}
+                                                                    disabled={isSendingQuote}
                                                                     onClick={handleSendQuote}
                                                                 >
                                                                     {isSendingQuote ? <Clock size={18} className={styles.spinner} /> : <Send size={18} />}
