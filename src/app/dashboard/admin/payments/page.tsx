@@ -2188,7 +2188,6 @@ export default function PaymentsPage() {
                                                         reader.result as string,
                                                         depositDate
                                                     );
-                                                    showToast('🎉 ¡Pago registrado y cerrado!');
                                                 };
                                                 reader.readAsDataURL(compressed);
                                             }
