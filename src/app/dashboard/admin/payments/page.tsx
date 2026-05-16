@@ -1377,14 +1377,32 @@ export default function PaymentsPage() {
             showToast('✅ Pago confirmado exitosamente');
             
             // ★ MEJORA: Invalidación POST-pago COMPLETA para bandeja del GESTOR
+            // Esta invalidación covering TODOS los queries de tickets sin importar el filtro
             await queryClient.invalidateQueries({ 
                 predicate: (query) => query.queryKey.some((key) => 
                     key === 'tickets' || 
-                    (typeof key === 'string' && key.startsWith('tickets'))
+                    key === 'ticket-all' ||
+                    (typeof key === 'string' && key.toLowerCase().includes('ticket'))
                 )
             });
             
+            // Forzar refresh del estado global de tickets para todas las vistas
             refresh();
+            
+            // Forzar actualización inmediata del ticket en caché local
+            const cachedTickets = queryClient.getQueryData(['tickets', 'all']);
+            if (cachedTickets && Array.isArray(cachedTickets)) {
+                queryClient.setQueryData(['tickets', 'all'], (old: any) => {
+                    if (!old || !Array.isArray(old)) return old;
+                    return old.map((t: any) => {
+                        if (t.id === group.realTicketId) {
+                            // Forzar actualización del estado visual
+                            return { ...t, _updatedAt: Date.now() };
+                        }
+                        return t;
+                    });
+                });
+            }
         } catch (err) {
             console.error('[Payments] Error confirming payment:', err);
             alert('Error al procesar el pago.');
