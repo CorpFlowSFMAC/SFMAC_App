@@ -1,5 +1,5 @@
 "use client";
-// Forced redeploy: v1.2 - Sincronizado con Flujo de Cotización y Borrado Inteligente
+// Forced redeploy: v1.3 - Async Quote Flow, Removal of Obsolete Sync and State Hardening
 
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -959,18 +959,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         syncToSupabaseRef.current = syncToSupabase;
     }, [syncToSupabase]);
 
-    useEffect(() => {
-        // Sync de fondo mucho menos agresivo (cada 30s) para evitar 'Sync of Death'
-        const syncInterval = setInterval(() => {
-            syncToSupabaseRef.current();
-        }, 30000);
+    // El sync automático de fondo ha sido ELIMINADO para evitar race conditions (V3 Refactoring)
+    // El sistema ahora confía en Realtime para actualizaciones entrantes y syncToSupabase para cambios locales.
 
-        return () => {
-            clearInterval(syncInterval);
-            // Sync final al cerrar la ventana (unmount)
-            syncToSupabaseRef.current();
-        };
-    }, [ticketData.id]);
 
     useEffect(() => {
         const handleStorageUpdate = (e: any) => {
@@ -1309,13 +1300,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const currentPartidas = currentDraft?.items || partidasCotización;
         const currentMontoTotal = currentDraft?.total ?? montoTotalCotizado;
 
+        const editorTotal = currentPartidas.reduce((s: any, i: any) => s + (Number(i.total) || 0), 0);
+        
         if (isBCP) {
             if (!bcpQuotationFile) {
                 showToast("Archivo Faltante", "Debe adjuntar la plantilla Excel BCP antes de enviar.", "error");
                 return;
             }
         } else {
-            const editorTotal = currentPartidas.reduce((s: any, i: any) => s + (Number(i.total) || 0), 0);
             if (currentPartidas.length === 0 || editorTotal <= 0) {
                 showToast("Partidas Vacías", "Debe ingresar el detalle y precio de las partidas en la cotización antes de enviarla.", "error");
                 return;
@@ -1329,6 +1321,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             }
         }
+
 
         setIsSendingQuote(true);
         try {
@@ -3030,7 +3023,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 <FileSpreadsheet size={28} color="#10B981" />
                                                 <div style={{ textAlign: 'left', flex: 1 }}>
                                                     <h3 className={styles.quotationTitle} style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-                                                        {ticketData.estadoId === "en_cotizacion" ? "Elaboración de Cotización Formal" : (ticketData.estadoId === "cotizacion_enviada" ? "Cotización Emitida al Cliente" : "Cotización Aprobada y Registrada")}
+                                                        {ticketData.estadoId === "en_cotizacion" 
+                                                            ? "Elaboración de Cotización Formal" 
+                                                            : (ticketData.estadoId === "cotizacion_enviada" 
+                                                                ? "Cotización Emitida al Cliente (Pendiente Aprobación)" 
+                                                                : (["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado"].includes(ticketData.estadoId)
+                                                                    ? "Cotización Aprobada y Registrada"
+                                                                    : "Estado de Cotización Desconocido"))}
                                                     </h3>
                                                     <p className={styles.quotationSubtitle} style={{ fontSize: '13px', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
                                                         {ticketData.estadoId === "en_cotizacion"
@@ -3379,7 +3378,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             {ticketData.estadoId === "en_cotizacion" ? (
                                                                 <button
                                                                     className={styles.sendQuoteBtnFinal}
-                                                                    disabled={isSendingQuote}
+                                                                    disabled={isSendingQuote || montoTotalCotizado <= 0 || (partidasCotización.length === 0 && !isBCP)}
                                                                     onClick={handleSendQuote}
                                                                 >
                                                                     {isSendingQuote ? <Clock size={18} className={styles.spinner} /> : <Send size={18} />}
@@ -5052,7 +5051,5 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         </>
     );
 }
-
-
 
 export default memo(TicketWindow);
