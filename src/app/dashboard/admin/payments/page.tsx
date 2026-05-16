@@ -15,7 +15,7 @@ import { useAppData } from "@/lib/AppDataContext";
 import { queryKeys } from "@/lib/useQueryHooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { round2, formatSoles } from "@/lib/formatters";
-import { calculateTicketFinances, toNum } from "@/lib/calculations";
+import { calculateTicketFinances } from "@/lib/calculations";
 import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
 
