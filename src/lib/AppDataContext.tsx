@@ -97,7 +97,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     // ── Refresh = invalidar caché → TanStack refetch automáticamente ──
     const refreshTickets = useCallback(async () => {
+        // Invalidar todas las queries de tickets incluyendo pagos
         await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
     }, [queryClient]);
 
     const refreshClients = useCallback(async () => {

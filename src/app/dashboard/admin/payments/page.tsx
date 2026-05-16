@@ -12,6 +12,8 @@ import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { ticketsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
+import { queryKeys } from "@/lib/useQueryHooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances, toNum } from "@/lib/calculations";
 import { compressImage } from "@/lib/imageCompression";
@@ -329,6 +331,7 @@ export default function PaymentsPage() {
         };
     }, [debouncedFetch]);
 
+    const queryClient = useQueryClient();
     const refresh = fetchPaymentTickets;
 
     const updateTicket = React.useCallback(async (id: string, updates: any) => {
@@ -1138,6 +1141,14 @@ export default function PaymentsPage() {
         };
 
         try {
+            // ==============================================================
+            // 🚨 CRÍTICO: Invalidación inmediata de caché V3
+            // Forzamos invalidación ANTES de cualquier mutación para evitar
+            // race conditions donde el frontend lee datos stale.
+            // ==============================================================
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            
             // Fetch fresh ticket data with ALL financial columns to ensure accurate balance calculations
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
@@ -1210,6 +1221,12 @@ export default function PaymentsPage() {
 
                 setPendingConfirmation(null);
                 showToast('✅ Pago de costo registrado');
+                
+                // 🚨 CRÍTICO: Invalidación POST-pago para bandeja del GESTOR
+                // Esto asegura que la bandeja del gestor vea el cambio inmediatamente
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+                
                 refresh();
                 return;
             }
@@ -1299,6 +1316,11 @@ export default function PaymentsPage() {
 
             setPendingConfirmation(null);
             showToast('✅ Pago confirmado exitosamente');
+            
+            // 🚨 CRÍTICO: Invalidación POST-pago para bandeja del GESTOR
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            
             refresh();
         } catch (err) {
             console.error('[Payments] Error confirming payment:', err);

@@ -224,7 +224,7 @@ export function useTickets() {
                 return [];
             }
         },
-        staleTime: 1000 * 60, // 60s - Tickets no cambian tan rápido para vista general
+        staleTime: 1000 * 30, // 30s - V3: datos más reactivos para sincronización bancaria
         gcTime: 1000 * 60 * 5, // 5 min
         // No mostrar errores al usuario - manejo silencioso
         retry: 1, // Solo reintentar una vez
@@ -258,7 +258,7 @@ export function usePaymentTickets() {
             const data = await ticketsAPI.getForPayments();
             return data || [];
         },
-        staleTime: 1000 * 60, // 60s - Módulo de tesorería
+        staleTime: 1000 * 10, // 10s - Módulo de tesorería V3 reactivo
     });
 }
 
