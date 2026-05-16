@@ -14,14 +14,22 @@ export async function GET() {
         console.log('[Cleanup] Starting deletion of tickets:', ticketsToDelete);
         
         // 1. Encontrar los UUIDs buscando en ambos campos (interno y externo)
-        const { data: tickets, error: findError } = await client
+        const { data, error: findError } = await client
             .from('tickets')
             .select('id, ticket_number, client_ticket_number')
             .or(`ticket_number.in.(${ticketsToDelete.join(',')}),client_ticket_number.in.(${ticketsToDelete.join(',')})`);
             
         if (findError) throw findError;
+
+        interface TicketRecord {
+            id: string;
+            ticket_number: string | null;
+            client_ticket_number: string | null;
+        }
+
+        const tickets = (data as TicketRecord[]) || [];
         
-        if (!tickets || tickets.length === 0) {
+        if (tickets.length === 0) {
             console.log('[Cleanup] No tickets found to delete matching:', ticketsToDelete);
             return NextResponse.json({ success: true, message: 'No tickets found to delete', searched: ticketsToDelete });
         }
