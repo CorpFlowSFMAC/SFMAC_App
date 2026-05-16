@@ -1193,6 +1193,22 @@ export default function PaymentsPage() {
                 if (costErr) throw costErr;
                 
                 await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
+                
+                // ✅ Optimistic Update Local
+                setTickets(prev => prev.map(t => {
+                    if (t.id === group.realTicketId) {
+                        const updated = { ...t };
+                        updated.pendingCosts = (updated.pendingCosts || []).filter((c: any) => c.id !== item.costId);
+                        if (additionalUpdates?.status_id) {
+                            updated.status_id = additionalUpdates.status_id;
+                            updated.estadoId = additionalUpdates.status_id;
+                        }
+                        return updated;
+                    }
+                    return t;
+                }));
+
+                setPendingConfirmation(null);
                 showToast('✅ Pago de costo registrado');
                 refresh();
                 return;
@@ -1259,6 +1275,29 @@ export default function PaymentsPage() {
 
             additionalUpdates.metadataFields = meta;
             await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
+            
+            // ✅ Optimistic Update Local
+            setTickets(prev => prev.map(t => {
+                if (t.id === group.realTicketId) {
+                    const updated = { ...t };
+                    if (item.solicitudId) {
+                        updated.solicitudesDeposito = (updated.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
+                    } else {
+                        updated.metadata = { ...updated.metadata };
+                        if (item.id === `${group.realTicketId}_adelanto`) updated.metadata.adelantoPagado = true;
+                        if (item.id === `${group.realTicketId}_final`) updated.metadata.fechaPagoFinal = new Date().toISOString();
+                        if (item.id === `${group.realTicketId}_visita`) updated.metadata.visitPaymentConfirmed = true;
+                    }
+                    if (additionalUpdates?.status_id) {
+                        updated.status_id = additionalUpdates.status_id;
+                        updated.estadoId = additionalUpdates.status_id;
+                    }
+                    return updated;
+                }
+                return t;
+            }));
+
+            setPendingConfirmation(null);
             showToast('✅ Pago confirmado exitosamente');
             refresh();
         } catch (err) {
@@ -2208,7 +2247,6 @@ export default function PaymentsPage() {
                                 <button className={styles.cancelBtn} onClick={() => setPendingConfirmation(null)}>CANCELAR</button>
                                 <button className={styles.confirmBtn} onClick={() => {
                                     handleConfirmPayment(pendingConfirmation.group, pendingConfirmation.item, pendingConfirmation.voucher, depositDate);
-                                    setPendingConfirmation(null);
                                 }}>
                                     CONFIRMAR PAGO
                                 </button>
