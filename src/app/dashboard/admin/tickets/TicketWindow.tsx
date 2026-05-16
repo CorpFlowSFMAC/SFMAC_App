@@ -75,6 +75,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     }));
 
     const isSantander = ticketData.client_id === SANTANDER_ID || (ticketData.numeroTicketCliente || "").startsWith("STD");
+    const isBCP = ticketData.cliente?.nombre?.toUpperCase().includes("BCP") || ticketData.cliente?.name?.toUpperCase().includes("BCP");
 
     const [isMaximized, setIsMaximized] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -1295,7 +1296,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleSendQuote = async () => {
-        const isBCP = ticketData.cliente?.nombre?.toUpperCase().includes("BCP");
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
         const currentMontoTotal = currentDraft?.total ?? montoTotalCotizado;
@@ -3370,6 +3370,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 onUpdate={(items: any[], total: number) => {
                                                                     quotationDraftRef.current = { items, total };
                                                                     setMontoTotalCotizado(prev => prev === total ? prev : total);
+                                                                    setPartidasCotización(items);
                                                                 }}
                                                             />
                                                         )}
