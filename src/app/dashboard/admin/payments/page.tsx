@@ -20,6 +20,65 @@ import { compressImage } from "@/lib/imageCompression";
 import styles from "./payments.module.css";
 
 // ──────────────────────────────────────────────────────────────
+// HETZNER API CLIENT - Endpoint seguro para mutate de ticket_costs
+// Redirige mutaciones de pagos hacia el servidor de Hetzner (87.99.137.96)
+// ──────────────────────────────────────────────────────────────
+
+const HETZNER_API_BASE = '/api/v3/ticket-costs';
+
+/**
+ * Actualiza el estado de pago de un ticket_cost en el servidor de Hetzner
+ * @param costId - ID del costo en ticket_costs
+ * @param updates - Campos a actualizar (estado_pago, url_comprobante, fecha_pago)
+ */
+async function updateTicketCostOnHetzner(costId: string, updates: Record<string, any>) {
+    const response = await fetch(HETZNER_API_BASE, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: costId, updates }),
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+        console.error('[Hetzner API] Error updating ticket_cost:', result.error);
+        throw new Error(result.error || 'Error al actualizar costo en servidor de Hetzner');
+    }
+
+    return result.data;
+}
+
+/**
+ * Denegar un costo en el servidor de Hetzner
+ */
+async function denyTicketCostOnHetzner(costId: string) {
+    return updateTicketCostOnHetzner(costId, {
+        estado_pago: 'RECHAZADO',
+        fecha_pago: new Date().toISOString()
+    });
+}
+
+/**
+ * Aprobar excedente (cambiar a estado pendiente) en el servidor de Hetzner
+ */
+async function approveExceedanceOnHetzner(costId: string) {
+    return updateTicketCostOnHetzner(costId, {
+        estado_pago: 'pendiente'
+    });
+}
+
+/**
+ * Rechazar excedente permanentemente en el servidor de Hetzner
+ */
+async function rejectExceedanceOnHetzner(costId: string) {
+    return updateTicketCostOnHetzner(costId, {
+        estado_pago: 'RECHAZADO'
+    });
+}
+
+// ──────────────────────────────────────────────────────────────
 // MODELO DE DATOS V3 - BANDEJA DE PAGOS
 // ──────────────────────────────────────────────────────────────
 
@@ -280,12 +339,9 @@ export default function PaymentsPage() {
 
     const handleApproveExceedance = async (costId: string) => {
         try {
-            const { error } = await supabase
-                .from('ticket_costs')
-                .update({ estado_pago: 'pendiente' })
-                .eq('id', costId);
-            
-            if (error) throw error;
+            // ★ V3 HETZNER: Usar API de Hetzner para aprobar excedente
+            // Redirige mutate hacia servidor soberano (87.99.137.96)
+            await approveExceedanceOnHetzner(costId);
             showToast('✅ Solicitud aprobada y enviada a Tesorería');
             refresh();
         } catch (err) {
@@ -297,12 +353,9 @@ export default function PaymentsPage() {
     const handleRejectExceedance = async (costId: string) => {
         if (!confirm('¿Desea denegar permanentemente esta solicitud de excedente?')) return;
         try {
-            const { error } = await supabase
-                .from('ticket_costs')
-                .update({ estado_pago: 'RECHAZADO' })
-                .eq('id', costId);
-            
-            if (error) throw error;
+            // ★ V3 HETZNER: Usar API de Hetzner para rechazar excedente
+            // Redirige mutate hacia servidor soberano (87.99.137.96)
+            await rejectExceedanceOnHetzner(costId);
             showToast('❌ Solicitud denegada');
             refresh();
         } catch (err) {
@@ -850,14 +903,14 @@ export default function PaymentsPage() {
             // 1. SI ES COSTO DE TABLA (ticket_costs)
             // 1. DENEGAR COSTO DE TABLA (V3 / Canal 2 / Specialists)
             if (item.isTableCost && item.costId) {
-                // Actualizar el costo individual
-                await supabase
-                    .from('ticket_costs')
-                    .update({ 
-                        estado_pago: 'RECHAZADO',
-                        fecha_pago: new Date().toISOString() 
-                    })
-                    .eq('id', item.costId);
+                // ★ V3 HETZNER: Usar API de Hetzner para denegar costo
+                // Redirige mutate hacia servidor soberano (87.99.137.96)
+                try {
+                    await denyTicketCostOnHetzner(item.costId);
+                } catch (err) {
+                    console.error('[Hetzner API] Error al denegar costo:', err);
+                    throw err;
+                }
 
                 // Reversión de estado del Ticket si el costo es crítico
                 const { data: ticketRef } = await supabase
@@ -1192,16 +1245,18 @@ export default function PaymentsPage() {
                     }
                 }
 
-                const { error: costErr } = await supabase
-                    .from('ticket_costs')
-                    .update({ 
+                // ★ V3 HETZNER: Usar API de Hetzner para actualizar estado_pago
+                // Redirige mutate hacia servidor soberano (87.99.137.96)
+                try {
+                    await updateTicketCostOnHetzner(item.costId, { 
                         estado_pago: 'pagado', 
                         url_comprobante: voucherBase64 || null,
                         fecha_pago: finalDate
-                    })
-                    .eq('id', item.costId);
-                
-                if (costErr) throw costErr;
+                    });
+                } catch (costErr: any) {
+                    console.error('[Hetzner API] Error al confirmar pago:', costErr);
+                    throw costErr;
+                }
                 
                 await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
                 
