@@ -1277,11 +1277,13 @@ export default function PaymentsPage() {
                 setPendingConfirmation(null);
                 showToast('✅ Pago de costo registrado');
                 
-                // ★ MEJORA: Invalidación POST-pago MULTI-NIVEL para bandeja del GESTOR
-                // Esto asegura que la bandeja del gestor vea el cambio inmediatamente
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+                // ★ MEJORA: Invalidación POST-pago COMPLETA para bandeja del GESTOR
+                // Invalida TODAS las queries relacionadas con tickets sin importar la clave exacta
+                await queryClient.invalidateQueries({ 
+                    predicate: (query) => query.queryKey.some((key) => 
+                        key === 'tickets' || 
+                        (typeof key === 'string' && key.startsWith('tickets'))
+                });
                 
                 refresh();
                 return;
@@ -1373,10 +1375,12 @@ export default function PaymentsPage() {
             setPendingConfirmation(null);
             showToast('✅ Pago confirmado exitosamente');
             
-            // ★ MEJORA: Invalidación POST-pago MULTI-NIVEL para bandeja del GESTOR
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            // ★ MEJORA: Invalidación POST-pago COMPLETA para bandeja del GESTOR
+            await queryClient.invalidateQueries({ 
+                predicate: (query) => query.queryKey.some((key) => 
+                    key === 'tickets' || 
+                    (typeof key === 'string' && key.startsWith('tickets'))
+            });
             
             refresh();
         } catch (err) {
