@@ -1702,8 +1702,14 @@ export const TicketSummary = memo(function TicketSummary({ ticket, onProceed, on
 });
 
 export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket, onAssign, canAssign }: { ticket: any; onAssign?: () => void; canAssign: boolean }) {
-    const gestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado;
-    const hasGestora = !!gestora;
+    // ★ MEJORA: Resolver gestora desde múltiples fuentes con fallbacks robustos
+    // Evitar mostrar "mi cuenta" cuando la información está incompleta
+    const rawGestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado || ticket.metadata?.gestora;
+    const hasGestora = !!(rawGestora && (rawGestora.id || rawGestora.name || rawGestora.nombre));
+    
+    // Nombre seguro - nunca mostrar valores vacíos o genéricos
+    const gestoraName = (rawGestora?.name || rawGestora?.nombre || '').trim() || (rawGestora?.id ? 'Gestor(a)' : '');
+    const showGestoraName = hasGestora && !!gestoraName && gestoraName !== 'Gestor(a)' && gestoraName !== '[object Object]';
 
     return (
         <div 
@@ -1715,13 +1721,13 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
             } as any}
         >
             <div className={styles.titleSection}>
-                <div className={styles.titleIcon} style={{ background: hasGestora ? '#6366F1' : '#F97316' }}>
+                <div className={styles.titleIcon} style={{ background: hasGestora && showGestoraName ? '#6366F1' : '#F97316' }}>
                     <ShieldCheck size={18} />
                 </div>
                 <div className={styles.titleText}>
-                    <h3 style={{ color: hasGestora ? '#3730A3' : '#9A3412' }}>Gestión Operativa</h3>
-                    <span style={{ color: hasGestora ? '#4F46E5' : '#C2410C' }}>
-                        {hasGestora ? 'Responsable Asignado(a)' : 'Pendiente de Derivación'}
+                    <h3 style={{ color: hasGestora && showGestoraName ? '#3730A3' : '#9A3412' }}>Gestión Operativa</h3>
+                    <span style={{ color: hasGestora && showGestoraName ? '#4F46E5' : '#C2410C' }}>
+                        {hasGestora && showGestoraName ? 'Responsable Asignado(a)' : 'Pendiente de Derivación'}
                     </span>
                 </div>
             </div>
@@ -1730,12 +1736,12 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
 
             <div className={styles.infoItem} style={{ flex: 1.5 }}>
                 <span className={styles.infoLabel}>Gestor(a)</span>
-                {hasGestora ? (
+                {hasGestora && showGestoraName ? (
                     <div className={styles.clienteCompact}>
                         <div className={styles.clienteAvatar} style={{ background: '#6366F1' }}>
-                            {(gestora.name || gestora.nombre || "G").substring(0, 1).toUpperCase()}
+                            {(gestoraName || "G").substring(0, 1).toUpperCase()}
                         </div>
-                        <span className={styles.infoValue} style={{ fontWeight: 700 }}>{gestora.name || gestora.nombre}</span>
+                        <span className={styles.infoValue} style={{ fontWeight: 700 }}>{gestoraName}</span>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F97316' }}>
