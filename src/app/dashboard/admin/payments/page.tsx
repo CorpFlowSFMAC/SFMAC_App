@@ -1286,6 +1286,10 @@ export default function PaymentsPage() {
                     )
                 });
                 
+                // ✅ FORZAR REFRESH DEL CONTEXTO GLOBAL para bandeja del gestor
+                // Esto asegura que el modal de adelanto desaparezca inmediatamente
+                refreshTickets?.();
+                
                 refresh();
                 return;
             }
