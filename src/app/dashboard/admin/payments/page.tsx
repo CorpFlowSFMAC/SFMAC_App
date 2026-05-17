@@ -1393,6 +1393,9 @@ export default function PaymentsPage() {
             // Forzar refresh del estado global de tickets para todas las vistas
             refresh();
             
+            // ✅ FORZAR REFRESH DEL CONTEXTO GLOBAL para bandeja del gestor
+            refreshTickets?.();
+            
             // Forzar actualización inmediata del ticket en caché local
             const cachedTickets = queryClient.getQueryData(['tickets', 'all']);
             if (cachedTickets && Array.isArray(cachedTickets)) {
