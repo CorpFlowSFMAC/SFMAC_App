@@ -286,7 +286,6 @@ export default function PaymentsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
-    const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
         try {
@@ -329,12 +328,9 @@ export default function PaymentsPage() {
         }
     }, []);
 
-    // Debounced fetch for realtime events
-    const debouncedFetch = React.useCallback(() => {
-        if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
-        fetchTimerRef.current = setTimeout(() => {
-            fetchPaymentTickets(true); // Refresco silencioso en segundo plano
-        }, 300);
+    // Fetch inmediato para eventos realtime (sincronización tipo banco)
+    const immediateFetch = React.useCallback(() => {
+        fetchPaymentTickets(true);
     }, [fetchPaymentTickets]);
 
     const handleApproveExceedance = async (costId: string) => {
@@ -371,18 +367,17 @@ export default function PaymentsPage() {
             .channel('payments:realtime_sync')
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'tickets' },
-                () => { debouncedFetch(); }
+                () => { immediateFetch(); }
             )
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'ticket_costs' },
-                () => { debouncedFetch(); }
+                () => { immediateFetch(); }
             )
             .subscribe();
         return () => { 
-            if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
             supabase.removeChannel(channel); 
         };
-    }, [debouncedFetch]);
+    }, [immediateFetch]);
 
     const queryClient = useQueryClient();
     const refresh = fetchPaymentTickets;
@@ -966,6 +961,12 @@ export default function PaymentsPage() {
                 }
                 
                 showToast('❌ Pago denegado y estado del ticket revertido.');
+                
+                // Invalidación inmediata para sincronización admin ↔ gestor
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+                
                 refresh();
                 return;
             }
@@ -1061,6 +1062,12 @@ export default function PaymentsPage() {
 
             // ★ NUEVO: Notificación Realtime para la gestora
             showToast(`❌ Solicitud de pago denegada. El ticket ha vuelto a su estado anterior.`);
+            
+            // Invalidación inmediata para sincronización admin ↔ gestor
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            
             refresh();
         } catch (err: any) {
             console.error('[Payments] Error detallado al denegar pago:', err);
@@ -1103,6 +1110,11 @@ export default function PaymentsPage() {
             if (error) throw error;
 
             showToast('🗑️ Registro de pago eliminado');
+            
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            
             refresh();
         } catch (err) {
             console.error('[Payments] Error deleting history item:', err);
@@ -1275,16 +1287,13 @@ export default function PaymentsPage() {
                 }));
 
                 setPendingConfirmation(null);
+                setWaitingVoucher(null);
                 showToast('✅ Pago de costo registrado');
                 
-                // ★ MEJORA: Invalidación POST-pago COMPLETA para bandeja del GESTOR
-                // Invalida TODAS las queries relacionadas con tickets sin importar la clave exacta
-                await queryClient.invalidateQueries({ 
-                    predicate: (query) => query.queryKey.some((key) => 
-                        key === 'tickets' || 
-                        (typeof key === 'string' && key.startsWith('tickets'))
-                    )
-                });
+                // Invalidación inmediata de todas las queries de tickets
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
                 
                 refresh();
                 return;
@@ -1374,35 +1383,15 @@ export default function PaymentsPage() {
             }));
 
             setPendingConfirmation(null);
+            setWaitingVoucher(null);
             showToast('✅ Pago confirmado exitosamente');
             
-            // ★ MEJORA: Invalidación POST-pago COMPLETA para bandeja del GESTOR
-            // Esta invalidación covering TODOS los queries de tickets sin importar el filtro
-            await queryClient.invalidateQueries({ 
-                predicate: (query) => query.queryKey.some((key) => 
-                    key === 'tickets' || 
-                    key === 'ticket-all' ||
-                    (typeof key === 'string' && key.toLowerCase().includes('ticket'))
-                )
-            });
+            // Invalidación inmediata de todas las queries de tickets
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
             
-            // Forzar refresh del estado global de tickets para todas las vistas
             refresh();
-            
-            // Forzar actualización inmediata del ticket en caché local
-            const cachedTickets = queryClient.getQueryData(['tickets', 'all']);
-            if (cachedTickets && Array.isArray(cachedTickets)) {
-                queryClient.setQueryData(['tickets', 'all'], (old: any) => {
-                    if (!old || !Array.isArray(old)) return old;
-                    return old.map((t: any) => {
-                        if (t.id === group.realTicketId) {
-                            // Forzar actualización del estado visual
-                            return { ...t, _updatedAt: Date.now() };
-                        }
-                        return t;
-                    });
-                });
-            }
         } catch (err) {
             console.error('[Payments] Error confirming payment:', err);
             alert('Error al procesar el pago.');

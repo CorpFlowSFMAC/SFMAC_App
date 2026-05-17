@@ -1063,13 +1063,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             partidas: prevMeta.partidas,
                             montoFinal: prevMeta.montoFinal,
                             documentosChecklist: prevMeta.documentosChecklist,
-                            pagoRechazado: (prevMeta.pagoRechazado === null && !serverMeta.pagoRechazado) ? null : serverMeta.pagoRechazado,
+                            // Campos financieros: el servidor SIEMPRE manda
+                            pagoRechazado: serverMeta.pagoRechazado !== undefined ? serverMeta.pagoRechazado : prevMeta.pagoRechazado,
+                            solicitudAdelanto: serverMeta.solicitudAdelanto !== undefined ? serverMeta.solicitudAdelanto : prevMeta.solicitudAdelanto,
+                            solicitudPago: serverMeta.solicitudPago !== undefined ? serverMeta.solicitudPago : prevMeta.solicitudPago,
+                            solicitudLiquidacion: serverMeta.solicitudLiquidacion !== undefined ? serverMeta.solicitudLiquidacion : prevMeta.solicitudLiquidacion,
+                            solicitudAdelantoExtra: serverMeta.solicitudAdelantoExtra !== undefined ? serverMeta.solicitudAdelantoExtra : prevMeta.solicitudAdelantoExtra,
+                            solicitudesDeposito: serverMeta.solicitudesDeposito !== undefined ? serverMeta.solicitudesDeposito : prevMeta.solicitudesDeposito,
+                            adelantoPagado: serverMeta.adelantoPagado !== undefined ? serverMeta.adelantoPagado : prevMeta.adelantoPagado,
+                            visitPaymentConfirmed: serverMeta.visitPaymentConfirmed !== undefined ? serverMeta.visitPaymentConfirmed : prevMeta.visitPaymentConfirmed,
+                            historialPagosTecnico: serverMeta.historialPagosTecnico !== undefined ? serverMeta.historialPagosTecnico : prevMeta.historialPagosTecnico,
                         };
 
                         return {
                             ...prev,
                             ...serverFields,
-                            metadata: mergedMeta
+                            metadata: mergedMeta,
+                            // Propagar campos financieros a nivel raíz
+                            solicitudAdelanto: mergedMeta.solicitudAdelanto,
+                            solicitudPago: mergedMeta.solicitudPago,
+                            solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
+                            pagoRechazado: mergedMeta.pagoRechazado,
+                            adelantoPagado: mergedMeta.adelantoPagado,
+                            visitPaymentConfirmed: mergedMeta.visitPaymentConfirmed,
                         };
                     });
                 }
