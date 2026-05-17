@@ -141,10 +141,13 @@ export const normalizeTicket = (t: any) => {
         // --- PROPAGACIÓN DE SOLICITUDES A LA RAÍZ ---
         // Esto evita el parpadeo en la UI al asegurar que el objeto ticket siempre
         // tenga estas propiedades disponibles para los componentes que las consumen.
-        solicitudAdelanto: realMetadata.solicitudAdelanto,
-        solicitudPagoVisita: realMetadata.solicitudPagoVisita,
-        solicitudLiquidacion: realMetadata.solicitudLiquidacion,
-        pagoRechazado: realMetadata.pagoRechazado,
+        solicitudAdelanto: realMetadata.solicitudAdelanto ?? null,
+        solicitudPago: realMetadata.solicitudPago ?? null,
+        solicitudLiquidacion: realMetadata.solicitudLiquidacion ?? null,
+        pagoRechazado: realMetadata.pagoRechazado ?? null,
+        solicitudesDeposito: realMetadata.solicitudesDeposito ?? null,
+        adelantoPagado: realMetadata.adelantoPagado ?? null,
+        solicitudAdelantoExtra: realMetadata.solicitudAdelantoExtra ?? null,
     };
 };
 

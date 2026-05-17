@@ -342,8 +342,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             gestora: patchedGestora,
                                             // Propagar campos clave a nivel raiz
                                             solicitudAdelanto: mergedMeta.solicitudAdelanto,
+                                            solicitudPago: mergedMeta.solicitudPago,
                                             solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
                                             pagoRechazado: mergedMeta.pagoRechazado,
+                                            solicitudesDeposito: mergedMeta.solicitudesDeposito,
+                                            adelantoPagado: mergedMeta.adelantoPagado,
                                         };
                                     })
                                     : old
@@ -427,6 +430,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     solicitudLiquidacion: incomingMeta.solicitudLiquidacion !== undefined
                                         ? incomingMeta.solicitudLiquidacion
                                         : existingMeta.solicitudLiquidacion,
+                                    solicitudesDeposito: incomingMeta.solicitudesDeposito !== undefined
+                                        ? incomingMeta.solicitudesDeposito
+                                        : existingMeta.solicitudesDeposito,
+                                    adelantoPagado: incomingMeta.adelantoPagado !== undefined
+                                        ? incomingMeta.adelantoPagado
+                                        : existingMeta.adelantoPagado,
                                     pagoRechazado: incomingMeta.pagoRechazado !== undefined 
                                         ? incomingMeta.pagoRechazado 
                                         : existingMeta.pagoRechazado,
@@ -441,6 +450,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     solicitudPago: mergedMeta.solicitudPago,
                                     solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
                                     pagoRechazado: mergedMeta.pagoRechazado,
+                                    solicitudesDeposito: mergedMeta.solicitudesDeposito,
+                                    adelantoPagado: mergedMeta.adelantoPagado,
                                 };
                             }
                         );
@@ -673,6 +684,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 solicitudLiquidacion: newMeta.solicitudLiquidacion !== undefined
                                     ? newMeta.solicitudLiquidacion
                                     : existingMeta.solicitudLiquidacion,
+                                pagoRechazado: newMeta.pagoRechazado !== undefined
+                                    ? newMeta.pagoRechazado
+                                    : existingMeta.pagoRechazado,
+                                solicitudesDeposito: newMeta.solicitudesDeposito !== undefined
+                                    ? newMeta.solicitudesDeposito
+                                    : existingMeta.solicitudesDeposito,
+                                adelantoPagado: newMeta.adelantoPagado !== undefined
+                                    ? newMeta.adelantoPagado
+                                    : existingMeta.adelantoPagado,
                             };
                             return {
                                 ...t,
@@ -681,6 +701,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                 solicitudPago: mergedMeta.solicitudPago,
                                 solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
+                                pagoRechazado: mergedMeta.pagoRechazado,
+                                solicitudesDeposito: mergedMeta.solicitudesDeposito,
+                                adelantoPagado: mergedMeta.adelantoPagado,
                             };
                         })
                         : old
