@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3, Clock, FolderOpen, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, BarChart3, Clock, FolderOpen, FileText } from 'lucide-react';
 import styles from "@/app/dashboard/admin/admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
@@ -201,11 +201,6 @@ export default function GestorLayout({
                             <Link href="/dashboard/gestor/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`} title="Mis Técnicos">
                                 <UserCog size={20} />
                                 <span className={styles.navText}>Mis Técnicos</span>
-                            </Link>
-
-                            <Link href="/dashboard/gestor/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`} title="Solicitar Pagos">
-                                <DollarSign size={20} />
-                                <span className={styles.navText}>Solicitar Pagos</span>
                             </Link>
 
                             <Link href="/dashboard/gestor/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`} title="Reportes de Eficiencia">
