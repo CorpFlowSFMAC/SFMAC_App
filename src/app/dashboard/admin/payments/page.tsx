@@ -1290,6 +1290,13 @@ export default function PaymentsPage() {
                 // Esto asegura que el modal de adelanto desaparezca inmediatamente
                 refreshTickets?.();
                 
+                // ✅ INVALIDAR TODAS LAS QUERIES DE DETALLE DEL TICKET para forzar recarga completa
+                queryClient.invalidateQueries({
+                    predicate: (query) => query.queryKey.some((key) => 
+                        typeof key === 'string' && key.includes(group.realTicketId)
+                    )
+                });
+                
                 refresh();
                 return;
             }
@@ -1395,6 +1402,13 @@ export default function PaymentsPage() {
             
             // ✅ FORZAR REFRESH DEL CONTEXTO GLOBAL para bandeja del gestor
             refreshTickets?.();
+            
+            // ✅ INVALIDAR TODAS LAS QUERIES DE DETALLE DEL TICKET para forzar recarga completa
+            queryClient.invalidateQueries({
+                predicate: (query) => query.queryKey.some((key) => 
+                    typeof key === 'string' && key.includes(group.realTicketId)
+                )
+            });
             
             // Forzar actualización inmediata del ticket en caché local
             const cachedTickets = queryClient.getQueryData(['tickets', 'all']);
