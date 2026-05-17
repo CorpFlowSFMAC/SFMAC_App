@@ -3517,8 +3517,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             </div>
                                                         </div>
 
-                                                        {/* SECCIÓN DE ADELANTO RESTAURADA */}
-                                                        {(!canProceedWithExecution || !isAdmin) && (
+                                                        {/* SECCIÓN DE ADELANTO — ocultar si ya fue pagado */}
+                                                        {(!canProceedWithExecution || !isAdmin) && !ticketData.adelantoPagado && (
                                                             <div className={styles.advanceRequestPremium}>
                                                                 <div className={styles.advanceInfoGrid}>
                                                                     <div className={styles.advanceMeta}>
