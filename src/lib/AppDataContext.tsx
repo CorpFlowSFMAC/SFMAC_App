@@ -451,6 +451,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                             exact: true,
                             refetchType: 'none' 
                         });
+                        // Invalidar bandeja de pagos para sincronización inmediata
+                        queryClient.invalidateQueries({
+                            queryKey: queryKeys.tickets.payments()
+                        });
                     } else if (payload.eventType === "DELETE") {
                         queryClient.setQueryData(
                             queryKeys.tickets.summary(),
@@ -473,15 +477,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 (payload) => {
                     const ticketId = (payload.new as any)?.ticket_id || (payload.old as any)?.ticket_id;
                     if (ticketId) {
-                        // Solo invalidar el ticket afectado, no toda la base de datos
                         queryClient.invalidateQueries({
                             queryKey: queryKeys.tickets.detail(ticketId),
                         });
-                        // El summary también podría cambiar (totales), pero lo hacemos silencioso
                         queryClient.invalidateQueries({
                             queryKey: queryKeys.tickets.summary()
                         });
                     }
+                    // Invalidar bandeja de pagos para sincronización inmediata admin ↔ gestor
+                    queryClient.invalidateQueries({
+                        queryKey: queryKeys.tickets.payments()
+                    });
                 }
             )
             .subscribe();
@@ -669,11 +675,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     : existingMeta.solicitudLiquidacion,
                             };
                             return {
-                                ...t, // Preservar campos locales como paidCosts, pendingCosts
+                                ...t,
                                 ...normalized,
                                 metadata: mergedMeta,
-                                // Propagar a nivel raiz para que TicketWindow los detecte
                                 solicitudAdelanto: mergedMeta.solicitudAdelanto,
+                                solicitudPago: mergedMeta.solicitudPago,
+                                solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
                             };
                         })
                         : old
