@@ -570,18 +570,37 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             montoAdelanto: cachedMontoAdelanto,
                             fechaPagoAdelanto: cachedFechaPagoAdelanto,
                             AdelantoPagado: cachedUpperAdelantoPagado,
+                            // Excluir campos financieros del cache para que el servidor siempre mande
+                            solicitudAdelanto: _cachedSolicitudAdelanto,
+                            solicitudPago: _cachedSolicitudPago,
+                            solicitudLiquidacion: _cachedSolicitudLiquidacion,
+                            solicitudAdelantoExtra: _cachedSolicitudAdelantoExtra,
+                            solicitudesDeposito: _cachedSolicitudesDeposito,
+                            pagoRechazado: _cachedPagoRechazado,
                             ...safeCachedMetadata
                         } = cachedMetadata;
                         const merged = {
                             ...prev, ...fullTicket, ...safeMeta, ...safeCachedMetadata,
                             numeroTicketCliente: fullTicket.client_ticket_number || safeMeta.numeroTicketCliente || safeCachedMetadata.numeroTicketCliente || prev.numeroTicketCliente,
-                            metadata: { ...safeMeta, ...safeCachedMetadata },
+                            metadata: {
+                                ...safeMeta, ...safeCachedMetadata,
+                                // Campos financieros: SIEMPRE del servidor, nunca del cache local
+                                solicitudAdelanto: safeMeta.solicitudAdelanto ?? null,
+                                solicitudPago: safeMeta.solicitudPago ?? null,
+                                solicitudLiquidacion: safeMeta.solicitudLiquidacion ?? null,
+                                solicitudAdelantoExtra: safeMeta.solicitudAdelantoExtra ?? null,
+                                solicitudesDeposito: safeMeta.solicitudesDeposito ?? null,
+                                pagoRechazado: safeMeta.pagoRechazado ?? null,
+                            },
                             estadoId: finalEstadoId,
                             status_id: finalStatusId,
                             adelantoPagado: advanceConfirmed,
                             visitPaymentConfirmed: visitConfirmed,
-                            solicitudAdelanto: safeMeta.solicitudAdelanto || ticket?.solicitudAdelanto || null,
+                            solicitudAdelanto: safeMeta.solicitudAdelanto !== undefined ? safeMeta.solicitudAdelanto : null,
                             solicitudPago: visitConfirmed ? null : (safeMeta.solicitudPago ?? null),
+                            solicitudLiquidacion: safeMeta.solicitudLiquidacion ?? null,
+                            pagoRechazado: safeMeta.pagoRechazado ?? null,
+                            solicitudesDeposito: safeMeta.solicitudesDeposito ?? null,
                             gestora: fullTicket.gestora || safeMeta.gestora || null
                         };
                         // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
@@ -672,8 +691,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
             const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada || safeMeta.modificacionAutorizada || prev.modificacionAutorizada);
 
-            const serverSolicitud = safeMeta.solicitudAdelanto || ticket.solicitudAdelanto;
-            const finalSolicitud = serverSolicitud || null;
+            const finalSolicitud = safeMeta.solicitudAdelanto !== undefined ? safeMeta.solicitudAdelanto : (ticket.solicitudAdelanto ?? null);
 
 
             return {
@@ -728,14 +746,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     // para evitar el "parpadeo" donde el estado local viejo sobreescribe al servidor limpio.
                     pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
                     solicitudAdelanto: finalSolicitud,
-                    solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
-                    solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
+                    solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago ?? prev.metadata?.solicitudPago ?? null),
+                    solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion ?? prev.metadata?.solicitudLiquidacion ?? null),
+                    solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
                 },
                 
                 // Mapeo a nivel de raíz para consistencia
                 solicitudAdelanto: finalSolicitud,
-                solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago || prev.metadata?.solicitudPago),
-                solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion || prev.metadata?.solicitudLiquidacion),
+                solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago ?? prev.metadata?.solicitudPago ?? null),
+                solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion ?? prev.metadata?.solicitudLiquidacion ?? null),
+                solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
                 pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
 
                 // Si el local está más avanzado, NO LO RETROCEDEMOS
@@ -921,11 +941,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 
                 solicitudLiquidacion: (hasActiveRejection || options?.allowStateRollback === false)
                     ? serverMeta.solicitudLiquidacion
-                    : (businessData.solicitudLiquidacion || dataToProcess.solicitudLiquidacion || serverMeta.solicitudLiquidacion),
+                    : (businessData.solicitudLiquidacion !== undefined ? businessData.solicitudLiquidacion : (serverMeta.solicitudLiquidacion ?? null)),
                 solicitudAdelanto: serverMeta.solicitudAdelanto ?? null,
                 solicitudPago: (hasActiveRejection || options?.allowStateRollback === false)
                     ? serverMeta.solicitudPago
-                    : (businessData.solicitudPago || dataToProcess.solicitudPago || serverMeta.solicitudPago),
+                    : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null)),
+                solicitudesDeposito: businessData.solicitudesDeposito !== undefined ? businessData.solicitudesDeposito : (serverMeta.solicitudesDeposito ?? null),
                 
                 evidenciasEjecucion,
                 metadata: undefined // Evitar anidación infinita
