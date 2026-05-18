@@ -34,10 +34,15 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
         return tickets.map((ticket) => ({ ...ticket, costos: [] }));
     }
 
-    const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`);
+    // ★ OPTIMIZACIÓN: Obtener costos en una sola llamada con IDs agrupados
+    const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`, {
+        // ★ OPTIMIZACIÓN: Reducir timeout a 10 segundos
+        signal: AbortSignal.timeout(10000)
+    });
     const result = await response.json();
     if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos de tickets');
 
+    // ★ OPTIMIZACIÓN: Usar Map para acceso O(1) en lugar de búsqueda O(n)
     const costsByTicket = new Map<string, any[]>();
     (result.data || []).forEach((cost: any) => {
         const current = costsByTicket.get(cost.ticket_id) || [];

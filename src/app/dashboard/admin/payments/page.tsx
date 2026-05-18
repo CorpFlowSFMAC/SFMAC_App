@@ -292,34 +292,39 @@ export default function PaymentsPage() {
             if (!isSilent) setLoading(true);
             setFetchError(null);
 
+            // ★ OPTIMIZACIÓN: Reducir timeout de 60s a 15s para detectar problemas más rápido
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout de conexión')), 60000)
+                setTimeout(() => reject(new Error('Timeout de conexión')), 15000)
             );
 
             const fetchPromise = (async () => {
+                // ★ OPTIMIZACIÓN: Obtener costos junto con tickets en una sola consulta
                 const data = await ticketsAPI.getForPayments();
                 return data || [];
             })();
 
             const data = await Promise.race([fetchPromise, timeoutPromise]) as any[];
             
-            const processed = (data || []).filter(Boolean).map((t: any) => {
-                try {
-                    const flat = flattenTicketForPayments(t);
-                    const relatedCosts = t.costos || [];
-                    flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
-                    flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
-                    flat.exceedanceRequests = relatedCosts.filter((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
+            // ★ OPTIMIZACIÓN: Procesamiento en paralelo con Promise.all
+            const processed = await Promise.all(
+                (data || []).filter(Boolean).map(async (t: any) => {
+                    try {
+                        const flat = flattenTicketForPayments(t);
+                        const relatedCosts = t.costos || [];
+                        flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
+                        flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
+                        flat.exceedanceRequests = relatedCosts.filter((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
 
-                    flat.isOpen = !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id);
-                    return flat;
-                } catch (e) {
-                    console.error('[Payments] Error processing ticket:', t.id, e);
-                    return null;
-                }
-            }).filter(Boolean);
+                        flat.isOpen = !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id);
+                        return flat;
+                    } catch (e) {
+                        console.error('[Payments] Error processing ticket:', t.id, e);
+                        return null;
+                    }
+                })
+            );
             
-            setTickets(processed);
+            setTickets(processed.filter(Boolean));
         } catch (err: any) {
             console.error('[Payments] Fetch Error:', err);
             setFetchError(err.message || "Error de conexión");

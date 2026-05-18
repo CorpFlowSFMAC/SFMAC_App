@@ -110,10 +110,12 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'ticket_id o ticket_ids es requerido' }, { status: 400 });
         }
 
+        // ★ OPTIMIZACIÓN: Usar .in() para múltiples IDs (más eficiente que múltiples eq())
         let query = client
             .from('ticket_costs')
             .select(TICKET_COST_SELECT)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true })
+            .limit(1000);  // ★ LIMIT: Evitar queries excesivamente grandes
 
         query = ticketId ? query.eq('ticket_id', ticketId) : query.in('ticket_id', ticketIds);
 

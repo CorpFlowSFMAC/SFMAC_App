@@ -435,14 +435,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (!ticketData?.id) return;
         setLoadingCosts(true);
         try {
-            const costs = await ticketCostsAPI.getByTicket(ticketData.id);
-            setTicketCosts(costs || []);
+            // ★ OPTIMIZACIÓN: Ejecutar ambas llamadas en paralelo para reducir latencia
+            const [costsResponse, ticketResponse] = await Promise.all([
+                ticketCostsAPI.getByTicket(ticketData.id),
+                ticketsAPI.getByTicket(ticketData.id)
+            ]);
+            
+            const costs = costsResponse || [];
+            setTicketCosts(costs);
             
             // MOTOR V3: Recalcular finanzas localmente para garantizar coherencia instantánea
             try {
-                const updatedTicket = await ticketsAPI.getById(ticketData.id);
+                const updatedTicket = ticketResponse;
                 if (updatedTicket) {
-                    const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : (costs || []);
+                    const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : costs;
                     const v3Finances = calculateTicketFinances(updatedTicket, localCosts);
 
                     setTicketData((prev: any) => ({
