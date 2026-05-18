@@ -735,13 +735,46 @@ export const ticketsAPI = {
         return data;
     },
 
+    // Eliminación completa de ticket con todas sus ramificaciones
     async delete(id: string) {
-        const { error } = await supabase
+        // Función auxiliar para eliminar sin fallar si la tabla no existe
+        const safeDelete = async (table: string, condition: any) => {
+            try {
+                const { error } = await supabase.from(table).delete().match(condition);
+                // Ignorar errores de "relation does not exist" - la tabla puede no existir
+                if (error && !error.message.includes('relation') && !error.message.includes('does not exist')) {
+                    throw error;
+                }
+            } catch (e: any) {
+                // Solo relanzar si no es un error de tabla inexistente
+                if (e.message && !e.message.includes('relation') && !e.message.includes('does not exist')) {
+                    throw e;
+                }
+            }
+        };
+
+        // 1. Eliminar ticket_evidences (evidencias/fotos del ticket)
+        await safeDelete('ticket_evidences', { ticket_id: id });
+
+        // 2. Eliminar ticket_costs (costos del ticket)
+        await safeDelete('ticket_costs', { ticket_id: id });
+
+        // 3. Eliminar ticket_payments (pagos del ticket)
+        await safeDelete('ticket_payments', { ticket_id: id });
+
+        // 4. Eliminar ticket_comments (comentarios del ticket)
+        await safeDelete('ticket_comments', { ticket_id: id });
+
+        // 5. Eliminar ticket_activity_log (historial de actividades)
+        await safeDelete('ticket_activity_log', { ticket_id: id });
+
+        // 6. Finalmente eliminar el ticket principal
+        const { error: errorTicket } = await supabase
             .from('tickets')
             .delete()
             .eq('id', id);
 
-        if (error) throw error;
+        if (errorTicket) throw errorTicket;
     }
 };
 
