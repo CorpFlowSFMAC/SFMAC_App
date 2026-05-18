@@ -1745,7 +1745,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setIsConfirmingPayment(true);
         isProcessingAdvance.current = true;
         try {
-            // 1. Registro Financiero Inmutable
+            // ════════════════════════════════════════════════════════════
+            // REGLA FIJA V3: Ningún costo creado desde TicketWindow queda
+            // "pagado" automáticamente. Todo nace como "pendiente" y sólo
+            // Tesorería/Admin puede cambiarlo a pagado en el módulo de pagos.
+            // ════════════════════════════════════════════════════════════
             const category = isForMaterials ? "Materiales" : "Mano de Obra";
             const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto Operativo (MANO DE OBRA)";
 
@@ -1755,27 +1759,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 categoria: category,
                 specialist_id: technicianId,
                 monto: amount,
-                estado_pago: "pagado",
+                estado_pago: "pendiente", // ← SIEMPRE pendiente; Tesorería aprueba
                 solicitado_por: myProfileId || undefined
             });
 
-            const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
-
-            const metadataUpdates = {
-                solicitudAdelanto: null,
-            };
-
-            const columnUpdates = {
-                status_id: newState
-            };
-
-            await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates, columnUpdates);
+            // Limpiar solicitud de metadata (ya está registrada en ticket_costs)
+            const metadataUpdates = { solicitudAdelanto: null };
+            await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates);
 
             const updated = {
                 ...ticketData,
-                estadoId: newState,
-                status_id: newState,
-                adelantoPagado: !isForMaterials || ticketData.adelantoPagado,
                 solicitudAdelanto: null,
                 metadata: {
                     ...(ticketData.metadata || {}),
@@ -1788,16 +1781,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             await loadCosts();
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
-            showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)} en el desglose de costos.`, "success");
+            showToast("Solicitud Enviada a Tesorería", `Adelanto de S/ ${amount.toFixed(2)} registrado como PENDIENTE. Tesorería debe aprobarlo.`, "info");
         } catch (err) {
-            console.error("Error confirming advance:", err);
+            console.error("Error registering pending advance:", err);
             const message = err instanceof DuplicateTicketCostError
                 ? "Ya existe un pago confirmado con el mismo ticket, monto y concepto."
-                : "No se pudo registrar el adelanto correctamente.";
+                : "No se pudo registrar la solicitud de adelanto.";
             showToast("Error de Conexión", message, "error");
         } finally {
             setIsConfirmingPayment(false);
-            // ✅ Limpiar flags
             confirmAdvanceRef.current = false;
             setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }

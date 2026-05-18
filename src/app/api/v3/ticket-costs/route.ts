@@ -138,8 +138,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Datos incompletos para registrar el costo' }, { status: 400 });
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        // REGLA FIJA V3: Ningún costo puede nacer en estado "pagado" o confirmado.
+        // Solo Tesorería/Admin puede transicionar a "pagado" vía PUT (módulo de pagos).
+        // Estados permitidos en creación: 'pendiente' | 'REQUIERE_APROBACION_ADMIN'
+        // ══════════════════════════════════════════════════════════════════════
         if (isConfirmedTicketCostStatus(payload.estado_pago)) {
-            await assertUniqueConfirmedTicketCost(client, payload.ticket_id, payload.monto, payload.concepto);
+            return NextResponse.json(
+                { success: false, error: 'Los costos deben crearse como pendientes. Solo Tesorería puede marcarlos como pagados.' },
+                { status: 403 }
+            );
         }
 
         const { data, error } = await client

@@ -250,8 +250,6 @@ function flattenTicketForPayments(t: any) {
         solicitudAdelantoExtra: meta.solicitudAdelantoExtra ?? null,
         solicitudLiquidacion: meta.solicitudLiquidacion ?? null,
         solicitudPago: meta.solicitudPago ?? null,
-        // ✅ Solicitudes de depósito creadas por la Gestora (pendientes de aprobación del Admin)
-        solicitudesDeposito: (meta.solicitudesDeposito || []).filter((s: any) => s.estado === 'pendiente'),
         historialPagosTecnico: history,
         montoAdelanto: parseFloat(meta.montoAdelanto || 0),
         adelantoPagado: meta.adelantoPagado || history.some((p: any) => p.tipo === 'Adelanto'),
@@ -328,15 +326,16 @@ export default function PaymentsPage() {
         }
     }, []);
 
-    // Fetch inmediato para eventos realtime (sincronización tipo banco)
-    const immediateFetch = React.useCallback(() => {
-        fetchPaymentTickets(true);
+    // Debounce de 800ms: evita fetch-storm cuando ticket_costs y tickets cambian en ráfaga
+    const debouncedFetch = React.useCallback(() => {
+        if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+        fetchTimerRef.current = setTimeout(() => {
+            fetchPaymentTickets(true);
+        }, 800);
     }, [fetchPaymentTickets]);
 
     const handleApproveExceedance = async (costId: string) => {
         try {
-            // ★ V3 HETZNER: Usar API de Hetzner para aprobar excedente
-            // Redirige mutate hacia servidor soberano (87.99.137.96)
             await approveExceedanceOnHetzner(costId);
             showToast('✅ Solicitud aprobada y enviada a Tesorería');
             refresh();
@@ -349,8 +348,6 @@ export default function PaymentsPage() {
     const handleRejectExceedance = async (costId: string) => {
         if (!confirm('¿Desea denegar permanentemente esta solicitud de excedente?')) return;
         try {
-            // ★ V3 HETZNER: Usar API de Hetzner para rechazar excedente
-            // Redirige mutate hacia servidor soberano (87.99.137.96)
             await rejectExceedanceOnHetzner(costId);
             showToast('❌ Solicitud denegada');
             refresh();
@@ -367,25 +364,26 @@ export default function PaymentsPage() {
             .channel('payments:realtime_sync')
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'tickets' },
-                () => { immediateFetch(); }
+                () => { debouncedFetch(); }
             )
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'ticket_costs' },
-                () => { immediateFetch(); }
+                () => { debouncedFetch(); }
             )
             .subscribe();
         return () => { 
+            if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
             supabase.removeChannel(channel); 
         };
-    }, [immediateFetch]);
+    }, [debouncedFetch]);
 
     const queryClient = useQueryClient();
-    const refresh = fetchPaymentTickets;
 
-    const updateTicket = React.useCallback(async (id: string, updates: any) => {
-        const updated = await ticketsAPI.update(id, updates);
-        return updated;
-    }, []);
+    // refresh: recarga bandeja local + invalida cache global de TanStack Query
+    const refresh = React.useCallback(async (silent = true) => {
+        await fetchPaymentTickets(silent);
+        queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+    }, [fetchPaymentTickets, queryClient]);
 
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('pendiente');
@@ -696,40 +694,23 @@ export default function PaymentsPage() {
                     });
                 }
 
-                // C. Solicitudes de Depósito (Legacy but still used by some gestoras)
-                (meta.solicitudesDeposito || []).forEach((s: any) => {
-                    if (s.estado === 'pendiente') {
-                        pendingItems.push({
-                            id: `${t.id}_deposito_${s.id}`,
-                            solicitudId: s.id,
-                            tipo: 'Solicitud de Depósito',
-                            monto: parseFloat(s.monto || 0),
-                            estado: 'pendiente',
-                            fecha: s.fecha || t.created_at,
-                            concepto: s.concepto || "Petición de Fondos"
-                        });
-                    }
-                });
-
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
                 
                 const liqMonto = meta.solicitudLiquidacion?.monto || 0;
                 const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
 
-                // ✅ V3: Detectar si hay cualquier solicitud pendiente (Metadata o ticket_costs)
+                // V3: detectar solicitudes pendientes — solo fuentes oficiales (ticket_costs + metadata estructurada)
                 const hasExceedancePending = (t.costos || []).some((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
                                            (meta.solicitudPago && !pagoInHistory) || 
                                            (meta.solicitudLiquidacion && !liqInHistory) ||
                                            (meta.solicitudAdelantoExtra && parseFloat(meta.solicitudAdelantoExtra.monto || 0) > 0) ||
-                                           (meta.solicitudesDeposito || []).some((s: any) => s.estado === 'pendiente') ||
                                            hasExceedancePending;
 
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
-                // ★ MEJORA: No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
+                // No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
-                    // 🚀 V3: La liquidación debe ser el saldo real de mano de obra (Pactado - Pagado)
-                    // Solo mostrar si NO hay solicitudes pendientes de aprobación
+                    // V3: La liquidación es el saldo real de mano de obra (Pactado - Pagado)
                     const autoLiqMonto = round2(netLaborBalance);
                     if (autoLiqMonto > 0.01) {
                         pendingItems.push({
@@ -742,8 +723,6 @@ export default function PaymentsPage() {
                         });
                     }
                 }
-
-                // C. Solicitudes de Depósito (Sustituido por ticket_costs en V3)
 
                 // 2. Separar ítems por beneficiario
                 const techItems = pendingItems.filter(i => !i.specialistName);
@@ -857,8 +836,7 @@ export default function PaymentsPage() {
         const newMeta = {
             ...meta,
             ...additionalUpdates?.metadataFields,
-            historialPagosTecnico: filtered,
-            historialPagosTécnico: filtered, // fallback
+            historialPagosTecnico: filtered, // campo canónico V3
             montoAdelanto: filtered.reduce((s: number, p: any) => s + (p.monto || 0), 0)
         };
         
@@ -874,6 +852,7 @@ export default function PaymentsPage() {
         
         refreshTickets();
     };
+
 
     const handleDenyPayment = async (group: PaymentTicketGroup, item: PaymentItem) => {
         const motivoRechazo = prompt(`¿Está seguro que desea denegar este pago de S/ ${formatSoles(item.monto)}?\n\nIngrese el motivo del rechazo:`, "No cumple con los requisitos");
@@ -895,15 +874,12 @@ export default function PaymentsPage() {
             else if (isFinal) newStatusId = 'documentacion_enviada';
             else if (isAdelanto) newStatusId = 'cotizacion_aprobada';
 
-            // 1. SI ES COSTO DE TABLA (ticket_costs)
-            // 1. DENEGAR COSTO DE TABLA (V3 / Canal 2 / Specialists)
+            // DENEGAR COSTO DE TABLA (ticket_costs)
             if (item.isTableCost && item.costId) {
-                // ★ V3 HETZNER: Usar API de Hetzner para denegar costo
-                // Redirige mutate hacia servidor soberano (87.99.137.96)
                 try {
                     await denyTicketCostOnHetzner(item.costId);
                 } catch (err) {
-                    console.error('[Hetzner API] Error al denegar costo:', err);
+                    console.error('[Payments] Error al denegar costo:', err);
                     throw err;
                 }
 
