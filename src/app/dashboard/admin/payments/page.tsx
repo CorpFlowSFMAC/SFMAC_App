@@ -9,7 +9,7 @@ import {
     Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle, ShieldAlert
 } from "lucide-react";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
-import { ticketsAPI } from "@/lib/supabase-api";
+import { ticketsAPI, paymentsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
 import { queryKeys } from "@/lib/useQueryHooks";
@@ -1245,6 +1245,22 @@ export default function PaymentsPage() {
                 } catch (costErr: any) {
                     console.error('[Hetzner API] Error al confirmar pago:', costErr);
                     throw costErr;
+                }
+                
+                // ★ FIX: Crear registro en ticket_payments para estadísticas y sumas
+                try {
+                    await paymentsAPI.create({
+                        ticket_id: group.realTicketId,
+                        amount: item.monto,
+                        payment_type: item.tipo || item.concepto || 'Costo de Ticket',
+                        reference_number: item.costId,
+                        payment_date: finalDate,
+                        status: 'confirmed'
+                    });
+                    console.log('[Payments] Registro creado en ticket_pagos:', item.monto);
+                } catch (paymentErr: any) {
+                    console.error('[Payments] Error al crear registro de payment:', paymentErr);
+                    // No fallar el proceso si no se puede crear el payment
                 }
                 
                 await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
