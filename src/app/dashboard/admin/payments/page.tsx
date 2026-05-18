@@ -1295,7 +1295,7 @@ export default function PaymentsPage() {
                 meta.solicitudAdelanto = null;
             } else if (item.id === `${group.realTicketId}_refuerzo`) {
                 meta.solicitudAdelantoExtra = null;
-            } else if (item.id === `${group.realTicketId}_final`) {
+            } else if (item.id === `${group.realTicketId}_final` || item.id === `${group.realTicketId}_liquidacion_manual`) {
                 // RESTAURADO: El pago final SÍ cierra el ticket automáticamente
                 additionalUpdates.status_id = 'ticket_cerrado';
                 additionalUpdates.closure_date = finalDate;
@@ -1355,7 +1355,7 @@ export default function PaymentsPage() {
                         if (item.id === `${group.realTicketId}_refuerzo`) {
                             updated.metadata.solicitudAdelantoExtra = null;
                         }
-                        if (item.id === `${group.realTicketId}_final`) {
+                        if (item.id === `${group.realTicketId}_final` || item.id === `${group.realTicketId}_liquidacion_manual`) {
                             updated.metadata.fechaPagoFinal = new Date().toISOString();
                             updated.metadata.solicitudLiquidacion = null;
                         }

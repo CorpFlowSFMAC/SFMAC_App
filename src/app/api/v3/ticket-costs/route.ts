@@ -30,6 +30,7 @@ const cleanCostPayload = (cost: Record<string, any>) => {
     if (cost.url_comprobante) payload.url_comprobante = cost.url_comprobante;
     if (cost.solicitado_por) payload.solicitado_por = cost.solicitado_por;
     if (cost.motivo) payload.motivo = cost.motivo;
+    if (cost.fecha_pago) payload.fecha_pago = cost.fecha_pago;
 
     return payload;
 };
