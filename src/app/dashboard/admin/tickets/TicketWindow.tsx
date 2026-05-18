@@ -1755,7 +1755,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 categoria: category,
                 specialist_id: technicianId,
                 monto: amount,
-                estado_pago: "pagado",
+                estado_pago: "pendiente",  // ✅ CORREGIDO: Siempre nace pendiente; Tesorería/Admin lo cambia a pagado
                 solicitado_por: myProfileId || undefined
             });
 
