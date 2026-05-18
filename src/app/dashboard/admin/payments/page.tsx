@@ -284,6 +284,7 @@ export default function PaymentsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
         try {
