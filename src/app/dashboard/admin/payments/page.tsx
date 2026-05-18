@@ -1253,7 +1253,9 @@ export default function PaymentsPage() {
                 setTickets(prev => prev.map(t => {
                     if (t.id === group.realTicketId) {
                         const updated = { ...t };
-                        updated.pendingCosts = (updated.pendingCosts || []).filter((c: any) => c.id !== item.costId);
+                        updated.costos = (updated.costos || []).map((c: any) => 
+                            c.id === item.costId ? { ...c, estado_pago: 'pagado', url_comprobante: nuevoPago.voucherRef } : c
+                        );
                         if (additionalUpdates?.status_id) {
                             updated.status_id = additionalUpdates.status_id;
                             updated.estadoId = additionalUpdates.status_id;
@@ -1346,9 +1348,24 @@ export default function PaymentsPage() {
                         updated.solicitudesDeposito = (updated.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
                     } else {
                         updated.metadata = { ...updated.metadata };
-                        if (item.id === `${group.realTicketId}_adelanto`) updated.metadata.adelantoPagado = true;
-                        if (item.id === `${group.realTicketId}_final`) updated.metadata.fechaPagoFinal = new Date().toISOString();
-                        if (item.id === `${group.realTicketId}_visita`) updated.metadata.visitPaymentConfirmed = true;
+                        if (item.id === `${group.realTicketId}_adelanto`) {
+                            updated.metadata.adelantoPagado = true;
+                            updated.metadata.solicitudAdelanto = null;
+                        }
+                        if (item.id === `${group.realTicketId}_refuerzo`) {
+                            updated.metadata.solicitudAdelantoExtra = null;
+                        }
+                        if (item.id === `${group.realTicketId}_final`) {
+                            updated.metadata.fechaPagoFinal = new Date().toISOString();
+                            updated.metadata.solicitudLiquidacion = null;
+                        }
+                        if (item.id === `${group.realTicketId}_visita`) {
+                            updated.metadata.visitPaymentConfirmed = true;
+                            updated.metadata.solicitudPago = null;
+                        }
+                        // Add to history so it reflects as paid
+                        updated.historialPagosTecnico = [...(updated.historialPagosTecnico || []), nuevoPago];
+                        updated.metadata.historialPagosTecnico = updated.historialPagosTecnico;
                     }
                     if (additionalUpdates?.status_id) {
                         updated.status_id = additionalUpdates.status_id;
