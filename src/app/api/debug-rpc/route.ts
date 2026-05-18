@@ -28,17 +28,9 @@ export async function POST(request: Request) {
         ];
 
         const { data, error } = await supabase
-            .from('tickets')
-            .select(`
-                id, client_ticket_number, status_id, created_at,
-                labor_cost, total_quoted_amount,
-                clients(name),
-                technicians(name),
-                costos:ticket_costs(id, estado_pago, monto)
-            `)
-            .not('status_id', 'in', `(${ESTADOS_EXCLUIDOS.join(',')})`)
-            .order('created_at', { ascending: false })
-            .limit(10);
+            .from('vw_tickets_strategic')
+            .select('*')
+            .limit(5);
 
         if (error) {
             return NextResponse.json({
