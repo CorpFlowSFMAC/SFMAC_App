@@ -438,7 +438,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // ★ OPTIMIZACIÓN: Ejecutar ambas llamadas en paralelo para reducir latencia
             const [costsResponse, ticketResponse] = await Promise.all([
                 ticketCostsAPI.getByTicket(ticketData.id),
-                ticketsAPI.getByTicket(ticketData.id)
+                ticketsAPI.getById(ticketData.id)
             ]);
             
             const costs = costsResponse || [];
