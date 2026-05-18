@@ -710,7 +710,8 @@ export default function PaymentsPage() {
 
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
-                if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
+                // TAMBIEN: No mostrar si ya existe solicitudLiquidacion en metadata (evitar duplicados)
+                if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests && !meta.solicitudLiquidacion) {
                     // V3: La liquidación es el saldo real de mano de obra (Pactado - Pagado)
                     const autoLiqMonto = round2(netLaborBalance);
                     if (autoLiqMonto > 0.01) {
