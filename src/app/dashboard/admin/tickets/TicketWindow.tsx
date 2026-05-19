@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, normalizeTicket } from "@/lib/useQueryHooks";
 
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, ChevronUp, ChevronDown } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -149,7 +149,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [showLiquidationConfirm, setShowLiquidationConfirm] = useState(false);
     const [advanceClassification, setAdvanceClassification] = useState<'pocket' | 'materials'>('pocket');
-    const [advanceRefreshKey, setAdvanceRefreshKey] = useState(0); // Forzar re-render después de confirmación de pago
+    const [advanceRefreshKey, setAdvanceRefreshKey] = useState(0); // Force re-render after payment confirmation
     const [showExceedApprovalConfirm, setShowExceedApprovalConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
@@ -245,12 +245,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     // --- REPORT UPDATE LOGIC ---
     const [showReportUpdateModal, setShowReportUpdateModal] = useState(false);
     const [isSavingReport, setIsSavingReport] = useState(false);
-    
-    // Estados para vista minimalizada en estado cerrado
-    const [liquidationCollapsed, setLiquidationCollapsed] = useState(ticketData.estadoId === "ticket_cerrado");
-    const [ledgerCollapsed, setLedgerCollapsed] = useState(ticketData.estadoId === "ticket_cerrado");
-    const [bankCollapsed, setBankCollapsed] = useState(ticketData.estadoId === "ticket_cerrado");
-    const [profitCollapsed, setProfitCollapsed] = useState(ticketData.estadoId === "ticket_cerrado");
     const [reportForm, setReportForm] = useState({
         diagnostico: "",
         costoManoObra: "",
@@ -1730,11 +1724,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         },
                     }));
                     localStorage.removeItem(`ticket_state_${ticketData.id}`);
-                    // ✅ FORZAR RE-RENDER INMEDIATO para actualizar la UI instantáneamente
+                    // IMMEDIATE UI UPDATE: Force re-render before waiting for loadCosts
                     setTicketCosts((prev: any[]) => 
                         prev.map((c: any) => c.id === matchingPendingCost.id ? { ...c, estado_pago: 'pagado' } : c)
                     );
-                    // Forzar update del estadoadvanceRefreshKey para re-render de toda la ventana
                     setAdvanceRefreshKey((k: number) => k + 1);
                     await loadCosts();
                     setMontoAdelantoManual("");
@@ -3976,8 +3969,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 </div>
                                             )}
                                             <div className={styles.liquidationCardPremium}>
-                                                <div className={styles.liquidationHeaderPremium} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'linear-gradient(135deg, #065F46, #059669)', color: 'white', cursor: 'pointer' } : { cursor: 'pointer' }}
-                                                 onClick={() => ticketData.estadoId === "ticket_cerrado" && setLiquidationCollapsed(!liquidationCollapsed)}>
+                                                <div className={styles.liquidationHeaderPremium} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'linear-gradient(135deg, #065F46, #059669)', color: 'white' } : {}}>
                                                     <div className={styles.headerTitleWrapper}>
                                                         <div className={styles.headerIconBox} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)', color: 'white' } : {}}>
                                                             <Calculator size={28} />
@@ -3991,19 +3983,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <div className={styles.totalBannerBadge} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)' } : { background: '#2563EB', color: 'white' }}>
-                                                            S/ {(techPactedTotal - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                        </div>
-                                                        {ticketData.estadoId === "ticket_cerrado" && (
-                                                            <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '50%', padding: '4px', color: 'white' }}>
-                                                                {liquidationCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                                                            </div>
-                                                        )}
+                                                    <div className={styles.totalBannerBadge} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)' } : { background: '#2563EB', color: 'white' }}>
+                                                        S/ {(techPactedTotal - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                     </div>
                                                 </div>
-
-                                                {(!liquidationCollapsed || ticketData.estadoId !== "ticket_cerrado") && (
 
                                                 <div className={styles.financialDetailsBody}>
                                                     <div className={styles.summarySection}>
@@ -4039,20 +4022,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
                                                         
-                                                        {/* ✅ Resumen de movimientos en estado cerrado */}
-                                                        {ticketData.estadoId === "ticket_cerrado" && laborItems.length + operatingItems.length > 0 && (
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#F8FAFC', borderRadius: '8px', marginTop: '8px', cursor: 'pointer' }}
-                                                             onClick={() => setLedgerCollapsed(!ledgerCollapsed)}>
-                                                                <span style={{ fontSize: '12px', color: '#64748B' }}>
-                                                                    📋 Ver movimientos ({laborItems.length + operatingItems.length})
-                                                                </span>
-                                                                {ledgerCollapsed ? <ChevronDown size={14} color="#64748B" /> : <ChevronUp size={14} color="#64748B" />}
-                                                            </div>
-                                                        )}
-                                                        
-                                                        {/* ✅ Mostrar lista expandida solo cuando no está colapsado en estado cerrado */}
-                                                        {(!ledgerCollapsed || ticketData.estadoId !== "ticket_cerrado") && (
-                                                        <div className={styles.transactionLedgerPremium}>
+                                                        {/* ✅ NUEVO:Mostrar solicitudes pendientes separately */}
+                                                                                               <div className={styles.transactionLedgerPremium}>
                                                             {/* --- SECCIÓN 1: PASIVO LABORAL --- */}
                                                             <div className={styles.ledgerChannel}>
                                                                 <div className={styles.channelHeader} style={{ color: '#1E40AF', background: '#EFF6FF' }}>
@@ -4140,19 +4111,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        )} {/* Cierre de ledgerCollapsed */}
 
-                                                    {/* ✅ Panel de banco con collapse en estado cerrado */}
-                                                    {(!bankCollapsed || ticketData.estadoId !== "ticket_cerrado") && (
                                                     <div className={styles.bankDetailsPanel}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <h4>Transferencia a Destino</h4>
-                                                            {ticketData.estadoId === "ticket_cerrado" && (
-                                                                <button onClick={() => setBankCollapsed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                                                                    <ChevronUp size={16} />
-                                                                </button>
-                                                            )}
-                                                        </div>
+                                                        <h4>Transferencia a Destino</h4>
                                                         
                                                         <div className={styles.bankFieldClean}>
                                                             <strong>BENEFICIARIO</strong>
@@ -4186,7 +4147,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             </div>
                                                         )}
                                                     </div>
-                                                    )} {/* Cierre de bankCollapsed */}
 
                                                     <div className={styles.finalBalanceBanner} style={ticketData.estadoId === "ticket_cerrado" ? { background: '#064E3B' } : {}}>
                                                         <span className={styles.finalBalanceLabel}>
@@ -4199,24 +4159,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
-{(ticketData.estadoId === "ticket_cerrado" && profitCollapsed) && (
-                                                        <div className={styles.profitabilityPanel} style={{ 
-                                                            marginTop: '20px', 
-                                                            padding: '12px 16px', 
-                                                            borderRadius: '12px', 
-                                                            background: grossMargin > 0 ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #DC2626, #991B1B)',
-                                                            color: 'white'
-                                                        }}>
-                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                <span style={{ fontSize: '12px', fontWeight: 600 }}>Rentabilidad: S/ {grossMargin.toFixed(2)}</span>
-                                                                <button onClick={() => setProfitCollapsed(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'white' }}>
-                                                                    <ChevronDown size={16} />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {(ticketData.estadoId !== "ticket_cerrado" || !profitCollapsed) && (
 
                                                     <div className={styles.profitabilityPanel} style={{ 
                                                         marginTop: '20px', 
@@ -4247,10 +4189,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             Utilidad Real tras deducir Pasivo Laboral pactado y Gastos Operativos del ticket.
                                                         </p>
                                                     </div>
-                                                    )}
                                                 </div>
                                             </div>
-                                                )} {/* Cierre de conditional liquidationCollapsed */}
 
                                             {ticketData.estadoId === "por_liquidar" && (
                                                 <div className={styles.waitingForManager} style={{ padding: '30px', background: '#F8FAFC', borderRadius: '20px', border: '1px solid #E2E8F0', marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
