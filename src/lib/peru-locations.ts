@@ -44,7 +44,8 @@ export const PERU_LOCATIONS: Record<string, { provinces: Record<string, string[]
     "La Libertad": {
         provinces: {
             "Trujillo": ["Trujillo", "El Porvenir", "Florencia de Mora", "La Esperanza", "Víctor Larco Herrera"],
-            "Pacasmayo": ["Pacasmayo", "San Pedro de Lloc"]
+            "Pacasmayo": ["Pacasmayo", "San Pedro de Lloc"],
+            "Ascope": ["Casa Grande", "Ascope", "Chao", "Guadalupito"]
         }
     },
     "Lambayeque": { provinces: { "Chiclayo": ["Chiclayo", "José Leonardo Ortiz", "La Victoria"] } },
