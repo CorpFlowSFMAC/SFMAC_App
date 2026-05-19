@@ -26,6 +26,7 @@ interface OnlineQuotationEditorProps {
     sedeInfo?: any;
     servicioId?: string;
     ticketId?: string;
+    numeroTicketCliente?: string;  // ✅ Added: para formato STD
     isLocked?: boolean;
 }
 
@@ -65,7 +66,7 @@ const arePartidasEqual = (left: Partida[], right: Partida[]) => {
     });
 };
 
-const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onUpdate, suggestedTotal, initialItems, clientInfo, sedeInfo, servicioId, ticketId, isLocked }, ref) => {
+const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onUpdate, suggestedTotal, initialItems, clientInfo, sedeInfo, servicioId, ticketId, numeroTicketCliente, isLocked }, ref) => {
     const [focusedField, setFocusedField] = useState<string | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const [items, setItems] = useState<Partida[]>(() => normalizePartidas(initialItems));
@@ -73,6 +74,21 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
     const onUpdateRef = useRef(onUpdate);
     const lastEmittedRef = useRef("");
     const initialItemsSignature = useMemo(() => JSON.stringify(initialItems || []), [initialItems]);
+    
+    // ✅ DETECCIÓN SANTANDER
+    const isSantander = numeroTicketCliente?.startsWith('STD');
+    
+    // ✅ GENERAR NÚMERO DE COTIZACIÓN SEGÚN CLIENTE
+    const cotizacionNumero = useMemo(() => {
+        if (numeroTicketCliente?.startsWith('STD')) {
+            // Formato Santander: N° 001-0001-STD
+            const num = numeroTicketCliente.match(/STD(\d+)/)?.[1] || '0001';
+            return `N° 001-${num}-STD`;
+        }
+        // Formato estándar MB: N° 001-2026-MB
+        const year = new Date().getFullYear().toString().slice(-2);
+        return `N° 001-${year}-MB`;
+    }, [numeroTicketCliente]);
 
     useEffect(() => {
         onUpdateRef.current = onUpdate;
@@ -212,7 +228,9 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                             </div>
                             <div className={styles.supplierRow}>
                                 <label>CLIENTE:</label>
-                                <strong>20382036655 - BANCO DE LA MICROEMPRESA S.A.C.</strong>
+                                <strong>{isSantander 
+                                    ? "20382036655 - Banco Santander" 
+                                    : "20382036655 - BANCO DE LA MICROEMPRESA S.A.C."}</strong>
                             </div>
                             <div className={styles.supplierRow}>
                                 <label>AGENCIA:</label>
@@ -228,7 +246,7 @@ const OnlineQuotationEditor = forwardRef<any, OnlineQuotationEditorProps>(({ onU
                         <div className={styles.quoteInfoBox}>
                             <h3>COTIZACIÓN DE SERVICIO</h3>
                             <div className={styles.quoteNumber}>
-                                <strong>N° 001-2026-MB</strong>
+                                <strong>{cotizacionNumero}</strong>
                             </div>
                         </div>
                         <div className={styles.quoteDetailsMeta}>
