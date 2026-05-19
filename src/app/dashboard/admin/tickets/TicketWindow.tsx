@@ -149,6 +149,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [showLiquidationConfirm, setShowLiquidationConfirm] = useState(false);
     const [advanceClassification, setAdvanceClassification] = useState<'pocket' | 'materials'>('pocket');
+    const [advanceRefreshKey, setAdvanceRefreshKey] = useState(0); // Force re-render after payment confirmation
     const [showExceedApprovalConfirm, setShowExceedApprovalConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
@@ -467,7 +468,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         } finally {
             setLoadingCosts(false);
         }
-    }, [ticketData.id]);
+    }, [ticketData.id, advanceRefreshKey]);
 
     // Suscripción granular a COSTOS (el ticket se actualiza vía props)
     useEffect(() => {
@@ -1705,12 +1706,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 const newState = ticketData.estadoId === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.estadoId;
                 setIsConfirmingPayment(true);
                 isProcessingAdvance.current = true;
+                // ✅ FIX: Desactivar transición para bloquear realtime durante update
+                isTransitioning.current = true;
                 try {
                     await ticketCostsAPI.update(matchingPendingCost.id, {
                         estado_pago: 'pagado',
                         solicitado_por: myProfileId || undefined
                     });
-                    await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null }, { status_id: newState });
+                    
+                    // ✅ Verificar respuesta antes de continuar
+                    const patchResult = await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null }, { status_id: newState });
+                    if (!patchResult) {
+                        throw new Error('API rejected metadata patch');
+                    }
+                    
+                    // ✅ SOLO actualizar UI local si el servidor respondió exitosamente
                     setTicketData((prev: any) => ({
                         ...prev,
                         estadoId: newState,
@@ -1723,19 +1733,33 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         },
                     }));
                     localStorage.removeItem(`ticket_state_${ticketData.id}`);
+                    // IMMEDIATE UI UPDATE: Force re-render before waiting for loadCosts
+                    setTicketCosts((prev: any[]) => 
+                        prev.map((c: any) => c.id === matchingPendingCost.id ? { ...c, estado_pago: 'pagado' } : c)
+                    );
+                    setAdvanceRefreshKey((k: number) => k + 1);
                     await loadCosts();
                     setMontoAdelantoManual("");
                     setPorcentajeAdelanto(null);
                     showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)}.`, "success");
-                } catch (err) {
+                } catch (err: any) {
                     console.error("Error confirming pending advance:", err);
+                    // ✅ Si hay error 400, no revertir UI automáticamente
+                    const isBadRequest = err?.message?.includes('400') || err?.message?.includes('rejected') || err?.message?.includes('API rejected');
                     const message = err instanceof DuplicateTicketCostError
                         ? "Ya existe un pago confirmado con el mismo ticket, monto y concepto."
-                        : "No se pudo confirmar el adelanto pendiente.";
+                        : isBadRequest
+                            ? "El servidor rechó la actualización. Verifica los datos e intenta de nuevo."
+                            : "No se pudo confirmar el adelanto pendiente.";
                     showToast("Error de Conexión", message, "error");
+            isTransitioning.current = false;
+                    // ✅ En caso de error, revertir el flag de transición para permitir retry
+                    isTransitioning.current = false;
                 } finally {
                     setIsConfirmingPayment(false);
                     confirmAdvanceRef.current = false;
+                    // ✅ Reactivar realtime después de 1.5s para permitir que el servidor procese
+                    setTimeout(() => { isTransitioning.current = false; }, 1500);
                     setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
                 }
                 return;
@@ -1744,6 +1768,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
         setIsConfirmingPayment(true);
         isProcessingAdvance.current = true;
+        // ✅ FIX: Desactivar realtime durante creación
+        isTransitioning.current = true;
         try {
             // ════════════════════════════════════════════════════════════
             // REGLA FIJA V3: Ningún costo creado desde TicketWindow queda
@@ -1753,7 +1779,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const category = isForMaterials ? "Materiales" : "Mano de Obra";
             const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto Operativo (MANO DE OBRA)";
 
-            await ticketCostsAPI.create({
+            const createResult = await ticketCostsAPI.create({
                 ticket_id: currentId,
                 concepto: conceptPrefix,
                 categoria: category,
@@ -1762,11 +1788,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estado_pago: "pendiente", // ← SIEMPRE pendiente; Tesorería aprueba
                 solicitado_por: myProfileId || undefined
             });
+            
+            if (!createResult) {
+                throw new Error('API rejected cost creation');
+            }
 
-            // Limpiar solicitud de metadata (ya está registrada en ticket_costs)
-            const metadataUpdates = { solicitudAdelanto: null };
-            await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates);
+            const patchResult = await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null });
+            if (!patchResult) {
+                throw new Error('API rejected metadata patch');
+            }
 
+            // ✅ Solo actualizar UI si el servidor respondió exitosamente
             const updated = {
                 ...ticketData,
                 solicitudAdelanto: null,
@@ -1788,9 +1820,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 ? "Ya existe un pago confirmado con el mismo ticket, monto y concepto."
                 : "No se pudo registrar la solicitud de adelanto.";
             showToast("Error de Conexión", message, "error");
+            isTransitioning.current = false;
         } finally {
             setIsConfirmingPayment(false);
             confirmAdvanceRef.current = false;
+            setTimeout(() => { isTransitioning.current = false; }, 1500);
             setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }
     };
