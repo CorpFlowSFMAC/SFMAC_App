@@ -1133,14 +1133,29 @@ export default function PaymentsPage() {
         const montoStr = formatSoles(item.monto);
 
         // Si el técnico tiene Yape o Plin, intentamos Deep Link
+        // ✅ FIX: Solo ejecutar deep links en dispositivos móviles, no en desktop
         if (phone && (group.tecnico.yape || group.tecnico.plin)) {
             const wallet = group.tecnico.yape ? 'yape' : 'plin';
-            const deepLink = wallet === 'yape' 
-                ? `yape://pay?number=${phone}&amount=${item.monto}`
-                : `plin://pay?number=${phone}&amount=${item.monto}`;
-
-            // Abrimos la app y mostramos el modal de espera
-            window.location.href = deepLink;
+            
+            // ✅ DEVICE VALIDATION: Verificar si es móvil antes de intentar deep link
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            if (isMobile && wallet === 'yape') {
+                const deepLink = `yape://pay?number=${phone}&amount=${item.monto}`;
+                try {
+                    window.location.href = deepLink;
+                } catch (e) {
+                    console.warn('Yape deep link failed (non-mobile or no handler):', e);
+                }
+            } else if (isMobile && wallet === 'plin') {
+                const deepLink = `plin://pay?number=${phone}&amount=${item.monto}`;
+                try {
+                    window.location.href = deepLink;
+                } catch (e) {
+                    console.warn('Plin deep link failed (non-mobile or no handler):', e);
+                }
+            }
+            // ✅ En desktop, no intentar deep link - solo mostrar modal de espera
             
             setWaitingVoucher({
                 group,
