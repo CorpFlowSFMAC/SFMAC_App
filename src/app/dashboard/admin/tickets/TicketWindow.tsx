@@ -3842,19 +3842,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                 <strong>5. NÚMERO DE TICKET DEL CLIENTE</strong>
                                                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                                    {!ticketData.numeroTicketCliente && (
+                                                                    {!ticketData.numeroTicketCliente && !isSantander && (
                                                                         <button 
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 const year = new Date().getFullYear().toString().slice(-2);
-                                                                                setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: `MB000000.${year}` })); // Auto-fill sugerido
+                                                                                setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: `MB000000.${year}` }));
                                                                             }}
                                                                             style={{ fontSize: '0.6rem', background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '1px 4px', borderRadius: '4px', cursor: 'pointer' }}
                                                                         >
                                                                             Auto-completar
                                                                         </button>
                                                                     )}
-                                                                    {isClientTicketFormatValid(ticketData.numeroTicketCliente) && (
+                                                                    {ticketData.numeroTicketCliente && isClientTicketFormatValid(ticketData.numeroTicketCliente) && (
                                                                         <span style={{ fontSize: '0.65rem', color: '#059669', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>VALIDADO</span>
                                                                     )}
                                                                 </div>
@@ -3881,20 +3881,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 onClick={(e) => e.stopPropagation()}
                                                                 readOnly={isSantander}
                                                             />
-                                                            {!ticketData.numeroTicketCliente && (
+                                                            {!ticketData.numeroTicketCliente && !isSantander && (
                                                                 <span style={{ color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
                                                                     ¡OBLIGATORIO: PENDIENTE DE ASIGNAR!
                                                                 </span>
                                                             )}
-                                                            {ticketData.numeroTicketCliente && !(/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) && !ticketData.numeroTicketCliente.startsWith('#') && (
+                                                            {ticketData.numeroTicketCliente && !isClientTicketFormatValid(ticketData.numeroTicketCliente) && !ticketData.numeroTicketCliente.startsWith('#') && (
                                                                 <span style={{ color: '#F59E0B', fontSize: '0.65rem', fontWeight: 700, marginTop: '4px', lineHeight: '1.2' }}>
-                                                                    FORMATO REQUERIDO: MB + 6 DÍGITOS + PUNTO + AÑO (26)<br />
-                                                                    Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
+                                                                    {isSantander ? (
+                                                                        <>
+                                                                            FORMATO REQUERIDO: STD + 4 DÍGITOS + PUNTO + AÑO (26)<br />
+                                                                            Ejemplo: STD0001.{new Date().getFullYear().toString().slice(-2)}
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            FORMATO REQUERIDO: MB + 6 DÍGITOS + PUNTO + AÑO (26)<br />
+                                                                            Ejemplo: MB000025.{new Date().getFullYear().toString().slice(-2)}
+                                                                        </>
+                                                                    )}
                                                                 </span>
                                                             )}
-                                                            {ticketData.numeroTicketCliente && ((/^MB\d{6}\.\d{2}$/.test(ticketData.numeroTicketCliente)) || ticketData.numeroTicketCliente.startsWith('#')) && (
+                                                            {ticketData.numeroTicketCliente && isClientTicketFormatValid(ticketData.numeroTicketCliente) && (
                                                                 <span style={{ color: '#059669', fontSize: '0.65rem', fontWeight: 800, marginTop: '4px' }}>
-                                                                    ✔ FORMATO VÁLIDO
+                                                                    ✔ FORMATO VÁLIDO {isSantander ? '(STD)' : ''}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -3903,16 +3912,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
                                                 <button
                                                     className={styles.proceedToLiquidationBtn}
-                                                    disabled={(!isSantander && !Object.values(documentosChecklist).every(v => v)) || !isClientTicketFormatValid(ticketData.numeroTicketCliente)}
+                                                    disabled={(!isSantander && !Object.values(documentosChecklist).every(v => v)) || (!isSantander && !isClientTicketFormatValid(ticketData.numeroTicketCliente))}
                                                     onClick={handleRequestFinalLiquidation}
                                                 >
                                                     <span>PASAR A LIQUIDACIÓN FINAL</span>
                                                     <ArrowRight size={20} />
                                                 </button>
 
-                                                {(!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente) && (
+                                                {(!isSantander && (!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente)) && (
                                                     <p className={styles.checklistAlert}>
-                                                        * Todos los documentos y el número de ticket del cliente son obligatorios para continuar.
+                                                        {isSantander 
+                                                            ? "* Verifique los documentos para continuar."
+                                                            : "* Todos los documentos y el número de ticket del cliente son obligatorios para continuar."
+                                                        }
                                                     </p>
                                                 )}
                                             </div>
