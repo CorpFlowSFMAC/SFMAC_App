@@ -9,7 +9,7 @@ import {
     Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle, ShieldAlert
 } from "lucide-react";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
-import { ticketsAPI, paymentsAPI } from "@/lib/supabase-api";
+import { ticketsAPI, ticketCostsAPI, paymentsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useAppData } from "@/lib/AppDataContext";
 import { queryKeys } from "@/lib/useQueryHooks";
@@ -1294,6 +1294,64 @@ export default function PaymentsPage() {
                 return;
             }
 
+            let createdCostId: string | null = null;
+            
+            const isVirtualPayment = [
+                `${group.realTicketId}_final`,
+                `${group.realTicketId}_liquidacion_manual`,
+                `${group.realTicketId}_adelanto`,
+                `${group.realTicketId}_refuerzo`,
+                `${group.realTicketId}_visita`
+            ].includes(item.id);
+
+            if (isVirtualPayment) {
+                let categoria = 'Mano de Obra';
+                let concepto = item.concepto || item.tipo || 'Pago';
+                
+                if (item.id === `${group.realTicketId}_final` || item.id === `${group.realTicketId}_liquidacion_manual`) {
+                    concepto = item.concepto || 'Liquidación Final: Saldo de Mano de Obra';
+                } else if (item.id === `${group.realTicketId}_adelanto`) {
+                    concepto = item.concepto || 'Adelanto Operativo (MANO DE OBRA)';
+                } else if (item.id === `${group.realTicketId}_refuerzo`) {
+                    concepto = item.concepto || 'Refuerzo / Adelanto Extra';
+                } else if (item.id === `${group.realTicketId}_visita`) {
+                    concepto = item.concepto || 'Pago de Visita';
+                }
+
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    const creatorId = user?.id || undefined;
+
+                    // 1. Crear el costo como 'pendiente'
+                    const createdCost = await ticketCostsAPI.create({
+                        ticket_id: group.realTicketId,
+                        concepto,
+                        categoria,
+                        monto: item.monto,
+                        estado_pago: 'pendiente',
+                        specialist_id: currentTicket.technician_id || undefined,
+                        solicitado_por: creatorId
+                    });
+
+                    // 2. Transicionar a 'pagado' vía Hetzner
+                    if (createdCost?.id) {
+                        createdCostId = createdCost.id;
+                        await updateTicketCostOnHetzner(createdCost.id, {
+                            estado_pago: 'pagado',
+                            url_comprobante: voucherBase64 || null,
+                            fecha_pago: finalDate
+                        });
+                    }
+                } catch (createErr) {
+                    console.error('[Treasury] Error registering virtual payment in ticket_costs:', createErr);
+                    throw createErr;
+                }
+            }
+
+            if (createdCostId) {
+                nuevoPago.id = createdCostId;
+            }
+
             const meta = { ...currentTicket.metadata };
             const additionalUpdates: any = { metadataFields: {} };
 
@@ -1342,7 +1400,20 @@ export default function PaymentsPage() {
                 
                 // Obtenemos costos de la tabla si existen para un cálculo preciso
                 const { data: currentCosts } = await supabase.from('ticket_costs').select('*').eq('ticket_id', group.realTicketId);
-                const fin = calculateTicketFinances(simulatedTicket, currentCosts || []);
+                const localCosts = currentCosts || [];
+                if (createdCostId && !localCosts.some(c => c.id === createdCostId)) {
+                    localCosts.push({
+                        id: createdCostId,
+                        ticket_id: group.realTicketId,
+                        concepto: item.concepto || item.tipo || 'Pago',
+                        categoria: 'Mano de Obra',
+                        monto: item.monto,
+                        estado_pago: 'pagado',
+                        fecha_pago: finalDate,
+                        specialist_id: currentTicket.technician_id
+                    });
+                }
+                const fin = calculateTicketFinances(simulatedTicket, localCosts);
                 
                 if (fin.netLaborBalance < 1) { // Margen de error de 1 sol
                     additionalUpdates.status_id = 'ticket_cerrado';
