@@ -3428,6 +3428,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 sedeInfo={ticketData.sede}
                                                                 servicioId={ticketData.servicioId}
                                                                 ticketId={ticketData.numeroTicketCliente || ticketData.id}
+                                                                numeroTicketCliente={ticketData.numeroTicketCliente}
                                                                 initialItems={partidasCotización}
                                                                 suggestedTotal={round2((round2(ticketData.costoManoObra || 0) + round2(ticketData.costoMateriales || 0) + round2(ticketData.costoVisita || 0)) / 0.45)}
                                                                 onUpdate={(items: any[], total: number) => {
