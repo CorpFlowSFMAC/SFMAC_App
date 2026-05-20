@@ -248,8 +248,9 @@ export default function AdminDashboard() {
         const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
 
 
-        // REGLA 3: INVERSION SOLO DE tickets CERRADOS
-        const inversionEjecutada = closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
+        // REGLA 3: INVERSIÓN EJECUTADA - Visible siempre (no depende de cierre)
+        // Se calcula desde todos los tickets con actividad en el periodo
+        const inversionEjecutada = inPeriod.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
 
         // Utilidad y Margen
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
