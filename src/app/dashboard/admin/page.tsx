@@ -277,6 +277,11 @@ export default function AdminDashboard() {
             return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
+        // ✅ NUEVO: Tickets EN PROCESO (aprobados)
+        const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
+        const approvedTickets = inPeriod.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
+        const totalEnProceso = approvedTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
+
         return { 
             inversion: round2(inversionEjecutada), 
             ingresos: round2(ingresosGenerados), 
@@ -285,6 +290,11 @@ export default function AdminDashboard() {
             ratio: ratioEficiencia, 
             closed: closed.length, 
             total: tickets.length, 
+            // ✅ NUEVO: Información de tickets EN PROCESO
+            enProceso: {
+                ingresos: round2(totalEnProceso),
+                tickets: approvedTickets.length,
+            },
             byService,
             inversionItems: closed.map(t => ({
                 ...t,
@@ -573,6 +583,12 @@ export default function AdminDashboard() {
                         setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ingresos' })));
                         setShowListModal(true);
                     }}
+                />
+                {/* NUEVO: Cards de tickets EN PROCESO */}
+                <RoiCard label="EN PROCESO" value={`S/ ${fmt(roi.enProceso?.ingresos || 0)}`}
+                    sub={`${roi.enProceso?.tickets || 0} ticket(s) activo(s)`} color="#F59E0B"
+                    icon={Clock}
+                    light={(roi.enProceso?.tickets || 0) > 0 ? "AMBAR" : "VERDE"}
                 />
                 <RoiCard label="Utilidad Neta" value={`S/ ${fmt(roi.utilidad)}`}
                     sub={`Margen: ${Math.round(roi.margen)}% (CERRADOS)`} color="#8B5CF6"
