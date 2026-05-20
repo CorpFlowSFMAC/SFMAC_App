@@ -236,11 +236,12 @@ export default function AdminDashboard() {
             return createdInRange || closedInRange;
         });
 
+        // ✅ CORREGIDO: Solo tickets CERRADOS (no en proceso)
         const closed = inPeriod.filter((t: any) => {
             const sid = normalizeStateId(t.status_id || t.estadoId);
-            const approvedOrLater = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin", "ticket_cerrado", "liquidado"];
-            return approvedOrLater.includes(sid);
+            return sid === "ticket_cerrado";  // SOLO ticket_cerrado
         });
+
 
         // REGLA 2: Lectura Inmutable (Backend Single Source of Truth)
         // Está estrictamente prohibido calcular IGV o sumar costos en el Frontend.
@@ -265,7 +266,7 @@ export default function AdminDashboard() {
         console.log(`[AUDIT ROI] Tickets Cerrados: ${closed.length}`);
         console.log(`[AUDIT ROI] Ingresos (Neto): S/ ${ingresosGenerados.toFixed(2)}`);
         console.log(`[AUDIT ROI] Inversión (Neto): S/ ${inversionEjecutada.toFixed(2)}`);
-        console.log(`[AUDIT ROI] Utilidad: S/ ${utilidadNeta.toFixed(2)} (Diff: ${(ingresosGenerados - inversionEjecutada - utilidadNeta).toFixed(4)})`);
+        console.log(`[AUDIT ROI] Utilidad: S/ ${utilidadNeta.toFixed(2)}`);
 
         // Por servicio (Lectura inmutable del backend)
         const byService = SERVICE_TYPES.map(s => {
@@ -564,17 +565,17 @@ export default function AdminDashboard() {
                     }}
                 />
                 <RoiCard label="Ingresos Generados" value={`S/ ${fmt(roi.ingresos)}`}
-                    sub={`${roi.closed} tickets cerrados (Neto)`} color="#10B981"
+                    sub={`De ${roi.closed} ticket(s) CERRADO(s)`} color="#10B981"
                     icon={DollarSign}
                     light={roi.ingresos > roi.inversion ? "VERDE" : "ROJO"}
                     onClick={() => {
-                        setModalTitle("Análisis de Ingresos: Ventas Liquidadas (NETO)");
+                        setModalTitle("Análisis de Ingresos: Tickets CERRADOS (NETO)");
                         setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ingresos' })));
                         setShowListModal(true);
                     }}
                 />
                 <RoiCard label="Utilidad Neta" value={`S/ ${fmt(roi.utilidad)}`}
-                    sub={`Margen Real: ${Math.round(roi.margen)}%`} color="#8B5CF6"
+                    sub={`Margen: ${Math.round(roi.margen)}% (CERRADOS)`} color="#8B5CF6"
                     icon={TrendingUp}
                     light={roi.margen >= 35 ? "VERDE" : roi.margen >= 20 ? "AMBAR" : "ROJO"}
                     onClick={() => {
