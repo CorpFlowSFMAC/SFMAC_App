@@ -248,9 +248,11 @@ export default function AdminDashboard() {
         const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
 
 
-        // REGLA 3: INVERSIÓN EJECUTADA - Visible siempre (no depende de cierre)
-        // Se calcula desde todos los tickets con actividad en el periodo
-        const inversionEjecutada = inPeriod.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
+        // REGLA 3: INVERSIÓN EJECUTADA - Mismo cálculo que Tesorería
+        // Solo tickets APROBADOS + anticipo 50% (gasto_flujo_a)
+        const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
+        const approvedInv = inPeriod.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
+        const inversionEjecutada = approvedInv.reduce((acc, t) => acc + parseFloat(t.gasto_flujo_a || t.anticipo_50 || 0), 0);
 
         // Utilidad y Margen
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
