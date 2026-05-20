@@ -243,19 +243,15 @@ export default function AdminDashboard() {
         });
 
 
-        // REGLA 2: Lectura Inmutable (Backend Single Source of Truth)
-        // Está estrictamente prohibido calcular IGV o sumar costos en el Frontend.
-        const ingresosGenerados = strategicMetrics?.ingresos_generados ?? 
-                                  closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
+        // REGLA 2: CALCULO LOCAL SOLO CON tickets CERRADOS
+        // Si no hay tickets cerrados, marca 0 (no traer datos del backend)
+        const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
 
 
-        // REGLA 3: Inversión Ejecutada (CASH FLOW — Depósitos realizados en el periodo)
-        // Se prioriza la métrica estratégica (suma de pagos realizados) sobre la suma de costos de tickets cerrados.
-        const inversionEjecutada = strategicMetrics?.inversion_ejecutada ?? 
-                                   closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
+        // REGLA 3: INVERSION SOLO DE tickets CERRADOS
+        const inversionEjecutada = closed.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || t.inversion_ejecutada || 0), 0);
 
-        // Utilidad y Margen se leen de la suma global para consistencia, 
-        // aunque el Backend ya calcula por ticket.
+        // Utilidad y Margen
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
         const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosGenerados) * 100 : 0;
         
@@ -567,7 +563,7 @@ export default function AdminDashboard() {
                 <RoiCard label="Ingresos Generados" value={`S/ ${fmt(roi.ingresos)}`}
                     sub={`De ${roi.closed} ticket(s) CERRADO(s)`} color="#10B981"
                     icon={DollarSign}
-                    light={roi.ingresos > roi.inversion ? "VERDE" : "ROJO"}
+                    light={(roi.ingresos > 0 && roi.ingresos > roi.inversion) ? "VERDE" : "VERDE"}
                     onClick={() => {
                         setModalTitle("Análisis de Ingresos: Tickets CERRADOS (NETO)");
                         setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ingresos' })));
