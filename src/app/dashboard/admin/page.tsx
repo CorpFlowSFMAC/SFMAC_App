@@ -291,8 +291,10 @@ export default function AdminDashboard() {
 
 
         // REGLA 2: INGRESOS GENERADOS = Tickets CERRADOS con MONTO FINAL (CON IGV)
-        // El monto final facturado YA INCLUYE IGV. Probamos varios campos.
+        // El monto final facturado YA INCLUYE IGV.
         let ingresosConIGV = 0;
+        let costosCerrados = 0;
+        
         closed.forEach((t: any) => {
             // Buscar monto en varios campos posibles
             const monto = parseFloat(
@@ -304,7 +306,12 @@ export default function AdminDashboard() {
             );
             const ingresoReal = parseFloat(t.ingresos_reales || t.ingreso_real || 0);
             
-            console.log(`[DEBUG] Ticket ${t.id?.substring(0,8)}: total_quoted=${t.total_quoted_amount} monto=${t.monto}total=${t.total_amount} ingreso_real=${ingresoReal}`);
+            // Calcular custos propios del ticket cerrado (mano obra + materiales + visitas)
+            const costoMano = parseFloat(t.labor_cost || t.costoManoObra || 0);
+            const costoMat = parseFloat(t.materials_cost || t.costoMateriales || 0);
+            const costoVis = parseFloat(t.visit_cost || t.costoVisita || 0);
+            const custosDelTicket = costoMano + costoMat + costoVis;
+            costosCerrados += custosDelTicket;
             
             // Usar el mayor valor entre monto facturado e ingreso real
             ingresosConIGV += Math.max(monto, ingresoReal);
@@ -316,12 +323,10 @@ export default function AdminDashboard() {
         // Para UI: Mostrar CON IGV
         const ingresosGenerados = ingresosConIGV;
         
-        // Para cálculo de utilidad: usamos neto (sin IGV)
+        // Para calculo: usamos neto (sin IGV)
         const ingresosNetoCalculo = ingresosSinIGV;
-
-
-        // REGLA 3: INVERSIÓN EJECUTADA = Depósitos realizados en el mes
-        // ★ CORREGIDO: Se obtiene directamente del módulo de pagos (ticket_payments)
+    
+        // REGLA 3: INVERSION EJECUTADA = Depositos del mes (para cuadro de Inversion)
         const now = new Date();
         const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         
@@ -344,29 +349,20 @@ export default function AdminDashboard() {
         const inversionEjecutada = inversionDesdePayments;
         
         // DEBUG
-        console.log('[ROI Debug] monthlyDeposits:', monthlyDeposits);
-        console.log('[ROI Debug] currentMonthKey:', currentMonthKey);
-        console.log('[ROI Debug] inversionEjecutada:', inversionEjecutada);
 
         // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
         // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto
-        const utilidadNeta = round2(ingresosNetoCalculo - inversionEjecutada);
+        const utilidadNeta = round2(ingresosNetoCalculo - costosCerrados);
         const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosNetoCalculo) * 100 : 0;
         
         // Ratio de Eficiencia: [Utilidad Neta] / [Inversión Ejecutada]
         const ratioEficiencia = inversionEjecutada > 0 ? (utilidadNeta / inversionEjecutada) : 0;
 
         // AUDIT LOG (Temporal para validación)
-        console.log(`[AUDIT ROI] Tickets Cerrados: ${closed.length}`);
-        console.log(`[AUDIT ROI] Ingresos (CON IGV): S/ ${ingresosConIGV.toFixed(2)}`);
-        console.log(`[AUDIT ROI] Ingresos (SIN IGV): S/ ${ingresosNetoCalculo.toFixed(2)}`);
-        console.log(`[AUDIT ROI] Inversión (Depósitos): S/ ${inversionEjecutada.toFixed(2)}`);
-        console.log(`[AUDIT ROI] Utilidad: S/ ${utilidadNeta.toFixed(2)}`);
         
         // Log detallado por ticket cerrado
         closed.forEach((t: any, idx: number) => {
             const monto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-            console.log(`[AUDIT Ticket ${idx+1}] ID:${t.id?.substring(0,8)} monto=${monto.toFixed(2)} cierre=${t.closure_date}`);
         });
 
         // Por servicio (Lectura inmutable del backend)
