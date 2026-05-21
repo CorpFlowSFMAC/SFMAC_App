@@ -72,12 +72,27 @@ export const normalizeTicket = (t: any) => {
         };
     }
 
+    // ── Protección: Eliminar campos de columnas DB del metadata ──
+    // El JSONB metadata puede contener copias stale de campos que son columnas
+    // reales de la tabla (e.g. status_id guardado por syncToSupabase).
+    // Si se dejan en el spread, sobreescriben el valor real de la columna
+    // y provocan que los KPIs del dashboard fluctúen (tickets cerrados
+    // aparecen como "aprobados" porque metadata.status_id tiene el estado viejo).
+    const safeMetadata = { ...realMetadata };
+    delete safeMetadata.status_id;
+    delete safeMetadata.id;
+    delete safeMetadata.labor_cost;
+    delete safeMetadata.materials_cost;
+    delete safeMetadata.visit_cost;
+    delete safeMetadata.total_quoted_amount;
+
     // Combinar todo en un objeto final
-    // Importante: No dejar que el spread (...realMetadata) al final sobreescriba campos normalizados
+    // Importante: No dejar que el spread sobreescriba campos normalizados
     return {
         ...t,
-        ...realMetadata, // Spread inicial para capturar campos extras
+        ...safeMetadata, // Spread de metadata SIN campos de columnas DB
         id: t.id, // Asegurar ID del nivel superior
+        status_id: t.status_id, // Siempre usar el valor real de la columna
         estadoId: normalizeStateId(
             t.status_id || t.estadoId || realMetadata.estadoId || "nuevo"
         ),
