@@ -419,7 +419,7 @@ export default function AdminDashboard() {
         // Presupuestos Aprobados: En ejecución o por liquidar
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const totalAprobadosNeto = approvedTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
+        const totalAprobados = approvedTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || t.montoFinal || 0), 0);
 
         // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados
         // = Ingresos esperados menos costos (ambos sin IGV)
@@ -453,7 +453,7 @@ export default function AdminDashboard() {
             approvedTickets: [...approvedTickets],
             total: todosPendientes.length,
             totalPipeline: round2(totalPipelineNeto),
-            totalAprobados: round2(totalAprobadosNeto),
+            totalAprobados: round2(totalAprobados),
             lucro: round2(lucroReal),
             aging: [
                 { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), tickets: [...aging["0-24h"]], color: "#10B981" },

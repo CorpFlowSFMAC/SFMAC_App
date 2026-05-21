@@ -105,7 +105,7 @@ export default function AdminLayout({
             // Buscar en perfiles primero
             const { data: p, error: errorP } = await supabase
                 .from('perfiles')
-                .select('id, nombre_completo, nombre')
+                .select('id, nombre_completo')
                 .ilike('email', email)
                 .maybeSingle();
             
@@ -113,15 +113,15 @@ export default function AdminLayout({
                 console.warn('[AdminLayout] Error perfiles:', errorP.message);
             }
             
-            if (p?.nombre_completo || p?.nombre) {
-                setGestoraNombre(p.nombre_completo || p.nombre);
+            if (p?.nombre_completo) {
+                setGestoraNombre(p.nombre_completo);
                 return;
             }
 
             // Fallback a gestoras
             const { data: g, error: errorG } = await supabase
                 .from('gestoras')
-                .select('id, name, nombre')
+                .select('id, name')
                 .ilike('email', email)
                 .maybeSingle();
             
@@ -129,8 +129,8 @@ export default function AdminLayout({
                 console.warn('[AdminLayout] Error gestoras:', errorG.message);
             }
             
-            if (g?.name || g?.nombre) {
-                setGestoraNombre(g.name || g.nombre);
+            if (g?.name) {
+                setGestoraNombre(g.name);
             } else {
                 setGestoraNombre(email.split('@')[0]);
             }
