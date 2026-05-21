@@ -448,25 +448,25 @@ export default function AdminDashboard() {
         const penLiq = approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado", "requiere_revision_admin"].includes(normalizeStateId(t.status_id || t.estadoId)));
 
         return {
-            tickets: todosPendientes,
-            pipelineTickets,
-            approvedTickets,
+            tickets: [...todosPendientes],
+            pipelineTickets: [...pipelineTickets],
+            approvedTickets: [...approvedTickets],
             total: todosPendientes.length,
             totalPipeline: round2(totalPipelineNeto),
             totalAprobados: round2(totalAprobadosNeto),
             lucro: round2(lucroReal),
             aging: [
-                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), tickets: aging["0-24h"], color: "#10B981" },
-                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), tickets: aging["24-48h"], color: "#F59E0B" },
-                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmountNeto(aging["+48h"]), tickets: aging["+48h"], color: "#EF4444" },
+                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), tickets: [...aging["0-24h"]], color: "#10B981" },
+                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), tickets: [...aging["24-48h"]], color: "#F59E0B" },
+                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmountNeto(aging["+48h"]), tickets: [...aging["+48h"]], color: "#EF4444" },
             ],
             bloqueados48: aging["+48h"].length,
             bottlenecks: [
-                { label: "Esperando Cotización", count: espCot.length, tickets: espCot, color: "#8B5CF6" },
-                { label: "Esperando Aprobación", count: espApro.length, tickets: espApro, color: "#3B82F6" },
-                { label: "Esperando Adelanto", count: espAde.length, tickets: espAde, color: "#F59E0B" },
-                { label: "En Ejecución", count: enEjec.length, tickets: enEjec, color: "#10B981" },
-                { label: "Pendiente Liquidar", count: penLiq.length, tickets: penLiq, color: "#64748B" },
+                { label: "Esperando Cotización", count: espCot.length, tickets: [...espCot], color: "#8B5CF6" },
+                { label: "Esperando Aprobación", count: espApro.length, tickets: [...espApro], color: "#3B82F6" },
+                { label: "Esperando Adelanto", count: espAde.length, tickets: [...espAde], color: "#F59E0B" },
+                { label: "En Ejecución", count: enEjec.length, tickets: [...enEjec], color: "#10B981" },
+                { label: "Pendiente Liquidar", count: penLiq.length, tickets: [...penLiq], color: "#64748B" },
             ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
     }, [tickets]);
