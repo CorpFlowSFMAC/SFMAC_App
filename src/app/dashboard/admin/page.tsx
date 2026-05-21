@@ -150,10 +150,14 @@ function GestoraBar({ name, count, max, color }: any) {
 // MAIN EXECUTIVE DASHBOARD
 // ════════════════════════════════════════════
 export default function AdminDashboard() {
-    const { tickets, loadingTickets, technicians, gestoras, updateTicket, refreshTickets } = useAppData();
+    const { tickets = [], loadingTickets, technicians, gestoras = [], updateTicket, refreshTickets } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [now] = useState(() => new Date());
+    
+    // Proteger gestoras contra undefined
+    const safeGestoras = Array.isArray(gestoras) ? gestoras : [];
+    const gestorasMap = new Map(safeGestoras.map((g: any) => [g.id, g]));
     
     // ★ NUEVO: Estado para depósitos realizados (del módulo de pagos)
     const [monthlyDeposits, setMonthlyDeposits] = useState<{ [key: string]: number }>({});
@@ -485,7 +489,7 @@ export default function AdminDashboard() {
 
                 // Resolver nombre de gestora
                 const gestoraId = t.gestora_id || t.metadata?.gestora_id;
-                const gestoraObj = gestoras.find((g: any) => g.id === gestoraId);
+                const gestoraObj = safeGestoras.find((g: any) => g.id === gestoraId);
                 const gestoraName = gestoraObj
                     ? (gestoraObj.name || gestoraObj.nombre || gestoraObj.full_name || "Gestora")
                     : (t.gestora?.nombre || t.gestora?.name || "Sin asignar");
@@ -541,7 +545,7 @@ export default function AdminDashboard() {
         const npsPct = 78;
 
         // Distribución por gestora REAL (matching por gestora_id)
-        const gestorasData = gestoras.map((g: any) => {
+        const gestorasData = safeGestoras.map((g: any) => {
             const nombre = g.name || g.nombre || g.full_name || "Gestora";
             const ticketsGestora = active.filter((t: any) => {
                 const tGestoraId = t.gestora_id || t.metadata?.gestora_id;
@@ -558,7 +562,7 @@ export default function AdminDashboard() {
         // Tickets SIN gestora asignada
         const sinGestora = active.filter((t: any) => {
             const tGestoraId = t.gestora_id || t.metadata?.gestora_id;
-            return !tGestoraId || !gestoras.find((g: any) => g.id === tGestoraId);
+            return !tGestoraId || !safeGestoras.find((g: any) => g.id === tGestoraId);
         });
         if (sinGestora.length > 0) {
             gestorasData.push({ id: 'sin_asignar', nombre: 'Sin Gestora', count: sinGestora.length, nuevos: sinGestora.length, enProceso: 0, vencidos: 0, tickets: sinGestora });
@@ -950,11 +954,11 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Distribución de Carga</div>
                         <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>CLICK para ver tickets</div>
                     </div>
-                    {rrhh.gestoras.length === 0 ? (
+                    {rrhhsafeGestoras.length === 0 ? (
                         <div style={{ textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", paddingTop: "1rem" }}>Sin datos de asignación</div>
                     ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                            {rrhh.gestoras.map((g: any) => {
+                            {rrhh.safeGestoras.map((g: any) => {
                                 const pct = rrhh.maxLoad > 0 ? (g.count / rrhh.maxLoad) * 100 : 0;
                                 const stress = g.count > 8 ? "#EF4444" : g.count > 5 ? "#F59E0B" : "#10B981";
                                 const initials = (g.nombre || "?").substring(0, 2).toUpperCase();
