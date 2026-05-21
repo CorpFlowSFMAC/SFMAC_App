@@ -695,7 +695,7 @@ export default function PaymentsPage() {
                     });
                 }
 
-                const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
+                const isPorLiquidar = ['cotizacion_aprobada', 'por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
                 
                 const liqMonto = meta.solicitudLiquidacion?.monto || 0;
                 const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
