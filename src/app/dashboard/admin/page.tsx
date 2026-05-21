@@ -407,7 +407,13 @@ export default function AdminDashboard() {
         const totalAprobadosNeto = approvedTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
 
         // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados
-        const lucroReal = approvedTickets.reduce((s, t) => s + parseFloat(t.utilidad_neta || 0), 0);
+        // = Ingresos esperados menos costos (ambos sin IGV)
+        const lucroReal = approvedTickets.reduce((s, t) => {
+            const ingresos = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18; // sin IGV
+            const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
+            const utilidadProyectada = Math.max(0, ingresos - costos);
+            return s + utilidadProyectada;
+        }, 0);
 
         // Aging
         const todosPendientes = [...pipelineTickets, ...approvedTickets];
@@ -806,12 +812,18 @@ export default function AdminDashboard() {
                     <div 
                         onClick={() => {
                             setModalTitle("Lucro Cesante: Utilidad de Tickets Pendientes");
-                            setModalTickets(tesoreria.approvedTickets.map(t => ({
-                                ...t,
-                                servicio: t.service_type || t.tipo_servicio,
-                                cliente: t.clients?.name || t.clienteNombre || 'Cliente',
-                                _utilidadPendiente: parseFloat(t.utilidad_neta || 0)
-                            })));
+                            setModalTickets(tesoreria.approvedTickets.map(t => {
+                                const ingresos = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
+                                const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
+                                return {
+                                    ...t,
+                                    servicio: t.service_type || t.tipo_servicio,
+                                    cliente: t.clients?.name || t.clienteNombre || 'Cliente',
+                                    _ingresosProyectados: ingresos,
+                                    _costosProyectados: costos,
+                                    _utilidadPendiente: Math.max(0, ingresos - costos)
+                                };
+                            }));
                             setShowListModal(true);
                         }}
                         style={{ padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px", marginBottom: "0.85rem", cursor: "pointer" }}
