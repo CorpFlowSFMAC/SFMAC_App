@@ -1299,7 +1299,20 @@ export default function PaymentsPage() {
                 setPendingConfirmation(null);
                 setWaitingVoucher(null);
                 showToast('✅ Pago de costo registrado');
-                
+
+                // ★ CORREGIR: Actualizar paymentGroups también para quitar de pendientes
+                setPaymentGroups(prev => prev.map(g => {
+                    if (g.realTicketId === group.realTicketId) {
+                        return {
+                            ...g,
+                            items: g.items.map(i => 
+                                i.id === item.id ? { ...i, estado: 'pagado', estado_pago: 'pagado' } : i
+                            )
+                        };
+                    }
+                    return g;
+                }));
+
                 // Invalidación inmediata de todas las queries de tickets
                 await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
                 await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
@@ -1482,6 +1495,19 @@ export default function PaymentsPage() {
             setWaitingVoucher(null);
             showToast('✅ Pago confirmado exitosamente');
             
+            // ★ CORREGIR: Actualizar paymentGroups también para quitar de pendientes
+            setPaymentGroups(prev => prev.map(g => {
+                if (g.realTicketId === group.realTicketId) {
+                    return {
+                        ...g,
+                        items: g.items.map(i => 
+                            i.id === item.id ? { ...i, estado: 'pagado', estado_pago: 'pagado' } : i
+                        )
+                    };
+                }
+                return g;
+            }));
+
             // Invalidación inmediata de todas las queries de tickets
             await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
