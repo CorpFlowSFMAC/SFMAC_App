@@ -157,6 +157,7 @@ export default function AdminDashboard() {
     
     // ★ NUEVO: Estado para depósitos realizados (del módulo de pagos)
     const [monthlyDeposits, setMonthlyDeposits] = useState<{ [key: string]: number }>({});
+    const [depositsList, setDepositsList] = useState<any[]>([]);
     const [loadingDeposits, setLoadingDeposits] = useState(false);
 
     // ★ NUEVO: Cargar depósitos confirmados del mes desde ticket_payments
@@ -170,13 +171,17 @@ export default function AdminDashboard() {
                 const currentMonthKey = `${year}-${month}`;
                 
                 // Obtener todos los pagos confirmados del mes actual
-                const { data: deposits } = await supabase
+                const { data: deposits, error } = await supabase
                     .from('ticket_payments')
-                    .select('amount, payment_date, status')
+                    .select('*')
                     .eq('status', 'confirmed')
-                    .gte('payment_date', `${currentMonthKey}-01`);
+                    .gte('payment_date', `${currentMonthKey}-01`)
+                    .order('payment_date', { ascending: false });
                 
-                if (deposits && deposits.length > 0) {
+                if (error) {
+                    console.error('[AdminDashboard] Error fetching deposits:', error);
+                } else if (deposits && deposits.length > 0) {
+                    setDepositsList(deposits);
                     const totals: { [key: string]: number } = {};
                     deposits.forEach((d: any) => {
                         const date = d.payment_date || '';
@@ -184,6 +189,7 @@ export default function AdminDashboard() {
                         totals[key] = (totals[key] || 0) + (d.amount || 0);
                     });
                     setMonthlyDeposits(totals);
+                    console.log('[AdminDashboard] Deposits loaded:', deposits.length, 'total:', totals[currentMonthKey]);
                 }
             } catch (err) {
                 console.error('[AdminDashboard] Error cargando depósitos:', err);
@@ -284,10 +290,20 @@ export default function AdminDashboard() {
         });
 
 
-        // REGLA 2: CALCULO LOCAL SOLO CON tickets CERRADOS
-        // Si no hay tickets cerrados, marca 0 (no traer datos del backend)
-        // Ingresos = ticket.ingresos_reales (MONTO SIN IGV - ya viene sin IGV del backend)
-        const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
+        // REGLA 2: INGRESOS GENERADOS = Tickets CERRADOS con MONTO FINAL (CON IGV)
+        // Ingreso total = montoFinal CON IGV (18%)
+        const ingresosConIGV = closed.reduce((acc, t) => {
+            const montoFinal = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+            const igv = montoFinal > 0 ? montoFinal * 0.18 : 0;
+            return acc + montoFinal; // Ya incluye IGV
+        }, 0);
+        
+        // Ingreso NETO (sin IGV) para cálculos internos
+        const ingresosNetos = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
+
+        // Ingresos GENERADOS (mostrar CON IGV en UI, pero calculamos utilidad correcta)
+        const ingresosGenerados = ingresosConIGV; // Para UI: Mostrar CON IGV
+        const ingresosNetoCalculo = ingresosConIGV / 1.18; // Para utilidd: sin IGV = monto / 1.18
 
 
         // REGLA 3: INVERSIÓN EJECUTADA = Depósitos realizados en el mes
@@ -318,9 +334,10 @@ export default function AdminDashboard() {
         console.log('[ROI Debug] currentMonthKey:', currentMonthKey);
         console.log('[ROI Debug] inversionEjecutada:', inversionEjecutada);
 
-        // Utilidad y Margen (UTILIDAD NETA = Ingresos - Inversión, ambos SIN IGV)
-        const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
-        const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosGenerados) * 100 : 0;
+        // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
+        // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto
+        const utilidadNeta = round2(ingresosNetoCalculo - inversionEjecutada);
+        const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosNetoCalculo) * 100 : 0;
         
         // Ratio de Eficiencia: [Utilidad Neta] / [Inversión Ejecutada]
         const ratioEficiencia = inversionEjecutada > 0 ? (utilidadNeta / inversionEjecutada) : 0;
@@ -357,7 +374,7 @@ export default function AdminDashboard() {
             })).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
-    }, [tickets, strategicMetrics]);
+    }, [tickets, strategicMetrics, monthlyDeposits, depositsList]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
@@ -622,18 +639,44 @@ export default function AdminDashboard() {
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
-                        setModalTitle("Análisis de Costos: Inversión Ejecutada (REAL)");
-                        setModalTickets(roi.inversionItems.map(t => ({ ...t, _viewMode: 'inversion' })));
+                        setModalTitle("Depósitos Realizados: Inversión del Mes");
+                        // Mostrar lista de depósitos del módulo de pagos
+                        setModalTickets(depositsList.map((d: any, idx: number) => ({
+                            id: d.id || `dep-${idx}`,
+                            ticketNum: d.reference_number || d.ticket_id?.substring(0, 8) || 'N/A',
+                            cliente: d.payment_type || 'Deposito',
+                            sede: d.payment_date || '',
+                            statusId: 'deposito',
+                            _monto: d.amount,
+                            _fecha: d.payment_date,
+                            _tipo: d.payment_type,
+                            _referencia: d.reference_number,
+                            metadata: { amount: d.amount, payment_date: d.payment_date, type: d.payment_type, ref: d.reference_number }
+                        })));
                         setShowListModal(true);
                     }}
                 />
                 <RoiCard label="Ingresos Generados" value={`S/ ${fmt(roi.ingresos)}`}
-                    sub={`De ${roi.closed} ticket(s) CERRADO(s)`} color="#10B981"
+                    sub={`De ${roi.closed} ticket(s) CERRADO(s) CON IGV`} color="#10B981"
                     icon={DollarSign}
                     light={(roi.ingresos > 0 && roi.ingresos > roi.inversion) ? "VERDE" : "VERDE"}
                     onClick={() => {
-                        setModalTitle("Análisis de Ingresos: Tickets CERRADOS (NETO)");
-                        setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ingresos' })));
+                        setModalTitle("Ingresos: Tickets CERRADOS (CON IGV)");
+                        // Mostrar tickets cerrados con monto CON IGV
+                        setModalTickets(roi.ingresosItems.map((t: any) => {
+                            const montoFinal = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                            const montoConIGV = montoFinal; // Ya incluye IGV
+                            return {
+                                ...t,
+                                cliente: t.clients?.name || t.cliente?.nombre || 'Cliente',
+                                sede: t.branch_offices?.name || t.sede?.nombre || 'Sede',
+                                statusId: t.status_id,
+                                _montoConIGV: montoConIGV,
+                                _montoSinIGV: montoFinal,
+                                _fechaCierre: t.closure_date,
+                                _ticketNumber: t.ticket_number || t.numeroTicket || 'N/A'
+                            };
+                        }));
                         setShowListModal(true);
                     }}
                 />
