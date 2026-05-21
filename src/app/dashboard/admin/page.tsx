@@ -803,7 +803,19 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#F59E0B" }}>S/ {fmt(tesoreria.totalPipeline)}</div>
                     </div>
 
-                    <div style={{ padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px", marginBottom: "0.85rem" }}>
+                    <div 
+                        onClick={() => {
+                            setModalTitle("Lucro Cesante: Utilidad de Tickets Pendientes");
+                            setModalTickets(tesoreria.approvedTickets.map(t => ({
+                                ...t,
+                                servicio: t.service_type || t.tipo_servicio,
+                                cliente: t.clients?.name || t.clienteNombre || 'Cliente',
+                                _utilidadPendiente: parseFloat(t.utilidad_neta || 0)
+                            })));
+                            setShowListModal(true);
+                        }}
+                        style={{ padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px", marginBottom: "0.85rem", cursor: "pointer" }}
+                    >
                         <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#EF4444", marginBottom: "2px" }}>⚡ Lucro Cesante Estimado</div>
                         <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#EF4444" }}>S/ {fmt(tesoreria.lucro)}</div>
                         <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>ganancia detenida por pendientes</div>
