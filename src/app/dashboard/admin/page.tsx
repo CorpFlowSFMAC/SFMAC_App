@@ -789,7 +789,7 @@ export default function AdminDashboard() {
                     <div 
                         onClick={() => {
                             setModalTitle("Presupuestos Aprobados (Trabajos en curso)");
-                            setModalTickets(tesoreria.approvedTickets);
+                            setModalTickets([...tesoreria.approvedTickets]);
                             setShowListModal(true);
                         }}
                         style={{ padding: "0.5rem", margin: "-0.5rem -0.5rem 10px -0.5rem", borderRadius: "10px", cursor: "pointer", transition: "background 0.2s" }}
@@ -807,7 +807,7 @@ export default function AdminDashboard() {
                     <div 
                         onClick={() => {
                             setModalTitle("Pipeline Pendiente (Cotizaciones en curso)");
-                            setModalTickets(tesoreria.pipelineTickets);
+                            setModalTickets([...tesoreria.pipelineTickets]);
                             setShowListModal(true);
                         }}
                         style={{
