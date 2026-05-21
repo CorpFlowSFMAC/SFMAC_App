@@ -464,63 +464,6 @@ export default function PaymentsPage() {
         toastTimer.current = setTimeout(() => setToast({ msg: '', visible: false }), 2200);
     }, []);
 
-    // Función principal del flujo Zero-Fee
-    const handleDeepLinkPayment = useCallback(async (
-        group: PaymentTicketGroup,
-        item: PaymentItem,
-        wallet: 'yape' | 'plin' | 'banco'
-    ) => {
-        // Al haber separado los grupos por beneficiario, group.tecnico ya contiene los datos correctos del destinatario
-        const numero = wallet === 'yape'
-            ? group.tecnico.yape
-            : wallet === 'plin'
-                ? group.tecnico.plin
-                : group.tecnico.numeroCuenta;
-
-        if (!numero) return;
-
-        // PASO A: Copiar número al portapapeles
-        try {
-            await navigator.clipboard.writeText(numero);
-        } catch {
-            // Fallback para contextos sin permiso de clipboard (HTTP)
-            const ta = document.createElement('textarea');
-            ta.value = numero;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-        }
-
-        // PASO B: Toast flash
-        showToast(`✅ Número copiado. Pegue el monto: S/ ${formatSoles(item.monto)}`);
-
-        // ⚠️ ADVERTENCIA RIESGO FINANCIERO (ETAPA 6)
-        const isStage6 = group.statusId === 'cotizacion_enviada';
-
-        // Marcar como "esperando voucher" ANTES de salir de la app
-        setWaitingVoucher({ 
-            group, 
-            item, 
-            wallet, 
-            numero,
-            stage6Warning: isStage6
-        });
-
-        // PASO C: Deep Link — intentar abrir la app bancaria vía scheme URI
-        await new Promise(r => setTimeout(r, 300));
-        const deepLinks: Record<string, string> = {
-            yape: 'yape://',
-            plin: 'plin://',
-            banco: 'https://www.bcp.com.pe',
-        };
-        try {
-            window.location.assign(deepLinks[wallet]);
-        } catch { /* silencioso */ }
-    }, [showToast]);
 
     // ★ FIX: monthlyTotals usa claves YYYY-MM (no locale) para evitar inconsistencias
     const [monthlyTotals, setMonthlyTotals] = useState<{ [key: string]: number }>({});
@@ -1129,44 +1072,53 @@ export default function PaymentsPage() {
         executeSmartPayment(group, item, phone);
     };
 
-    const executeSmartPayment = (group: PaymentTicketGroup, item: PaymentItem, phone: string) => {
+    const executeSmartPayment = async (group: PaymentTicketGroup, item: PaymentItem, phone: string) => {
         const montoStr = formatSoles(item.monto);
 
-        // Si el técnico tiene Yape o Plin, intentamos Deep Link
-        // ✅ FIX: Solo ejecutar deep links en dispositivos móviles, no en desktop
         if (phone && (group.tecnico.yape || group.tecnico.plin)) {
             const wallet = group.tecnico.yape ? 'yape' : 'plin';
-            
-            // ✅ DEVICE VALIDATION: Verificar si es móvil antes de intentar deep link
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            if (isMobile && wallet === 'yape') {
-                const deepLink = `yape://pay?number=${phone}&amount=${item.monto}`;
-                try {
-                    window.location.href = deepLink;
-                } catch (e) {
-                    console.warn('Yape deep link failed (non-mobile or no handler):', e);
-                }
-            } else if (isMobile && wallet === 'plin') {
-                const deepLink = `plin://pay?number=${phone}&amount=${item.monto}`;
-                try {
-                    window.location.href = deepLink;
-                } catch (e) {
-                    console.warn('Plin deep link failed (non-mobile or no handler):', e);
-                }
+            const numero = wallet === 'yape' ? group.tecnico.yape : group.tecnico.plin;
+
+            if (!numero) return;
+
+            // PASO 1: Copiar número al portapapeles
+            try {
+                await navigator.clipboard.writeText(numero);
+            } catch {
+                const ta = document.createElement('textarea');
+                ta.value = numero;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
             }
-            // ✅ En desktop, no intentar deep link - solo mostrar modal de espera
-            
+
+            // PASO 2: Toast con monto
+            showToast(`✅ Número ${wallet === 'yape' ? 'Yape' : 'Plin'} copiado. Monto: S/ ${montoStr}`);
+
+            // PASO 3: Marcar como esperando voucher ANTES de intentar deep link
             setWaitingVoucher({
                 group,
                 item,
                 wallet,
-                numero: phone
+                numero
             });
+
+            // PASO 4: Deep link en móvil para abrir la app
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobile) {
+                await new Promise(r => setTimeout(r, 300));
+                try {
+                    window.location.href = wallet === 'yape' ? 'yape://' : 'plin://';
+                } catch { /* silencioso */ }
+            }
+
             return;
         }
 
-        // Si no tiene billetera móvil, vamos a confirmación directa
         setPendingConfirmation({
             group,
             item,
