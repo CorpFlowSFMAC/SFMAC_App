@@ -339,11 +339,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             if (!email) return;
 
             // Intentar obtener ID de gestora (para permisos operativas)
-            const { data: gestoraData } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            const { data: gestoraData, error: errG } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            if (errG) console.warn('[TicketWindow] Error gestoras:', errG.message);
             if (gestoraData?.id) setMyGestoraId(gestoraData.id);
 
             // Intentar obtener ID de perfil (para registros de tesorería solicitado_por)
-            const { data: profileData } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
+            const { data: profileData, error: errP } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
+            if (errP) console.warn('[TicketWindow] Error perfiles:', errP.message);
             if (profileData?.id) setMyProfileId(profileData.id);
         };
         fetchMe();

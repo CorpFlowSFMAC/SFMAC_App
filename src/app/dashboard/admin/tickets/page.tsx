@@ -139,7 +139,8 @@ export default function TicketsPage() {
             }
 
             // REVISIÓN DE GESTORAS
-            const { data: g } = await supabase.from('gestoras').select('id, name, email').ilike('email', userEmail).maybeSingle();
+            const { data: g, error: errorG } = await supabase.from('gestoras').select('id, name, email').ilike('email', userEmail).maybeSingle();
+            if (errorG) console.warn('[TicketsPage] Error gestoras:', errorG.message);
             if (g?.id) {
                 resolvedGestoraId = g.id;
                 setMyGestoraId(g.id);
@@ -147,7 +148,9 @@ export default function TicketsPage() {
 
             // REVISIÓN DE ROL EN PERFILES (Independiente de si es gestora o no)
             // Dos pasos: primero ID, luego rol
-            const { data: p } = await supabase.from('perfiles').select('id').ilike('email', userEmail).maybeSingle();
+            const { data: p, error: errorP } = await supabase.from('perfiles').select('id').ilike('email', userEmail).maybeSingle();
+            if (errorP) console.warn('[TicketsPage] Error perfiles:', errorP.message);
+            
             if (p) {
                 // Segunda consulta solo para rol
                 const { data: perfilData } = await supabase.from('perfiles').select('rol').eq('id', p.id).maybeSingle();

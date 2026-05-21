@@ -98,15 +98,20 @@ export default function AdminLayout({
     }, []);
 
     // Buscar nombre real desde perfil o gestora
+    // Con mejor manejo de errores para evitar HTTP 400
     const fetchPerfilNombre = async (email: string | null) => {
         if (!email) return;
         try {
             // Buscar en perfiles primero
-            const { data: p } = await supabase
+            const { data: p, error: errorP } = await supabase
                 .from('perfiles')
                 .select('id, nombre_completo, nombre')
                 .ilike('email', email)
                 .maybeSingle();
+            
+            if (errorP) {
+                console.warn('[AdminLayout] Error perfiles:', errorP.message);
+            }
             
             if (p?.nombre_completo || p?.nombre) {
                 setGestoraNombre(p.nombre_completo || p.nombre);
@@ -114,11 +119,15 @@ export default function AdminLayout({
             }
 
             // Fallback a gestoras
-            const { data: g } = await supabase
+            const { data: g, error: errorG } = await supabase
                 .from('gestoras')
                 .select('id, name, nombre')
                 .ilike('email', email)
                 .maybeSingle();
+            
+            if (errorG) {
+                console.warn('[AdminLayout] Error gestoras:', errorG.message);
+            }
             
             if (g?.name || g?.nombre) {
                 setGestoraNombre(g.name || g.nombre);
@@ -126,6 +135,7 @@ export default function AdminLayout({
                 setGestoraNombre(email.split('@')[0]);
             }
         } catch (e) {
+            // Silencioso - fallback seguro
             setGestoraNombre(email.split('@')[0]);
         }
     };
