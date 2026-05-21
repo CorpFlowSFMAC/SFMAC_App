@@ -954,11 +954,11 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Distribución de Carga</div>
                         <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>CLICK para ver tickets</div>
                     </div>
-                    {rrhhsafeGestoras.length === 0 ? (
+                    {rrhh.gestoras.length === 0 ? (
                         <div style={{ textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", paddingTop: "1rem" }}>Sin datos de asignación</div>
                     ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                            {rrhh.safeGestoras.map((g: any) => {
+                            {rrhh.gestoras.map((g: any) => {
                                 const pct = rrhh.maxLoad > 0 ? (g.count / rrhh.maxLoad) * 100 : 0;
                                 const stress = g.count > 8 ? "#EF4444" : g.count > 5 ? "#F59E0B" : "#10B981";
                                 const initials = (g.nombre || "?").substring(0, 2).toUpperCase();
@@ -1155,8 +1155,6 @@ export default function AdminDashboard() {
                                         const isUtility = t._viewMode === 'utilidad';
                                         
                                         // Amount primario
-                                        const primaryAmount = t._viewMode === 'utilidad' ? (t._utilityAmount || 0) : (t._paymentMonto || t.montoFinal || 0);
-                                        const amountLabel = isUtility ? 'UTILIDAD NETO' : isPayment ? 'MONTO PAGADO' : 'TOTAL FACTURADO';
                                         const amountColor = isUtility ? '#8B5CF6' : isPayment ? '#F59E0B' : '#22C55E';
 
                                         return (
