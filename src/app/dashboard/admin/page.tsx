@@ -12,7 +12,8 @@ import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
-import { ticketsAPI } from "@/lib/supabase-api";
+import { ticketsAPI, paymentsAPI } from "@/lib/supabase-api";
+import { supabase } from "@/lib/supabase";
 import { useStrategicMetrics } from "@/lib/useQueryHooks";
 import { calculateTicketFinances } from "@/lib/calculations";
 
@@ -153,6 +154,46 @@ export default function AdminDashboard() {
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [now] = useState(() => new Date());
+    
+    // ★ NUEVO: Estado para depósitos realizados (del módulo de pagos)
+    const [monthlyDeposits, setMonthlyDeposits] = useState<{ [key: string]: number }>({});
+    const [loadingDeposits, setLoadingDeposits] = useState(false);
+
+    // ★ NUEVO: Cargar depósitos confirmados del mes desde ticket_pagos
+    useEffect(() => {
+        const loadMonthlyDeposits = async () => {
+            setLoadingDeposits(true);
+            try {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const currentMonthKey = `${year}-${month}`;
+                
+                // Obtener todos los pagos confirmados del mes actual
+                const { data: deposits } = await supabase
+                    .from('ticket_pagos')
+                    .select('amount, payment_date, status')
+                    .eq('status', 'confirmed')
+                    .gte('payment_date', `${currentMonthKey}-01`);
+                
+                if (deposits && deposits.length > 0) {
+                    const totals: { [key: string]: number } = {};
+                    deposits.forEach((d: any) => {
+                        const date = d.payment_date || '';
+                        const key = date.substring(0, 7); // YYYY-MM
+                        totals[key] = (totals[key] || 0) + (d.amount || 0);
+                    });
+                    setMonthlyDeposits(totals);
+                }
+            } catch (err) {
+                console.error('[AdminDashboard] Error cargando depósitos:', err);
+            } finally {
+                setLoadingDeposits(false);
+            }
+        };
+        
+        loadMonthlyDeposits();
+    }, []);
 
     // Estados para el Modal de Seguimiento (General)
     const [showListModal, setShowListModal] = useState(false);
@@ -245,19 +286,17 @@ export default function AdminDashboard() {
 
         // REGLA 2: CALCULO LOCAL SOLO CON tickets CERRADOS
         // Si no hay tickets cerrados, marca 0 (no traer datos del backend)
+        // Ingresos = ticket.ingresos_reales (MONTO SIN IGV - ya viene sin IGV del backend)
         const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
 
 
-        // REGLA 3: INVERSIÓN EJECUTADA = Depósitos realizados (como Tesorería)
-        // Mismo cálculo: calculateTicketFinances.totalExpenses de tickets aprobados
-        const inversionStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
-        const approvedInv = inPeriod.filter((t: any) => inversionStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const inversionEjecutada = approvedInv.reduce((acc, t) => {
-            const finances = calculateTicketFinances(t, t.costos || []);
-            return acc + finances.totalExpenses;
-        }, 0);
+        // REGLA 3: INVERSIÓN EJECUTADA = Depónimos realizados en el mes
+        // ★ CORREGIDO: Se obtiene directamente del módulo de pagos (ticket_pagos)
+        const now = new Date();
+        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const inversionEjecutada = round2(monthlyDeposits[currentMonthKey] || 0);
 
-        // Utilidad y Margen
+        // Utilidad y Margen (UTILIDAD NETA = Ingresos - Inversión, ambos SIN IGV)
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
         const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosGenerados) * 100 : 0;
         
