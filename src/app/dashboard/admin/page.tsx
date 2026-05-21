@@ -171,28 +171,39 @@ export default function AdminDashboard() {
                 const currentMonthKey = `${year}-${month}`;
                 
                 // Obtener todos los pagos confirmados del mes actual
+                // Sin filtro de fecha para evitar errores HTTP 400
                 const { data: deposits, error } = await supabase
                     .from('ticket_payments')
                     .select('*')
                     .eq('status', 'confirmed')
-                    .gte('payment_date', `${currentMonthKey}-01`)
                     .order('payment_date', { ascending: false });
                 
                 if (error) {
-                    console.error('[AdminDashboard] Error fetching deposits:', error);
+                    console.error('[AdminDashboard] Error fetching deposits:', error.message);
                 } else if (deposits && deposits.length > 0) {
-                    setDepositsList(deposits);
-                    const totals: { [key: string]: number } = {};
+                    // Filtrar solo los del mes actual en memoria (más seguro)
+                    const monthlyTotals: { [key: string]: number } = {};
+                    const monthlyList: any[] = [];
+                    
                     deposits.forEach((d: any) => {
                         const date = d.payment_date || '';
-                        const key = date.substring(0, 7); // YYYY-MM
-                        totals[key] = (totals[key] || 0) + (d.amount || 0);
+                        if (date.startsWith(currentMonthKey)) {
+                            monthlyList.push(d);
+                            monthlyTotals[currentMonthKey] = (monthlyTotals[currentMonthKey] || 0) + (d.amount || 0);
+                        }
                     });
-                    setMonthlyDeposits(totals);
-                    console.log('[AdminDashboard] Deposits loaded:', deposits.length, 'total:', totals[currentMonthKey]);
+                    
+                    setDepositsList(monthlyList);
+                    setMonthlyDeposits(monthlyTotals);
+                    console.log('[AdminDashboard] Deposits loaded:', monthlyList.length, 'total:', monthlyTotals[currentMonthKey]);
+                } else {
+                    setDepositsList([]);
+                    setMonthlyDeposits({});
                 }
-            } catch (err) {
-                console.error('[AdminDashboard] Error cargando depósitos:', err);
+            } catch (err: any) {
+                console.error('[AdminDashboard] Error cargando depósitos:', err?.message || err);
+                setDepositsList([]);
+                setMonthlyDeposits({});
             } finally {
                 setLoadingDeposits(false);
             }
