@@ -159,7 +159,7 @@ export default function AdminDashboard() {
     const [monthlyDeposits, setMonthlyDeposits] = useState<{ [key: string]: number }>({});
     const [loadingDeposits, setLoadingDeposits] = useState(false);
 
-    // ★ NUEVO: Cargar depósitos confirmados del mes desde ticket_pagos
+    // ★ NUEVO: Cargar depósitos confirmados del mes desde ticket_payments
     useEffect(() => {
         const loadMonthlyDeposits = async () => {
             setLoadingDeposits(true);
@@ -171,7 +171,7 @@ export default function AdminDashboard() {
                 
                 // Obtener todos los pagos confirmados del mes actual
                 const { data: deposits } = await supabase
-                    .from('ticket_pagos')
+                    .from('ticket_payments')
                     .select('amount, payment_date, status')
                     .eq('status', 'confirmed')
                     .gte('payment_date', `${currentMonthKey}-01`);
@@ -290,11 +290,33 @@ export default function AdminDashboard() {
         const ingresosGenerados = closed.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || t.ingreso_real || 0), 0);
 
 
-        // REGLA 3: INVERSIÓN EJECUTADA = Depónimos realizados en el mes
-        // ★ CORREGIDO: Se obtiene directamente del módulo de pagos (ticket_pagos)
+        // REGLA 3: INVERSIÓN EJECUTADA = Depósitos realizados en el mes
+        // ★ CORREGIDO: Se obtiene directamente del módulo de pagos (ticket_payments)
         const now = new Date();
         const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const inversionEjecutada = round2(monthlyDeposits[currentMonthKey] || 0);
+        
+        // Método 1: Desde ticket_payments (tabla de módulo de pagos)
+        let inversionDesdePayments = round2(monthlyDeposits[currentMonthKey] || 0);
+        
+        // Método 2: Fallback si no hay datos en ticket_payments -> calcular desde costos de tickets
+        if (inversionDesdePayments === 0) {
+            // Sumar todos los costos con estado "pagado" o "confirmado" de tickets en el período
+            const inversionFallback = inPeriod.reduce((acc, t) => {
+                const costs = t.costos || [];
+                const costosPagados = costs.filter((c: any) => 
+                    c.estado_pago === 'pagado' || c.estado_pago === 'confirmado'
+                );
+                return acc + costosPagados.reduce((sum: number, c: any) => sum + parseFloat(c.monto || c.amount || c.cost || 0), 0);
+            }, 0);
+            inversionDesdePayments = round2(inversionFallback);
+        }
+        
+        const inversionEjecutada = inversionDesdePayments;
+        
+        // DEBUG
+        console.log('[ROI Debug] monthlyDeposits:', monthlyDeposits);
+        console.log('[ROI Debug] currentMonthKey:', currentMonthKey);
+        console.log('[ROI Debug] inversionEjecutada:', inversionEjecutada);
 
         // Utilidad y Margen (UTILIDAD NETA = Ingresos - Inversión, ambos SIN IGV)
         const utilidadNeta = round2(ingresosGenerados - inversionEjecutada);
