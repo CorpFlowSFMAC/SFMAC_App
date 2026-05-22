@@ -616,14 +616,19 @@ export default function PaymentsPage() {
                 }
 
                 if (meta.solicitudLiquidacion) {
-                    pendingItems.push({
-                        id: `${t.id}_liquidacion_manual`,
-                        tipo: 'Liquidación Final',
-                        monto: round2(meta.solicitudLiquidacion.monto || 0),
-                        estado: 'pendiente',
-                        fecha: meta.solicitudLiquidacion.fecha || t.created_at,
-                        concepto: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
-                    });
+                    const liqMonto = meta.solicitudLiquidacion.monto || 0;
+                    const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
+                    
+                    if (!liqInHistory && liqMonto > 0) {
+                        pendingItems.push({
+                            id: `${t.id}_liquidacion_manual`,
+                            tipo: 'Liquidación Final',
+                            monto: round2(liqMonto),
+                            estado: 'pendiente',
+                            fecha: meta.solicitudLiquidacion.fecha || t.created_at,
+                            concepto: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
+                        });
+                    }
                 }
 
                 // B. Solicitud de Adelanto Extra (Refuerzo)
@@ -647,12 +652,13 @@ export default function PaymentsPage() {
                 const hasExceedancePending = (t.costos || []).some((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
                                            (meta.solicitudPago && !pagoInHistory) || 
-                                           (meta.solicitudLiquidacion && !liqInHistory) ||
+                                           (meta.solicitudLiquidacion && !liqInHistory && liqMonto > 0) ||
                                            (meta.solicitudAdelantoExtra && parseFloat(meta.solicitudAdelantoExtra.monto || 0) > 0) ||
                                            hasExceedancePending;
 
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
+                // ni si ya existe una solicitud de liquidación pendiente
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
                     // V3: La liquidación es el saldo real de mano de obra (Pactado - Pagado)
                     const autoLiqMonto = round2(netLaborBalance);
