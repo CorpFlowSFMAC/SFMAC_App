@@ -134,7 +134,22 @@ export async function POST(request: NextRequest) {
         const client = getClient() as any;
         if (!client) throw new Error('Supabase server client is not configured');
 
-        const payload = await normalizeCostPayload(client, cleanCostPayload(await request.json()));
+        const rawPayload = await request.json();
+        const cleanPayload = cleanCostPayload(rawPayload);
+        
+        // ══════════════════════════════════════════════════════════════════════
+        // AUTO-CLASIFICACIÓN: Asignar tipo_solicitud basándose en categoria/concepto
+        // si no fue proveído explícitamente
+        // ══════════════════════════════════════════════════════════════════════
+        if (!cleanPayload.tipo_solicitud && (cleanPayload.categoria || cleanPayload.concepto)) {
+            const { getTipoSolicitud } = await import('@/lib/ticketCostCategories');
+            cleanPayload.tipo_solicitud = getTipoSolicitud({
+                categoria: cleanPayload.categoria,
+                concepto: cleanPayload.concepto
+            });
+        }
+
+        const payload = await normalizeCostPayload(client, cleanPayload);
         if (!payload.ticket_id || !payload.concepto || !payload.categoria || !payload.monto || !payload.estado_pago) {
             return NextResponse.json({ success: false, error: 'Datos incompletos para registrar el costo' }, { status: 400 });
         }

@@ -906,12 +906,30 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // FIX 2026-05-11: Si lo local ha limpiado el rechazo (pagoRechazado === null), la denegación ya no es 'activa' para el flujo local.
         const hasActiveRejection = !!serverMeta.pagoRechazado && businessData.pagoRechazado !== null;
         
-        const resolvedStatusId = options?.allowStateRollback
-            ? businessData.estadoId
-            : (hasActiveRejection 
-                ? serverStatusId 
-                : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId));
-
+        // BLINDAJE CRÍTICO V5: Preservar SOLICITUDES DE PAGO del gestor/admin
+        // Si local tiene una nueva solicitud (definida en businessData y no existente en servidor),
+        // SIEMPRE preservar la local. Esto evita que el sync borre peticiones de pago recientes.
+        const localHasNewSolLiq = businessData.solicitudLiquidacion !== undefined 
+            && businessData.solicitudLiquidacion !== null 
+            && serverMeta.solicitudLiquidacion === undefined;
+        const localHasNewSolPago = businessData.solicitudPago !== undefined 
+            && businessData.solicitudPago !== null 
+            && serverMeta.solicitudPago === undefined;
+        const localHasNewSolAde = businessData.solicitudAdelanto !== undefined 
+            && businessData.solicitudAdelanto !== null 
+            && serverMeta.solicitudAdelanto === undefined;
+        
+        // Resolver valores de solicitudes - estas variables deben estar FUERA del objeto
+        const resLiq = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolLiq)
+            ? (localHasNewSolLiq ? businessData.solicitudLiquidacion : serverMeta.solicitudLiquidacion)
+            : (businessData.solicitudLiquidacion !== undefined ? businessData.solicitudLiquidacion : (serverMeta.solicitudLiquidacion ?? null));
+        const resAde = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolAde)
+            ? (localHasNewSolAde ? businessData.solicitudAdelanto : serverMeta.solicitudAdelanto)
+            : (businessData.solicitudAdelanto !== undefined ? businessData.solicitudAdelanto : (serverMeta.solicitudAdelanto ?? null));
+        const resPago = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolPago)
+            ? (localHasNewSolPago ? businessData.solicitudPago : serverMeta.solicitudPago)
+            : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null));
+        
         const updates: any = {
             status_id: resolvedStatusId,
             description: businessData.descripcionProblema,
@@ -922,55 +940,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
             total_quoted_amount: parseFloat(sourceForPayments?.montoFinal ?? montoTotalCotizado ?? 0),
             technician_id: tecnico?.id || serverTicket?.technician_id,
-            gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
+            gestiona_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
-                // 1. Empezamos con la metadata del servidor (fuente de verdad base)
                 ...serverMeta,
-                // 2. Aplicamos la metadata local (cambios del usuario) encima
                 ...sourceMetadata,
-                // 3. Pero preservamos los campos que el usuario está editando en esta ventana
                 diagnostico: businessData.diagnostico || sourceMetadata.diagnostico || serverMeta.diagnostico,
                 partidas: businessData.partidas || sourceMetadata.partidas || serverMeta.partidas,
                 montoFinal: businessData.montoFinal ?? sourceMetadata.montoFinal ?? serverMeta.montoFinal,
                 documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist || serverMeta.documentosChecklist,
-                // 4. Protección específica: si lo local acaba de limpiar un rechazo, no dejar que el servidor lo restaure
-                // y viceversa: si el servidor tiene un rechazo nuevo, lo local debe aceptarlo.
                 pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
-                // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
-                // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
-                // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
-                
-                // BLINDAJE CRÍTICO V5: Preservar SOLICITUDES DE PAGO del gestor/admin
-                // Si local tiene una nueva solicitud (definida en businessData y no existente en servidor),
-                // SIEMPRE preservar la local. Esto evita que el sync borre peticiones de pago recientes.
-                // Caso: El gestor crea solicitudLiquidacion → sync intenta restaurar valor del servidor (null)
-                const localHasNewSolicitudLiquidacion = businessData.solicitudLiquidacion !== undefined 
-                    && businessData.solicitudLiquidacion !== null 
-                    && serverMeta.solicitudLiquidacion === undefined;
-                const localHasNewSolicitudPago = businessData.solicitudPago !== undefined 
-                    && businessData.solicitudPago !== null 
-                    && serverMeta.solicitudPago === undefined;
-                const localHasNewSolicitudAdelanto = businessData.solicitudAdelanto !== undefined 
-                    && businessData.solicitudAdelanto !== null 
-                    && serverMeta.solicitudAdelanto === undefined;
-                
-                // Si hay una denegación activa Y el local intenta crear una nueva solicitud, 
-                // no sobreescribir la solicitud local con el null del servidor
-                solicitudLiquidacion: (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolicitudLiquidacion)
-                    ? (localHasNewSolicitudLiquidacion ? businessData.solicitudLiquidacion : serverMeta.solicitudLiquidacion)
-                    : (businessData.solicitudLiquidacion !== undefined ? businessData.solicitudLiquidacion : (serverMeta.solicitudLiquidacion ?? null)),
-                solicitudAdelanto: (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolicitudAdelanto)
-                    ? (localHasNewSolicitudAdelanto ? businessData.solicitudAdelanto : serverMeta.solicitudAdelanto)
-                    : (businessData.solicitudAdelanto !== undefined ? businessData.solicitudAdelanto : (serverMeta.solicitudAdelanto ?? null)),
-                solicitudPago: (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolicitudPago)
-                    ? (localHasNewSolicitudPago ? businessData.solicitudPago : serverMeta.solicitudPago)
-                    : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null)),
+                // Valores resueltos de solicitudes de pago (BLINDAJE V5)
+                solicitudLiquidacion: resLiq,
+                solicitudAdelanto: resAde,
+                solicitudPago: resPago,
                 solicitudesDeposito: businessData.solicitudesDeposito !== undefined ? businessData.solicitudesDeposito : (serverMeta.solicitudesDeposito ?? null),
-                
                 evidenciasEjecucion,
-                metadata: undefined // Evitar anidación infinita
+                metadata: undefined
             }
         };
 
