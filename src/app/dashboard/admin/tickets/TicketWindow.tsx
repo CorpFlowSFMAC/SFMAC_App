@@ -4038,14 +4038,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     <div className={styles.financeCard}>
                                                         <div className={styles.financeCardHeader}>
                                                             <TrendingUp size={16} />
-                                                            <span>PRESUPUESTO APROBADO</span>
+                                                            <span>PRESUPUESTO APROBADO SIN IGV</span>
                                                         </div>
                                                         <div className={styles.financeMainValue}>
                                                             <span className={styles.currencySymbol}>S/</span>
-                                                            <span className={styles.mainAmount}>{techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            <span className={styles.mainAmount}>{finances.totalVenta.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
                                                         <div className={styles.financeSubRow}>
-                                                            <span>Ingresos totales del servicio</span>
+                                                            <span>Presupuesto aprobado por el cliente</span>
                                                         </div>
                                                     </div>
 
@@ -4130,30 +4130,30 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         <div className={styles.destinationMain}>
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Tecnico</span>
-                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
+                                                                <span className={styles.destFieldValue}>{ticketData.technicians?.nombre_completo || ticketData.technicians?.nombre || 'N/A'}</span>
                                                             </div>
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Banco</span>
-                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.banco || 'N/A'}</span>
+                                                                <span className={styles.destFieldValue}>{ticketData.technicians?.banco || 'N/A'}</span>
                                                             </div>
                                                             <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                 <span className={styles.destFieldLabel}>Cuenta</span>
-                                                                <span className={styles.destFieldValueMono}>{ticketData.tecnico?.numeroCuenta || '---'}</span>
+                                                                <span className={styles.destFieldValueMono}>{ticketData.technicians?.numero_cuenta || ticketData.technicians?.numeroCuenta || '---'}</span>
                                                             </div>
-                                                            {ticketData.tecnico?.cci && (
+                                                            {ticketData.technicians?.cci && (
                                                                 <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                     <span className={styles.destFieldLabel}>CCI</span>
-                                                                    <span className={styles.destFieldValueMono}>{ticketData.tecnico.cci}</span>
+                                                                    <span className={styles.destFieldValueMono}>{ticketData.technicians.cci}</span>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
+                                                        {(ticketData.technicians?.yape || ticketData.technicians?.plin) && (
                                                             <div className={styles.destinationWallets}>
-                                                                {ticketData.tecnico?.yape && (
-                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.tecnico.yape}</span>
+                                                                {ticketData.technicians?.yape && (
+                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.technicians.yape}</span>
                                                                 )}
-                                                                {ticketData.tecnico?.plin && (
-                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.tecnico.plin}</span>
+                                                                {ticketData.technicians?.plin && (
+                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.technicians.plin}</span>
                                                                 )}
                                                             </div>
                                                         )}
@@ -4217,21 +4217,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 </div>
                                             )}
 
-                                            {ticketData.estadoId === "ticket_cerrado" && (
-                                                <div className={styles.closedFooterActions} style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
-                                                    <div className={styles.closedStatusBanner} style={{ padding: '12px 24px', background: '#DCFCE7', color: '#166534', borderRadius: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <CheckCircle size={20} />
-                                                        TICKET CERRADO Y ARCHIVADO
-                                                    </div>
-                                                    <button
-                                                        onClick={onClose}
-                                                        style={{ background: '#F1F5F9', color: '#475569', border: 'none', padding: '12px 24px', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                    >
-                                                        VOLVER AL DASHBOARD
-                                                        <ArrowRight size={18} />
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     )}
 
