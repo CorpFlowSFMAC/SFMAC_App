@@ -149,6 +149,45 @@
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
+/* Avatar styles for Gestora */
+.gestoraAvatarRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.gestoraAvatarContainer {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #6366F1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 10px rgba(99, 102, 241, 0.4);
+    border: 2px solid white;
+}
+
+.gestoraAvatarImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gestoraAvatarInitials {
+    color: white;
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+}
+
+.gestoraName {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1E293B;
+}
+
 .sedeCompact {
     color: #3B82F6;
 }

@@ -1741,27 +1741,21 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
             <div className={styles.infoItem} style={{ flex: 1.5 }}>
                 <span className={styles.infoLabel}>Gestor(a)</span>
                 {hasGestora && showGestoraName ? (
-                    <div className={styles.clienteCompact}>
-                        {avatarUrl ? (
-                            <img 
-                                src={avatarUrl} 
-                                alt={gestorasName}
-                                style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '50%',
-                                    objectFit: 'cover',
-                                    border: '2px solid rgba(99, 102, 241, 0.3)'
-                                }}
-                            />
-                        ) : (
-                            <div className={styles.clienteAvatar} style={{ background: '#6366F1', width: '36px', height: '36px', fontSize: '14px' }}>
-                                {(gestorasName || "G").substring(0, 1).toUpperCase()}
-                            </div>
-                        )}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
-                            <span className={styles.infoValue} style={{ fontWeight: 700, fontSize: '13px', lineHeight: 1.2 }}>{gestorasName}</span>
+                    <div className={styles.gestoraAvatarRow}>
+                        <div className={styles.gestoraAvatarContainer}>
+                            {avatarUrl ? (
+                                <img
+                                    src={avatarUrl}
+                                    alt={gestorasName}
+                                    className={styles.gestoraAvatarImage}
+                                />
+                            ) : (
+                                <div className={styles.gestoraAvatarInitials}>
+                                    {gestorasName.substring(0, 2).toUpperCase()}
+                                </div>
+                            )}
                         </div>
+                        <span className={styles.gestoraName}>{gestorasName}</span>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F97316' }}>
