@@ -6,7 +6,7 @@ import {
     MapPin, AlertCircle, TrendingUp, TrendingDown, Target, BarChart2,
     Activity, AlertTriangle, Flame, Timer, Trophy, Users, ChevronRight,
     Calendar, X, RefreshCw, Gauge, Star, Award, MessageCircle,
-    LogIn, LogOut, Bell, CheckCheck, BarChart3, Wrench
+    LogIn, LogOut, Bell, CheckCheck, BarChart3, Wrench, Coins
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
@@ -850,6 +850,129 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             alert={kpis.backlog.length > 3}
                         />
                     </div>
+
+                    {/* ── FINANCIAL SUMMARY ROW ─────────── */}
+                    {myGestoraId && (() => {
+                        // Calculate financial KPIs for the filtered tickets
+                        const myTickets = tickets.filter(t => isVisibleForMe(t));
+                        const activeTickets = myTickets.filter(t => 
+                            !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId))
+                        );
+                        const closedTickets = myTickets.filter(t => 
+                            normalizeStateId(t.estadoId) === "ticket_cerrado"
+                        );
+                        
+                        const calcFinances = (t: any) => calculateTicketFinances(t, t.costos || []);
+                        
+                        // Active tickets financial data
+                        const activeRevenue = activeTickets.reduce((sum, t) => sum + calcFinances(t).totalVenta, 0);
+                        const activeCosts = activeTickets.reduce((sum, t) => sum + calcFinances(t).totalCosts, 0);
+                        const activeProfit = activeTickets.reduce((sum, t) => sum + Math.max(0, calcFinances(t).realProfitability), 0);
+                        
+                        // Closed tickets (this month)
+                        const now3 = new Date();
+                        const startOfMonth = new Date(now3.getFullYear(), now3.getMonth(), 1);
+                        const closedThisMonth = closedTickets.filter(t => {
+                            const d = new Date(t.closure_date || t.updated_at);
+                            return d >= startOfMonth;
+                        });
+                        const closedRevenue = closedThisMonth.reduce((sum, t) => sum + calcFinances(t).totalVenta, 0);
+                        const closedCosts = closedThisMonth.reduce((sum, t) => sum + calcFinances(t).totalCosts, 0);
+                        const closedProfit = closedThisMonth.reduce((sum, t) => sum + Math.max(0, calcFinances(t).realProfitability), 0);
+                        
+                        const totalRevenue = closedRevenue + (activeTickets.length > 0 ? activeRevenue * 0.5 : 0);
+                        const totalCosts = closedCosts + (activeTickets.length > 0 ? activeCosts * 0.5 : 0);
+                        const netProfit = closedProfit + (activeTickets.length > 0 ? activeProfit * 0.5 : 0);
+                        const marginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+                        return (
+                            <div style={{
+                                display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+                                gap: "1rem", marginBottom: "1.25rem"
+                            }}>
+                                {/* Ingresos Totales */}
+                                <div style={{
+                                    background: "linear-gradient(135deg, #1E293B, #334155)",
+                                    borderRadius: "14px", padding: "1rem 1.25rem",
+                                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                                }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.5rem" }}>
+                                        <TrendingUp size={16} color="#34D399" />
+                                        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase" }}>Ingresos Totales</span>
+                                    </div>
+                                    <div style={{ color: "white", fontSize: "1.5rem", fontWeight: 900 }}>
+                                        S/ {formatSoles(totalRevenue)}
+                                    </div>
+                                    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.68rem", marginTop: "4px" }}>
+                                        Cerrados: S/ {formatSoles(closedRevenue)} + Proyección: S/ {formatSoles(activeRevenue * 0.5)}
+                                    </div>
+                                </div>
+
+                                {/* Costos Totales */}
+                                <div style={{
+                                    background: "linear-gradient(135deg, #7C2D12, #9A3412)",
+                                    borderRadius: "14px", padding: "1rem 1.25rem",
+                                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                                }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.5rem" }}>
+                                        <TrendingDown size={16} color="#FCA5A5" />
+                                        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase" }}>Costos Totales</span>
+                                    </div>
+                                    <div style={{ color: "white", fontSize: "1.5rem", fontWeight: 900 }}>
+                                        S/ {formatSoles(totalCosts)}
+                                    </div>
+                                    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.68rem", marginTop: "4px" }}>
+                                        MO + Materiales + Viáticos
+                                    </div>
+                                </div>
+
+                                {/* Utilidad Neta (Rentabilidad) */}
+                                <div style={{
+                                    background: "linear-gradient(135deg, #166534, #15803D)",
+                                    borderRadius: "14px", padding: "1rem 1.25rem",
+                                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                                }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.5rem" }}>
+                                        <Coins size={16} color="#6EE7B7" />
+                                        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase" }}>Utilidad Neta</span>
+                                    </div>
+                                    <div style={{ color: "white", fontSize: "1.5rem", fontWeight: 900 }}>
+                                        S/ {formatSoles(netProfit)}
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                                        <span style={{
+                                            background: "rgba(255,255,255,0.15)",
+                                            color: "white", fontSize: "0.68rem", fontWeight: 800,
+                                            padding: "2px 8px", borderRadius: "4px"
+                                        }}>
+                                            {marginPct.toFixed(1)}% margen
+                                        </span>
+                                        <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem" }}>
+                                            {closedThisMonth.length} tickets cerrados
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Tickets Activos con Proyección */}
+                                <div style={{
+                                    background: "linear-gradient(135deg, #4C1D95, #6D28D9)",
+                                    borderRadius: "14px", padding: "1rem 1.25rem",
+                                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                                }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0.5rem" }}>
+                                        <Wrench size={16} color="#C4B5FD" />
+                                        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase" }}>Tickets en Proceso</span>
+                                    </div>
+                                    <div style={{ color: "white", fontSize: "1.5rem", fontWeight: 900 }}>
+                                        {activeTickets.length}
+                                    </div>
+                                    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.68rem", marginTop: "4px" }}>
+                                        Proyección util: S/ {formatSoles(activeProfit * 0.5)}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* ── CHARTS ROW ───────────────────────── */}
                     <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr", gap: "1.25rem", marginBottom: "1.25rem" }}>
