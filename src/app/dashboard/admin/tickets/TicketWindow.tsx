@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, normalizeTicket } from "@/lib/useQueryHooks";
 
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, TrendingUp } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -4011,229 +4011,181 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     </div>
                                                 </div>
                                             )}
-                                            <div className={styles.liquidationCardPremium}>
-                                                <div className={styles.liquidationHeaderPremium} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'linear-gradient(135deg, #065F46, #059669)', color: 'white' } : {}}>
-                                                    <div className={styles.headerTitleWrapper}>
-                                                        <div className={styles.headerIconBox} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)', color: 'white' } : {}}>
-                                                            <Calculator size={28} />
+                                            <div className={styles.concludedServiceContainer}>
+                                                <div className={styles.concludedHeader}>
+                                                    <div className={styles.concludedHeaderLeft}>
+                                                        <div className={styles.concludedIconBadge}>
+                                                            <CheckCircle2 size={22} />
                                                         </div>
-                                                        <div className={styles.headerTextGroup}>
-                                                            <h3 style={ticketData.estadoId === "ticket_cerrado" ? { color: 'white' } : {}}>
-                                                                {ticketData.estadoId === "ticket_cerrado" ? "Servicio Concluido y Liquidado" : "Liquidación Final de Servicio"}
-                                                            </h3>
-                                                            <p style={ticketData.estadoId === "ticket_cerrado" ? { color: 'rgba(255,255,255,0.8)' } : {}}>
-                                                                {ticketData.estadoId === "ticket_cerrado" ? "Información financiera auditada y cerrada." : "Resumen detallado de costos y saldos pendientes."}
-                                                            </p>
+                                                        <div className={styles.concludedTitleGroup}>
+                                                            <h3>Servicio Concluido y Liquidado</h3>
+                                                            <span>Informacion financiera auditada y cerrada</span>
                                                         </div>
                                                     </div>
-                                                    <div className={styles.totalBannerBadge} style={ticketData.estadoId === "ticket_cerrado" ? { background: 'rgba(255,255,255,0.2)' } : { background: '#2563EB', color: 'white' }}>
-                                                        S/ {(techPactedTotal - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                                    <div className={styles.concludedHeaderStats}>
+                                                        <div className={styles.statBadge}>
+                                                            <span className={styles.statLabel}>Ticket</span>
+                                                            <span className={styles.statValue}>{ticketData.numeroTicketCliente || ticketData.id?.slice(0,8) || 'N/A'}</span>
+                                                        </div>
+                                                        <div className={styles.statBadgeGreen}>
+                                                            <span className={styles.statLabelGreen}>Liquidado</span>
+                                                            <CheckCircle size={14} color="#059669" />
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                <div className={styles.financialDetailsBody}>
-                                                    <div className={styles.summarySection}>
-                                                        <div className={styles.mainFinancialRow}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <span className={styles.rowLabel}>{["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId) ? "Presupuesto Proyectado" : "Monto Pactado Trabajo"}</span>
-                                                                {ticketData.fechaCotización && (
-                                                                    <span style={{ fontSize: '10px', color: '#64748B', marginLeft: '4px' }}>
-                                                                        • {new Date(ticketData.fechaCotización).toLocaleDateString('es-PE')}
-                                                                    </span>
-                                                                )}
-                                                                {availableRescue > 0 && ticketData.estadoId !== "ticket_cerrado" && (
-                                                                    <button 
-                                                                        onClick={handleOpenRescue}
-                                                                        className={styles.rescueBtnMini}
-                                                                        title="Solicitar Rescate Financiero (Adelanto de Mano de Obra)"
-                                                                    >
-                                                                        <Coins size={12} />
-                                                                        <span>Rescate Financiero</span>
-                                                                    </button>
-                                                                )}
-                                                                {availableRescue <= 0 && ticketData.estadoId !== "ticket_cerrado" && (
-                                                                    <span style={{ fontSize: '9px', fontWeight: 800, color: '#94A3B8', padding: '2px 8px', background: '#F1F5F9', borderRadius: '6px', cursor: 'help' }} title="Se ha solicitado o pagado el 100% de la mano de obra pactada.">
-                                                                        TOPE ALCANZADO
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <span className={styles.rowValue}>S/ {techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                <div className={styles.financialAuditGrid}>
+                                                    <div className={styles.financeCard}>
+                                                        <div className={styles.financeCardHeader}>
+                                                            <TrendingUp size={16} />
+                                                            <span>PRESUPUESTO APROBADO</span>
                                                         </div>
+                                                        <div className={styles.financeMainValue}>
+                                                            <span className={styles.currencySymbol}>S/</span>
+                                                            <span className={styles.mainAmount}>{techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                        <div className={styles.financeSubRow}>
+                                                            <span>Ingresos totales del servicio</span>
+                                                        </div>
+                                                    </div>
 
-                                                        <div className={styles.mainFinancialRow} style={{ border: 'none', paddingBottom: '12px' }}>
-                                                            <span className={styles.rowLabel} style={{ fontWeight: 800 }}>Total Pagado (Confirmado)</span>
-                                                            <span className={styles.rowValue} style={{ color: '#059669', fontSize: '18px' }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                    <div className={styles.financeCard}>
+                                                        <div className={styles.financeCardHeader} style={{ color: '#991B1B' }}>
+                                                            <ArrowDownLeft size={16} />
+                                                            <span>DEBE HABER (EGRESOS)</span>
                                                         </div>
-                                                        
-                                                        {/* ✅ NUEVO:Mostrar solicitudes pendientes separately */}
-                                                                                               <div className={styles.transactionLedgerPremium}>
-                                                            {/* --- SECCIÓN 1: PASIVO LABORAL --- */}
-                                                            <div className={styles.ledgerChannel}>
-                                                                <div className={styles.channelHeader} style={{ color: '#1E40AF', background: '#EFF6FF' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                        <User size={16} />
-                                                                        <span style={{ fontWeight: 900, fontSize: '11px', letterSpacing: '0.5px' }}>CANAL 1: PASIVO LABORAL (M.O.)</span>
+                                                        <div className={styles.financeMainValue} style={{ color: '#DC2626' }}>
+                                                            <span className={styles.currencySymbol}>S/</span>
+                                                            <span className={styles.mainAmount}>{(unifiedPaymentsSum + operatingExpenses).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                        <div className={styles.egresosBreakdown}>
+                                                            <div className={styles.breakdownItem}>
+                                                                <span className={styles.breakdownLabel}>Mano de Obra</span>
+                                                                <span className={styles.breakdownValue}>S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            </div>
+                                                            <div className={styles.breakdownItem}>
+                                                                <span className={styles.breakdownLabel}>Gastos Operativos</span>
+                                                                <span className={styles.breakdownValue}>S/ {operatingExpenses.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className={styles.financeCard} style={{
+                                                        background: grossMargin >= 0 ? 'linear-gradient(135deg, #F0FDF4, #DCFCE7)' : 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
+                                                        border: grossMargin >= 0 ? '1px solid #86EFAC' : '1px solid #FCA5A5'
+                                                    }}>
+                                                        <div className={styles.financeCardHeader} style={{ color: grossMargin >= 0 ? '#166534' : '#991B1B' }}>
+                                                            <Sparkles size={16} />
+                                                            <span>RENTABILIDAD / GANANCIA</span>
+                                                        </div>
+                                                        <div className={styles.financeMainValue} style={{ color: grossMargin >= 0 ? '#059669' : '#DC2626' }}>
+                                                            <span className={styles.currencySymbol}>S/</span>
+                                                            <span className={styles.mainAmount}>{grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                        <div className={styles.profitMarginBadge}>
+                                                            <Percent size={12} />
+                                                            <span>{(pctReal || 0).toFixed(1)}% margen</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className={styles.depositsSection}>
+                                                    <div className={styles.depositsSectionHeader}>
+                                                        <div className={styles.depositsSectionTitle}>
+                                                            <Coins size={16} />
+                                                            <span>Depositos Realizados</span>
+                                                        </div>
+                                                        <div className={styles.depositsTotal}>
+                                                            <span>Total Depositado:</span>
+                                                            <strong>S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className={styles.depositsListCompact}>
+                                                        {laborItems.length > 0 ? laborItems.map((p: any, i: number) => (
+                                                            <div key={`dep-${i}`} className={styles.depositRowCompact}>
+                                                                <div className={styles.depositRowLeft}>
+                                                                    <div className={styles.depositStatusDot} style={{ background: '#10B981' }} />
+                                                                    <div className={styles.depositInfo}>
+                                                                        <span className={styles.depositConcept}>{p.concepto || p.categoria || p.tipo || 'Pago MO'}</span>
+                                                                        <span className={styles.depositDate}>{new Date(p.created_at || p.fecha).toLocaleDateString('es-PE')}</span>
                                                                     </div>
-                                                                    <span style={{ fontWeight: 800 }}>- S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                                 </div>
-                                                                
-                                                                <div className={styles.depositsListPremium}>
-                                                                    {[...laborItems, ...pendingLaborItems].sort((a,b) => new Date(b.created_at || b.fecha).getTime() - new Date(a.created_at || a.fecha).getTime()).map((p: any, i: number) => {
-                                                                        const st = (p.estado_pago || p.estado || '').toLowerCase();
-                                                                        const isPending = st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
-                                                                        const isRejected = st === 'rechazado' || st === 'anulado';
-                                                                        
-                                                                        return (
-                                                                            <div key={`labor-${i}`} className={styles.depositEntry} style={{ 
-                                                                                opacity: isRejected ? 0.5 : 1,
-                                                                                textDecoration: isRejected ? 'line-through' : 'none',
-                                                                                background: st === 'requiere_aprobacion_admin' ? '#f5f3ff' : 'transparent',
-                                                                                borderLeft: st === 'requiere_aprobacion_admin' ? '3px solid #6366f1' : 'none'
-                                                                            }}>
-                                                                                <div className={styles.depositLabel}>
-                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                                        {isRejected ? <XCircle size={12} color="#EF4444" /> : (isPending ? <Clock size={12} color="#F59E0B" /> : <CheckCircle size={12} color="#10B981" />)}
-                                                                                        <span style={{ fontWeight: 700 }}>{p.concepto || p.categoria || p.tipo || 'Pago MO'}</span>
-                                                                                    </div>
-                                                                                    <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha).toLocaleDateString('es-PE')}</span>
-                                                                                </div>
-                                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                                                                                    <span className={styles.depositAmount} style={{ color: isRejected ? '#94A3B8' : (isPending ? '#F59E0B' : '#1E40AF') }}>
-                                                                                        - S/ {toNum(p.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                                                    </span>
-                                                                                    {isAdmin && st === 'requiere_aprobacion_admin' && (
-                                                                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                                                                            <button onClick={() => handleRejectRescueAdmin(p.id)} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>DENEGAR</button>
-                                                                                            <button onClick={() => handleApproveRescueAdmin(p.id)} style={{ background: '#dcfce7', color: '#15803d', border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>APROBAR</button>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                    {laborItems.length === 0 && pendingLaborItems.length === 0 && (
-                                                                        <div className={styles.operationalHint} style={{ padding: '8px', textAlign: 'center' }}>Sin movimientos de mano de obra.</div>
-                                                                    )}
-                                                                </div>
+                                                                <span className={styles.depositAmountCompact}>S/ {toNum(p.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                             </div>
-
-                                                            {/* --- SECCIÓN 2: GASTOS OPERATIVOS --- */}
-                                                            <div className={styles.ledgerChannel} style={{ marginTop: '16px' }}>
-                                                                <div className={styles.channelHeader} style={{ color: '#9D174D', background: '#FDF2F8' }}>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                        <Package size={16} />
-                                                                        <span style={{ fontWeight: 900, fontSize: '11px', letterSpacing: '0.5px' }}>CANAL 2: GASTOS OPERATIVOS (RENTABILIDAD)</span>
-                                                                    </div>
-                                                                    <span style={{ fontWeight: 800 }}>- S/ {operatingExpenses.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                                </div>
-                                                                
-                                                                <div className={styles.depositsListPremium}>
-                                                                    {[...operatingItems, ...pendingOpItems].sort((a,b) => new Date(b.created_at || b.fecha).getTime() - new Date(a.created_at || a.fecha).getTime()).map((p: any, i: number) => {
-                                                                        const st = (p.estado_pago || p.estado || '').toLowerCase();
-                                                                        const isPending = st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
-                                                                        
-                                                                        return (
-                                                                            <div key={`op-${i}`} className={styles.depositEntry}>
-                                                                                <div className={styles.depositLabel}>
-                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                                        {isPending ? <Clock size={12} color="#F59E0B" /> : <ArrowDownLeft size={12} color="#9D174D" />}
-                                                                                        <span style={{ fontWeight: 700 }}>{p.concepto || p.categoria || p.tipo || 'Gasto'}</span>
-                                                                                    </div>
-                                                                                    <span className={styles.depositMeta}>{new Date(p.created_at || p.fecha).toLocaleDateString('es-PE')}</span>
-                                                                                </div>
-                                                                                <span className={styles.depositAmount} style={{ color: isPending ? '#F59E0B' : '#9D174D' }}>
-                                                                                    - S/ {toNum(p.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                                                </span>
-                                                                            </div>
-                                                                        );
-                                                                    })}
-                                                                    {operatingItems.length === 0 && pendingOpItems.length === 0 && (
-                                                                        <div className={styles.operationalHint} style={{ padding: '8px', textAlign: 'center' }}>Sin gastos operativos registrados.</div>
-                                                                    )}
-                                                                </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                    <div className={styles.bankDetailsPanel}>
-                                                        <h4>Transferencia a Destino</h4>
-                                                        
-                                                        <div className={styles.bankFieldClean}>
-                                                            <strong>BENEFICIARIO</strong>
-                                                            <span>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
-                                                        </div>
-
-                                                        <div className={styles.bankFieldClean}>
-                                                            <strong>{ticketData.tecnico?.banco || 'BANCO'}</strong>
-                                                            <span style={{ fontFamily: 'Monospace', letterSpacing: '1px' }}>{ticketData.tecnico?.numeroCuenta || '---'}</span>
-                                                        </div>
-
-                                                        {ticketData.tecnico?.cci && (
-                                                            <div className={styles.bankFieldClean}>
-                                                                <strong>CCI (INTERBANCARIO)</strong>
-                                                                <span style={{ fontFamily: 'Monospace', letterSpacing: '1px' }}>{ticketData.tecnico.cci}</span>
+                                                        )) : (
+                                                            <div className={styles.emptyDeposits}>
+                                                                <span>Sin depositos registrados</span>
                                                             </div>
                                                         )}
+                                                    </div>
+                                                </div>
 
+                                                <div className={styles.paymentDestinationPanel}>
+                                                    <div className={styles.destinationHeader}>
+                                                        <CreditCard size={16} />
+                                                        <span>Destino del Pago</span>
+                                                    </div>
+                                                    <div className={styles.destinationContent}>
+                                                        <div className={styles.destinationMain}>
+                                                            <div className={styles.destinationField}>
+                                                                <span className={styles.destFieldLabel}>Tecnico</span>
+                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
+                                                            </div>
+                                                            <div className={styles.destinationField}>
+                                                                <span className={styles.destFieldLabel}>Banco</span>
+                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.banco || 'N/A'}</span>
+                                                            </div>
+                                                            <div className={styles.destinationField} style={{ flex: 2 }}>
+                                                                <span className={styles.destFieldLabel}>Cuenta</span>
+                                                                <span className={styles.destFieldValueMono}>{ticketData.tecnico?.numeroCuenta || '---'}</span>
+                                                            </div>
+                                                            {ticketData.tecnico?.cci && (
+                                                                <div className={styles.destinationField} style={{ flex: 2 }}>
+                                                                    <span className={styles.destFieldLabel}>CCI</span>
+                                                                    <span className={styles.destFieldValueMono}>{ticketData.tecnico.cci}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
-                                                            <div className={styles.walletsRowPremium}>
+                                                            <div className={styles.destinationWallets}>
                                                                 {ticketData.tecnico?.yape && (
-                                                                    <div className={styles.walletBadgePremium} style={{ background: '#7C3AED' }}>
-                                                                        <span>YAPE: {ticketData.tecnico.yape}</span>
-                                                                    </div>
+                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.tecnico.yape}</span>
                                                                 )}
                                                                 {ticketData.tecnico?.plin && (
-                                                                    <div className={styles.walletBadgePremium} style={{ background: '#00D1FF' }}>
-                                                                        <span>PLIN: {ticketData.tecnico.plin}</span>
-                                                                    </div>
+                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.tecnico.plin}</span>
                                                                 )}
                                                             </div>
                                                         )}
                                                     </div>
+                                                </div>
 
-                                                    <div className={styles.finalBalanceBanner} style={ticketData.estadoId === "ticket_cerrado" ? { background: '#064E3B' } : {}}>
-                                                        <span className={styles.finalBalanceLabel}>
-                                                            {ticketData.estadoId === "ticket_cerrado" ? "MONTO TOTAL LIQUIDADO" : "SALDO MANO DE OBRA (TÉCNICO)"}
-                                                        </span>
-                                                        <span className={styles.finalBalanceValue}>
-                                                            S/ {(ticketData.estadoId === "ticket_cerrado" 
-                                                                ? unifiedPaymentsSum 
-                                                                : Math.max(0, finalBalance)
-                                                            ).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                        </span>
+                                                <div className={styles.finalSettledRow}>
+                                                    <div className={styles.settledInfo}>
+                                                        <CheckCircle size={18} />
+                                                        <div className={styles.settledText}>
+                                                            <span className={styles.settledLabel}>SALDO FINAL LIQUIDADO</span>
+                                                            <span className={styles.settledNote}>Pago completado y confirmado</span>
+                                                        </div>
                                                     </div>
-
-                                                    <div className={styles.profitabilityPanel} style={{ 
-                                                        marginTop: '20px', 
-                                                        padding: '16px', 
-                                                        borderRadius: '16px', 
-                                                        background: ["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId)
-                                                            ? 'linear-gradient(135deg, #3B82F6, #1D4ED8)' 
-                                                            : grossMargin > 0 ? 'linear-gradient(135deg, #059669, #047857)' : 'linear-gradient(135deg, #DC2626, #991B1B)',
-                                                        color: 'white',
-                                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                                                    }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                                                {["en_cotizacion", "cotizacion_enviada"].includes(ticketData.estadoId)
-                                                                    ? "Rentabilidad Proyectada"
-                                                                    : "Rentabilidad Real (V3)"
-                                                                }
-                                                            </span>
-                                                            <span style={{ fontSize: '0.75rem', fontWeight: 800, padding: '2px 8px', background: 'rgba(255,255,255,0.2)', borderRadius: '6px' }}>
-                                                                Gastos Op: S/ {operatingExpenses.toFixed(2)}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ fontSize: '1.6rem', fontWeight: 900, display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                                                            <span style={{ fontSize: '1rem', opacity: 0.8 }}>S/</span>
-                                                            {grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                                        </div>
-                                                        <p style={{ fontSize: '0.7rem', marginTop: '6px', opacity: 0.8, lineHeight: 1.3 }}>
-                                                            Utilidad Real tras deducir Pasivo Laboral pactado y Gastos Operativos del ticket.
-                                                        </p>
+                                                    <div className={styles.settledAmount}>
+                                                        <span className={styles.settledCurrency}>S/</span>
+                                                        <span className={styles.settledValue}>{(techPactedTotal - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                     </div>
                                                 </div>
+
+                                                <div className={styles.closedFooterActions}>
+                                                    <div className={styles.closedStatusBanner}>
+                                                        <CheckCircle size={18} />
+                                                        TICKET CERRADO Y ARCHIVADO
+                                                    </div>
+                                                    <button onClick={onClose} className={styles.returnDashboardBtn}>
+                                                        VOLVER AL DASHBOARD
+                                                        <ArrowRight size={16} />
+                                                    </button>
+                                                </div>
                                             </div>
+
 
                                             {ticketData.estadoId === "por_liquidar" && (
                                                 <div className={styles.waitingForManager} style={{ padding: '30px', background: '#F8FAFC', borderRadius: '20px', border: '1px solid #E2E8F0', marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
