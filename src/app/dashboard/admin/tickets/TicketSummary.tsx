@@ -4,7 +4,7 @@ import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethos
 import { getServiceById } from "@/lib/serviceTypes";
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { supabase } from "@/lib/supabase";
-import { round2, formatSoles } from "@/lib/formatters";
+import { round2, formatSoles, getAvatarUrl } from "@/lib/formatters";
 import { calculateTicketFinances } from "@/lib/calculations";
 import styles from "./TicketSummary.module.css";
 
@@ -1706,15 +1706,19 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
     // Evitar mostrar "mi cuenta" cuando la información está incompleta
     const rawGestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado || ticket.metadata?.gestora;
     const hasGestora = !!(rawGestora && (rawGestora.id || rawGestora.name || rawGestora.nombre));
-    
+
     // Nombre seguro - nunca mostrar valores vacíos o genéricos
-    const gestoraName = (rawGestora?.name || rawGestora?.nombre || '').trim() || (rawGestora?.id ? 'Gestor(a)' : '');
-    const showGestoraName = hasGestora && !!gestoraName && gestoraName !== 'Gestor(a)' && gestoraName !== '[object Object]';
+    const gestoresName = (rawGestora?.name || rawGestora?.nombre || '').trim() || (rawGestora?.id ? 'Gestor(a)' : '');
+    const showGestoraName = hasGestora && !!gestorasName && gestorasName !== 'Gestor(a)' && gestorasName !== '[object Object]';
+
+    // Obtener email para generar avatar
+    const gestoresEmail = rawGestora?.email || '';
+    const avatarUrl = hasGestora && showGestoraName ? getAvatarUrl(gestorasEmail, gestorasName) : '';
 
     return (
-        <div 
+        <div
             className={styles.infoBar}
-            style={{ 
+            style={{
                 background: hasGestora ? 'linear-gradient(to right, #EEF2FF, white)' : 'linear-gradient(to right, #FFF7ED, white)',
                 '--bar-accent-color': hasGestora ? '#6366F1' : '#F97316',
                 marginTop: '-4px'
@@ -1738,10 +1742,26 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
                 <span className={styles.infoLabel}>Gestor(a)</span>
                 {hasGestora && showGestoraName ? (
                     <div className={styles.clienteCompact}>
-                        <div className={styles.clienteAvatar} style={{ background: '#6366F1' }}>
-                            {(gestoraName || "G").substring(0, 1).toUpperCase()}
+                        {avatarUrl ? (
+                            <img 
+                                src={avatarUrl} 
+                                alt={gestorasName}
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '50%',
+                                    objectFit: 'cover',
+                                    border: '2px solid rgba(99, 102, 241, 0.3)'
+                                }}
+                            />
+                        ) : (
+                            <div className={styles.clienteAvatar} style={{ background: '#6366F1', width: '36px', height: '36px', fontSize: '14px' }}>
+                                {(gestorasName || "G").substring(0, 1).toUpperCase()}
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+                            <span className={styles.infoValue} style={{ fontWeight: 700, fontSize: '13px', lineHeight: 1.2 }}>{gestorasName}</span>
                         </div>
-                        <span className={styles.infoValue} style={{ fontWeight: 700 }}>{gestoraName}</span>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F97316' }}>
@@ -1752,11 +1772,11 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
             </div>
 
             {canAssign && !ticket.estadoId.includes('cerrado') && (
-                <button 
+                <button
                     className={styles.reassignBtn}
                     onClick={onAssign}
-                    style={{ 
-                        color: hasGestora ? '#4338CA' : '#C2410C', 
+                    style={{
+                        color: hasGestora ? '#4338CA' : '#C2410C',
                         '--btn-color': hasGestora ? '#6366F1' : '#F97316',
                         background: hasGestora ? '#EEF2FF' : '#FFF7ED',
                         padding: '6px 12px',
