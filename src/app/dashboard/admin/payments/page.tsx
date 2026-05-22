@@ -281,6 +281,10 @@ function flattenTicketForPayments(t: any) {
 }
 
 export default function PaymentsPage() {
+    // ── Seguro de montaje (evita hydration mismatch React #418) ──
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => { setIsMounted(true); }, []);
+
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -358,9 +362,15 @@ export default function PaymentsPage() {
         }
     };
 
-    useEffect(() => { fetchPaymentTickets(); }, [fetchPaymentTickets]);
-
+    // ── Fetch solo cuando esté montado y fetchPaymentTickets esté listo ──
     useEffect(() => {
+        if (!isMounted) return;
+        fetchPaymentTickets();
+    }, [isMounted, fetchPaymentTickets]);
+
+    // ── Realtime subscription solo cuando esté montado ──
+    useEffect(() => {
+        if (!isMounted) return;
         const channel = supabase
             .channel('payments:realtime_sync')
             .on('postgres_changes',
@@ -376,7 +386,7 @@ export default function PaymentsPage() {
             if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
             supabase.removeChannel(channel); 
         };
-    }, [debouncedFetch]);
+    }, [isMounted, debouncedFetch]);;
 
     const queryClient = useQueryClient();
 
