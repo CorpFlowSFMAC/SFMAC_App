@@ -285,12 +285,30 @@ export default function TicketsPage() {
         return (tickets || []).filter(isVisibleForMe);
     }, [tickets, isVisibleForMe]);
 
+    // 🎯 CRÍTICO: Previene Error de Hidratación #418
+    // Solo renderizar contenido dinámico después de montar en cliente
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => { setIsMounted(true); }, []);
+
     // Estado inicial de cada ticket: "nuevo" o "asignado_a_tecnico" o estados de inicio de proceso
-    const NUEVOS_STATES = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
-    const EN_PROCESO_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
+    // NOTA: 'tecnico_asignado' es el estado correcto, NO 'asignado_a_tecnico'
+    const NUEVOS_STATES = ["nuevo", "pendiente", "tecnico_asignado", "borrador"];
+    
+    // Estados EN PROCESO - Incluye TODOS los estados activos operativos
+    // Incluye: inspeccion, cotizacion, aprobado, ejecucion, documentacion, liquidar, liquidado, visita, espera
+    const EN_PROCESO_STATES = [
+        "en_inspeccion", "visita_programada", "visita_realizada", "esperando_pago_visita",
+        "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada",
+        "en_ejecucion", "documentacion_enviada",
+        "por_liquidar", "liquidado", "requiere_revision_admin"
+    ];
     
     // Estados disponibles para filtrado individual en la barra kanban
-    const KANBAN_FILTER_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado"];
+    const KANBAN_FILTER_STATES = [
+        "en_inspeccion", "visita_programada", "visita_realizada",
+        "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada",
+        "en_ejecucion", "por_liquidar"
+    ];
 
     // ── BÚSQUEDA GLOBAL: helpers de filtrado ─────────────────────────────────
     const matchesSearch = useCallback((t: any, term: string) => {
@@ -373,7 +391,29 @@ export default function TicketsPage() {
 
     return (
         <div className={styles.page}>
-            {/* ✨ HEADER ULTRA COMPACTO */}
+            {/* 🎯 CRÍTICO: Pantalla de carga durante hidratación para evitar Error #418 */}
+            {!isMounted ? (
+                <div style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    minHeight: '400px',
+                    gap: '1rem'
+                }}>
+                    <div style={{ 
+                        width: '48px', 
+                        height: '48px', 
+                        border: '4px solid #E2E8F0', 
+                        borderTop: '4px solid #8B5CF6', 
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                    }} />
+                    <p style={{ color: '#64748B', fontSize: '0.9rem' }}>Cargando tickets...</p>
+                    <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                </div>
+            ) : (
+            <>
             <div className={styles.pageHeader}>
                 <div className={styles.headerLeft}>
                     <Sparkles className={styles.sparkleIcon} size={22} />
@@ -777,11 +817,7 @@ export default function TicketsPage() {
             {/* 🪟 VENTANAS FLOTANTES DE TICKETS */}
             {
                 openTickets.map((ticket, index) => {
-                    // 🔥 FRESH DATA: Buscar la versión más reciente del ticket en el estado global (Realtime)
-                    // Esto asegura que si el Admin confirma un pago, la Gestora lo vea reflejado al instante
-                    // sin tener que cerrar y abrir el ticket, ya que 'tickets' se actualiza vía suscripción.
                     const freshTicket = tickets.find((t: any) => t.id === ticket.id) || ticket;
-
                     return (
                         <TicketWindow
                             key={freshTicket.id}
@@ -792,7 +828,9 @@ export default function TicketsPage() {
                         />
                     );
                 })}
-        </div >
+            </>
+            )}
+        </div>
     );
 }
 
