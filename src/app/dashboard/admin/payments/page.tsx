@@ -6,7 +6,8 @@ import {
     DollarSign, CreditCard, ChevronDown, ChevronUp,
     Building2, User, Upload, Eye, X, Search, Filter,
     AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw,
-    Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle, ShieldAlert
+    Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle, ShieldAlert,
+    Package, Wrench, Receipt
 } from "lucide-react";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { ticketsAPI, ticketCostsAPI, paymentsAPI } from "@/lib/supabase-api";
@@ -17,7 +18,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances } from "@/lib/calculations";
 import { compressImage } from "@/lib/imageCompression";
+import { getTipoSolicitud, mapEstadoPagoToUniversal } from "@/lib/ticketCostCategories";
 import styles from "./payments.module.css";
+
+// ──────────────────────────────────────────────────────────────
+// TIPO DE SOLICITUD - PARA SEPARAR VISTAS EN TESORERÍA
+// ──────────────────────────────────────────────────────────────
+type TabTipoSolicitud = 'GASTO_RESCATE' | 'ADELANTO' | 'LIQUIDACION' | 'TODOS';
+
+const TAB_CONFIG: Record<TabTipoSolicitud, { label: string; icon: React.ReactNode; color: string; bgColor: string }> = {
+    'TODOS': { label: 'Todos', icon: <Wallet size={16} />, color: '#64748B', bgColor: '#F1F5F9' },
+    'GASTO_RESCATE': { label: 'Gastos y Rescates', icon: <Package size={16} />, color: '#D97706', bgColor: '#FFF7ED' },
+    'ADELANTO': { label: 'Adelantos', icon: <Wrench size={16} />, color: '#7C3AED', bgColor: '#F5F3FF' },
+    'LIQUIDACION': { label: 'Liquidaciones', icon: <Receipt size={16} />, color: '#059669', bgColor: '#ECFDF5' }
+};
 
 // ──────────────────────────────────────────────────────────────
 // HETZNER API CLIENT - Endpoint seguro para mutate de ticket_costs
@@ -389,6 +403,18 @@ export default function PaymentsPage() {
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
     const [filter, setFilter] = useState<'todos' | 'pendiente' | 'pagado'>('pendiente');
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // ──────────────────────────────────────────────────────────────
+    // HIDRATACIÓN SEGURA: Estado para evitar errores de hidratación
+    // ──────────────────────────────────────────────────────────────
+    const [isMounted, setIsMounted] = useState(false);
+    
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+    
+    // Pestaña activa para separar vistas por tipo de solicitud
+    const [activeTab, setActiveTab] = useState<TabTipoSolicitud>('TODOS');
 
     // Función para ver voucher con carga diferida (lazy loading)
     const handleViewVoucher = async (ticketId: string, voucherRef?: string | null, hasVoucher?: boolean) => {
@@ -616,14 +642,19 @@ export default function PaymentsPage() {
                 }
 
                 if (meta.solicitudLiquidacion) {
-                    pendingItems.push({
-                        id: `${t.id}_liquidacion_manual`,
-                        tipo: 'Liquidación Final',
-                        monto: round2(meta.solicitudLiquidacion.monto || 0),
-                        estado: 'pendiente',
-                        fecha: meta.solicitudLiquidacion.fecha || t.created_at,
-                        concepto: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
-                    });
+                    const liqMonto = meta.solicitudLiquidacion.monto || 0;
+                    const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
+                    
+                    if (!liqInHistory && liqMonto > 0) {
+                        pendingItems.push({
+                            id: `${t.id}_liquidacion_manual`,
+                            tipo: 'Liquidación Final',
+                            monto: round2(liqMonto),
+                            estado: 'pendiente',
+                            fecha: meta.solicitudLiquidacion.fecha || t.created_at,
+                            concepto: meta.solicitudLiquidacion.concepto || "Saldo Solicitado"
+                        });
+                    }
                 }
 
                 // B. Solicitud de Adelanto Extra (Refuerzo)
@@ -647,12 +678,13 @@ export default function PaymentsPage() {
                 const hasExceedancePending = (t.costos || []).some((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
                                            (meta.solicitudPago && !pagoInHistory) || 
-                                           (meta.solicitudLiquidacion && !liqInHistory) ||
+                                           (meta.solicitudLiquidacion && !liqInHistory && liqMonto > 0) ||
                                            (meta.solicitudAdelantoExtra && parseFloat(meta.solicitudAdelantoExtra.monto || 0) > 0) ||
                                            hasExceedancePending;
 
                 const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
                 // No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
+                // ni si ya existe una solicitud de liquidación pendiente
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
                     // V3: La liquidación es el saldo real de mano de obra (Pactado - Pagado)
                     const autoLiqMonto = round2(netLaborBalance);
@@ -1527,7 +1559,46 @@ export default function PaymentsPage() {
             matchesStatus = (!hasPendingItems || isTicketClosed) && (hasPaidItems || g.items.some(i => i.isReference));
         }
         
-        return matchesSearch && matchesStatus;
+        // ──────────────────────────────────────────────────────────────
+        // FILTRO POR TIPO DE SOLICITUD: Separar vistas en Tesorería
+        // ──────────────────────────────────────────────────────────────
+        let matchesTab = true;
+        if (activeTab !== 'TODOS') {
+            // Contar ítems por tipo de solicitud basado en el categoría del costo
+            const itemsByType = {
+                'GASTO_RESCATE': g.items.filter((i: any) => {
+                    if (i.isTableCost) {
+                        // Para costos de tabla, clasificar basándose en categoría
+                        const cat = (i.categoria || '').toLowerCase();
+                        return cat.includes('materiales') || cat.includes('viático') || cat.includes('movilidad') ||
+                               cat.includes('logística') || cat.includes('rescate') || cat.includes('envíos') || 
+                               cat.includes('compras') || cat.includes('insumo');
+                    }
+                    return i.tipo?.toLowerCase().includes('gasto') || i.tipo?.toLowerCase().includes('rescate') ||
+                           i.tipo?.toLowerCase().includes('materiales') || i.tipo?.toLowerCase().includes('viático');
+                }),
+                'ADELANTO': g.items.filter((i: any) => {
+                    if (i.isTableCost) {
+                        const cat = (i.categoria || '').toLowerCase();
+                        return cat.includes('adelanto') || cat.includes('mano de obra');
+                    }
+                    return i.tipo?.toLowerCase().includes('adelanto') || i.tipo?.toLowerCase().includes('refuerzo');
+                }),
+                'LIQUIDACION': g.items.filter((i: any) => {
+                    if (i.isTableCost) {
+                        const cat = (i.categoria || '').toLowerCase();
+                        return cat.includes('liquidación') || cat.includes('liquidacion') || 
+                               cat.includes('mano de obra') && i.tipo?.toLowerCase().includes('liquidación');
+                    }
+                    return i.tipo?.toLowerCase().includes('liquidación') || i.tipo?.toLowerCase().includes('liquidacion');
+                })
+            };
+            
+            const filteredItems = itemsByType[activeTab] || [];
+            matchesTab = filteredItems.length > 0;
+        }
+        
+        return matchesSearch && matchesStatus && matchesTab;
     });
 
 
@@ -1800,6 +1871,49 @@ export default function PaymentsPage() {
                                 </button>
                             ))}
                         </div>
+                        
+                        {/* ──────────────────────────────────────────────────────────────
+                            TABS: Separación por tipo de solicitud (Gastos/Adelantos/Liquidaciones)
+                        ────────────────────────────────────────────────────────────── */}
+                        <div style={{ 
+                            display: 'flex', 
+                            gap: '8px', 
+                            padding: '4px', 
+                            background: '#F1F5F9', 
+                            borderRadius: '14px',
+                            overflowX: 'auto',
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {(Object.keys(TAB_CONFIG) as TabTipoSolicitud[]).map(tabKey => {
+                                const tab = TAB_CONFIG[tabKey];
+                                const isActive = activeTab === tabKey;
+                                return (
+                                    <button 
+                                        key={tabKey} 
+                                        onClick={() => setActiveTab(tabKey)}
+                                        style={{
+                                            padding: '8px 14px', 
+                                            borderRadius: '10px', 
+                                            border: 'none', 
+                                            cursor: 'pointer',
+                                            fontWeight: 800, 
+                                            fontSize: '0.75rem', 
+                                            transition: 'all 0.2s',
+                                            background: isActive ? 'white' : 'transparent',
+                                            color: isActive ? tab.color : '#64748B',
+                                            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            flexShrink: 0
+                                        }}
+                                    >
+                                        {tab.icon}
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
@@ -1827,13 +1941,13 @@ export default function PaymentsPage() {
                             <p style={{ color: '#64748B', maxWidth: '340px', margin: '0 auto', fontSize: '0.9rem' }}>
                                 {searchTerm 
                                     ? `No se encontraron resultados para "${searchTerm}".`
-                                    : filter === 'todos' 
+                                    : filter === 'todos' && activeTab === 'TODOS'
                                         ? 'Actualmente no hay solicitudes registradas.'
-                                        : `No se encontraron registros con el filtro "${filter}".`}
+                                        : `No se encontraron solicitudes de tipo "${activeTab === 'TODOS' ? 'todos' : TAB_CONFIG[activeTab]?.label || activeTab}".`}
                             </p>
-                            {(searchTerm || filter !== 'todos') && (
+                            {(searchTerm || filter !== 'todos' || activeTab !== 'TODOS') && (
                                 <button 
-                                    onClick={() => { setSearchTerm(''); setFilter('todos'); }}
+                                    onClick={() => { setSearchTerm(''); setFilter('todos'); setActiveTab('TODOS'); }}
                                     style={{ marginTop: '20px', color: '#3B82F6', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}
                                 >
                                     Ver todos los registros

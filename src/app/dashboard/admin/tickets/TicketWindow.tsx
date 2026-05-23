@@ -906,12 +906,30 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // FIX 2026-05-11: Si lo local ha limpiado el rechazo (pagoRechazado === null), la denegación ya no es 'activa' para el flujo local.
         const hasActiveRejection = !!serverMeta.pagoRechazado && businessData.pagoRechazado !== null;
         
-        const resolvedStatusId = options?.allowStateRollback
-            ? businessData.estadoId
-            : (hasActiveRejection 
-                ? serverStatusId 
-                : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId));
-
+        // BLINDAJE CRÍTICO V5: Preservar SOLICITUDES DE PAGO del gestor/admin
+        // Si local tiene una nueva solicitud (definida en businessData y no existente en servidor),
+        // SIEMPRE preservar la local. Esto evita que el sync borre peticiones de pago recientes.
+        const localHasNewSolLiq = businessData.solicitudLiquidacion !== undefined 
+            && businessData.solicitudLiquidacion !== null 
+            && serverMeta.solicitudLiquidacion === undefined;
+        const localHasNewSolPago = businessData.solicitudPago !== undefined 
+            && businessData.solicitudPago !== null 
+            && serverMeta.solicitudPago === undefined;
+        const localHasNewSolAde = businessData.solicitudAdelanto !== undefined 
+            && businessData.solicitudAdelanto !== null 
+            && serverMeta.solicitudAdelanto === undefined;
+        
+        // Resolver valores de solicitudes - estas variables deben estar FUERA del objeto
+        const resLiq = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolLiq)
+            ? (localHasNewSolLiq ? businessData.solicitudLiquidacion : serverMeta.solicitudLiquidacion)
+            : (businessData.solicitudLiquidacion !== undefined ? businessData.solicitudLiquidacion : (serverMeta.solicitudLiquidacion ?? null));
+        const resAde = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolAde)
+            ? (localHasNewSolAde ? businessData.solicitudAdelanto : serverMeta.solicitudAdelanto)
+            : (businessData.solicitudAdelanto !== undefined ? businessData.solicitudAdelanto : (serverMeta.solicitudAdelanto ?? null));
+        const resPago = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolPago)
+            ? (localHasNewSolPago ? businessData.solicitudPago : serverMeta.solicitudPago)
+            : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null));
+        
         const updates: any = {
             status_id: resolvedStatusId,
             description: businessData.descripcionProblema,
@@ -922,37 +940,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
             total_quoted_amount: parseFloat(sourceForPayments?.montoFinal ?? montoTotalCotizado ?? 0),
             technician_id: tecnico?.id || serverTicket?.technician_id,
-            gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
+            gestiona_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
-                // 1. Empezamos con la metadata del servidor (fuente de verdad base)
                 ...serverMeta,
-                // 2. Aplicamos la metadata local (cambios del usuario) encima
                 ...sourceMetadata,
-                // 3. Pero preservamos los campos que el usuario está editando en esta ventana
                 diagnostico: businessData.diagnostico || sourceMetadata.diagnostico || serverMeta.diagnostico,
                 partidas: businessData.partidas || sourceMetadata.partidas || serverMeta.partidas,
                 montoFinal: businessData.montoFinal ?? sourceMetadata.montoFinal ?? serverMeta.montoFinal,
                 documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist || serverMeta.documentosChecklist,
-                // 4. Protección específica: si lo local acaba de limpiar un rechazo, no dejar que el servidor lo restaure
-                // y viceversa: si el servidor tiene un rechazo nuevo, lo local debe aceptarlo.
                 pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
-                // BLINDAJE CONTRA RE-ENVÍOS AUTOMÁTICOS: 
-                // Si el servidor ha limpiado la solicitud (denegación) o tiene null, no reintroducir desde local
-                // Esto evita que el sync automático reintroduzca solicitudes que ya fueron denegadas
-                
-                solicitudLiquidacion: (hasActiveRejection || options?.allowStateRollback === false)
-                    ? serverMeta.solicitudLiquidacion
-                    : (businessData.solicitudLiquidacion !== undefined ? businessData.solicitudLiquidacion : (serverMeta.solicitudLiquidacion ?? null)),
-                solicitudAdelanto: serverMeta.solicitudAdelanto ?? null,
-                solicitudPago: (hasActiveRejection || options?.allowStateRollback === false)
-                    ? serverMeta.solicitudPago
-                    : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null)),
+                // Valores resueltos de solicitudes de pago (BLINDAJE V5)
+                solicitudLiquidacion: resLiq,
+                solicitudAdelanto: resAde,
+                solicitudPago: resPago,
                 solicitudesDeposito: businessData.solicitudesDeposito !== undefined ? businessData.solicitudesDeposito : (serverMeta.solicitudesDeposito ?? null),
-                
                 evidenciasEjecucion,
-                metadata: undefined // Evitar anidación infinita
+                metadata: undefined
             }
         };
 
@@ -1129,9 +1134,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const handleAssignment = async (assignmentData: any) => {
         // Sin costo de visita en asignación - siempre va a en_inspeccion
         const newEstadoId = 'en_inspeccion';
+        
+        // ✅ FIX: Asegurar que technician_id se actualiza correctamente
+        const newTechnicianId = assignmentData.tecnico?.id || null;
 
         const dbUpdates: any = {
-            technician_id: assignmentData.tecnico?.id || null,
+            technician_id: newTechnicianId,
             visit_cost: null,
             status_id: newEstadoId,
             metadata: {
@@ -1152,9 +1160,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             console.error('Error persisting assignment to Supabase:', err);
         }
 
+        // ✅ FIX: Actualizar tanto tecnico como technician_id correctamente
         setTicketData((prev: any) => ({
             ...prev,
-            ...assignmentData,
+            tecnico: assignmentData.tecnico,
+            technician_id: newTechnicianId,
             estadoId: newEstadoId,
             status_id: newEstadoId
         }));
@@ -1963,6 +1973,28 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const isExceeding = (finances.totalLaborConfirmed + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
 
+            // ✅ REGISTRO EN ticket_costs: Crear registro oficial para tracking de liquidez
+            // Esto asegura que la solicitud de pago sea visible en el módulo de Tesorería
+            const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id;
+            
+            try {
+                if (amount > 0.01 && technicianId) {
+                    await ticketCostsAPI.create({
+                        ticket_id: ticket.id,
+                        monto: amount,
+                        categoria: "Mano de Obra",
+                        concepto: "Liquidación Final - Saldo de Mano de Obra",
+                        specialist_id: technicianId,
+                        estado_pago: isExceeding ? "REQUIERE_APROBACION_ADMIN" : "pendiente",
+                        solicitado_por: myProfileId || undefined
+                    });
+                    console.log("[handleActualLiquidation] ticket_cost creado:", { amount, isExceeding });
+                }
+            } catch (costErr) {
+                // Si falla el registro en ticket_costs, continuar con metadata (no bloquear)
+                console.warn("[handleActualLiquidation] Error creando ticket_cost, continuando con metadata:", costErr);
+            }
+
             // ✅ UNIFICACIÓN DE ESTRUCTURA: solicitudLiquidacion debe ir dentro de metadata
             const finalMetadata = {
                 ...(ticketData.metadata || {}),
@@ -1989,6 +2021,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // 🚀 SYNC INMEDIATO: Usamos syncToSupabase con override para asegurar 
             // que se apliquen todas las reglas de negocio y no haya race conditions.
             await syncToSupabase(updated, { allowStateRollback: true });
+            
+            // 🔄 RECARGA DE COSTOS: Para asegurar que el módulo de Tesorería vea la nueva solicitud
+            // Esto es crítico porque la solicitud ahora se guarda también en ticket_costs
+            await loadCosts();
             
             showToast(
                 isExceeding ? "Revisión Requerida" : "Liquidación Solicitada", 
