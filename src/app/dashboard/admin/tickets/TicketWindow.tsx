@@ -1134,9 +1134,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const handleAssignment = async (assignmentData: any) => {
         // Sin costo de visita en asignación - siempre va a en_inspeccion
         const newEstadoId = 'en_inspeccion';
+        
+        // ✅ FIX: Asegurar que technician_id se actualiza correctamente
+        const newTechnicianId = assignmentData.tecnico?.id || null;
 
         const dbUpdates: any = {
-            technician_id: assignmentData.tecnico?.id || null,
+            technician_id: newTechnicianId,
             visit_cost: null,
             status_id: newEstadoId,
             metadata: {
@@ -1157,9 +1160,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             console.error('Error persisting assignment to Supabase:', err);
         }
 
+        // ✅ FIX: Actualizar tanto tecnico como technician_id correctamente
         setTicketData((prev: any) => ({
             ...prev,
-            ...assignmentData,
+            tecnico: assignmentData.tecnico,
+            technician_id: newTechnicianId,
             estadoId: newEstadoId,
             status_id: newEstadoId
         }));
