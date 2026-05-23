@@ -565,7 +565,9 @@ export default function AdminDashboard() {
             return !tGestoraId || !safeGestoras.find((g: any) => g.id === tGestoraId);
         });
         if (sinGestora.length > 0) {
-            gestorasData.push({ id: 'sin_asignar', nombre: 'Sin Gestora', count: sinGestora.length, nuevos: sinGestora.length, enProceso: 0, vencidos: 0, tickets: sinGestora });
+            const sinGestoraEnProceso = sinGestora.filter((t: any) => EN_PROCESO_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
+            const sinGestoraNuevos = sinGestora.filter((t: any) => NUEVOS_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
+            gestorasData.push({ id: 'sin_asignar', nombre: 'Sin Gestora', count: sinGestora.length, nuevos: sinGestoraNuevos, enProceso: sinGestoraEnProceso, vencidos: 0, tickets: sinGestora });
         }
 
         const maxLoad = Math.max(...gestorasData.map((g: any) => g.count), 1);
