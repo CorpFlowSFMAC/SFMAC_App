@@ -81,7 +81,7 @@ export default function TicketsPage() {
     // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("active");
-    const [statFilter, setStatFilter] = useState<"all" | "nuevos" | "enProceso" | "revision">("all");
+    const [statFilter, setStatFilter] = useState<"all" | "nuevos" | "enProceso" | "revision" | string>("all");
     // 🚀 Cache inicial de identidad en sessionStorage para evitar flash del empty state
     // mientras se resuelve la identidad del gestor (race condition).
     const [myGestoraId, setMyGestoraId] = useState<string | null>(() => {
@@ -286,8 +286,11 @@ export default function TicketsPage() {
     }, [tickets, isVisibleForMe]);
 
     // Estado inicial de cada ticket: "nuevo" o "asignado_a_tecnico" o estados de inicio de proceso
-    const NUEVOS_STATES = ["nuevo", "pendiente", "asignado_a_tecnico"];
+    const NUEVOS_STATES = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
     const EN_PROCESO_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
+    
+    // Estados disponibles para filtrado individual en la barra kanban
+    const KANBAN_FILTER_STATES = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado"];
 
     // ── BÚSQUEDA GLOBAL: helpers de filtrado ─────────────────────────────────
     const matchesSearch = useCallback((t: any, term: string) => {
@@ -351,6 +354,11 @@ export default function TicketsPage() {
             return globalSearchResults.all;
         }
         const base = ticketsForMe.filter(t => filterByView(t, viewMode));
+        
+        // Filtro por estado específico del kanban (ej: "visitado", "en_ejecucion")
+        if (viewMode === "active" && statFilter && KANBAN_FILTER_STATES.includes(statFilter)) {
+            return base.filter(t => normalizeStateId(t.estadoId) === statFilter);
+        }
         if (viewMode === "active" && statFilter === "nuevos") {
             return base.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId)));
         }
@@ -515,6 +523,10 @@ export default function TicketsPage() {
                     const ticketsEnEstado = ticketsForMe.reduce((count: number, t: any) =>
                         normalizeStateId(t.estadoId) === estado.id ? count + 1 : count, 0
                     );
+                    
+                    // Determinar si este estado está seleccionado en el filtro
+                    const isStateSelected = statFilter === estado.id;
+                    const isInKanbanFilter = KANBAN_FILTER_STATES.includes(estado.id);
 
                     return (
                         <div
@@ -524,7 +536,19 @@ export default function TicketsPage() {
                         >
                             <div
                                 className={styles.flowStep}
-                                style={{ '--step-color': estado.color } as any}
+                                style={{ 
+                                    '--step-color': estado.color,
+                                    cursor: isInKanbanFilter ? 'pointer' : 'default',
+                                    outline: isStateSelected ? `2px solid ${estado.color}` : 'none',
+                                    transform: isStateSelected ? 'scale(1.05)' : 'scale(1)',
+                                } as any}
+                                onClick={() => {
+                                    if (isInKanbanFilter) {
+                                        // Toggle: si ya está seleccionado, volver a "all", si no, seleccionar este estado
+                                        setStatFilter(isStateSelected ? 'all' : estado.id);
+                                    }
+                                }}
+                                title={isInKanbanFilter ? `Filtrar por: ${estado.nombreCorto}` : estado.nombreCorto}
                             >
                                 <div className={styles.flowIcon}>
                                     <IconComponent size={14} />
