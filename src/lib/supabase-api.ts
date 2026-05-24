@@ -497,19 +497,25 @@ export const ticketsAPI = {
             .select('*')
             .order('created_at', { ascending: false })
             .limit(300);
-
+        
         if (error) {
-            console.error('[ticketsAPI] Error fetching strategic summary:', error.message);
+            console.error('[ticketsAPI.getSummaryAll] View failed:', error.message);
             const { data: fallbackData, error: fallbackError } = await supabase
                 .from('tickets')
                 .select(TICKET_LIST_SELECT)
                 .order('created_at', { ascending: false })
                 .limit(300);
 
-            if (fallbackError) throw fallbackError;
-
+            if (fallbackError) {
+                console.error('[ticketsAPI.getSummaryAll] Both failed:', fallbackError.message);
+                throw fallbackError;
+            }
+            
+            console.log('[ticketsAPI.getSummaryAll] Using FALLBACK tickets table, records:', fallbackData?.length || 0);
             return fallbackData || [];
         }
+        
+        console.log('[ticketsAPI.getSummaryAll] View success, records:', data?.length || 0);
         return data || [];
     },
 
