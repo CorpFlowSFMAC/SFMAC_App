@@ -229,12 +229,6 @@ export function useTickets() {
         retry: 1,
     });
 }
-        staleTime: 1000 * 30, // 30s - V3: datos más reactivos para sincronización bancaria
-        gcTime: 1000 * 60 * 5, // 5 min
-        // No mostrar errores al usuario - manejo silencioso
-        retry: 1, // Solo reintentar una vez
-    });
-}
 
 // ─────────────────────────────────────────────
 // useTicketDetail — Hook para cargar un ticket completo (con metadata)
