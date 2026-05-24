@@ -149,12 +149,35 @@ function GestoraBar({ name, count, max, color }: any) {
 // MAIN EXECUTIVE DASHBOARD
 // ════════════════════════════════════════════
 export default function AdminDashboard() {
-    // ── Hydration Protection: Ensure client-side only rendering ──
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ANTI-HYDRATION ERROR 418: Strict client-side only rendering
+    // El servidor NO pre-renderiza cálculos financieros - solo entrega contenedor
+    // ═══════════════════════════════════════════════════════════════════════════
     const [isMounted, setIsMounted] = useState(false);
+    const [hasError, setHasError] = useState(false);
     
     useEffect(() => {
+        // Solo montar en el cliente
+        console.log('[Dashboard] 🔄 Montando en cliente...');
         setIsMounted(true);
     }, []);
+    
+    // Error boundary inline
+    if (hasError) {
+        return (
+            <div className="min-h-screen bg-[#0d1117] text-white p-6 flex items-center justify-center">
+                <div className="text-center">
+                    <h2 className="text-2xl font-bold text-red-500 mb-4">Error de Renderizado</h2>
+                    <button 
+                        onClick={() => { setHasError(false); window.location.reload(); }}
+                        className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
+                    >
+                        Recargar Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
     
     // Loading skeleton for SSR/hydration mismatch prevention
     if (!isMounted) {
@@ -288,11 +311,12 @@ export default function AdminDashboard() {
     };
 
     // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ───────────
+    // ── ROI / Rentabilidad ───────────────────────────────────────────────
     const roi = useMemo(() => {
         try {
-        // Safe initialization
+        // SAFE INIT: Siempre retornar estructura válida
         if (!Array.isArray(tickets)) {
-            console.warn('[ROI] ⚠️ tickets no es array, retornando vacío');
+            console.warn('[ROI] ⚠️ tickets no es array, retornando defaults');
             return { inversion: 0, ingresos: 0, utilidad: 0, margen: 0, ratio: 0, closed: 0, total: 0, byService: [], inversionItems: [], ingresosItems: [] };
         }
         
