@@ -213,67 +213,6 @@ export default function AdminDashboard() {
     const safeGestoras = Array.isArray(gestoras) ? gestoras : [];
     const gestorasMap = new Map(safeGestoras.map((g: any) => [g.id, g]));
     
-    // ★ NUEVO: Estado para depósitos realizados (del módulo de pagos)
-    const [monthlyDeposits, setMonthlyDeposits] = useState<{ [key: string]: number }>({});
-    const [depositsList, setDepositsList] = useState<any[]>([]);
-    const [loadingDeposits, setLoadingDeposits] = useState(false);
-
-    // ★ NUEVO: Cargar depósitos confirmados del mes desde ticket_payments
-    useEffect(() => {
-        const loadMonthlyDeposits = async () => {
-            setLoadingDeposits(true);
-            try {
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const currentMonthKey = `${year}-${month}`;
-                
-                // Obtener todos los pagos confirmados del mes actual
-                // Sin filtro de fecha para evitar errores HTTP 400
-                const { data: deposits, error } = await supabase
-                    .from('ticket_payments')
-                    .select('*')
-                    .eq('status', 'confirmed')
-                    .order('payment_date', { ascending: false });
-                
-                if (error) {
-                    // Error silenciado en producción - solo registrar en desarrollo
-                    if (process.env.NODE_ENV === 'development') {
-                        console.error('[AdminDashboard] Error fetching deposits:', error.message);
-                    }
-                } else if (deposits && deposits.length > 0) {
-                    // Filtrar solo los del mes actual en memoria (más seguro)
-                    const monthlyTotals: { [key: string]: number } = {};
-                    const monthlyList: any[] = [];
-                    
-                    deposits.forEach((d: any) => {
-                        const date = d.payment_date || '';
-                        if (date.startsWith(currentMonthKey)) {
-                            monthlyList.push(d);
-                            monthlyTotals[currentMonthKey] = (monthlyTotals[currentMonthKey] || 0) + (d.amount || 0);
-                        }
-                    });
-                    
-                    setDepositsList(monthlyList);
-                    setMonthlyDeposits(monthlyTotals);
-                } else {
-                    setDepositsList([]);
-                    setMonthlyDeposits({});
-                }
-            } catch (err: any) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.error('[AdminDashboard] Error cargando depósitos:', err?.message || err);
-                }
-                setDepositsList([]);
-                setMonthlyDeposits({});
-            } finally {
-                setLoadingDeposits(false);
-            }
-        };
-        
-        loadMonthlyDeposits();
-    }, []);
-
     // Estados para el Modal de Seguimiento (General)
     const [showListModal, setShowListModal] = useState(false);
     const [modalTitle, setModalTitle] = useState("");
@@ -401,27 +340,27 @@ export default function AdminDashboard() {
         // Para calculo: usamos neto (sin IGV)
         const ingresosNetoCalculo = ingresosSinIGV;
     
-        // REGLA 3: INVERSION EJECUTADA = Depositos del mes (para cuadro de Inversion)
-        const now = new Date();
-        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        // REGLA 3: INVERSIÓN EJECUTADA = Costos reales de tickets CERRADOS del mes
+        // NO se usa ticket_payments (depósitos) - son adelantos, no inversión real
+        // La inversión ejecutada = suma de costos operativos de cada ticket cerrado
+        let inversionEjecutada = 0;
         
-        // Método 1: Desde ticket_payments (tabla de módulo de pagos)
-        let inversionDesdePayments = round2(monthlyDeposits[currentMonthKey] || 0);
+        closed.forEach((t: any) => {
+            // Jerarquía: campo del backend primero, fallback a suma de costos operativos
+            const backendInversion = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+            const laborCost = parseFloat(t.labor_cost || t.costoManoObra || 0);
+            const materialsCost = parseFloat(t.materials_cost || t.costoMateriales || 0);
+            const visitCost = parseFloat(t.visit_cost || t.costoVisita || 0);
+            
+            // Usar campo del backend si tiene valor, sino calcular desde componentes
+            const ticketInvestment = backendInversion > 0 
+                ? backendInversion 
+                : (laborCost + materialsCost + visitCost);
+            
+            inversionEjecutada += ticketInvestment;
+        });
         
-        // Método 2: Fallback si no hay datos en ticket_payments -> calcular desde costos de tickets
-        if (inversionDesdePayments === 0) {
-            // Sumar todos los costos con estado "pagado" o "confirmado" de tickets en el período
-            const inversionFallback = inPeriod.reduce((acc, t) => {
-                const costs = t.costos || [];
-                const costosPagados = costs.filter((c: any) => 
-                    c.estado_pago === 'pagado' || c.estado_pago === 'confirmado'
-                );
-                return acc + costosPagados.reduce((sum: number, c: any) => sum + parseFloat(c.monto || c.amount || c.cost || 0), 0);
-            }, 0);
-            inversionDesdePayments = round2(inversionFallback);
-        }
-        
-        const inversionEjecutada = inversionDesdePayments;
+        inversionEjecutada = round2(inversionEjecutada);
 
         // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
         // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto
@@ -449,15 +388,19 @@ export default function AdminDashboard() {
             closed: closed.length, 
             total: tickets.length, 
             byService,
-            inversionItems: closed.map(t => ({
-                ...t,
-                _investmentTotalReal: (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
-                                       parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                                       parseFloat(t.visit_cost || t.costoVisita || 0))
-            })).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
+            inversionItems: closed.map(t => {
+                const backendInversion = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                const laborCost = parseFloat(t.labor_cost || t.costoManoObra || 0);
+                const materialsCost = parseFloat(t.materials_cost || t.costoMateriales || 0);
+                const visitCost = parseFloat(t.visit_cost || t.costoVisita || 0);
+                const investmentReal = backendInversion > 0 
+                    ? backendInversion 
+                    : (laborCost + materialsCost + visitCost);
+                return { ...t, _investmentTotalReal: investmentReal };
+            }).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
-    }, [tickets, strategicMetrics, monthlyDeposits, depositsList]);
+    }, [tickets, strategicMetrics]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
@@ -736,36 +679,23 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub="Depósitos y costos del periodo" color="#3B82F6"
+                    sub="Costos reales de tickets cerrados" color="#3B82F6"
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
-                        setModalTitle("Inversión Ejecutada: Costos del Periodo");
-                        // Mostrar costos de tickets cerrados (inversión real)
+                        setModalTitle("Inversión Ejecutada: Costos Reales del Periodo");
+                        // Mostrar SOLO costos de tickets cerrados (inversión real)
                         const inversionItems = roi.inversionItems || [];
                         
-                        // Si hay depósitos, mostrarlos primero
-                        const deposits = depositsList.map((d: any, idx: number) => ({
-                            id: d.id || `dep-${idx}`,
-                            ticketNum: d.reference_number || d.ticket_id?.substring(0, 8) || 'N/A',
-                            cliente: d.payment_type || 'Deposito',
-                            sede: d.payment_date || '',
-                            statusId: 'deposito',
-                            _monto: d.amount,
-                            _fecha: d.payment_date,
-                            _tipo: d.payment_type || 'Depósito',
-                            _referencia: d.reference_number,
-                            _isDeposit: true,
-                            _ticketId: d.ticket_id,
-                        }));
-                        
-                        // Si no hay depósitos, mostrar costos de tickets
-                        // Fallback: usar labor_cost+materials_cost+visit_cost O inversion_ejecutada del backend
+                        // Costos de tickets: usar campo del backend o calcular desde componentes
                         const ticketCosts = inversionItems.length > 0 ? inversionItems.map((t: any) => {
-                            const costSum = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
-                                           parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                                           parseFloat(t.visit_cost || t.costoVisita || 0));
-                            const investmentReal = costSum > 0 ? costSum : (parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0));
+                            const backendInversion = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                            const laborCost = parseFloat(t.labor_cost || t.costoManoObra || 0);
+                            const materialsCost = parseFloat(t.materials_cost || t.costoMateriales || 0);
+                            const visitCost = parseFloat(t.visit_cost || t.costoVisita || 0);
+                            const investmentReal = backendInversion > 0 
+                                ? backendInversion 
+                                : (laborCost + materialsCost + visitCost);
                             return {
                                 id: t.id,
                                 ticketNum: t.ticket_number || t.numeroTicket || t.id?.substring(0,8) || 'N/A',
@@ -782,10 +712,7 @@ export default function AdminDashboard() {
                             };
                         }) : [];
                         
-                        // Combinar depósitos y costos
-                        const allItems = [...deposits, ...ticketCosts];
-                        
-                        setModalTickets(allItems);
+                        setModalTickets(ticketCosts);
                         setShowListModal(true);
                     }}
                 />
