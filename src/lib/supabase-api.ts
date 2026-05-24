@@ -491,7 +491,8 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // Usar la vista estratégica que ya tiene los cálculos financieros (ROI, Margen, etc.)
+        // SOLO usar la vista estratégica - NINGÚN FALLBACK a datos simulados
+        // Si la vista falla, el dashboard mostrará S/ 0.00 (datos reales)
         const { data, error } = await supabase
             .from('vw_tickets_strategic')
             .select('*')
@@ -499,23 +500,11 @@ export const ticketsAPI = {
             .limit(300);
         
         if (error) {
-            console.error('[ticketsAPI.getSummaryAll] View failed:', error.message);
-            const { data: fallbackData, error: fallbackError } = await supabase
-                .from('tickets')
-                .select(TICKET_LIST_SELECT)
-                .order('created_at', { ascending: false })
-                .limit(300);
-
-            if (fallbackError) {
-                console.error('[ticketsAPI.getSummaryAll] Both failed:', fallbackError.message);
-                throw fallbackError;
-            }
-            
-            console.log('[ticketsAPI.getSummaryAll] Using FALLBACK tickets table, records:', fallbackData?.length || 0);
-            return fallbackData || [];
+            console.error('[ticketsAPI.getSummaryAll] ERROR - No fallback, returning empty array:', error.message);
+            // NO hacer fallback - retornar vacío si la vista falla
+            return [];
         }
         
-        console.log('[ticketsAPI.getSummaryAll] View success, records:', data?.length || 0);
         return data || [];
     },
 

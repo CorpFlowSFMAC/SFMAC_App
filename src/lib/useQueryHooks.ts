@@ -214,34 +214,21 @@ export function useStrategicMetrics(startDate: string, endDate: string) {
 // ─────────────────────────────────────────────
 // useTickets — Hook principal para lista/kanban
 // ─────────────────────────────────────────────
-// Usa fallback: intenta primero la API, si falla usa server endpoint
+// SOLO datos reales - sin fallback a endpoints de servidor
 export function useTickets() {
     return useQuery({
         queryKey: queryKeys.tickets.summary(),
         queryFn: async () => {
-            try {
-                // Intentar método primario: RPC de Supabase
-                const data = await ticketsAPI.getSummaryAll();
-                
-                return (data || []).map(normalizeTicket).filter(Boolean);
-            } catch (primaryError: any) {
-                console.log('[useTickets] Primary method failed, trying server fallback:', primaryError.message);
-                
-                try {
-                    // Fallback: endpoint del servidor (usa service role)
-                    const response = await fetch('/api/v3/tickets-server?summary=1');
-                    if (response.ok) {
-                        const result = await response.json();
-                        return (result.data || []).map(normalizeTicket).filter(Boolean);
-                    }
-                } catch (fallbackError: any) {
-                    console.log('[useTickets] Server fallback failed:', fallbackError.message);
-                }
-                
-                // Si todo falla, retornar array vacío (no throw)
-                return [];
-            }
+            // Solo usar ticketsAPI.getSummaryAll() - sin fallback
+            // Si falla o viene vacío, el dashboard mostrará S/ 0.00
+            const data = await ticketsAPI.getSummaryAll();
+            return (data || []).map(normalizeTicket).filter(Boolean);
         },
+        staleTime: 1000 * 30, // 30s
+        gcTime: 1000 * 60 * 5, // 5 min
+        retry: 1,
+    });
+}
         staleTime: 1000 * 30, // 30s - V3: datos más reactivos para sincronización bancaria
         gcTime: 1000 * 60 * 5, // 5 min
         // No mostrar errores al usuario - manejo silencioso

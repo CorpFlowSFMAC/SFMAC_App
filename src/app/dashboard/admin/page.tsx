@@ -345,43 +345,21 @@ export default function AdminDashboard() {
         // La inversión ejecutada = suma de costos operativos de cada ticket cerrado
         let inversionEjecutada = 0;
         
-        // DEBUG: Mostrar desglose de inversión por ticket
-        const debugInversion: { ticket: string; labor: number; materials: number; visit: number; total: number; estado: string }[] = [];
-        
+        // Calcular inversión ejecutada: costos reales de cada ticket cerrado
         closed.forEach((t: any) => {
-            // Jerarquía: campo del backend primero, fallback a suma de costos operativos
             const backendInversion = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
             const laborCost = parseFloat(t.labor_cost || t.costoManoObra || 0);
             const materialsCost = parseFloat(t.materials_cost || t.costoMateriales || 0);
             const visitCost = parseFloat(t.visit_cost || t.costoVisita || 0);
             
-            // Usar campo del backend si tiene valor, sino calcular desde componentes
             const ticketInvestment = backendInversion > 0 
                 ? backendInversion 
                 : (laborCost + materialsCost + visitCost);
             
             inversionEjecutada += ticketInvestment;
-            
-            // Debug: Registrar cada ticket
-            debugInversion.push({
-                ticket: t.ticket_number || t.id?.substring(0,8) || 'N/A',
-                labor: laborCost,
-                materials: materialsCost,
-                visit: visitCost,
-                total: ticketInvestment,
-                estado: normalizeStateId(t.status_id || t.estadoId)
-            });
         });
         
         inversionEjecutada = round2(inversionEjecutada);
-        
-        // DEBUG: Log en consola para verificar
-        if (process.env.NODE_ENV === 'development') {
-            console.log('=== DEBUG INVERSIÓN EJECUTADA ===');
-            console.log('Total Inversión:', inversionEjecutada);
-            console.log('Tickets cerrados:', closed.length);
-            console.log('Desglose:', debugInversion);
-        }
 
         // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
         // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto
