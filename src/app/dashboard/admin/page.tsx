@@ -150,6 +150,50 @@ function GestoraBar({ name, count, max, color }: any) {
 // MAIN EXECUTIVE DASHBOARD
 // ════════════════════════════════════════════
 export default function AdminDashboard() {
+    // ── Hydration Protection: Ensure client-side only rendering ──
+    const [isMounted, setIsMounted] = useState(false);
+    
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+    
+    // Loading skeleton for SSR/hydration mismatch prevention
+    if (!isMounted) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                background: 'linear-gradient(135deg, #0a0a0f 0%, #12121a 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+            }}>
+                <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '20px'
+                }}>
+                    <div style={{
+                        width: '48px',
+                        height: '48px',
+                        border: '4px solid rgba(255,255,255,0.1)',
+                        borderTopColor: '#10B981',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                    }} />
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', fontWeight: 600 }}>
+                        Cargando dashboard...
+                    </p>
+                    <style>{`
+                        @keyframes spin {
+                            to { transform: rotate(360deg); }
+                        }
+                    `}</style>
+                </div>
+            </div>
+        );
+    }
+
     const { tickets = [], loadingTickets, technicians, gestoras = [], updateTicket, refreshTickets } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
     const [isRefreshing, setIsRefreshing] = useState(false);
