@@ -606,6 +606,10 @@ export default function AdminDashboard() {
         const maxLoad = Math.max(...gestorasData.map((g: any) => g.count), 1);
 
         return { slaGlobal, fcrPct, npsPct, gestoras: gestorasData, maxLoad, expired: expired.length };
+        } catch (error) {
+            console.error('[RRHH] ❌ Error:', error);
+            return { nuevos: 0, enProceso: 0, vencidos: 0, eficiencia: 0, gestorasData: [], slaGlobal: 0, fcrPct: 0, npsPct: 0 };
+        }
     }, [tickets, gestoras]);
 
     // ── SEMÁFORO GLOBAL ─────────────────────

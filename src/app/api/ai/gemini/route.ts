@@ -22,10 +22,16 @@ const VIATICOS_POR_ZONA: Record<string, number> = {
 
 const MARGEN_DEFAULT = 0.55;
 
-// ── SUPABASE CLIENT (para aprendizaje) ─────────────────────────────────────────
-const supabaseUrl = getSupabaseUrl();
-const supabaseKey = getSupabaseAnonKey();
-const supabase = createClient(supabaseUrl, supabaseKey);
+// ── SUPABASE CLIENT (para aprendizaje) - Lazy initialization ──────────────────
+const getSupabaseClient = () => {
+    const supabaseUrl = getSupabaseUrl();
+    const supabaseKey = getSupabaseAnonKey();
+    if (!supabaseUrl || !supabaseKey) {
+        console.error('[Gemini] Supabase not configured');
+        return null;
+    }
+    return createClient(supabaseUrl, supabaseKey);
+};
 
 // ── INTERFACES ────────────────────────────────────────────────────────────────
 interface Partida {

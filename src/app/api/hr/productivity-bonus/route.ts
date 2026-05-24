@@ -3,10 +3,15 @@ import { NextResponse } from "next/server";
 import { calculateTicketFinances } from "@/lib/calculations";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase-config";
 
-const supabase = createClient(
-  getSupabaseUrl(),
-  getSupabaseAnonKey()
-);
+// Lazy initialization - only create client when actually needed
+const getSupabase = () => {
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
+  if (!url || !key) {
+    return null;
+  }
+  return createClient(url, key);
+};
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -22,7 +27,7 @@ export async function GET(request: Request) {
 
   try {
     // 1. Fetch closed tickets in range
-    const { data: closedTickets, error: tError } = await supabase
+    const { data: closedTickets, error: tError } = await getSupabase()
       .from("tickets")
       .select("*, gestoras(*), costos:ticket_costs(*)")
       .gte("closure_date", startOfMonth)
@@ -32,7 +37,7 @@ export async function GET(request: Request) {
 
     // 2. Fetch targets for that month
     const monthKey = `${year}-${month.padStart(2, '0')}`;
-    const { data: targets, error: tgError } = await supabase
+    const { data: targets, error: tgError } = await getSupabase()
       .from("gestoras_targets")
       .select("*")
       .eq("month_key", monthKey);
@@ -40,7 +45,7 @@ export async function GET(request: Request) {
     if (tgError) throw tgError;
 
     // 3. Fetch all gestoras mentioned or registered
-    const { data: gestoras, error: gError } = await supabase
+    const { data: gestoras, error: gError } = await getSupabase()
       .from("gestoras")
       .select("*");
 

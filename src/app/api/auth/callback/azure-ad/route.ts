@@ -13,8 +13,15 @@ const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 // Determinar qué key usar
 const SERVICE_KEY = getSupabaseAuthKey();
 
-// Crear cliente
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+// Lazy initialization - create client inside function
+const getSupabase = () => {
+    const url = getSupabaseUrl();
+    const key = getSupabaseAuthKey() || getSupabaseAnonKey();
+    if (!url || !key) {
+        return null;
+    }
+    return createClient(url, key);
+};
 
 // Admin especial - estos emails SIEMPRE serán admin
 const ADMIN_EMAILS = ['acubas@sinfimac.pe', 'admin@sinfimac.pe'];
