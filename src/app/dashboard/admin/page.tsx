@@ -345,7 +345,12 @@ export default function AdminDashboard() {
         // La inversión ejecutada = suma de costos operativos de cada ticket cerrado
         let inversionEjecutada = 0;
         
-        // Calcular inversión ejecutada: costos reales de cada ticket cerrado
+        // ═══════════════════════════════════════════════════════════════════
+        // CÁLCULO: Inversión Ejecutada (INVERSIÓN REAL)
+        // = Suma de labor_cost + materials_cost + visit_cost de tickets cerrados
+        // ═══════════════════════════════════════════════════════════════════
+        console.log('[ROI] 📊 Tickets cerrados en el periodo:', closed.length);
+        
         closed.forEach((t: any) => {
             const backendInversion = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
             const laborCost = parseFloat(t.labor_cost || t.costoManoObra || 0);
@@ -360,6 +365,8 @@ export default function AdminDashboard() {
         });
         
         inversionEjecutada = round2(inversionEjecutada);
+        
+        console.log('[ROI] 💰 Inversión Ejecutada Calculada:', inversionEjecutada);
 
         // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
         // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto

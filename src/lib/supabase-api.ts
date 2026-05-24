@@ -491,8 +491,13 @@ export const ticketsAPI = {
     },
 
     async getSummaryAll() {
-        // SOLO usar la vista estratégica - NINGÚN FALLBACK a datos simulados
-        // Si la vista falla, el dashboard mostrará S/ 0.00 (datos reales)
+        // ═══════════════════════════════════════════════════════════════════
+        // FUENTE DE DATOS: vw_tickets_strategic (Vista de Supabase Self-Hosted)
+        // URL: http://87.99.137.96:8000
+        // ═══════════════════════════════════════════════════════════════════
+        console.log('[ticketsAPI.getSummaryAll] 🔍 CONECTANDO A: http://87.99.137.96:8000');
+        console.log('[ticketsAPI.getSummaryAll] 📊 CONSULTA: SELECT * FROM vw_tickets_strategic');
+        
         const { data, error } = await supabase
             .from('vw_tickets_strategic')
             .select('*')
@@ -500,9 +505,24 @@ export const ticketsAPI = {
             .limit(300);
         
         if (error) {
-            console.error('[ticketsAPI.getSummaryAll] ERROR - No fallback, returning empty array:', error.message);
-            // NO hacer fallback - retornar vacío si la vista falla
+            console.error('[ticketsAPI.getSummaryAll] ❌ ERROR de BD:', error.message);
+            console.error('[ticketsAPI.getSummaryAll] ❌ Código:', error.code);
             return [];
+        }
+        
+        console.log('[ticketsAPI.getSummaryAll] ✅ RESPUESTA de vw_tickets_strategic');
+        console.log('[ticketsAPI.getSummaryAll] 📦 Registros recibidos:', data?.length || 0);
+        
+        if (data && data.length > 0) {
+            console.log('[ticketsAPI.getSummaryAll] 📋 Muestra del primer ticket:');
+            console.log('   ID:', data[0].id);
+            console.log('   ticket_number:', data[0].ticket_number);
+            console.log('   status_id:', data[0].status_id);
+            console.log('   labor_cost:', data[0].labor_cost);
+            console.log('   materials_cost:', data[0].materials_cost);
+            console.log('   visit_cost:', data[0].visit_cost);
+        } else {
+            console.log('[ticketsAPI.getSummaryAll] ⚠️ No hay tickets en la vista (vacío)');
         }
         
         return data || [];
