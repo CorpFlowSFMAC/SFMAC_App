@@ -1,4 +1,4 @@
-const CACHE_NAME = 'corpflow-cache-v2';
+const CACHE_NAME = 'corpflow-cache-v3';
 const urlsToCache = [
   '/',
   '/manifest.json',
@@ -25,19 +25,33 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Network First for dynamic content - prevents stale data
+// ═══════════════════════════════════════════════════════════════════
+// Service Worker STRICT - No caching para dashboard administrativo
+// Las métricas financieras requieren datos frescos en tiempo real
+// ═══════════════════════════════════════════════════════════════════
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+  const pathname = url.pathname;
   
-  // Bypass API calls and dynamic routes - always fetch fresh
-  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/dashboard')) {
+  // ═══════════════════════════════════════════════════════════════════
+  // REGLA 1: NUNCA cachear rutas administrativas dinámicas
+  // ═══════════════════════════════════════════════════════════════════
+  const adminRoutes = [
+    '/dashboard',
+    '/api',
+  ];
+  
+  if (adminRoutes.some(route => pathname.startsWith(route))) {
+    // SIEMPRE fetch de red, nunca del caché
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request)
     );
     return;
   }
   
-  // Network first for navigation requests - prevents frozen splash
+  // ═══════════════════════════════════════════════════════════════════
+  // REGLA 2: Network first para navegación (páginas HTML)
+  // ═══════════════════════════════════════════════════════════════════
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
@@ -51,7 +65,9 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Cache first for static assets
+  // ═══════════════════════════════════════════════════════════════════
+  // REGLA 3: Cache first para assets estáticos (imágenes, CSS, JS)
+  // ═══════════════════════════════════════════════════════════════════
   event.respondWith(
     caches.match(event.request)
       .then(response => response || fetch(event.request))
