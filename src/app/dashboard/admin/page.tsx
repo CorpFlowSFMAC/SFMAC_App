@@ -760,19 +760,27 @@ export default function AdminDashboard() {
                         }));
                         
                         // Si no hay depósitos, mostrar costos de tickets
-                        const ticketCosts = inversionItems.length > 0 ? inversionItems.map((t: any) => ({
-                            id: t.id,
-                            ticketNum: t.ticket_number || t.numeroTicket || t.id?.substring(0,8) || 'N/A',
-                            cliente: t.clients?.name || t.cliente?.nombre || t.client_name || 'Cliente',
-                            sede: t.branch_offices?.name || t.sede?.nombre || t.branch_name || 'Sede',
-                            statusId: t.status_id || t.estadoId,
-                            _monto: t._investmentTotalReal || 0,
-                            _fecha: t.updated_at || t.closure_date || t.createdAt || '',
-                            _tipo: 'Costo de Servicio',
-                            _referencia: t.ticket_number || t.numeroTicket || '',
-                            _isDeposit: false,
-                            _ticketId: t.id,
-                        })) : [];
+                        // Fallback: usar labor_cost+materials_cost+visit_cost O inversion_ejecutada del backend
+                        const ticketCosts = inversionItems.length > 0 ? inversionItems.map((t: any) => {
+                            const costSum = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
+                                           parseFloat(t.materials_cost || t.costoMateriales || 0) + 
+                                           parseFloat(t.visit_cost || t.costoVisita || 0));
+                            const investmentReal = costSum > 0 ? costSum : (parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0));
+                            return {
+                                id: t.id,
+                                ticketNum: t.ticket_number || t.numeroTicket || t.id?.substring(0,8) || 'N/A',
+                                cliente: t.clients?.name || t.cliente?.nombre || t.client_name || 'Cliente',
+                                sede: t.branch_offices?.name || t.sede?.nombre || t.branch_name || 'Sede',
+                                statusId: t.status_id || t.estadoId,
+                                _monto: investmentReal,
+                                _investmentTotalReal: investmentReal,
+                                _fecha: t.updated_at || t.closure_date || t.createdAt || '',
+                                _tipo: 'Costo de Servicio',
+                                _referencia: t.ticket_number || t.numeroTicket || '',
+                                _isDeposit: false,
+                                _ticketId: t.id,
+                            };
+                        }) : [];
                         
                         // Combinar depósitos y costos
                         const allItems = [...deposits, ...ticketCosts];
@@ -1211,7 +1219,27 @@ export default function AdminDashboard() {
                                 <div style={{ display: 'flex', gap: '1.5rem', marginTop: '6px' }}>
                                     <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Total: {modalTickets.length} registros</p>
                                     <p style={{ margin: 0, fontSize: '0.8rem', color: '#10B981', fontWeight: 900 }}>
-                                        SUMA TOTAL (NETO): S/ {fmt(modalTickets.reduce((acc, t) => acc + (t._investmentTotalNet || t._utilityAmount || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0))}
+                                        {/* Calcular suma total según tipo de modal */}
+                                        TOTAL: S/ {(() => {
+                                            // Detectar tipo de modal por el primer ticket o título
+                                            const isInversion = modalTitle.toLowerCase().includes('inversión') || modalTitle.toLowerCase().includes('inversion');
+                                            const isUtilidad = modalTitle.toLowerCase().includes('utilidad');
+                                            const first = modalTickets[0];
+                                            
+                                            if (first?._isDeposit === true) {
+                                                // Modal de inversión con depósitos
+                                                return fmt(modalTickets.reduce((acc, t) => acc + (t.amount || t._monto || 0), 0));
+                                            } else if (isInversion && first?._isDeposit === false) {
+                                                // Modal de inversión con costos de tickets
+                                                return fmt(modalTickets.reduce((acc, t) => acc + (t._monto || t._investmentTotalReal || 0), 0));
+                                            } else if (isUtilidad) {
+                                                // Modal de utilidad
+                                                return fmt(modalTickets.reduce((acc, t) => acc + (t._utilityAmount || 0), 0));
+                                            } else {
+                                                // Modal de ingresos u otros
+                                                return fmt(modalTickets.reduce((acc, t) => acc + (parseFloat(t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0)), 0));
+                                            }
+                                        })()}
                                     </p>
                                 </div>
                             </div>
