@@ -3,16 +3,15 @@
 import { useState, useMemo, useEffect } from "react";
 import {
     DollarSign, TrendingUp, AlertTriangle, Clock, Users, CheckCircle2,
-    Zap, ArrowRight, BarChart3, Flame, Target, Activity, Shield,
-    ChevronRight, Filter, RefreshCw, AlertCircle, Star, Layers,
-    BanknoteIcon, PieChart, Award
+    Zap, ArrowRight, BarChart3, Target, Activity, Shield,
+    ChevronRight, Filter, RefreshCw, AlertCircle, Layers,
+    BanknoteIcon, Award
 } from "lucide-react";
 import Link from "next/link";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
-import { ticketsAPI, paymentsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
 import { useStrategicMetrics } from "@/lib/useQueryHooks";
 import { calculateTicketFinances } from "@/lib/calculations";
@@ -238,7 +237,10 @@ export default function AdminDashboard() {
                     .order('payment_date', { ascending: false });
                 
                 if (error) {
-                    console.error('[AdminDashboard] Error fetching deposits:', error.message);
+                    // Error silenciado en producción - solo registrar en desarrollo
+                    if (process.env.NODE_ENV === 'development') {
+                        console.error('[AdminDashboard] Error fetching deposits:', error.message);
+                    }
                 } else if (deposits && deposits.length > 0) {
                     // Filtrar solo los del mes actual en memoria (más seguro)
                     const monthlyTotals: { [key: string]: number } = {};
@@ -254,13 +256,14 @@ export default function AdminDashboard() {
                     
                     setDepositsList(monthlyList);
                     setMonthlyDeposits(monthlyTotals);
-                    console.log('[AdminDashboard] Deposits loaded:', monthlyList.length, 'total:', monthlyTotals[currentMonthKey]);
                 } else {
                     setDepositsList([]);
                     setMonthlyDeposits({});
                 }
             } catch (err: any) {
-                console.error('[AdminDashboard] Error cargando depósitos:', err?.message || err);
+                if (process.env.NODE_ENV === 'development') {
+                    console.error('[AdminDashboard] Error cargando depósitos:', err?.message || err);
+                }
                 setDepositsList([]);
                 setMonthlyDeposits({});
             } finally {
@@ -286,7 +289,9 @@ export default function AdminDashboard() {
             const result = await updateTicket(id, updates);
             return result;
         } catch (err) {
-            console.error("Error updating ticket from dashboard:", err);
+            if (process.env.NODE_ENV === 'development') {
+                console.error("Error updating ticket from dashboard:", err);
+            }
             throw err;
         }
     };
@@ -417,8 +422,6 @@ export default function AdminDashboard() {
         }
         
         const inversionEjecutada = inversionDesdePayments;
-        
-        // DEBUG
 
         // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
         // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto
@@ -427,13 +430,6 @@ export default function AdminDashboard() {
         
         // Ratio de Eficiencia: [Utilidad Neta] / [Inversión Ejecutada]
         const ratioEficiencia = inversionEjecutada > 0 ? (utilidadNeta / inversionEjecutada) : 0;
-
-        // AUDIT LOG (Temporal para validación)
-        
-        // Log detallado por ticket cerrado
-        closed.forEach((t: any, idx: number) => {
-            const monto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-        });
 
         // Por servicio (Lectura inmutable del backend)
         const byService = SERVICE_TYPES.map(s => {
