@@ -691,6 +691,7 @@ export default function AdminDashboard() {
                             _fecha: d.payment_date,
                             _tipo: d.payment_type,
                             _referencia: d.reference_number,
+                            _isDeposit: true,
                             metadata: { amount: d.amount, payment_date: d.payment_date, type: d.payment_type, ref: d.reference_number }
                         })));
                         setShowListModal(true);
@@ -1136,95 +1137,105 @@ export default function AdminDashboard() {
                         </div>
 
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                                <button
+                                    onClick={() => {
+                                        // Exportar a Excel/CSV
+                                        const csvData = modalTickets.map((t: any) => {
+                                            const isDeposit = t._isDeposit === true || t.statusId === 'deposito';
+                                            return {
+                                                'N° Referencia': t._referencia || t.reference_number || t.ticketNum || 'N/A',
+                                                'Fecha': t._fecha || t.payment_date || t.created_at || '',
+                                                'Tipo': t._tipo || t.payment_type || t._tipoPago || (isDeposit ? 'DEPÓSITO' : 'N/A'),
+                                                'Monto (S/)': t._monto || t.amount || t._utilityAmount || t._investmentTotalNet || parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18 || 0,
+                                                'Ticket ID': t.ticket_id || t.id?.substring(0, 8) || 'N/A',
+                                                'Cliente': t.cliente || t.client_name || t.client?.name || '',
+                                                'Sede': t.sede || t.branch_name || '',
+                                            };
+                                        });
+                                        
+                                        const headers = Object.keys(csvData[0] || {});
+                                        const csvRows = [
+                                            headers.join(';'),
+                                            ...csvData.map(row => headers.map(h => `"${(row as any)[h]}"`).join(';'))
+                                        ];
+                                        const csvContent = csvRows.join('\n');
+                                        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                                        const url = URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        const tipoExport = modalTitle.toLowerCase().includes('depósit') ? 'depositos' : 'reportes';
+                                        link.download = `${tipoExport}_${new Date().toISOString().split('T')[0]}.csv`;
+                                        link.click();
+                                        URL.revokeObjectURL(url);
+                                    }}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                        border: 'none', color: 'white', padding: '0.6rem 1.2rem',
+                                        borderRadius: '10px', cursor: 'pointer', fontSize: '0.75rem',
+                                        fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'}
+                                >
+                                    📊 Exportar CSV
+                                </button>
+                            </div>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Ticket #</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Sede</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Estado</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Presupuesto</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Aging</th>
-                                        <th style={{ padding: '12px 2px', textAlign: 'center' }}></th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ref.</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Tipo</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto (S/)</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Ticket ID</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {modalTickets.map((t: any, idx: number) => {
-                                        const h = hoursAgo(t.createdAt || t.created_at || "");
-                                        const agingCol = h >= 72 ? "#EF4444" : h >= 48 ? "#F59E0B" : "#10B981";
+                                        // Verificar si es un depósito
+                                        const isDeposit = t._isDeposit === true || t.statusId === 'deposito';
                                         
-                                        // Configuración de visualización según modo
-                                        const isPayment = !!t._paymentMonto;
-                                        const isUtility = t._viewMode === 'utilidad';
-                                        
-                                        // Amount primario
-                                        const amountColor = isUtility ? '#8B5CF6' : isPayment ? '#F59E0B' : '#22C55E';
-
                                         return (
                                             <tr 
                                                 key={t.id + idx} 
-                                                onClick={() => setSelectedTicket(t)}
-                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}
                                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                             >
-
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
-                                                        {t.numeroTicketCliente || t.id.substring(0,8).toUpperCase()}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
-                                                        {`F. Audit: ${new Date(t.closure_date || t.updated_at || t.createdAt || t.created_at).toLocaleDateString()}`}
+                                                        {t._referencia || t.reference_number || t.ticketNum || 'N/A'}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.82rem' }}>
-                                                        {t.cliente?.nombre || t.client?.name || "Cliente SINFIMAC"}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
-                                                        {(t.sede?.nombre || t.sede_reportada_cliente || "Sede por definir")}
+                                                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                        {t._fecha ? new Date(t._fecha).toLocaleDateString('es-PE') : (t.payment_date ? new Date(t.payment_date).toLocaleDateString('es-PE') : 'N/A')}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <span style={{ 
                                                         padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
-                                                        background: `${amountColor}15`, 
-                                                        color: amountColor, 
-                                                        border: `1px solid ${amountColor}30`
+                                                        background: isDeposit ? 'rgba(59,130,246,0.15)' : 'rgba(139,92,246,0.15)', 
+                                                        color: isDeposit ? '#60A5FA' : '#A78BFA', 
+                                                        border: `1px solid ${isDeposit ? 'rgba(59,130,246,0.3)' : 'rgba(139,92,246,0.3)'}`
                                                     }}>
-                                                        {isPayment ? (t._paymentType || 'PAGO').toUpperCase() : (t.estadoId?.replace(/_/g, ' ').toUpperCase() || "NUEVO")}
+                                                        {(t._tipo || t.payment_type || 'DEPÓSITO').toUpperCase()}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: amountColor, fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(t._viewMode === 'utilidad' ? (t._utilityAmount || 0) : t._viewMode === 'inversion' ? (t._investmentTotalReal || 0) : (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18))}
+                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.9rem' }}>
+                                                        S/ {fmt(t._monto || t.amount || 0)}
                                                     </div>
-                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.65)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                                                        {t._viewMode === 'utilidad' ? 'Utilidad Neta' : t._viewMode === 'inversion' ? 'Monto Real (Salida)' : 'Ingreso Neto'}
+                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700, textTransform: 'uppercase' }}>
+                                                        Depósito confirmado
                                                     </div>
-                                                    {t._viewMode === 'utilidad' && (
-                                                        <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700 }}>
-                                                            {`(Sin IGV)`}
-                                                        </div>
-                                                    )}
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: agingCol, fontWeight: 900, fontSize: '0.85rem' }}>{Math.floor(h)}h</div>
-                                                    <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', marginTop: '4px' }}>
-                                                        <div style={{ width: `${Math.min(h/72*100, 100)}%`, height: '100%', background: agingCol, borderRadius: '2px' }} />
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontFamily: 'monospace' }}>
+                                                        {t.ticket_id?.substring(0, 8) || t.id?.substring(0, 8) || 'N/A'}
                                                     </div>
-                                                </td>
-                                                <td style={{ padding: '14px 2px' }}>
-                                                    <Link 
-                                                        href={`/dashboard/admin/tickets?ticketId=${t.id}`}
-                                                        style={{ 
-                                                            display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', 
-                                                            borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'white', transition: 'all 0.2s'
-                                                        }}
-                                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-                                                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                                                    >
-                                                        <ChevronRight size={14} />
-                                                    </Link>
                                                 </td>
                                             </tr>
                                         );
