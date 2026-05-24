@@ -345,6 +345,9 @@ export default function AdminDashboard() {
         // La inversión ejecutada = suma de costos operativos de cada ticket cerrado
         let inversionEjecutada = 0;
         
+        // DEBUG: Mostrar desglose de inversión por ticket
+        const debugInversion: { ticket: string; labor: number; materials: number; visit: number; total: number; estado: string }[] = [];
+        
         closed.forEach((t: any) => {
             // Jerarquía: campo del backend primero, fallback a suma de costos operativos
             const backendInversion = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
@@ -358,9 +361,27 @@ export default function AdminDashboard() {
                 : (laborCost + materialsCost + visitCost);
             
             inversionEjecutada += ticketInvestment;
+            
+            // Debug: Registrar cada ticket
+            debugInversion.push({
+                ticket: t.ticket_number || t.id?.substring(0,8) || 'N/A',
+                labor: laborCost,
+                materials: materialsCost,
+                visit: visitCost,
+                total: ticketInvestment,
+                estado: normalizeStateId(t.status_id || t.estadoId)
+            });
         });
         
         inversionEjecutada = round2(inversionEjecutada);
+        
+        // DEBUG: Log en consola para verificar
+        if (process.env.NODE_ENV === 'development') {
+            console.log('=== DEBUG INVERSIÓN EJECUTADA ===');
+            console.log('Total Inversión:', inversionEjecutada);
+            console.log('Tickets cerrados:', closed.length);
+            console.log('Desglose:', debugInversion);
+        }
 
         // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
         // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto
