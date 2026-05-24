@@ -516,11 +516,17 @@ export const ticketsAPI = {
         if (data && data.length > 0) {
             console.log('[ticketsAPI.getSummaryAll] 📋 Muestra del primer ticket:');
             console.log('   ID:', data[0].id);
-            console.log('   ticket_number:', data[0].ticket_number);
-            console.log('   status_id:', data[0].status_id);
+            console.log('   ticket_number:', data[0].ticket_number || 'undefined');
+            console.log('   status_id:', data[0].status_id || data[0].estadoId);
             console.log('   labor_cost:', data[0].labor_cost);
             console.log('   materials_cost:', data[0].materials_cost);
             console.log('   visit_cost:', data[0].visit_cost);
+            
+            // Mostrar TODOS los primeros 5 tickets con sus IDs
+            console.log('[ticketsAPI.getSummaryAll] 🎫 Primeros 5 tickets:');
+            data.slice(0, 5).forEach((t: any, i: number) => {
+                console.log(`   [${i+1}] id=${t.id?.substring(0,8)}... number=${t.ticket_number || 'SIN_NUMERO'} status=${t.status_id || t.estadoId}`);
+            });
         } else {
             console.log('[ticketsAPI.getSummaryAll] ⚠️ No hay tickets en la vista (vacío)');
         }

@@ -74,6 +74,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         data: tickets = [],
         isLoading: loadingTickets,
     } = useTickets();
+    
+    // DEBUG: Track ticket origin
+    useEffect(() => {
+        if (tickets && tickets.length > 0) {
+            console.log('[AppDataContext] 📦 Tickets recibidos:', tickets.length);
+            console.log('[AppDataContext] 🔍 ORIGEN: useTickets() hook');
+            console.log('[AppDataContext] 📋 Primeros 3 tickets:');
+            tickets.slice(0, 3).forEach((t: any, i: number) => {
+                console.log(`   [${i+1}] ID: ${t.id}, number: ${t.ticket_number || t.numeroTicket || 'N/A'}, status: ${t.status_id || t.estadoId}`);
+            });
+        }
+    }, [tickets]);
 
     const {
         data: clients = [],
