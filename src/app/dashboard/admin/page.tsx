@@ -675,13 +675,16 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub="Depósitos totales realizados en el periodo" color="#3B82F6"
+                    sub="Depósitos y costos del periodo" color="#3B82F6"
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
-                        setModalTitle("Depósitos Realizados: Inversión del Mes");
-                        // Mostrar lista de depósitos del módulo de pagos
-                        setModalTickets(depositsList.map((d: any, idx: number) => ({
+                        setModalTitle("Inversión Ejecutada: Costos del Periodo");
+                        // Mostrar costos de tickets cerrados (inversión real)
+                        const inversionItems = roi.inversionItems || [];
+                        
+                        // Si hay depósitos, mostrarlos primero
+                        const deposits = depositsList.map((d: any, idx: number) => ({
                             id: d.id || `dep-${idx}`,
                             ticketNum: d.reference_number || d.ticket_id?.substring(0, 8) || 'N/A',
                             cliente: d.payment_type || 'Deposito',
@@ -689,11 +692,31 @@ export default function AdminDashboard() {
                             statusId: 'deposito',
                             _monto: d.amount,
                             _fecha: d.payment_date,
-                            _tipo: d.payment_type,
+                            _tipo: d.payment_type || 'Depósito',
                             _referencia: d.reference_number,
                             _isDeposit: true,
-                            metadata: { amount: d.amount, payment_date: d.payment_date, type: d.payment_type, ref: d.reference_number }
-                        })));
+                            _ticketId: d.ticket_id,
+                        }));
+                        
+                        // Si no hay depósitos, mostrar costos de tickets
+                        const ticketCosts = inversionItems.length > 0 ? inversionItems.map((t: any) => ({
+                            id: t.id,
+                            ticketNum: t.ticket_number || t.numeroTicket || t.id?.substring(0,8) || 'N/A',
+                            cliente: t.clients?.name || t.cliente?.nombre || t.client_name || 'Cliente',
+                            sede: t.branch_offices?.name || t.sede?.nombre || t.branch_name || 'Sede',
+                            statusId: t.status_id || t.estadoId,
+                            _monto: t._investmentTotalReal || 0,
+                            _fecha: t.updated_at || t.closure_date || t.createdAt || '',
+                            _tipo: 'Costo de Servicio',
+                            _referencia: t.ticket_number || t.numeroTicket || '',
+                            _isDeposit: false,
+                            _ticketId: t.id,
+                        })) : [];
+                        
+                        // Combinar depósitos y costos
+                        const allItems = [...deposits, ...ticketCosts];
+                        
+                        setModalTickets(allItems);
                         setShowListModal(true);
                     }}
                 />
@@ -1142,15 +1165,15 @@ export default function AdminDashboard() {
                                     onClick={() => {
                                         // Exportar a Excel/CSV
                                         const csvData = modalTickets.map((t: any) => {
-                                            const isDeposit = t._isDeposit === true || t.statusId === 'deposito';
+                                            const isDeposit = t._isDeposit === true;
+                                            const isCost = !isDeposit && t._isDeposit === false;
                                             return {
-                                                'N° Referencia': t._referencia || t.reference_number || t.ticketNum || 'N/A',
-                                                'Fecha': t._fecha || t.payment_date || t.created_at || '',
-                                                'Tipo': t._tipo || t.payment_type || t._tipoPago || (isDeposit ? 'DEPÓSITO' : 'N/A'),
-                                                'Monto (S/)': t._monto || t.amount || t._utilityAmount || t._investmentTotalNet || parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18 || 0,
-                                                'Ticket ID': t.ticket_id || t.id?.substring(0, 8) || 'N/A',
-                                                'Cliente': t.cliente || t.client_name || t.client?.name || '',
+                                                'Ticket #': t.ticketNum || t._referencia || t.numeroTicketCliente || t.id?.substring(0,8) || 'N/A',
+                                                'Cliente': t.cliente || t.client_name || (isDeposit ? 'Depósito' : 'Ticket'),
                                                 'Sede': t.sede || t.branch_name || '',
+                                                'Tipo': t._tipo || t.payment_type || (isDeposit ? 'DEPÓSITO' : isCost ? 'COSTO DE SERVICIO' : 'N/A'),
+                                                'Fecha': t._fecha ? new Date(t._fecha).toLocaleDateString('es-PE') : (t.payment_date ? new Date(t.payment_date).toLocaleDateString('es-PE') : ''),
+                                                'Monto (S/)': t._monto || t.amount || 0,
                                             };
                                         });
                                         
@@ -1164,7 +1187,7 @@ export default function AdminDashboard() {
                                         const url = URL.createObjectURL(blob);
                                         const link = document.createElement('a');
                                         link.href = url;
-                                        const tipoExport = modalTitle.toLowerCase().includes('depósit') ? 'depositos' : 'reportes';
+                                        const tipoExport = modalTitle.toLowerCase().includes('inversión') ? 'inversion_ejecutada' : 'reportes';
                                         link.download = `${tipoExport}_${new Date().toISOString().split('T')[0]}.csv`;
                                         link.click();
                                         URL.revokeObjectURL(url);
@@ -1185,17 +1208,18 @@ export default function AdminDashboard() {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ref.</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Ticket #</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Sede</th>
                                         <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Tipo</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto (S/)</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Ticket ID</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', textAlign: 'right' }}>Monto (S/)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {modalTickets.map((t: any, idx: number) => {
                                         // Verificar si es un depósito
-                                        const isDeposit = t._isDeposit === true || t.statusId === 'deposito';
+                                        const isDeposit = t._isDeposit === true;
+                                        const isCost = !isDeposit && t._isDeposit === false;
                                         
                                         return (
                                             <tr 
@@ -1206,35 +1230,38 @@ export default function AdminDashboard() {
                                             >
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
-                                                        {t._referencia || t.reference_number || t.ticketNum || 'N/A'}
+                                                        {t.ticketNum || t._referencia || t.numeroTicketCliente || t.id?.substring(0,8).toUpperCase() || 'N/A'}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', fontWeight: 600 }}>
-                                                        {t._fecha ? new Date(t._fecha).toLocaleDateString('es-PE') : (t.payment_date ? new Date(t.payment_date).toLocaleDateString('es-PE') : 'N/A')}
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700, fontSize: '0.8rem' }}>
+                                                        {t.cliente || t.client_name || (isDeposit ? 'Depósito' : 'Ticket')}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>
+                                                        {t.sede || t.branch_name || ''}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <span style={{ 
-                                                        padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
-                                                        background: isDeposit ? 'rgba(59,130,246,0.15)' : 'rgba(139,92,246,0.15)', 
-                                                        color: isDeposit ? '#60A5FA' : '#A78BFA', 
-                                                        border: `1px solid ${isDeposit ? 'rgba(59,130,246,0.3)' : 'rgba(139,92,246,0.3)'}`
+                                                        padding: '4px 8px', borderRadius: '6px', fontSize: '0.62rem', fontWeight: 800, 
+                                                        background: isDeposit ? 'rgba(59,130,246,0.15)' : isCost ? 'rgba(245,158,11,0.15)' : 'rgba(139,92,246,0.15)', 
+                                                        color: isDeposit ? '#60A5FA' : isCost ? '#FCD34D' : '#A78BFA', 
+                                                        border: `1px solid ${isDeposit ? 'rgba(59,130,246,0.3)' : isCost ? 'rgba(245,158,11,0.3)' : 'rgba(139,92,246,0.3)'}`
                                                     }}>
-                                                        {(t._tipo || t.payment_type || 'DEPÓSITO').toUpperCase()}
+                                                        {(t._tipo || t.payment_type || 'COSTO').toUpperCase()}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(t._monto || t.amount || 0)}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700, textTransform: 'uppercase' }}>
-                                                        Depósito confirmado
+                                                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                        {t._fecha ? new Date(t._fecha).toLocaleDateString('es-PE') : (t.payment_date ? new Date(t.payment_date).toLocaleDateString('es-PE') : 'N/A')}
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontFamily: 'monospace' }}>
-                                                        {t.ticket_id?.substring(0, 8) || t.id?.substring(0, 8) || 'N/A'}
+                                                <td style={{ padding: '14px 10px', textAlign: 'right' }}>
+                                                    <div style={{ color: isDeposit ? '#60A5FA' : isCost ? '#FCD34D' : '#A78BFA', fontWeight: 900, fontSize: '0.95rem' }}>
+                                                        S/ {fmt(t._monto || t.amount || 0)}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.45)', fontWeight: 700, textTransform: 'uppercase', textAlign: 'right' }}>
+                                                        {isDeposit ? 'Depósito' : isCost ? 'Costo' : 'N/A'}
                                                     </div>
                                                 </td>
                                             </tr>
