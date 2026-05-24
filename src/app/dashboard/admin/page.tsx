@@ -197,7 +197,18 @@ export default function AdminDashboard() {
     const { tickets = [], loadingTickets, technicians, gestoras = [], updateTicket, refreshTickets } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [now] = useState(() => new Date());
+    
+    // ── Fecha del cliente (solo para UI, no causa hydration)
+    const [currentDate, setCurrentDate] = useState<string>('');
+    
+    useEffect(() => {
+        setCurrentDate(new Date().toLocaleDateString("es-PE", { 
+            weekday: "long", 
+            year: "numeric", 
+            month: "long", 
+            day: "numeric" 
+        }));
+    }, []);
     
     // Proteger gestoras contra undefined
     const safeGestoras = Array.isArray(gestoras) ? gestoras : [];
@@ -632,6 +643,16 @@ export default function AdminDashboard() {
 
     return (
         <div style={{ padding: "1.5rem 2rem", minHeight: "100vh", fontFamily: "Inter,system-ui,sans-serif" }}>
+            {/* ── Mostrar loading adicional si los datos están cargando ── */}
+            {loadingTickets && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+                    background: 'rgba(16,185,129,0.9)', padding: '8px 16px',
+                    textAlign: 'center', fontSize: '0.75rem', fontWeight: 700, color: 'white'
+                }}>
+                    Sincronizando datos desde {process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://87.99.137.96:8000'}...
+                </div>
+            )}
 
             {/* ── EXECUTIVE HEADER ─────────────── */}
             <div style={{
@@ -673,7 +694,7 @@ export default function AdminDashboard() {
                             </button>
                         </div>
                         <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.8rem", margin: "4px 0 0" }}>
-                            {new Date().toLocaleDateString("es-PE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · Tiempo real
+                            {currentDate || 'Cargando...'} · Tiempo real
                         </p>
                     </div>
                 </div>
