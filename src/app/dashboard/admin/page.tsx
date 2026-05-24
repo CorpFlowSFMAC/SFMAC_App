@@ -148,6 +148,11 @@ function GestoraBar({ name, count, max, color }: any) {
 // ════════════════════════════════════════════
 // MAIN EXECUTIVE DASHBOARD
 // ════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════════
+// ANTI-SSR: Esta página SIEMPRE se renderiza en el cliente
+// No hay pre-renderizado estático - evita hydration mismatch
+// ═══════════════════════════════════════════════════════════════════════════════════
+
 export default function AdminDashboard() {
     // ═══════════════════════════════════════════════════════════════════════════
     // ANTI-HYDRATION ERROR 418: Strict client-side only rendering
