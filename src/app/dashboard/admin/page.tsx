@@ -289,6 +289,13 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ───────────
     const roi = useMemo(() => {
+        try {
+        // Safe initialization
+        if (!Array.isArray(tickets)) {
+            console.warn('[ROI] ⚠️ tickets no es array, retornando vacío');
+            return { inversion: 0, ingresos: 0, utilidad: 0, margen: 0, ratio: 0, closed: 0, total: 0, byService: [], inversionItems: [], ingresosItems: [] };
+        }
+        
         // REGLA 1: Solo tickets con actividad o creación en el rango seleccionado
         const inPeriod = tickets.filter((t: any) => {
             // El ticket entra en el ROI si fue creado en el periodo O si fue cerrado en el periodo
@@ -406,14 +413,24 @@ export default function AdminDashboard() {
             }).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
+        } catch (error) {
+            console.error('[ROI] ❌ Error en cálculo ROI:', error);
+            return { inversion: 0, ingresos: 0, utilidad: 0, margen: 0, ratio: 0, closed: 0, total: 0, byService: [], inversionItems: [], ingresosItems: [] };
+        }
     }, [tickets, strategicMetrics]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
     const tesoreria = useMemo(() => {
+        try {
+        if (!Array.isArray(tickets)) {
+            console.warn('[Tesoreria] ⚠️ tickets no es array, retornando vacío');
+            return { pipelineNeto: 0, aproNeto: 0, lucro: 0, pendientes: [], cotizaciones: [], servicios: [], gestoras: [] };
+        }
+        
         // Pipeline: Cotizaciones en curso
         const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente", "visitado"];
-        const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId)));
+        const pipelineTickets = Array.isArray(tickets) ? tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId))) : [];
         const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
 
         // Presupuestos Aprobados: En ejecución o por liquidar
@@ -469,6 +486,10 @@ export default function AdminDashboard() {
                 { label: "Pendiente Liquidar", count: penLiq.length, tickets: [...penLiq], color: "#64748B" },
             ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
+        } catch (error) {
+            console.error('[Tesoreria] ❌ Error en cálculo:', error);
+            return { pipelineNeto: 0, aproNeto: 0, lucro: 0, pendientes: [], cotizaciones: [], servicios: [], gestoras: [] };
+        }
     }, [tickets]);
 
     // ── CAPITAL EXPUESTO / ADELANTADO (Pagos a Técnicos en tickets activos) ────────
@@ -476,6 +497,10 @@ export default function AdminDashboard() {
     const ESTADOS_RIESGO_CAPITAL = ["en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "por_liquidar", "nuevo", "asignado_a_tecnico", "en_inspeccion", "visitado"];
 
     const capitalExpuesto = useMemo(() => {
+        try {
+        if (!Array.isArray(tickets)) {
+            return { tickets: [], total: 0, enRiesgo: 0, totalEnRiesgo: 0 };
+        }
         const ticketsConAdelantos = tickets
             .filter((t: any) => {
                 const sid = normalizeStateId(t.estadoId);
@@ -521,6 +546,10 @@ export default function AdminDashboard() {
         const totalEnRiesgo = round2(enRiesgo.reduce((s: number, t: any) => s + t._totalAdelantado, 0));
 
         return { tickets: ticketsConAdelantos, total: totalCapital, enRiesgo: enRiesgo.length, totalEnRiesgo };
+        } catch (error) {
+            console.error('[CapitalExpuesto] ❌ Error:', error);
+            return { tickets: [], total: 0, enRiesgo: 0, totalEnRiesgo: 0 };
+        }
     }, [tickets, gestoras]);
 
     // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
@@ -528,6 +557,10 @@ export default function AdminDashboard() {
     const EN_PROCESO_STATES_RRHH = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
 
     const rrhh = useMemo(() => {
+        try {
+        if (!Array.isArray(tickets)) {
+            return { nuevos: 0, enProceso: 0, vencidos: 0, eficiencia: 0, gestorasData: [] };
+        }
         const inPeriod = tickets.filter((t: any) => isInRange(t.created_at || t.createdAt || t.fechaCreacion));
         const active = inPeriod.filter((t: any) =>
             !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId))
