@@ -508,9 +508,18 @@ export const ticketsAPI = {
 
             if (fallbackError) throw fallbackError;
 
-            return fallbackData || [];
+            const fallbackWithCosts = await attachTicketCosts(fallbackData || []);
+            return fallbackWithCosts.map((t: any) => ({
+                ...t,
+                costos: Array.isArray(t.costos) ? t.costos : [],
+            }));
         }
-        return data || [];
+
+        const ticketsWithCosts = await attachTicketCosts(data || []);
+        return ticketsWithCosts.map((t: any) => ({
+            ...t,
+            costos: Array.isArray(t.costos) ? t.costos : [],
+        }));
     },
 
     async getStrategicMetrics(startDate: string, endDate: string) {
