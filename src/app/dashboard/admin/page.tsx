@@ -1,20 +1,20 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useMemo, useEffect } from "react";
 import {
-    DollarSign, TrendingUp, AlertTriangle, Clock, Users, CheckCircle2,
-    Zap, ArrowRight, BarChart3, Flame, Target, Activity, Shield,
-    ChevronRight, Filter, RefreshCw, AlertCircle, Star, Layers,
-    BanknoteIcon, PieChart, Award
+    DollarSign, TrendingUp, AlertTriangle, Users, CheckCircle2,
+    Zap, ArrowRight, BarChart3, Target, Activity, Shield,
+    ChevronRight, AlertCircle, Star, Layers,
+    BanknoteIcon, Award
 } from "lucide-react";
 import Link from "next/link";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
-import { ticketsAPI, paymentsAPI } from "@/lib/supabase-api";
 import { supabase } from "@/lib/supabase";
-import { useStrategicMetrics } from "@/lib/useQueryHooks";
 import { calculateTicketFinances } from "@/lib/calculations";
 
 // ── Helpers ──────────────────────────────────
@@ -152,8 +152,26 @@ function GestoraBar({ name, count, max, color }: any) {
 export default function AdminDashboard() {
     const { tickets = [], loadingTickets, technicians, gestoras = [], updateTicket, refreshTickets } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [now] = useState(() => new Date());
+    const [isMounted, setIsMounted] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+    // Hydration guard
+    useEffect(() => { setIsMounted(true); }, []);
+
+    // Auto-refresh polling every 15 seconds
+    useEffect(() => {
+        if (!isMounted) return;
+        const interval = setInterval(async () => {
+            try {
+                await refreshTickets();
+                setLastRefresh(new Date());
+            } catch (e) {
+                // silent retry next cycle
+            }
+        }, 15_000);
+        return () => clearInterval(interval);
+    }, [isMounted, refreshTickets]);
     
     // Proteger gestoras contra undefined
     const safeGestoras = Array.isArray(gestoras) ? gestoras : [];
@@ -236,14 +254,7 @@ export default function AdminDashboard() {
         }
     };
 
-    const handleManualRefresh = async () => {
-        setIsRefreshing(true);
-        try {
-            await refreshTickets();
-        } finally {
-            setTimeout(() => setIsRefreshing(false), 800);
-        }
-    };
+
 
     // ── Rango de Fechas para Métricas Globales (Cash Flow) ──
     const rangeDates = useMemo(() => {
@@ -264,7 +275,6 @@ export default function AdminDashboard() {
         return { start: start.toISOString(), end: end.toISOString() };
     }, [dateRange]);
 
-    const { data: strategicMetrics } = useStrategicMetrics(rangeDates.start, rangeDates.end);
 
     const isInRange = (dateStr: string) => {
         if (dateRange === "all") return true;
@@ -406,7 +416,7 @@ export default function AdminDashboard() {
             })).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
-    }, [tickets, strategicMetrics, monthlyDeposits, depositsList]);
+    }, [tickets, monthlyDeposits, depositsList]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
@@ -421,13 +431,21 @@ export default function AdminDashboard() {
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
         const totalAprobados = approvedTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || t.montoFinal || 0), 0);
 
-        // Lucro Cesante: Utilidad PROYECTADA de tickets aprobados
-        // = Ingresos esperados menos costos (ambos sin IGV)
-        const lucroReal = approvedTickets.reduce((s, t) => {
-            const ingresos = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18; // sin IGV
+        // Lucro Cesante: dinero que la empresa deja de percibir por
+        // inoperatividad, retrasos técnicos o penalizaciones SLA en
+        // tickets bloqueados más de 48 horas sin avance.
+        const bloqueados48h = [...pipelineTickets, ...approvedTickets].filter((t: any) =>
+            hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48
+        );
+        const lucroReal = bloqueados48h.reduce((s, t) => {
+            const ingresos = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
             const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
-            const utilidadProyectada = Math.max(0, ingresos - costos);
-            return s + utilidadProyectada;
+            const utilidadPerdida = Math.max(0, ingresos - costos);
+            // Penalización SLA: +5% adicional por cada 24h extra sobre las 48h de bloqueo
+            const horasBloqueo = hoursAgo(t.updated_at || t.createdAt || t.created_at || "");
+            const diasExtra = Math.max(0, Math.floor((horasBloqueo - 48) / 24));
+            const penalizacionSLA = utilidadPerdida * (diasExtra * 0.05);
+            return s + utilidadPerdida + penalizacionSLA;
         }, 0);
 
         // Aging
@@ -451,6 +469,7 @@ export default function AdminDashboard() {
             tickets: [...todosPendientes],
             pipelineTickets: [...pipelineTickets],
             approvedTickets: [...approvedTickets],
+            bloqueados48hTickets: [...bloqueados48h],
             total: todosPendientes.length,
             totalPipeline: round2(totalPipelineNeto),
             totalAprobados: round2(totalAprobados),
@@ -540,9 +559,16 @@ export default function AdminDashboard() {
         const expired = active.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS);
         const slaGlobal = ((total - expired.length) / total) * 100;
 
-        // FCR (tickets cerrados sin re-apertura — simulado)
-        const fcrPct = closed.length > 0 ? Math.min(92, 70 + closed.length * 2) : 0;
-        const npsPct = 78;
+        // FCR: tickets cerrados que nunca fueron reabiertos (sin campo de reopen, 100% si hay cerrados)
+        const fcrPct = closed.length > 0
+            ? (closed.filter((t: any) => !t.reopen_count || t.reopen_count === 0).length / closed.length) * 100
+            : 0;
+
+        // NPS: calculado desde valoración real del cliente (si existe); 0 si no hay datos
+        const withRating = closed.filter((t: any) => typeof t.client_rating === 'number' && t.client_rating > 0);
+        const npsPct = withRating.length > 0
+            ? Math.round(withRating.reduce((s: number, t: any) => s + t.client_rating, 0) / withRating.length)
+            : 0;
 
         // Distribución por gestora REAL (matching por gestora_id)
         const gestorasData = safeGestoras.map((g: any) => {
@@ -586,6 +612,18 @@ export default function AdminDashboard() {
     const lightColor = globalLight === "ROJO" ? "#EF4444" : globalLight === "AMBAR" ? "#F59E0B" : "#10B981";
     const lightBg = globalLight === "ROJO" ? "rgba(239,68,68,0.12)" : globalLight === "AMBAR" ? "rgba(245,158,11,0.12)" : "rgba(16,185,129,0.1)";
 
+    if (!isMounted) {
+        return (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                    <div style={{ width: "40px", height: "40px", border: "3px solid rgba(255,255,255,0.1)", borderTopColor: "#10B981", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                    <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", fontWeight: 600 }}>Cargando datos en tiempo real…</span>
+                    <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{ padding: "1.5rem 2rem", minHeight: "100vh", fontFamily: "Inter,system-ui,sans-serif" }}>
 
@@ -612,21 +650,22 @@ export default function AdminDashboard() {
                                 </span>
                             </div>
                             
-                            <button 
-                                onClick={handleManualRefresh}
-                                disabled={isRefreshing}
-                                style={{
-                                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                                    borderRadius: "8px", padding: "0.4rem 0.8rem", color: "white",
-                                    display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer",
-                                    fontSize: "0.72rem", fontWeight: 700, transition: "all 0.2s"
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-                                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
-                            >
-                                <RefreshCw size={12} className={isRefreshing ? "animate-spin" : ""} />
-                                {isRefreshing ? "..." : "Sincronizar"}
-                            </button>
+                            {/* Live indicator — auto-refresh every 15s */}
+                            <span style={{
+                                display: "flex", alignItems: "center", gap: "6px",
+                                fontSize: "0.68rem", fontWeight: 700, color: "#10B981",
+                                padding: "3px 10px", borderRadius: "999px",
+                                background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)"
+                            }}>
+                                <span style={{
+                                    width: "7px", height: "7px", borderRadius: "50%",
+                                    background: "#10B981",
+                                    animation: "livePulse 2s ease-in-out infinite",
+                                    boxShadow: "0 0 6px #10B981"
+                                }} />
+                                EN VIVO
+                            </span>
+                            <style>{`@keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
                         </div>
                         <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "0.8rem", margin: "4px 0 0" }}>
                             {new Date().toLocaleDateString("es-PE", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · Tiempo real
@@ -829,26 +868,32 @@ export default function AdminDashboard() {
 
                     <div 
                         onClick={() => {
-                            setModalTitle("Lucro Cesante: Utilidad de Tickets Pendientes");
-                            setModalTickets(tesoreria.approvedTickets.map(t => {
+                            setModalTitle("Lucro Cesante: Tickets bloqueados >48h + Penalización SLA");
+                            setModalTickets(tesoreria.bloqueados48hTickets.map(t => {
                                 const ingresos = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
                                 const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
+                                const utilidadPerdida = Math.max(0, ingresos - costos);
+                                const horasBloqueo = hoursAgo(t.updated_at || t.createdAt || t.created_at || "");
+                                const diasExtra = Math.max(0, Math.floor((horasBloqueo - 48) / 24));
+                                const penalizacionSLA = utilidadPerdida * (diasExtra * 0.05);
                                 return {
                                     ...t,
                                     servicio: t.service_type || t.tipo_servicio,
                                     cliente: t.clients?.name || t.clienteNombre || 'Cliente',
                                     _ingresosProyectados: ingresos,
                                     _costosProyectados: costos,
-                                    _utilidadPendiente: Math.max(0, ingresos - costos)
+                                    _utilidadPendiente: utilidadPerdida + penalizacionSLA,
+                                    _horasBloqueo: Math.floor(horasBloqueo),
+                                    _penalizacionSLA: penalizacionSLA
                                 };
                             }));
                             setShowListModal(true);
                         }}
                         style={{ padding: "0.65rem 0.9rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "10px", marginBottom: "0.85rem", cursor: "pointer" }}
                     >
-                        <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#EF4444", marginBottom: "2px" }}>⚡ Lucro Cesante Estimado</div>
+                        <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#EF4444", marginBottom: "2px" }}>⚡ Lucro Cesante (bloqueados &gt;48h)</div>
                         <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#EF4444" }}>S/ {fmt(tesoreria.lucro)}</div>
-                        <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>ganancia detenida por pendientes</div>
+                        <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>{tesoreria.bloqueados48hTickets.length} ticket(s) — inoperatividad + penalización SLA</div>
                     </div>
 
                     {/* Capital Expuesto — CLICKABLE */}
