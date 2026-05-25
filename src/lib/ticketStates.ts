@@ -354,6 +354,7 @@ export const TICKET_STATE_ORDER: Record<string, number> = {
     'nuevo': 1,
     'tecnico_asignado': 2,
     'esperando_pago_visita': 2,
+    'visita_programada': 3,
     'en_inspeccion': 3,
     'visita_realizada': 4,
     'en_cotizacion': 5,
