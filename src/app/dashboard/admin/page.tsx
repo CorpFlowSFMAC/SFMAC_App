@@ -14,7 +14,6 @@ import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
-import { supabase } from "@/lib/supabase";
 import { calculateTicketFinances } from "@/lib/calculations";
 
 // ── Helpers ──────────────────────────────────
@@ -177,62 +176,7 @@ export default function AdminDashboard() {
     const safeGestoras = Array.isArray(gestoras) ? gestoras : [];
     const gestorasMap = new Map(safeGestoras.map((g: any) => [g.id, g]));
     
-    // ★ NUEVO: Estado para depósitos realizados (del módulo de pagos)
-    const [monthlyDeposits, setMonthlyDeposits] = useState<{ [key: string]: number }>({});
-    const [depositsList, setDepositsList] = useState<any[]>([]);
-    const [loadingDeposits, setLoadingDeposits] = useState(false);
 
-    // ★ NUEVO: Cargar depósitos confirmados del mes desde ticket_payments
-    useEffect(() => {
-        const loadMonthlyDeposits = async () => {
-            setLoadingDeposits(true);
-            try {
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const currentMonthKey = `${year}-${month}`;
-                
-                // Obtener todos los pagos confirmados del mes actual
-                // Sin filtro de fecha para evitar errores HTTP 400
-                const { data: deposits, error } = await supabase
-                    .from('ticket_payments')
-                    .select('*')
-                    .eq('status', 'confirmed')
-                    .order('payment_date', { ascending: false });
-                
-                if (error) {
-                    console.error('[AdminDashboard] Error fetching deposits:', error.message);
-                } else if (deposits && deposits.length > 0) {
-                    // Filtrar solo los del mes actual en memoria (más seguro)
-                    const monthlyTotals: { [key: string]: number } = {};
-                    const monthlyList: any[] = [];
-                    
-                    deposits.forEach((d: any) => {
-                        const date = d.payment_date || '';
-                        if (date.startsWith(currentMonthKey)) {
-                            monthlyList.push(d);
-                            monthlyTotals[currentMonthKey] = (monthlyTotals[currentMonthKey] || 0) + (d.amount || 0);
-                        }
-                    });
-                    
-                    setDepositsList(monthlyList);
-                    setMonthlyDeposits(monthlyTotals);
-                    console.log('[AdminDashboard] Deposits loaded:', monthlyList.length, 'total:', monthlyTotals[currentMonthKey]);
-                } else {
-                    setDepositsList([]);
-                    setMonthlyDeposits({});
-                }
-            } catch (err: any) {
-                console.error('[AdminDashboard] Error cargando depósitos:', err?.message || err);
-                setDepositsList([]);
-                setMonthlyDeposits({});
-            } finally {
-                setLoadingDeposits(false);
-            }
-        };
-        
-        loadMonthlyDeposits();
-    }, []);
 
     // Estados para el Modal de Seguimiento (General)
     const [showListModal, setShowListModal] = useState(false);
@@ -351,27 +295,12 @@ export default function AdminDashboard() {
         // Para calculo: usamos neto (sin IGV)
         const ingresosNetoCalculo = ingresosSinIGV;
     
-        // REGLA 3: INVERSION EJECUTADA = Depositos del mes (para cuadro de Inversion)
-        const now = new Date();
-        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        
-        // Método 1: Desde ticket_payments (tabla de módulo de pagos)
-        let inversionDesdePayments = round2(monthlyDeposits[currentMonthKey] || 0);
-        
-        // Método 2: Fallback si no hay datos en ticket_payments -> calcular desde costos de tickets
-        if (inversionDesdePayments === 0) {
-            // Sumar todos los costos con estado "pagado" o "confirmado" de tickets en el período
-            const inversionFallback = inPeriod.reduce((acc, t) => {
-                const costs = t.costos || [];
-                const costosPagados = costs.filter((c: any) => 
-                    c.estado_pago === 'pagado' || c.estado_pago === 'confirmado'
-                );
-                return acc + costosPagados.reduce((sum: number, c: any) => sum + parseFloat(c.monto || c.amount || c.cost || 0), 0);
-            }, 0);
-            inversionDesdePayments = round2(inversionFallback);
-        }
-        
-        const inversionEjecutada = inversionDesdePayments;
+        // REGLA 3: INVERSIÓN EJECUTADA = Total de pagos confirmados en ticket_costs
+        // Fuente ÚNICA de verdad: calculateTicketFinances (misma fuente que el módulo de pagos)
+        const inversionEjecutada = round2(inPeriod.reduce((acc, t) => {
+            const finances = calculateTicketFinances(t, t.costos || []);
+            return acc + finances.totalLaborConfirmed + finances.totalOpConfirmed;
+        }, 0));
         
         // DEBUG
 
@@ -408,15 +337,13 @@ export default function AdminDashboard() {
             closed: closed.length, 
             total: tickets.length, 
             byService,
-            inversionItems: closed.map(t => ({
-                ...t,
-                _investmentTotalReal: (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
-                                       parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                                       parseFloat(t.visit_cost || t.costoVisita || 0))
-            })).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
+            inversionItems: inPeriod.map(t => {
+                const fin = calculateTicketFinances(t, t.costos || []);
+                return { ...t, _investmentTotalReal: fin.totalLaborConfirmed + fin.totalOpConfirmed };
+            }).filter(t => t._investmentTotalReal > 0).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
-    }, [tickets, monthlyDeposits, depositsList]);
+    }, [tickets]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
@@ -714,24 +641,16 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub="Depósitos totales realizados en el periodo" color="#3B82F6"
+                    sub="Pagos confirmados en ticket_costs del periodo" color="#3B82F6"
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
-                        setModalTitle("Depósitos Realizados: Inversión del Mes");
-                        // Mostrar lista de depósitos del módulo de pagos
-                        setModalTickets(depositsList.map((d: any, idx: number) => ({
-                            id: d.id || `dep-${idx}`,
-                            ticketNum: d.reference_number || d.ticket_id?.substring(0, 8) || 'N/A',
-                            cliente: d.payment_type || 'Deposito',
-                            sede: d.payment_date || '',
-                            statusId: 'deposito',
-                            _monto: d.amount,
-                            _fecha: d.payment_date,
-                            _tipo: d.payment_type,
-                            _referencia: d.reference_number,
-                            _isDeposit: true,
-                            metadata: { amount: d.amount, payment_date: d.payment_date, type: d.payment_type, ref: d.reference_number }
+                        setModalTitle("Inversión Ejecutada: Pagos confirmados (ticket_costs)");
+                        setModalTickets(roi.inversionItems.map((t: any) => ({
+                            ...t,
+                            servicio: t.service_type || t.tipo_servicio,
+                            cliente: t.clients?.name || t.clienteNombre || 'Cliente',
+                            _monto: t._investmentTotalReal,
                         })));
                         setShowListModal(true);
                     }}
