@@ -364,6 +364,7 @@ export const TICKET_STATE_ORDER: Record<string, number> = {
     'documentacion_enviada': 9,
     'requiere_revision_admin': 10,
     'por_liquidar': 11,
+    'pago_realizado': 11, // ★ AGREGADO: Estado transitorio antes del cierre
     'ticket_cerrado': 12,
     'vencido': 13,
     'ticket_rechazado': 14,

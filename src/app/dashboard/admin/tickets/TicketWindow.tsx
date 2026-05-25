@@ -1078,11 +1078,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         // para evitar perder lo que el usuario está escribiendo en el momento.
                         const serverMeta = freshServerData.metadata || {};
                         const prevMeta = prev.metadata || {};
+                        
+                        // 🔒 PREVENIR REGRESIÓN DE ESTADO: No permitir retroceder a estados menos avanzados
+                        const incomingStatus = freshServerData.status_id || 'nuevo';
+                        const incomingOrder = TICKET_STATE_ORDER[incomingStatus] || 0;
+                        const currentOrder = TICKET_STATE_ORDER[prev.estadoId] || 0;
+                        
+                        // Si el servidor dice un estado MENOS avanzado que el actual, IGNORARLO
+                        // EXCEPCIÓN: Solo permitir si es un rechazo de pago (pagoRechazado)
+                        const hasNewRejection = !!serverMeta.pagoRechazado;
+                        if (incomingOrder < currentOrder && !hasNewRejection) {
+                            console.warn(`[Realtime] Ignorando regresión de estado: ${incomingStatus} → ${prev.estadoId}`);
+                            return prev;
+                        }
 
                         // Campos que MANDA el servidor (Finanzas, Pagos, Estado)
                         const serverFields = {
-                            status_id: freshServerData.status_id,
-                            estadoId: normalizeStateId(freshServerData.status_id),
+                            status_id: incomingOrder >= currentOrder ? incomingStatus : prev.status_id,
+                            estadoId: incomingOrder >= currentOrder ? normalizeStateId(incomingStatus) : prev.estadoId,
                             technician_id: freshServerData.technician_id,
                             gestora_id: freshServerData.gestora_id,
                             labor_cost: freshServerData.labor_cost,
