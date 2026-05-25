@@ -297,7 +297,9 @@ export default function AdminDashboard() {
     
         // REGLA 3: INVERSIÓN EJECUTADA — Usa calculateTicketFinances para normalizar
         // datos (fechas, montos, estados) de forma idéntica al módulo de Pagos.
-        // Filtra items confirmados cuya fecha normalizada cae en el rango seleccionado.
+        // Filtra items confirmados cuya fecha de pago/confirmación cae en el rango.
+        // Prioridad de fecha: fecha_pago > updated_at > fecha (created_at fallback).
+        // updated_at refleja cuándo se confirmó el depósito (cambio de estado a "pagado").
         const inversionItemsList: any[] = [];
         let inversionTotal = 0;
         tickets.forEach((t: any) => {
@@ -305,7 +307,8 @@ export default function AdminDashboard() {
             const allConfirmed = [...finances.laborItems, ...finances.operatingItems];
             let ticketInversion = 0;
             allConfirmed.forEach((c: any) => {
-                if (!isInRange(c.fecha)) return;
+                const investmentDate = c.fecha_pago || c.updated_at || c.fecha;
+                if (!isInRange(investmentDate)) return;
                 ticketInversion += c.monto;
             });
             if (ticketInversion > 0) {
