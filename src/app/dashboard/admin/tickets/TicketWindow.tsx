@@ -860,7 +860,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean, manual?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
-        if (!onUpdate || !dataToProcess || !isInitialLoadComplete || isSyncing.current) return false;
+        if (!dataToProcess || !isInitialLoadComplete || isSyncing.current) return false;
 
         // 🛡️ BLOQUEO CRÍTICO: No sincronizar si el usuario está editando activamente un monto
         const isEditingMonto = !!montoAdelantoManual || !!porcentajeAdelanto;
