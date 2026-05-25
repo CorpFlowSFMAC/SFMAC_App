@@ -91,8 +91,7 @@ export const normalizeTicketCostCategory = ({ categoria, tipo, concepto }: Ticke
     if (text.includes('liquidación') || text.includes('mano de obra') || text.includes('saldo')) return 'Mano de Obra';
     if (text.includes('movilidad') || text.includes('visita') || text.includes('viático')) return 'Viáticos / Movilidad';
     if (text.includes('material')) return 'Materiales';
-    if (text.includes('adelanto operativo') && !text.includes('mano de obra') && !text.includes('m.o')) return 'Adelanto Operativo';
-    if (text.includes('adelanto')) return 'Mano de Obra';
+    if (text.includes('adelanto')) return 'Adelanto Operativo';
     if (text.includes('rescate')) return 'Rescate Financiero';
 
     return 'Otros';
