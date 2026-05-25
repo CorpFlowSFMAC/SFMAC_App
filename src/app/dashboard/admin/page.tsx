@@ -14,7 +14,7 @@ import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
-import { calculateTicketFinances, isConfirmedTicketCostStatus, toNum } from "@/lib/calculations";
+import { calculateTicketFinances } from "@/lib/calculations";
 
 // ── Helpers ──────────────────────────────────
 const SLA_HOURS = 72;
@@ -295,19 +295,18 @@ export default function AdminDashboard() {
         // Para calculo: usamos neto (sin IGV)
         const ingresosNetoCalculo = ingresosSinIGV;
     
-        // REGLA 3: INVERSIÓN EJECUTADA = Pagos confirmados en ticket_costs cuya fecha
-        // cae en el rango seleccionado. Itera TODOS los tickets (no solo inPeriod) y filtra
-        // cada costo por su fecha de pago — misma lógica que el módulo de Pagos y Tesorería.
+        // REGLA 3: INVERSIÓN EJECUTADA — Usa calculateTicketFinances para normalizar
+        // datos (fechas, montos, estados) de forma idéntica al módulo de Pagos.
+        // Filtra items confirmados cuya fecha normalizada cae en el rango seleccionado.
         const inversionItemsList: any[] = [];
         let inversionTotal = 0;
         tickets.forEach((t: any) => {
-            const costos = t.costos || [];
+            const finances = calculateTicketFinances(t, t.costos || []);
+            const allConfirmed = [...finances.laborItems, ...finances.operatingItems];
             let ticketInversion = 0;
-            costos.forEach((c: any) => {
-                if (!isConfirmedTicketCostStatus(c.estado_pago || c.estado)) return;
-                const fechaPago = c.fecha_pago || c.fecha || c.date || c.created_at || '';
-                if (!isInRange(fechaPago)) return;
-                ticketInversion += toNum(c.monto || c.amount || 0);
+            allConfirmed.forEach((c: any) => {
+                if (!isInRange(c.fecha)) return;
+                ticketInversion += c.monto;
             });
             if (ticketInversion > 0) {
                 inversionItemsList.push({ ...t, _investmentTotalReal: round2(ticketInversion) });
