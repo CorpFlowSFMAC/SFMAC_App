@@ -947,7 +947,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
             total_quoted_amount: parseFloat(sourceForPayments?.montoFinal ?? montoTotalCotizado ?? 0),
             technician_id: tecnico?.id || serverTicket?.technician_id,
-            gestiona_id: businessData?.gestora?.id || serverTicket?.gestora_id,
+            gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
                 ...serverMeta,
                 ...sourceMetadata,
