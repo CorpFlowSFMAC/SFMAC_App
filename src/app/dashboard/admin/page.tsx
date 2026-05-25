@@ -14,7 +14,7 @@ import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import TicketWindow from "./tickets/TicketWindow";
-import { calculateTicketFinances } from "@/lib/calculations";
+import { calculateTicketFinances, isConfirmedTicketCostStatus, toNum } from "@/lib/calculations";
 
 // ── Helpers ──────────────────────────────────
 const SLA_HOURS = 72;
@@ -295,12 +295,26 @@ export default function AdminDashboard() {
         // Para calculo: usamos neto (sin IGV)
         const ingresosNetoCalculo = ingresosSinIGV;
     
-        // REGLA 3: INVERSIÓN EJECUTADA = Total de pagos confirmados en ticket_costs
-        // Fuente ÚNICA de verdad: calculateTicketFinances (misma fuente que el módulo de pagos)
-        const inversionEjecutada = round2(inPeriod.reduce((acc, t) => {
-            const finances = calculateTicketFinances(t, t.costos || []);
-            return acc + finances.totalLaborConfirmed + finances.totalOpConfirmed;
-        }, 0));
+        // REGLA 3: INVERSIÓN EJECUTADA = Pagos confirmados en ticket_costs cuya fecha
+        // cae en el rango seleccionado. Itera TODOS los tickets (no solo inPeriod) y filtra
+        // cada costo por su fecha de pago — misma lógica que el módulo de Pagos y Tesorería.
+        const inversionItemsList: any[] = [];
+        let inversionTotal = 0;
+        tickets.forEach((t: any) => {
+            const costos = t.costos || [];
+            let ticketInversion = 0;
+            costos.forEach((c: any) => {
+                if (!isConfirmedTicketCostStatus(c.estado_pago || c.estado)) return;
+                const fechaPago = c.fecha_pago || c.fecha || c.date || c.created_at || '';
+                if (!isInRange(fechaPago)) return;
+                ticketInversion += toNum(c.monto || c.amount || 0);
+            });
+            if (ticketInversion > 0) {
+                inversionItemsList.push({ ...t, _investmentTotalReal: round2(ticketInversion) });
+                inversionTotal += ticketInversion;
+            }
+        });
+        const inversionEjecutada = round2(inversionTotal);
         
         // DEBUG
 
@@ -337,10 +351,7 @@ export default function AdminDashboard() {
             closed: closed.length, 
             total: tickets.length, 
             byService,
-            inversionItems: inPeriod.map(t => {
-                const fin = calculateTicketFinances(t, t.costos || []);
-                return { ...t, _investmentTotalReal: fin.totalLaborConfirmed + fin.totalOpConfirmed };
-            }).filter(t => t._investmentTotalReal > 0).sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
+            inversionItems: inversionItemsList.sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
             ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
         };
     }, [tickets]);
@@ -1091,7 +1102,7 @@ export default function AdminDashboard() {
                                 <div style={{ display: 'flex', gap: '1.5rem', marginTop: '6px' }}>
                                     <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Total: {modalTickets.length} registros</p>
                                     <p style={{ margin: 0, fontSize: '0.8rem', color: '#10B981', fontWeight: 900 }}>
-                                        SUMA TOTAL (NETO): S/ {fmt(modalTickets.reduce((acc, t) => acc + (t._investmentTotalNet || t._utilityAmount || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0))}
+                                        SUMA TOTAL (NETO): S/ {fmt(modalTickets.reduce((acc, t) => acc + (t._monto || t._investmentTotalNet || t._utilityAmount || t._utilidadPendiente || 0), 0))}
                                     </p>
                                 </div>
                             </div>
@@ -1106,15 +1117,12 @@ export default function AdminDashboard() {
                                     onClick={() => {
                                         // Exportar a Excel/CSV
                                         const csvData = modalTickets.map((t: any) => {
-                                            const isDeposit = t._isDeposit === true || t.statusId === 'deposito';
                                             return {
-                                                'N° Referencia': t._referencia || t.reference_number || t.ticketNum || 'N/A',
-                                                'Fecha': t._fecha || t.payment_date || t.created_at || '',
-                                                'Tipo': t._tipo || t.payment_type || t._tipoPago || (isDeposit ? 'DEPÓSITO' : 'N/A'),
-                                                'Monto (S/)': t._monto || t.amount || t._utilityAmount || t._investmentTotalNet || parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18 || 0,
-                                                'Ticket ID': t.ticket_id || t.id?.substring(0, 8) || 'N/A',
-                                                'Cliente': t.cliente || t.client_name || t.client?.name || '',
-                                                'Sede': t.sede || t.branch_name || '',
+                                                'N° Ticket': t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? t.id.substring(0, 8).toUpperCase() : 'N/A'),
+                                                'Cliente': t.cliente || t.clients?.name || t.client_name || t.clienteNombre || '',
+                                                'Servicio': t.servicio || t.service_type || t.tipo_servicio || '',
+                                                'Monto (S/)': t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0,
+                                                'Fecha': t._fecha || t.created_at || t.createdAt || t.updated_at || '',
                                             };
                                         });
                                         
@@ -1128,7 +1136,7 @@ export default function AdminDashboard() {
                                         const url = URL.createObjectURL(blob);
                                         const link = document.createElement('a');
                                         link.href = url;
-                                        const tipoExport = modalTitle.toLowerCase().includes('depósit') ? 'depositos' : 'reportes';
+                                        const tipoExport = modalTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30).toLowerCase() || 'reporte';
                                         link.download = `${tipoExport}_${new Date().toISOString().split('T')[0]}.csv`;
                                         link.click();
                                         URL.revokeObjectURL(url);
@@ -1149,56 +1157,56 @@ export default function AdminDashboard() {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ref.</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Tipo</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Servicio</th>
                                         <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto (S/)</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Ticket ID</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {modalTickets.map((t: any, idx: number) => {
-                                        // Verificar si es un depósito
-                                        const isDeposit = t._isDeposit === true || t.statusId === 'deposito';
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? t.id.substring(0, 8).toUpperCase() : 'N/A');
+                                        const clientName = t.cliente || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
+                                        const fecha = t._fecha || t.created_at || t.createdAt || t.updated_at || '';
+                                        const monto = t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0;
                                         
                                         return (
                                             <tr 
-                                                key={t.id + idx} 
+                                                key={(t.id || idx) + '-' + idx} 
                                                 style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}
                                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                             >
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
-                                                        {t._referencia || t.reference_number || t.ticketNum || 'N/A'}
+                                                        {ticketNum}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', fontWeight: 600 }}>
-                                                        {t._fecha ? new Date(t._fecha).toLocaleDateString('es-PE') : (t.payment_date ? new Date(t.payment_date).toLocaleDateString('es-PE') : 'N/A')}
+                                                        {clientName}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <span style={{ 
                                                         padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
-                                                        background: isDeposit ? 'rgba(59,130,246,0.15)' : 'rgba(139,92,246,0.15)', 
-                                                        color: isDeposit ? '#60A5FA' : '#A78BFA', 
-                                                        border: `1px solid ${isDeposit ? 'rgba(59,130,246,0.3)' : 'rgba(139,92,246,0.3)'}`
+                                                        background: 'rgba(139,92,246,0.15)', 
+                                                        color: '#A78BFA', 
+                                                        border: '1px solid rgba(139,92,246,0.3)'
                                                     }}>
-                                                        {(t._tipo || t.payment_type || 'DEPÓSITO').toUpperCase()}
+                                                        {servicio.toUpperCase()}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
                                                     <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(t._monto || t.amount || 0)}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700, textTransform: 'uppercase' }}>
-                                                        Depósito confirmado
+                                                        S/ {fmt(monto)}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontFamily: 'monospace' }}>
-                                                        {t.ticket_id?.substring(0, 8) || t.id?.substring(0, 8) || 'N/A'}
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>
+                                                        {fecha ? new Date(fecha).toLocaleDateString('es-PE') : 'N/A'}
                                                     </div>
                                                 </td>
                                             </tr>
