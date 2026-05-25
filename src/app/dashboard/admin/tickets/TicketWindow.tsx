@@ -1789,7 +1789,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // Tesorería/Admin puede cambiarlo a pagado en el módulo de pagos.
             // ════════════════════════════════════════════════════════════
             const category = isForMaterials ? "Materiales" : "Mano de Obra";
-            const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto Operativo (MANO DE OBRA)";
+            const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto M.O.";
 
             const createResult = await ticketCostsAPI.create({
                 ticket_id: currentId,
