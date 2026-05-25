@@ -696,9 +696,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
             const finalSolicitud = safeMeta.solicitudAdelanto !== undefined ? safeMeta.solicitudAdelanto : (ticket.solicitudAdelanto ?? null);
 
+            // 🔒 PREVENIR REGRESIÓN: El estado nunca debe retroceder
+            // El estado más avanzado siempre gana
+            const finalEstadoId = shouldPreservePrevState ? prev.estadoId : corregidoEstadoId;
+            const finalStatusId = shouldPreservePrevState ? prev.status_id : corregidoEstadoId;
 
             return {
                 ...prev,
+                // 🔒 CRÍTICO: El estado preservado va ANTES de ...ticket para que no sea sobrescrito
+                estadoId: finalEstadoId,
+                status_id: finalStatusId,
                 ...ticket,
                 // ... (existing mappings)
                 // PREVENIR PARPADEO: Conservar valores financieros del backend si el prop no los tiene actualizados
@@ -753,7 +760,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion ?? prev.metadata?.solicitudLiquidacion ?? null),
                     solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
                 },
-                
+
                 // Mapeo a nivel de raíz para consistencia
                 solicitudAdelanto: finalSolicitud,
                 solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago ?? prev.metadata?.solicitudPago ?? null),
@@ -761,9 +768,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
                 pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
 
-                // Si el local está más avanzado, NO LO RETROCEDEMOS
-                estadoId: shouldPreservePrevState ? prev.estadoId : corregidoEstadoId,
-                status_id: shouldPreservePrevState ? prev.status_id : corregidoEstadoId,
+                // ⚠️ NOTA: estadoId y status_id ya fueron establecidos antes de ...ticket
+                // para evitar que ...ticket sobrescriba la preservación del estado más avanzado
                 modificacionAutorizada: finalModificacionAutorizada,
                 solicitudModificacion: ticket.solicitudModificacion || safeMeta.solicitudModificacion || prev.solicitudModificacion,
                 visitPaymentConfirmed: visitConfirmed,
