@@ -2063,11 +2063,40 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             
             // 🚀 SYNC INMEDIATO: Usamos syncToSupabase con override para asegurar 
             // que se apliquen todas las reglas de negocio y no haya race conditions.
-            await syncToSupabase(updated, { allowStateRollback: true });
+            try {
+                const syncResult = await syncToSupabase(updated, { allowStateRollback: true });
+                if (!syncResult) {
+                    console.warn("[handleActualLiquidation] syncToSupabase retornó false, intentando fallback...");
+                    // Fallback: sync directo via ticketsAPI
+                    try {
+                        await ticketsAPI.update(ticketData.id, {
+                            status_id: newState,
+                            metadata: finalMetadata
+                        });
+                    } catch (fallbackErr) {
+                        console.error("Error en fallback de sync:", fallbackErr);
+                    }
+                }
+            } catch (syncErr) {
+                console.error("Error en syncToSupabase:", syncErr);
+                // Intentar fallback directo
+                try {
+                    await ticketsAPI.update(ticketData.id, {
+                        status_id: newState,
+                        metadata: finalMetadata
+                    });
+                } catch (fallbackErr) {
+                    console.error("Error en fallback de sync:", fallbackErr);
+                }
+            }
             
             // 🔄 RECARGA DE COSTOS: Para asegurar que el módulo de Tesorería vea la nueva solicitud
             // Esto es crítico porque la solicitud ahora se guarda también en ticket_costs
-            await loadCosts();
+            try {
+                await loadCosts();
+            } catch (loadErr) {
+                console.warn("Error recargando costos:", loadErr);
+            }
             
             showToast(
                 isExceeding ? "Revisión Requerida" : "Liquidación Solicitada", 
