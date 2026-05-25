@@ -46,7 +46,8 @@ const isOperating = (item: any) => {
     );
 
     if (con.includes('adelanto operativo')) {
-        return con.includes('materiales');
+        if (con.includes('mano de obra') || con.includes('m.o')) return false;
+        return true;
     }
     
     return operatingKeywords.some(key => cat.includes(key) || con.includes(key)) || isExternalSpecialist;

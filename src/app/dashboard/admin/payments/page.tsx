@@ -616,10 +616,10 @@ export default function PaymentsPage() {
                 // B. Solicitudes en Metadata (Adelanto/Liquidación/Visita)
                 // ★ MEJORA 2026-05-12: Validar si la solicitud ya está en el historial (evita zombies)
                 const adelantoMonto = meta.solicitudAdelanto?.monto || 0;
-                const adelantoInHistory = adelantoMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('adelanto') && Math.abs(i.monto - adelantoMonto) < 1);
+                const adelantoInHistory = adelantoMonto > 0 && laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('adelanto') && Math.abs(i.monto - adelantoMonto) < 1);
                 
                 const pagoMonto = meta.solicitudPago?.monto || 0;
-                const pagoInHistory = pagoMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('visita') && Math.abs(i.monto - pagoMonto) < 1);
+                const pagoInHistory = pagoMonto > 0 && laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('visita') && Math.abs(i.monto - pagoMonto) < 1);
 
                 if (meta.solicitudAdelanto && !adelantoInHistory) {
                     pendingItems.push({
@@ -643,7 +643,7 @@ export default function PaymentsPage() {
 
                 if (meta.solicitudLiquidacion) {
                     const liqMonto = meta.solicitudLiquidacion.monto || 0;
-                    const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
+                    const liqInHistory = liqMonto > 0 && laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
                     
                     if (!liqInHistory && liqMonto > 0) {
                         pendingItems.push({
@@ -672,7 +672,7 @@ export default function PaymentsPage() {
                 const isPorLiquidar = ['por_liquidar', 'requiere_revision_admin', 'esperando_pago_final'].includes(t.status_id);
                 
                 const liqMonto = meta.solicitudLiquidacion?.monto || 0;
-                const liqInHistory = liqMonto > 0 && laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
+                const liqInHistory = liqMonto > 0 && laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
 
                 // V3: detectar solicitudes pendientes — solo fuentes oficiales (ticket_costs + metadata estructurada)
                 const hasExceedancePending = (t.costos || []).some((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
@@ -682,7 +682,7 @@ export default function PaymentsPage() {
                                            (meta.solicitudAdelantoExtra && parseFloat(meta.solicitudAdelantoExtra.monto || 0) > 0) ||
                                            hasExceedancePending;
 
-                const hasLiquidacionPaid = laborItems.some(i => i.tipo?.toLowerCase().includes('liquidación'));
+                const hasLiquidacionPaid = laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('liquidación'));
                 // No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
                 // ni si ya existe una solicitud de liquidación pendiente
                 if (isPorLiquidar && !hasLiquidacionPaid && !hasPendingRequests) {
@@ -1574,23 +1574,26 @@ export default function PaymentsPage() {
                                cat.includes('logística') || cat.includes('rescate') || cat.includes('envíos') || 
                                cat.includes('compras') || cat.includes('insumo');
                     }
-                    return i.tipo?.toLowerCase().includes('gasto') || i.tipo?.toLowerCase().includes('rescate') ||
-                           i.tipo?.toLowerCase().includes('materiales') || i.tipo?.toLowerCase().includes('viático');
+                    const label = `${i.concepto || ''} ${i.tipo || ''}`.toLowerCase();
+                    return label.includes('gasto') || label.includes('rescate') ||
+                           label.includes('materiales') || label.includes('viático');
                 }),
                 'ADELANTO': g.items.filter((i: any) => {
                     if (i.isTableCost) {
                         const cat = (i.categoria || '').toLowerCase();
                         return cat.includes('adelanto') || cat.includes('mano de obra');
                     }
-                    return i.tipo?.toLowerCase().includes('adelanto') || i.tipo?.toLowerCase().includes('refuerzo');
+                    const label = `${i.concepto || ''} ${i.tipo || ''}`.toLowerCase();
+                    return label.includes('adelanto') || label.includes('refuerzo');
                 }),
                 'LIQUIDACION': g.items.filter((i: any) => {
                     if (i.isTableCost) {
                         const cat = (i.categoria || '').toLowerCase();
                         return cat.includes('liquidación') || cat.includes('liquidacion') || 
-                               cat.includes('mano de obra') && i.tipo?.toLowerCase().includes('liquidación');
+                               cat.includes('mano de obra') && (i.concepto || i.tipo || '').toLowerCase().includes('liquidación');
                     }
-                    return i.tipo?.toLowerCase().includes('liquidación') || i.tipo?.toLowerCase().includes('liquidacion');
+                    const label = `${i.concepto || ''} ${i.tipo || ''}`.toLowerCase();
+                    return label.includes('liquidación') || label.includes('liquidacion');
                 })
             };
             
