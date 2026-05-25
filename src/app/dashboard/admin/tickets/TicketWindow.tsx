@@ -1903,6 +1903,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
         // 🚀 FORZAR SINCRONIZACIÓN: Asegurar que el override llega a la DB
         isProcessingAdvance.current = true;
+        let advanceCreated = false;
         try {
             const isForMaterials = advanceClassification === 'materials';
             const category = isForMaterials ? "Materiales" : "Mano de Obra";
@@ -1910,25 +1911,45 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 ? "Adelanto Operativo (MATERIALES)"
                 : "Adelanto Operativo (MANO DE OBRA)";
 
-            await ticketCostsAPI.create({
-                ticket_id: currentId,
-                concepto,
-                categoria: category,
-                specialist_id: technicianId,
-                monto: amount,
-                estado_pago: "pendiente",
-                solicitado_por: myProfileId || undefined
-            });
+            try {
+                await ticketCostsAPI.create({
+                    ticket_id: currentId,
+                    concepto,
+                    categoria: category,
+                    specialist_id: technicianId,
+                    monto: amount,
+                    estado_pago: "pendiente",
+                    solicitado_por: myProfileId || undefined
+                });
+                advanceCreated = true;
+            } catch (costErr: any) {
+                console.error("Error creando ticket_cost:", costErr);
+                // Si falla ticketCosts, continuar con metadata (no bloquear totalmente)
+                if (costErr?.message?.includes('400') || costErr?.message?.includes('Duplicate')) {
+                    showToast("Solicitud Duplicada", "Ya existe un pago pendiente con el mismo monto y concepto.", "warning");
+                    requestAdvanceRef.current = false;
+                    return;
+                }
+                // Otros errores de ticket_cost: continuar con metadata
+                console.warn("Continuando sin ticket_cost, usando solo metadata...");
+            }
 
             const metadataUpdates = {
                 pagoRechazado: null,
                 riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero,
-                solicitudAdelanto: null,
+                // Si no se creó ticket_cost, guardar solicitud en metadata para visibility
+                solicitudAdelanto: !advanceCreated ? {
+                    monto: amount,
+                    porcentaje: pctVal,
+                    fecha: new Date().toISOString(),
+                    categoria: category,
+                    concepto: concepto
+                } : null,
             };
 
             const updated = {
                 ...ticketData,
-                solicitudAdelanto: null,
+                solicitudAdelanto: !advanceCreated ? metadataUpdates.solicitudAdelanto : null,
                 pagoRechazado: null,
                 metadata: {
                     ...(ticketData.metadata || {}),
@@ -1940,7 +1961,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setTicketData(updated);
 
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
-            await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates);
+            
+            try {
+                await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates);
+            } catch (metaErr: any) {
+                console.error("Error actualizando metadata:", metaErr);
+                // Si falla patchMetadata, intentar fallback con ticketsAPI.update
+                try {
+                    await ticketsAPI.update(ticketData.id, {
+                        metadata: updated.metadata
+                    });
+                } catch (fallbackErr) {
+                    console.error("Error en fallback update:", fallbackErr);
+                }
+            }
+            
             await loadCosts();
             
             // ✅ FIX 2026-04-27: Esperar a que Supabase procese antes de limpiar estado
@@ -1949,9 +1984,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
             showToast("Solicitud Enviada", `Se ha solicitado el adelanto de S/ ${amount.toFixed(2)}.`, "success");
-        } catch (err) {
-            console.error("Error al solicitar adelanto:", err);
-            showToast("Error de Conexión", "No se pudo registrar la solicitud.", "error");
+        } catch (err: any) {
+            console.error("Error general en executeRequestAdvance:", err);
+            const message = err?.message || "No se pudo registrar la solicitud.";
+            showToast("Error", message, "error");
         } finally {
             // ✅ Limpiar flags
             requestAdvanceRef.current = false;
