@@ -905,6 +905,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ★ ENHANCED: payment denegado activa limpieza de solicitudes
         // FIX 2026-05-11: Si lo local ha limpiado el rechazo (pagoRechazado === null), la denegación ya no es 'activa' para el flujo local.
         const hasActiveRejection = !!serverMeta.pagoRechazado && businessData.pagoRechazado !== null;
+
+        // RESOLVER ESTADO FINAL: El más avanzado gana, excepto si hay denegación activa
+        const resolvedStatusId = hasActiveRejection
+            ? serverStatusId
+            : options?.allowStateRollback
+                ? businessData.estadoId
+                : (localStateOrder >= serverStateOrder ? businessData.estadoId : serverStatusId);
         
         // BLINDAJE CRÍTICO V5: Preservar SOLICITUDES DE PAGO del gestor/admin
         // Si local tiene una nueva solicitud (definida en businessData y no existente en servidor),
