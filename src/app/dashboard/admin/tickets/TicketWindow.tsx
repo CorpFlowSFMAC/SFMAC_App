@@ -748,20 +748,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // BLINDAJE DE TÉCNICO Y GESTORA:
                 // Si el ID del prop coincide con el ID que ya tenemos en el estado local (prev),
                 // preferimos el objeto local que puede tener datos más completos/frescos.
+                // IMPORTANTE: Si el prop está desactualizado (IDs diferentes), 
+                // el estado local YA fue actualizado por handleAssignment → retornarlo para evitar parpadeo
                 tecnico: (() => {
                     const incomingTech = ticket.technicians || ticket.tecnico;
-                    // Si el técnico del prop coincide con el ID actual de la DB, usarlo (es lo más fresco)
-                    if (incomingTech?.id === ticket.technician_id) return incomingTech;
-                    // Si el técnico previo coincide con el ID actual de la DB, preservarlo (evita parpadeo)
-                    if (prev.tecnico?.id === ticket.technician_id) return prev.tecnico;
-                    // Fallback al prop
-                    return incomingTech || prev.tecnico;
+                    // Si el prop está actualizado Y coincide con el estado local, usar prop (más fresco)
+                    if (incomingTech?.id === ticket.technician_id && incomingTech?.id === prev.tecnico?.id) {
+                        return incomingTech;
+                    }
+                    // En cualquier otro caso, preservar el estado local para evitar parpadeo
+                    // Esto cubre: reasignación en curso, prop desactualizado, etc.
+                    return prev.tecnico || incomingTech;
                 })(),
                 gestora: (() => {
                     const incomingGestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado || safeMeta.gestora;
-                    if (incomingGestora?.id === ticket.gestora_id) return incomingGestora;
-                    if (prev.gestora?.id === ticket.gestora_id) return prev.gestora;
-                    return incomingGestora || prev.gestora;
+                    // Si el prop está actualizado Y coincide con el estado local, usar prop
+                    if (incomingGestora?.id === ticket.gestora_id && incomingGestora?.id === prev.gestora?.id) {
+                        return incomingGestora;
+                    }
+                    // Preservar estado local para evitar parpadeo
+                    return prev.gestora || incomingGestora;
                 })(),
                 
                 metadata: {
