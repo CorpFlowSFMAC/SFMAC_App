@@ -269,13 +269,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const newMO = parseFloat(reportForm.costoManoObra || "0");
             const newMAT = parseFloat(reportForm.costoMateriales || "0");
 
-            // 1. Actualizar en Base de Datos
+            const updatedMetadata = {
+                ...(ticketData.metadata || {}),
+                diagnostico: reportForm.diagnostico,
+                costoManoObra: newMO,
+                costoMateriales: newMAT
+            };
+
+            // 1. Actualizar en Base de Datos (Columnas y Metadata para consistencia absoluta)
             const { error } = await supabase
                 .from('tickets')
                 .update({
                     diagnosis: reportForm.diagnostico,
                     labor_cost: newMO,
                     materials_cost: newMAT,
+                    metadata: updatedMetadata
                 })
                 .eq('id', ticketData.id);
 
@@ -297,6 +305,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             });
 
+            // Sincronizar estados locales del componente
+            setDiagnostico(reportForm.diagnostico);
+            setCostoManoObra(newMO.toString());
+            setCostoMateriales(newMAT.toString());
+
             // 3. Recálculo Reactivo (State Sync)
             setTicketData((prev: any) => ({
                 ...prev,
@@ -304,12 +317,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 costoManoObra: newMO,
                 costoMateriales: newMAT,
                 // Provocar refresco en dependencias
-                metadata: {
-                    ...prev.metadata,
-                    diagnostico: reportForm.diagnostico,
-                    costoManoObra: newMO,
-                    costoMateriales: newMAT
-                }
+                metadata: updatedMetadata
             }));
 
             showToast("Reporte Actualizado", "Los cambios han sido guardados y los cálculos financieros sincronizados.", "success");
@@ -1158,15 +1166,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
 
     const handleAssignment = async (assignmentData: any) => {
-        // Sin costo de visita en asignación - siempre va a en_inspeccion
-        const newEstadoId = 'en_inspeccion';
+        // Asignación inicial vs Reasignación: Si el estado actual ya no es nuevo/pendiente/borrador,
+        // mantenemos el estado actual del ticket intacto.
+        const isInitialAssignment = ['nuevo', 'pendiente', 'borrador'].includes(ticketData.estadoId);
+        const newEstadoId = isInitialAssignment ? 'en_inspeccion' : ticketData.estadoId;
         
         // ✅ FIX: Asegurar que technician_id se actualiza correctamente
         const newTechnicianId = assignmentData.tecnico?.id || null;
 
         const dbUpdates: any = {
             technician_id: newTechnicianId,
-            visit_cost: null,
+            visit_cost: isInitialAssignment ? null : (ticketData.visit_cost || null),
             status_id: newEstadoId,
             metadata: {
                 ...ticketData.metadata,
@@ -1945,7 +1955,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 console.error("Error creando ticket_cost:", costErr);
                 // Si falla ticketCosts, continuar con metadata (no bloquear totalmente)
                 if (costErr?.message?.includes('400') || costErr?.message?.includes('Duplicate')) {
-                    showToast("Solicitud Duplicada", "Ya existe un pago pendiente con el mismo monto y concepto.", "warning");
+                    showToast("Solicitud Duplicada", "Ya existe un pago pendiente con el mismo monto y concepto.", "info");
                     requestAdvanceRef.current = false;
                     return;
                 }
