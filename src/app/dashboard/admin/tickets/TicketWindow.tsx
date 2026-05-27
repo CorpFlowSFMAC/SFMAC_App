@@ -305,18 +305,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             });
 
-            // Sincronizar estados locales del componente
+            // 3. Sincronizar TODOS los estados locales INMEDIATAMENTE
+            // Estos estados deben actualizarse ANTES de cualquier re-render del prop sync
             setDiagnostico(reportForm.diagnostico);
             setCostoManoObra(newMO.toString());
             setCostoMateriales(newMAT.toString());
 
-            // 3. Recálculo Reactivo (State Sync)
+            // 4. Actualizar ticketData local con los nuevos valores (incluye columnas directas)
             setTicketData((prev: any) => ({
                 ...prev,
+                diagnosis: reportForm.diagnostico,
                 diagnostico: reportForm.diagnostico,
+                labor_cost: newMO,
                 costoManoObra: newMO,
+                materials_cost: newMAT,
                 costoMateriales: newMAT,
-                // Provocar refresco en dependencias
                 metadata: updatedMetadata
             }));
 
@@ -652,6 +655,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (!ticket || !isInitialLoadComplete) return;
         // 🔒 BLOQUEO DE TRANSICIÓN: Si hay un reajuste en curso, ignorar actualizaciones entrantes
         if (isTransitioning.current) return;
+        // 🔒 BLOQUEO DE REASIGNACIÓN: Si hay una reasignación en curso, ignorar para evitar parpadeo
+        if (isReassigning.current) return;
 
 
         if (isProcessingAdvance.current) {
@@ -659,13 +664,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
 
         // Solo actualizar si el estado, técnico o metadata importante cambió en el prop
+        // ★ INCLUIR cambios en costos financieros para evitar parpadeo post-guardado
         setTicketData((prev: any) => {
             const hasStatusChanged = ticket.status_id !== prev.status_id;
             const hasTechChanged = ticket.technician_id !== prev.technician_id;
             const hasGestoraChanged = ticket.gestora_id !== prev.gestora_id;
             const hasMetaChanged = JSON.stringify(ticket.metadata) !== JSON.stringify(prev.metadata);
-            
-            if (!hasStatusChanged && !hasTechChanged && !hasGestoraChanged && !hasMetaChanged) return prev;
+            // Detectores de cambio financiero (evita parpadeo tras guardar reporte técnico)
+            const hasLaborCostChanged = ticket.labor_cost !== prev.labor_cost;
+            const hasMaterialsCostChanged = ticket.materials_cost !== prev.materials_cost;
+            const hasDiagnosisChanged = ticket.diagnosis !== prev.diagnosis;
+
+            if (!hasStatusChanged && !hasTechChanged && !hasGestoraChanged && !hasMetaChanged && !hasLaborCostChanged && !hasMaterialsCostChanged && !hasDiagnosisChanged) return prev;
             
             let meta = ticket.metadata || {};
             const rawEstadoId = normalizeStateId(ticket.status_id || meta.estadoId || 'nuevo');
@@ -726,8 +736,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // BLINDAJE DE EDICIÓN LOCAL: No permitir que el caché global borre lo que el usuario está escribiendo o cargó vía getById
                 partidas: prev.partidas || prev.metadata?.partidas || safeMeta.partidas,
                 montoFinal: prev.montoFinal || prev.metadata?.montoFinal || safeMeta.montoFinal,
-                costoManoObra: prev.costoManoObra || prev.metadata?.costoManoObra || safeMeta.costoManoObra,
-                diagnostico: prev.diagnostico || prev.metadata?.diagnostico || safeMeta.diagnostico,
+                // ★ BLINDAJE COSTOS FINANCIEROS: Preservar cambios del Reporte Técnico para evitar parpadeo
+                labor_cost: prev.labor_cost !== undefined ? prev.labor_cost : ticket.labor_cost,
+                materials_cost: prev.materials_cost !== undefined ? prev.materials_cost : ticket.materials_cost,
+                costoManoObra: prev.costoManoObra !== undefined ? prev.costoManoObra : (ticket.costoManoObra || ticket.labor_cost || safeMeta.costoManoObra),
+                costoMateriales: prev.costoMateriales !== undefined ? prev.costoMateriales : (ticket.costoMateriales || ticket.materials_cost || safeMeta.costoMateriales),
+                diagnostico: prev.diagnostico !== undefined ? prev.diagnostico : (ticket.diagnostico || ticket.diagnosis || safeMeta.diagnostico),
+                diagnosis: prev.diagnosis !== undefined ? prev.diagnosis : ticket.diagnosis,
                 evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || safeMeta.evidenciasEjecucion,
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || safeMeta.documentosChecklist,
                 numeroTicketCliente: prev.numeroTicketCliente || ticket.client_ticket_number || safeMeta.numeroTicketCliente,
@@ -735,20 +750,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // BLINDAJE DE TÉCNICO Y GESTORA:
                 // Si el ID del prop coincide con el ID que ya tenemos en el estado local (prev),
                 // preferimos el objeto local que puede tener datos más completos/frescos.
+                // IMPORTANTE: Si el prop está desactualizado (IDs diferentes), 
+                // el estado local YA fue actualizado por handleAssignment → retornarlo para evitar parpadeo
                 tecnico: (() => {
                     const incomingTech = ticket.technicians || ticket.tecnico;
-                    // Si el técnico del prop coincide con el ID actual de la DB, usarlo (es lo más fresco)
-                    if (incomingTech?.id === ticket.technician_id) return incomingTech;
-                    // Si el técnico previo coincide con el ID actual de la DB, preservarlo (evita parpadeo)
-                    if (prev.tecnico?.id === ticket.technician_id) return prev.tecnico;
-                    // Fallback al prop
-                    return incomingTech || prev.tecnico;
+                    // Si el prop está actualizado Y coincide con el estado local, usar prop (más fresco)
+                    if (incomingTech?.id === ticket.technician_id && incomingTech?.id === prev.tecnico?.id) {
+                        return incomingTech;
+                    }
+                    // En cualquier otro caso, preservar el estado local para evitar parpadeo
+                    // Esto cubre: reasignación en curso, prop desactualizado, etc.
+                    return prev.tecnico || incomingTech;
                 })(),
                 gestora: (() => {
                     const incomingGestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado || safeMeta.gestora;
-                    if (incomingGestora?.id === ticket.gestora_id) return incomingGestora;
-                    if (prev.gestora?.id === ticket.gestora_id) return prev.gestora;
-                    return incomingGestora || prev.gestora;
+                    // Si el prop está actualizado Y coincide con el estado local, usar prop
+                    if (incomingGestora?.id === ticket.gestora_id && incomingGestora?.id === prev.gestora?.id) {
+                        return incomingGestora;
+                    }
+                    // Preservar estado local para evitar parpadeo
+                    return prev.gestora || incomingGestora;
                 })(),
                 
                 metadata: {
@@ -757,6 +778,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     // 2. Preservamos SOLO los campos de edición local (User Input) que el usuario puede estar tipeando
                     // Usamos ?? en lugar de || para permitir strings vacíos "" (borrado intencional)
                     diagnostico: (prev.diagnostico !== undefined) ? prev.diagnostico : (prev.metadata?.diagnostico ?? safeMeta.diagnostico),
+                    // ★ BLINDAJE COSTOS: Preservar cambios del Reporte Técnico en metadata
+                    costoManoObra: (prev.costoManoObra !== undefined) ? prev.costoManoObra : (prev.metadata?.costoManoObra ?? safeMeta.costoManoObra),
+                    costoMateriales: (prev.costoMateriales !== undefined) ? prev.costoMateriales : (prev.metadata?.costoMateriales ?? safeMeta.costoMateriales),
                     partidas: (prev.partidas !== undefined) ? prev.partidas : (prev.metadata?.partidas ?? safeMeta.partidas),
                     montoFinal: (prev.montoFinal !== undefined) ? prev.montoFinal : (prev.metadata?.montoFinal ?? safeMeta.montoFinal),
                     documentosChecklist: (prev.documentosChecklist !== undefined) ? prev.documentosChecklist : (prev.metadata?.documentosChecklist ?? safeMeta.documentosChecklist),
@@ -807,6 +831,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const isIntentionalRollback = useRef(false);
     // 🔒 BLOQUEO DE TRANSICIÓN: Durante una regresión manual, ignorar TODOS los updates entrantes del WS
     const isTransitioning = useRef(false);
+    // 🔒 BLOQUEO DE REASIGNACIÓN: Durante reasignación de especialista, ignorar updates del prop para evitar parpadeo
+    const isReassigning = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -1166,6 +1192,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
 
     const handleAssignment = async (assignmentData: any) => {
+        // 🔒 BLOQUEO DE REASIGNACIÓN: Activar flag para evitar parpadeo en prop sync
+        isReassigning.current = true;
+        
         // Asignación inicial vs Reasignación: Si el estado actual ya no es nuevo/pendiente/borrador,
         // mantenemos el estado actual del ticket intacto.
         const isInitialAssignment = ['nuevo', 'pendiente', 'borrador'].includes(ticketData.estadoId);
@@ -1205,6 +1234,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             status_id: newEstadoId
         }));
         setShowAssignmentDrawer(false);
+        
+        // 🔓 Liberar el bloqueo después de un breve delay para que el prop se actualice
+        setTimeout(() => {
+            isReassigning.current = false;
+        }, 500);
     };
 
     const handleDismissRejection = async () => {
