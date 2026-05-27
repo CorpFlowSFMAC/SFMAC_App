@@ -305,18 +305,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             });
 
-            // Sincronizar estados locales del componente
+            // 3. Sincronizar TODOS los estados locales INMEDIATAMENTE
+            // Estos estados deben actualizarse ANTES de cualquier re-render del prop sync
             setDiagnostico(reportForm.diagnostico);
             setCostoManoObra(newMO.toString());
             setCostoMateriales(newMAT.toString());
 
-            // 3. Recálculo Reactivo (State Sync)
+            // 4. Actualizar ticketData local con los nuevos valores (incluye columnas directas)
             setTicketData((prev: any) => ({
                 ...prev,
+                diagnosis: reportForm.diagnostico,
                 diagnostico: reportForm.diagnostico,
+                labor_cost: newMO,
                 costoManoObra: newMO,
+                materials_cost: newMAT,
                 costoMateriales: newMAT,
-                // Provocar refresco en dependencias
                 metadata: updatedMetadata
             }));
 
@@ -659,13 +662,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
 
         // Solo actualizar si el estado, técnico o metadata importante cambió en el prop
+        // ★ INCLUIR cambios en costos financieros para evitar parpadeo post-guardado
         setTicketData((prev: any) => {
             const hasStatusChanged = ticket.status_id !== prev.status_id;
             const hasTechChanged = ticket.technician_id !== prev.technician_id;
             const hasGestoraChanged = ticket.gestora_id !== prev.gestora_id;
             const hasMetaChanged = JSON.stringify(ticket.metadata) !== JSON.stringify(prev.metadata);
-            
-            if (!hasStatusChanged && !hasTechChanged && !hasGestoraChanged && !hasMetaChanged) return prev;
+            // Detectores de cambio financiero (evita parpadeo tras guardar reporte técnico)
+            const hasLaborCostChanged = ticket.labor_cost !== prev.labor_cost;
+            const hasMaterialsCostChanged = ticket.materials_cost !== prev.materials_cost;
+            const hasDiagnosisChanged = ticket.diagnosis !== prev.diagnosis;
+
+            if (!hasStatusChanged && !hasTechChanged && !hasGestoraChanged && !hasMetaChanged && !hasLaborCostChanged && !hasMaterialsCostChanged && !hasDiagnosisChanged) return prev;
             
             let meta = ticket.metadata || {};
             const rawEstadoId = normalizeStateId(ticket.status_id || meta.estadoId || 'nuevo');
@@ -726,8 +734,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // BLINDAJE DE EDICIÓN LOCAL: No permitir que el caché global borre lo que el usuario está escribiendo o cargó vía getById
                 partidas: prev.partidas || prev.metadata?.partidas || safeMeta.partidas,
                 montoFinal: prev.montoFinal || prev.metadata?.montoFinal || safeMeta.montoFinal,
-                costoManoObra: prev.costoManoObra || prev.metadata?.costoManoObra || safeMeta.costoManoObra,
-                diagnostico: prev.diagnostico || prev.metadata?.diagnostico || safeMeta.diagnostico,
+                // ★ BLINDAJE COSTOS FINANCIEROS: Preservar cambios del Reporte Técnico para evitar parpadeo
+                labor_cost: prev.labor_cost !== undefined ? prev.labor_cost : ticket.labor_cost,
+                materials_cost: prev.materials_cost !== undefined ? prev.materials_cost : ticket.materials_cost,
+                costoManoObra: prev.costoManoObra !== undefined ? prev.costoManoObra : (ticket.costoManoObra || ticket.labor_cost || safeMeta.costoManoObra),
+                costoMateriales: prev.costoMateriales !== undefined ? prev.costoMateriales : (ticket.costoMateriales || ticket.materials_cost || safeMeta.costoMateriales),
+                diagnostico: prev.diagnostico !== undefined ? prev.diagnostico : (ticket.diagnostico || ticket.diagnosis || safeMeta.diagnostico),
+                diagnosis: prev.diagnosis !== undefined ? prev.diagnosis : ticket.diagnosis,
                 evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || safeMeta.evidenciasEjecucion,
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || safeMeta.documentosChecklist,
                 numeroTicketCliente: prev.numeroTicketCliente || ticket.client_ticket_number || safeMeta.numeroTicketCliente,
@@ -757,6 +770,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     // 2. Preservamos SOLO los campos de edición local (User Input) que el usuario puede estar tipeando
                     // Usamos ?? en lugar de || para permitir strings vacíos "" (borrado intencional)
                     diagnostico: (prev.diagnostico !== undefined) ? prev.diagnostico : (prev.metadata?.diagnostico ?? safeMeta.diagnostico),
+                    // ★ BLINDAJE COSTOS: Preservar cambios del Reporte Técnico en metadata
+                    costoManoObra: (prev.costoManoObra !== undefined) ? prev.costoManoObra : (prev.metadata?.costoManoObra ?? safeMeta.costoManoObra),
+                    costoMateriales: (prev.costoMateriales !== undefined) ? prev.costoMateriales : (prev.metadata?.costoMateriales ?? safeMeta.costoMateriales),
                     partidas: (prev.partidas !== undefined) ? prev.partidas : (prev.metadata?.partidas ?? safeMeta.partidas),
                     montoFinal: (prev.montoFinal !== undefined) ? prev.montoFinal : (prev.metadata?.montoFinal ?? safeMeta.montoFinal),
                     documentosChecklist: (prev.documentosChecklist !== undefined) ? prev.documentosChecklist : (prev.metadata?.documentosChecklist ?? safeMeta.documentosChecklist),
