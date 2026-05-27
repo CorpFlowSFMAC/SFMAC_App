@@ -46,19 +46,61 @@ const HETZNER_API_BASE = '/api/v3/ticket-costs';
  * @param updates - Campos a actualizar (estado_pago, url_comprobante, fecha_pago)
  */
 async function updateTicketCostOnHetzner(costId: string, updates: Record<string, any>) {
+    // ★ MEJORA: Manejar vouchers grandes separando la imagen del payload
+    // Si url_comprobante es un base64 grande, almacenarlo en localStorage y enviar solo la referencia
+    let processedUpdates = { ...updates };
+    const voucherBase64 = updates.url_comprobante;
+    
+    if (voucherBase64 && typeof voucherBase64 === 'string' && voucherBase64.startsWith('data:image')) {
+        // Verificar si es muy grande (>1MB en base64 = ~1.3MB original)
+        if (voucherBase64.length > 1_000_000) {
+            const storageKey = `voucher_${costId}_${Date.now()}`;
+            try {
+                localStorage.setItem(storageKey, voucherBase64);
+                processedUpdates.url_comprobante = storageKey; // Enviar referencia en vez de base64 completo
+                console.log('[Hetzner API] Voucher grande almacenado en localStorage:', storageKey);
+            } catch (storageErr) {
+                console.warn('[Hetzner API] No se pudo guardar voucher en localStorage, enviando directo');
+            }
+        }
+    }
+
     const response = await fetch(HETZNER_API_BASE, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id: costId, updates }),
+        body: JSON.stringify({ id: costId, updates: processedUpdates }),
     });
+
+    // ★ MEJORA: Extraer información de error incluyendo HTTP status
+    let errorMessage = 'Error al actualizar costo en servidor de Hetzner';
+    
+    if (!response.ok) {
+        if (response.status === 413) {
+            errorMessage = 'El comprobante es demasiado grande. Por favor reduzca el tamaño de la imagen.';
+        } else if (response.status === 404) {
+            errorMessage = 'No se encontró el costo del ticket. Es posible que haya sido eliminado.';
+        } else if (response.status >= 500) {
+            errorMessage = 'Error interno del servidor. Por favor intente nuevamente en unos minutos.';
+        } else {
+            // Intentar extraer mensaje de error del cuerpo
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorData.message || `Error del servidor (${response.status})`;
+            } catch {
+                errorMessage = `Error del servidor (${response.status})`;
+            }
+        }
+        console.error('[Hetzner API] HTTP Error:', response.status, errorMessage);
+        throw new Error(errorMessage);
+    }
 
     const result = await response.json();
 
     if (!result.success) {
         console.error('[Hetzner API] Error updating ticket_cost:', result.error);
-        throw new Error(result.error || 'Error al actualizar costo en servidor de Hetzner');
+        throw new Error(result.error || errorMessage);
     }
 
     return result.data;
@@ -437,10 +479,17 @@ export default function PaymentsPage() {
                 
                 // Buscar el pago que tenga el voucher base64
                 // A veces el voucher está en meta.voucherVisita o en el historial
-                const found = history.find((p: any) => p.voucherRef && p.voucherRef.startsWith('data:image'));
-                
+                const found = history.find((p: any) => p.voucherRef && (p.voucherRef.startsWith('data:image') || p.voucherRef.startsWith('voucher_')));
+
                 if (found?.voucherRef) {
-                    setShowVoucher(found.voucherRef);
+                    // Verificar si es base64 directo o referencia a localStorage
+                    if (found.voucherRef.startsWith('data:image')) {
+                        setShowVoucher(found.voucherRef);
+                    } else if (found.voucherRef.startsWith('voucher_')) {
+                        const stored = localStorage.getItem(found.voucherRef);
+                        if (stored) setShowVoucher(stored);
+                        else alert("El comprobante se perdió del almacenamiento local. Intente subirlo nuevamente.");
+                    }
                 } else if (meta.voucherVisita && meta.voucherVisita.startsWith('data:image')) {
                     setShowVoucher(meta.voucherVisita);
                 } else {
@@ -1498,16 +1547,26 @@ export default function PaymentsPage() {
             await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
             
             refresh();
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Payments] Error confirming payment:', err);
-            alert('Error al procesar el pago.');
+            // ★ MEJORA: Mostrar mensaje de error más detallado al usuario
+            const errorMessage = err?.message || String(err) || 'Error desconocido';
+            alert('Error al procesar el pago:\n\n' + errorMessage);
         }
     };
 
     const getVoucherSrc = (ref?: string | null) => {
         if (!ref) return "";
         if (ref.startsWith("data:image")) return ref;
-        return localStorage.getItem(ref) || "";
+        // ★ MEJORA: Soportar referencias almacenadas en localStorage
+        // (usado cuando el voucher es muy grande y se guarda por separado)
+        const fromStorage = localStorage.getItem(ref);
+        if (fromStorage) return fromStorage;
+        // También verificar si la key empieza con "voucher_" como patrón de referencia
+        if (ref.startsWith('voucher_')) {
+            return fromStorage || "";
+        }
+        return "";
     };
 
     const currentMonthKey = getCurrentMonthKey();
