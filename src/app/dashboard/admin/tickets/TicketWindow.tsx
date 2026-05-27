@@ -1458,13 +1458,46 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
             };
 
-            const success = await syncToSupabase(updated);
+            // Intentar sync con fallback directo a API si syncToSupabase retorna false
+            let success = await syncToSupabase(updated);
+
+            // Fallback: si syncToSupabase retorna false, intentar actualización directa via onUpdate
+            if (!success && onUpdate) {
+                try {
+                    const directUpdates = {
+                        status_id: "cotizacion_enviada",
+                        total_quoted_amount: currentMontoTotal,
+                        labor_cost: round2(currentMontoTotal / 1.18) * 0.6,
+                        materials_cost: round2(currentMontoTotal / 1.18) * 0.4,
+                        quotation_date: new Date().toISOString(),
+                        is_sla_paused: true,
+                        sla_pause_date: new Date().toISOString(),
+                        metadata: {
+                            ...ticketData.metadata,
+                            estadoId: "cotizacion_enviada",
+                            partidas: currentPartidas,
+                            montoFinal: currentMontoTotal,
+                            montoSubtotal: round2(currentMontoTotal / 1.18),
+                            montoIGV: round2(currentMontoTotal - round2(currentMontoTotal / 1.18)),
+                            archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
+                        }
+                    };
+                    await onUpdate(ticketData.id, directUpdates);
+                    success = true;
+                } catch (fallbackErr) {
+                    console.error("Error en fallback de sync:", fallbackErr);
+                }
+            }
+
             if (success) {
                 setTicketData(updated);
                 showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
             } else {
                 showToast("Error de Conexión", "No se pudo sincronizar la cotización con el servidor.", "error");
             }
+        } catch (err) {
+            console.error("Error en handleSendQuote:", err);
+            showToast("Error de Conexión", "No se pudo sincronizar la cotización con el servidor.", "error");
         } finally {
             setIsSendingQuote(false);
         }
