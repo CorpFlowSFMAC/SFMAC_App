@@ -655,6 +655,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (!ticket || !isInitialLoadComplete) return;
         // 🔒 BLOQUEO DE TRANSICIÓN: Si hay un reajuste en curso, ignorar actualizaciones entrantes
         if (isTransitioning.current) return;
+        // 🔒 BLOQUEO DE REASIGNACIÓN: Si hay una reasignación en curso, ignorar para evitar parpadeo
+        if (isReassigning.current) return;
 
 
         if (isProcessingAdvance.current) {
@@ -829,6 +831,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const isIntentionalRollback = useRef(false);
     // 🔒 BLOQUEO DE TRANSICIÓN: Durante una regresión manual, ignorar TODOS los updates entrantes del WS
     const isTransitioning = useRef(false);
+    // 🔒 BLOQUEO DE REASIGNACIÓN: Durante reasignación de especialista, ignorar updates del prop para evitar parpadeo
+    const isReassigning = useRef(false);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -1188,6 +1192,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
 
     const handleAssignment = async (assignmentData: any) => {
+        // 🔒 BLOQUEO DE REASIGNACIÓN: Activar flag para evitar parpadeo en prop sync
+        isReassigning.current = true;
+        
         // Asignación inicial vs Reasignación: Si el estado actual ya no es nuevo/pendiente/borrador,
         // mantenemos el estado actual del ticket intacto.
         const isInitialAssignment = ['nuevo', 'pendiente', 'borrador'].includes(ticketData.estadoId);
@@ -1227,6 +1234,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             status_id: newEstadoId
         }));
         setShowAssignmentDrawer(false);
+        
+        // 🔓 Liberar el bloqueo después de un breve delay para que el prop se actualice
+        setTimeout(() => {
+            isReassigning.current = false;
+        }, 500);
     };
 
     const handleDismissRejection = async () => {

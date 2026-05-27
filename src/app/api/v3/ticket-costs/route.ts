@@ -175,8 +175,17 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (error) {
+            console.error('[Ticket Costs API] POST - Database error:', error);
             if (error.code === '23505') throw new DuplicateTicketCostError();
-            throw error;
+            return NextResponse.json({ 
+                success: false, 
+                error: error.message,
+                errorDetails: {
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint
+                }
+            }, { status: 400 });
         }
 
         return NextResponse.json({ success: true, data });
