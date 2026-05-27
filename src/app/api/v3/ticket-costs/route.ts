@@ -31,6 +31,10 @@ const cleanCostPayload = (cost: Record<string, any>) => {
     if (cost.solicitado_por) payload.solicitado_por = cost.solicitado_por;
     if (cost.motivo) payload.motivo = cost.motivo;
     if (cost.fecha_pago) payload.fecha_pago = cost.fecha_pago;
+    
+    // ★ NOTA: tipo_solicitud fue removido de la tabla ticket_costs
+    // Asegurar que no se envíe este campo aunque venga en el payload
+    // (puede causar errores si la columna no existe en la DB)
 
     return payload;
 };
@@ -137,10 +141,17 @@ export async function POST(request: NextRequest) {
         const rawPayload = await request.json();
         const cleanPayload = cleanCostPayload(rawPayload);
         
-        // ★ NOTA: tipo_solicitud fue removido - la columna no existe en ticket_costs
-        // Si se necesita clasificación, usar categoria o concepto existente
+        // ★ FILTRAR campos que no existen en la tabla ticket_costs
+        // Esto evita errores de "column not found" de Supabase
+        const allowedFields = ['ticket_id', 'concepto', 'categoria', 'proveedor', 'specialist_id', 'monto', 'estado_pago', 'url_comprobante', 'solicitado_por', 'motivo', 'fecha_pago'];
+        const filteredPayload: Record<string, any> = {};
+        for (const key of allowedFields) {
+            if (key in cleanPayload) {
+                filteredPayload[key] = cleanPayload[key];
+            }
+        }
 
-        const payload = await normalizeCostPayload(client, cleanPayload);
+        const payload = await normalizeCostPayload(client, filteredPayload);
         if (!payload.ticket_id || !payload.concepto || !payload.categoria || !payload.monto || !payload.estado_pago) {
             return NextResponse.json({ success: false, error: 'Datos incompletos para registrar el costo' }, { status: 400 });
         }
@@ -186,7 +197,21 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'id y updates son requeridos' }, { status: 400 });
         }
 
-        const safeUpdates = await normalizeCostPayload(client, cleanCostPayload(updates));
+        console.log('[Ticket Costs API] PUT - id:', id, 'updates:', Object.keys(updates));
+
+        // ★ FILTRAR campos que no existen en la tabla ticket_costs
+        // Esto evita errores de "column not found" de Supabase
+        const allowedFields = ['ticket_id', 'concepto', 'categoria', 'proveedor', 'specialist_id', 'monto', 'estado_pago', 'url_comprobante', 'solicitado_por', 'motivo', 'fecha_pago'];
+        const filteredUpdates: Record<string, any> = {};
+        for (const key of allowedFields) {
+            if (key in updates) {
+                filteredUpdates[key] = updates[key];
+            }
+        }
+        console.log('[Ticket Costs API] PUT - filteredUpdates:', Object.keys(filteredUpdates));
+
+        const safeUpdates = await normalizeCostPayload(client, filteredUpdates);
+        console.log('[Ticket Costs API] PUT - safeUpdates:', Object.keys(safeUpdates));
 
         if (safeUpdates.estado_pago && isConfirmedTicketCostStatus(safeUpdates.estado_pago)) {
             const { data: current, error: fetchErr } = await client
@@ -214,6 +239,7 @@ export async function PUT(request: NextRequest) {
             .single();
 
         if (error) {
+            console.error('[Ticket Costs API] PUT - Database error:', error);
             if (error.code === '23505') throw new DuplicateTicketCostError();
             throw error;
         }
