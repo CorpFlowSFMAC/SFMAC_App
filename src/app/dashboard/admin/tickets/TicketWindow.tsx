@@ -16,7 +16,8 @@ import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { calculateTicketFinances, toNum } from "@/lib/calculations";
 import { supabase } from "@/lib/supabase";
-import { DuplicateTicketCostError, ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
+import { DuplicateTicketCostError, ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI, paymentsAPI } from "@/lib/supabase-api";
+import { isConfirmedTicketCostStatus } from "@/lib/calculations";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
@@ -167,24 +168,65 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (!ticketData?.id) return;
         setIsDeleting(true);
         try {
-            // 1. Verificar si hay gastos
+            // 1. Verificar ticket_costs
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
-            if (costs && costs.length > 0) {
-                const pendingCount = costs.filter((c: any) => c.estado_pago === 'pendiente').length;
-                const paidCount = costs.filter((c: any) => c.estado_pago === 'pagado').length;
-                
+            const confirmedCosts = costs ? costs.filter((c: any) => isConfirmedTicketCostStatus(c.estado_pago)) : [];
+            const pendingCosts = costs ? costs.filter((c: any) => !isConfirmedTicketCostStatus(c.estado_pago)) : [];
+
+            // 2. Verificar ticket_payments (depositos reales)
+            const payments = await paymentsAPI.getByTicket(ticketData.id);
+            const confirmedPayments = payments ? payments.filter((p: any) => p.status === 'confirmed') : [];
+
+            // 3. Verificar ticket_evidences
+            const { data: evidences } = await supabase
+                .from('ticket_evidences')
+                .select('id')
+                .eq('ticket_id', ticketData.id);
+            const evidenceCount = evidences?.length || 0;
+
+            const hasFinancial = confirmedCosts.length > 0 || confirmedPayments.length > 0;
+            const hasPendingOrEvidence = pendingCosts.length > 0 || evidenceCount > 0;
+
+            if (hasFinancial) {
+                // Hay pagos confirmados — requiere reubicación obligatoria
                 setShowDeleteModal(false);
                 setShowTransferModal(true);
                 showToast(
-                    "Bloqueo de Seguridad", 
-                    `Este ticket tiene ${costs.length} registros en costos (${paidCount} pagados, ${pendingCount} pendientes). Debe eliminarlos o trasladarlos antes de borrar el ticket.`, 
+                    "Bloqueo de Tesorería",
+                    `Este ticket tiene ${confirmedCosts.length} costos confirmados y ${confirmedPayments.length} depósitos Confirmados. Debes reubicar TODOS los registros financieros a un ticket activo antes de poder eliminarlo.`,
                     "info"
                 );
                 return;
             }
 
-            // 2. Ejecutar Hard Delete
-            if (!confirm(`¿FINALMENTE SEGURO? Esta acción es irreversible y eliminará el ticket ${ticketData.numeroTicketCliente || ticketData.id} de TODO el sistema (incluyendo fotos y chat).`)) {
+            if (hasPendingOrEvidence) {
+                // Solo hay pendientes o evidencias — admin puede forzar
+                const forced = confirm(
+                    `⚠️ Este ticket tiene ${pendingCosts.length} costo(s) pendiente(s) y ${evidenceCount} evidencia(s).\n\n` +
+                    `Como Administrador puedes:\n` +
+                    `  • OK → Forzar borrado (se eliminarán costos y evidencias)\n` +
+                    `  • CANCELAR → Buscar un ticket destino para reubicar todo`
+                );
+
+                if (!forced) {
+                    setShowDeleteModal(false);
+                    setShowTransferModal(true);
+                    setIsDeleting(false);
+                    return;
+                }
+            }
+
+            // 4. Confirmación final
+            if (!confirm(
+                `¿FINALMENTE SEGURO?\n\n` +
+                `Esta acción es IRREVERSIBLE y eliminará el ticket ${ticketData.numeroTicketCliente || ticketData.id} de TODO el sistema.\n\n` +
+                `Incluye:\n` +
+                `  • ${(costs || []).length} costo(s)\n` +
+                `  • ${(payments || []).length} pago(s)\n` +
+                `  • ${evidenceCount} evidencia(s)\n\n` +
+                `Esta acción no se puede deshacer.`
+            )) {
+                setIsDeleting(false);
                 return;
             }
 
@@ -193,7 +235,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             onClose();
         } catch (err: any) {
             console.error("Error in hard delete:", err);
-            showToast("Error", "No se pudo eliminar el ticket.", "error");
+            showToast("Error", "No se pudo eliminar el ticket. " + (err.message || ''), "error");
         } finally {
             setIsDeleting(false);
         }
@@ -4973,7 +5015,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 </ul>
                                 <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', padding: '12px', borderRadius: '12px', marginTop: '15px' }}>
                                     <p style={{ color: '#dc2626', fontSize: '12px', fontWeight: 700, margin: 0 }}>
-                                        ⚠️ EL SISTEMA SOLO PERMITIRÁ ELIMINAR SI EL TICKET NO TIENE GASTOS REGISTRADOS.
+                                        ⚠️ Si el ticket tiene depósitos o costos confirmados, debe reubicarlos primero.
                                     </p>
                                 </div>
                             </div>
@@ -5017,8 +5059,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 <div className={styles.blockerNotice}>
                                     <AlertTriangle className={styles.blockerIcon} size={24} />
                                     <div className={styles.blockerText}>
-                                        <h4>Ticket con Carga Financiera</h4>
-                                        <p>No se puede eliminar un ticket que tiene gastos o adelantos pagados. Debe trasladar estos registros a un ticket activo para no perder la trazabilidad de Tesorería.</p>
+                                        <h4>Ticket con Registros Financieros</h4>
+                                        <p>Este ticket tiene costos o depósitos confirmados que deben reubicarse a un ticket activo para no perder la trazabilidad de Tesorería. Si no hay ticket destino disponible, comunícate con el Administrador.</p>
                                     </div>
                                 </div>
 
