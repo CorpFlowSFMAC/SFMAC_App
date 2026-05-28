@@ -25,14 +25,16 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
-          node scratch/phase2_integration_assert.mjs > phase2_assert.log 2>&1 || true
+          set -e
+          node scratch/phase2_integration_assert.mjs > phase2_assert.log 2>&1
 
       - name: Run Phase2 integration script
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
-          node scratch/phase2_integration_test.mjs > phase2_test.log 2>&1 || true
+          set -e
+          node scratch/phase2_integration_test.mjs > phase2_test.log 2>&1
 
       - name: Upload logs
         uses: actions/upload-artifact@v4
