@@ -41,30 +41,4 @@ jobs:
           node scratch/phase2_integration_test.mjs
           node scratch/phase2_integration_assert.mjs
 
-  deploy-staging:
-    name: Deploy to staging (SSH)
-    runs-on: ubuntu-latest
-    needs: integration
-    if: ${{ secrets.STAGING_SSH_HOST && secrets.STAGING_SSH_USER && secrets.STAGING_SSH_KEY }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.8.1
-        with:
-          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
-
-      - name: Deploy (remote command)
-        env:
-          HOST: ${{ secrets.STAGING_SSH_HOST }}
-          USER: ${{ secrets.STAGING_SSH_USER }}
-          DEPLOY_CMD: ${{ secrets.STAGING_DEPLOY_CMD }}
-        run: |
-          set -e
-          if [ -z "$DEPLOY_CMD" ]; then
-            echo "No DEPLOY_CMD provided — set STAGING_DEPLOY_CMD secret with the deploy command.";
-            exit 1;
-          fi
-          ssh -o StrictHostKeyChecking=no "$USER@$HOST" "$DEPLOY_CMD"
+  # deploy-staging job removed to avoid parse-time secret-expression issues
