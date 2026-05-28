@@ -1519,6 +1519,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleApproveQuote = () => {
+        // 🔒 BLOQUEO DE TRANSICIÓN: Silenciar updates del prop mientras se procesa la aprobación
+        isTransitioning.current = true;
+
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
         const currentMontoTotal = currentDraft?.total ?? montoTotalCotizado;
@@ -1535,9 +1538,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             montoFinal: currentMontoTotal,
             partidas: currentPartidas
         };
+
         setTicketData(approved);
-        syncToSupabase(approved);
+        syncToSupabase(approved, { allowStateRollback: true });
         showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
+
+        // 🔓 Liberar el bloqueo después de que el servidor procese
+        setTimeout(() => { isTransitioning.current = false; }, 1500);
     };
 
     const queryClient = useQueryClient();
