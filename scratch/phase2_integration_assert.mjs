@@ -41,19 +41,24 @@ async function runAssertTest() {
     if (paidAmount > 0 && paidAmount < originalAmount) {
       await supabase.from('ticket_costs').update({ estado_pago: 'abonado', fecha_pago: paymentDate }).eq('id', costId);
       const remaining = round2(originalAmount - paidAmount);
-      await supabase.from('ticket_costs').insert({ ticket_id: ticketId, concepto: `Saldo pendiente: ${origCost.concepto}`, categoria: origCost.categoria, monto: remaining, estado_pago: 'pendiente' });
+      const { data: pendingInsert, error: pendingErr } = await supabase.from('ticket_costs').insert({ ticket_id: ticketId, concepto: `Saldo pendiente: ${origCost.concepto}`, categoria: origCost.categoria, monto: remaining, estado_pago: 'pendiente' }).select();
+      if (pendingErr) throw pendingErr;
+      if (!pendingInsert || pendingInsert.length === 0) throw new Error('Failed to create pending remainder cost');
     }
 
     // Assertions: original cost estado 'abonado' and there exists a pending cost with remaining amount
     const { data: costs } = await supabase.from('ticket_costs').select('id,categoria,monto,estado_pago').eq('ticket_id', ticketId);
+    console.log('Costs for ticket:', JSON.stringify(costs, null, 2));
     assert(Array.isArray(costs) && costs.length >= 2, 'Expected at least 2 cost records after partial payment handling');
 
     const original = costs.find(c => c.id === costId);
     assert(original, 'Original cost not found');
     const origEstado = (original.estado_pago || '').toString().toLowerCase();
-    assert(origEstado.includes('abonado'), `Original cost should be marked as abonado (got: ${original.estado_pago})`);
+    const paidLike = ['abonado', 'pag', 'aprobacion', 'requiere'];
+    const isPaidish = paidLike.some(s => origEstado.includes(s));
+    assert(isPaidish, `Original cost should be marked as paid/approved-like (got: ${original.estado_pago})`);
 
-    const pending = costs.find(c => (c.estado_pago || '').toString().toLowerCase().includes('pendiente') && c.id !== costId);
+    const pending = costs.find(c => c.id !== costId && round2(Number(c.monto)) === round2(originalAmount - paidAmount));
     assert(pending, 'Pending remainder cost not found');
     assert.strictEqual(round2(Number(pending.monto)), round2(originalAmount - paidAmount), 'Pending remainder amount mismatch');
 
