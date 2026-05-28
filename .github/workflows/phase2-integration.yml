@@ -1,3 +1,73 @@
+name: Phase2 Integration + Staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ feature/phase2-ci, main ]
+
+jobs:
+  integration:
+    name: Run Phase2 integration tests
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test -- --colors
+
+      - name: Run integration scripts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -e
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Supabase service role key missing — set SUPABASE_SERVICE_ROLE_KEY in repo secrets.";
+            exit 1;
+          fi
+          node scratch/phase2_integration_test.mjs
+          node scratch/phase2_integration_assert.mjs
+
+  deploy-staging:
+    name: Deploy to staging (SSH)
+    runs-on: ubuntu-latest
+    needs: integration
+    if: ${{ secrets.STAGING_SSH_HOST && secrets.STAGING_SSH_USER && secrets.STAGING_SSH_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Deploy (remote command)
+        env:
+          HOST: ${{ secrets.STAGING_SSH_HOST }}
+          USER: ${{ secrets.STAGING_SSH_USER }}
+          DEPLOY_CMD: ${{ secrets.STAGING_DEPLOY_CMD }}
+        run: |
+          set -e
+          if [ -z "$DEPLOY_CMD" ]; then
+            echo "No DEPLOY_CMD provided — set STAGING_DEPLOY_CMD secret with the deploy command.";
+            exit 1;
+          fi
+          ssh -o StrictHostKeyChecking=no "$USER@$HOST" "$DEPLOY_CMD"
 name: Phase2 Integration Tests
 
 on:
