@@ -186,6 +186,7 @@ export default function GestorLayout({
                         <nav className={styles.nav}>
                             <Link
                                 href="/dashboard/gestor/metrics"
+                                prefetch={false}
                                 className={`${styles.navItem} ${pathname.includes('/metrics') ? styles.navItemActive : ''}`}
                                 title="Inicio / Métricas"
                             >
@@ -193,17 +194,17 @@ export default function GestorLayout({
                                 <span className={styles.navText}>Inicio / Métricas</span>
                             </Link>
 
-                            <Link href="/dashboard/gestor/tickets" className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`} title="Sistema Tickets">
+                            <Link href="/dashboard/gestor/tickets" prefetch={false} className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`} title="Sistema Tickets">
                                 <Ticket size={20} />
                                 <span className={styles.navText}>Sistema Tickets</span>
                             </Link>
 
-                            <Link href="/dashboard/gestor/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`} title="Mis Técnicos">
+                            <Link href="/dashboard/gestor/technicians" prefetch={false} className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`} title="Mis Técnicos">
                                 <UserCog size={20} />
                                 <span className={styles.navText}>Mis Técnicos</span>
                             </Link>
 
-                            <Link href="/dashboard/gestor/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`} title="Reportes de Eficiencia">
+                            <Link href="/dashboard/gestor/reportes" prefetch={false} className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`} title="Reportes de Eficiencia">
                                 <BarChart3 size={20} />
                                 <span className={styles.navText}>Reportes de Eficiencia</span>
                             </Link>

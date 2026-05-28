@@ -317,13 +317,11 @@ export default function AdminDashboard() {
             }
         });
         const inversionEjecutada = round2(inversionTotal);
-        
-        // DEBUG
 
-        // Utilidad Neta = Ingresos SIN IGV - Inversión (ambos SIN IGV)
-        // Mostramos ingresos CON IGV en la UI, pero utilidad se calcula correcto
-        const utilidadNeta = round2(ingresosNetoCalculo - costosCerrados);
-        const margenReal = ingresosGenerados > 0 ? (utilidadNeta / ingresosNetoCalculo) * 100 : 0;
+        // Utilidad Neta = Monto Aprobado por el Cliente (SIN IGV) - Inversión Ejecutada (confirmada en ticket_costs)
+        // Se utiliza la inversión ejecutada calculada más arriba (`inversionEjecutada`) para evitar mezclar campos legacy.
+        const utilidadNeta = round2(ingresosNetoCalculo - inversionEjecutada);
+        const margenReal = ingresosNetoCalculo > 0 ? (utilidadNeta / ingresosNetoCalculo) * 100 : 0;
         
         // Ratio de Eficiencia: [Utilidad Neta] / [Inversión Ejecutada]
         const ratioEficiencia = inversionEjecutada > 0 ? (utilidadNeta / inversionEjecutada) : 0;
@@ -1328,7 +1326,7 @@ export default function AdminDashboard() {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '14px 8px' }}>
-                                                        <Link href={`/dashboard/admin/tickets?ticketId=${t.id}`} onClick={() => setShowCapitalModal(false)}
+                                                        <Link prefetch={false} href={`/dashboard/admin/tickets?ticketId=${t.id}`} onClick={() => setShowCapitalModal(false)}
                                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'white', transition: 'all 0.2s' }}
                                                             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.2)'}
                                                             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'}
@@ -1356,10 +1354,10 @@ export default function AdminDashboard() {
                     { href: "/dashboard/admin/routing", label: "Enrutamiento", sub: "Asignación de gestoras", icon: Target, color: "#F59E0B" },
                     { href: "/dashboard/admin/reportes", label: "Reportes", sub: "Análisis detallado", icon: BarChart3, color: "#EF4444" },
                     { href: "/dashboard/admin/clients", label: "Clientes", sub: "Directorio corporativo", icon: CheckCircle2, color: "#06B6D4" },
-                ].map(item => {
+                        ].map(item => {
                     const Icon = item.icon;
                     return (
-                        <Link key={item.href} href={item.href} style={{
+                        <Link key={item.href} prefetch={false} href={item.href} style={{
                             background: `${item.color}08`, border: `1px solid ${item.color}20`,
                             borderRadius: "12px", padding: "1rem 1.1rem",
                             display: "flex", alignItems: "center", gap: "0.75rem",

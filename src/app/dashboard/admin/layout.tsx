@@ -200,6 +200,7 @@ export default function AdminLayout({
                             {/* Dashboard Link for both roles, pointing to their respective home */}
                             <Link
                                 href={dashboardHref}
+                                prefetch={false}
                                 className={`${styles.navItem} ${pathname === '/dashboard/admin' || pathname === '/dashboard/gestor' ? styles.navItemActive : ''}`}
                             >
                                 <LayoutDashboard size={20} />
@@ -207,57 +208,57 @@ export default function AdminLayout({
                             </Link>
 
                             {isAdmin && (
-                                <Link href="/dashboard/admin/clients" className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
+                                <Link href="/dashboard/admin/clients" prefetch={false} className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
                                     <Users size={20} />
                                     Gestión Clientes
                                 </Link>
                             )}
 
-                            <Link href="/dashboard/admin/technicians" className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/admin/technicians" prefetch={false} className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
                                 <UserCog size={20} />
                                 Gestión Técnicos
                             </Link>
 
-                            <Link href="/dashboard/admin/tickets" className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/admin/tickets" prefetch={false} className={`${styles.navItem} ${pathname.includes('/tickets') ? styles.navItemActive : ''}`}>
                                 <Ticket size={20} />
                                 Sistema Tickets
                             </Link>
 
                             {isAdmin && (
-                                <Link href="/dashboard/admin/payments" className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
+                                <Link href="/dashboard/admin/payments" prefetch={false} className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
                                     <DollarSign size={20} />
                                     Pagos y Tesorería
                                 </Link>
                             )}
 
-                            <Link href="/dashboard/admin/reportes" className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
+                            <Link href="/dashboard/admin/reportes" prefetch={false} className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
                                 <BarChart3 size={20} />
                                 Reportes de Eficiencia
                             </Link>
 
                             {isAdmin && (
-                                <Link href="/dashboard/admin/routing" className={`${styles.navItem} ${pathname.includes('/routing') ? styles.navItemActive : ''}`}>
+                                <Link href="/dashboard/admin/routing" prefetch={false} className={`${styles.navItem} ${pathname.includes('/routing') ? styles.navItemActive : ''}`}>
                                     <Route size={20} />
                                     Enrutamiento
                                 </Link>
                             )}
 
                             {isAdmin && (
-                                <Link href="/dashboard/admin/asistencia" className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
+                                <Link href="/dashboard/admin/asistencia" prefetch={false} className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
                                     <Clock size={20} />
                                     Asistencia y Planillas
                                 </Link>
                             )}
 
                             {isAdmin && (
-                                <Link href="/dashboard/admin/closing" className={`${styles.navItem} ${pathname.includes('/closing') ? styles.navItemActive : ''}`}>
+                                <Link href="/dashboard/admin/closing" prefetch={false} className={`${styles.navItem} ${pathname.includes('/closing') ? styles.navItemActive : ''}`}>
                                     <Calculator size={20} />
                                     Cierre de Mes
                                 </Link>
                             )}
 
                             {isAdmin && (
-                                <Link href="/dashboard/admin/usuarios" className={`${styles.navItem} ${pathname.includes('/usuarios') ? styles.navItemActive : ''}`}>
+                                <Link href="/dashboard/admin/usuarios" prefetch={false} className={`${styles.navItem} ${pathname.includes('/usuarios') ? styles.navItemActive : ''}`}>
                                     <Shield size={20} />
                                     Usuarios y Accesos
                                 </Link>

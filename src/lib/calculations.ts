@@ -29,43 +29,53 @@ const isConfirmed = isConfirmedTicketCostStatus;
 const isOperating = (item: any) => {
     const cat = (item.categoria || '').toLowerCase();
     const con = (item.concepto || item.tipo || '').toLowerCase();
-    
+
+    // Palabras que claramente indican gasto operativo / compras
     const operatingKeywords = [
-        'compras', 'materiales', 'viáticos', 'viatico', 'logística', 
+        'compras', 'materiales', 'viáticos', 'viatico', 'logística',
         'insumos', 'movilidad', 'pasajes', 'taxi', 'bus', 'transporte',
         'envíos', 'gasto operativo', 'compra mat', 'herramientas',
-        'repuestos', 'insumo', 'peaje', 'estacionamiento', 'egreso', 'compras'
+        'repuestos', 'insumo', 'peaje', 'estacionamiento', 'egreso'
     ];
-    
-    // Si tiene un specialist_id y NO es el técnico principal del ticket (si se conoce),
-    // o si el concepto indica explícitamente un pago a tercero/compra.
-    const isExternalSpecialist = Boolean(
-        item.specialist_id &&
-        item.main_technician_id &&
-        item.specialist_id !== item.main_technician_id
-    );
 
-    if (con.includes('adelanto operativo')) {
-        return con.includes('materiales');
+    // 1) Franjas explícitas: "adelanto operativo" debe tratarse como operativo
+    if (cat.includes('adelanto operativo') || con.includes('adelanto operativo')) {
+        return true;
     }
-    
-    return operatingKeywords.some(key => cat.includes(key) || con.includes(key)) || isExternalSpecialist;
+
+    // 2) Si existe la palabra 'adelanto' en categoría, comprobar contexto (materiales/compras)
+    if (cat.includes('adelanto') || con.includes('adelanto')) {
+        if (con.includes('material') || con.includes('compra') || cat.includes('compra') || con.includes('insumo')) {
+            return true;
+        }
+        // Si el contexto NO coincide con materiales/compras, no asumir operativo aquí
+    }
+
+    // 3) Keywords generales de operativo
+    return operatingKeywords.some(key => cat.includes(key) || con.includes(key));
 };
 
 const isLabor = (item: any) => {
-    if (isOperating(item)) return false; // Prioridad operativa/terceros
+    // Prioridad: si viene de un especialista EXTERNO (specialist_id !== main_technician_id)
+    // lo consideramos "Mano de Obra (Técnico Externo)" — gasto directo por servicios.
+    const isExternalSpecialist = Boolean(
+        item && item.specialist_id && item.main_technician_id && item.specialist_id !== item.main_technician_id
+    );
+    if (isExternalSpecialist) return true;
 
+    // Si fue clasificado explícitamente como "adelanto operativo" evitar marcarlo como mano de obra
     const cat = (item.categoria || '').toLowerCase();
     const con = (item.concepto || item.tipo || '').toLowerCase();
-    
+    if (cat.includes('adelanto operativo') || con.includes('adelanto operativo')) return false;
+
     const laborKeywords = [
-        'adelanto m.o', 'rescate financiero', 'pago mo', 
-        'adelanto', 'rescate', 'pago_mo', 'liquidación final',
+        'adelanto m.o', 'rescate financiero', 'pago mo',
+        'rescate', 'pago_mo', 'liquidación final',
         'mano de obra', 'honorarios', 'pago técnico', 'pago_tecnico',
         'pago mo', 'pago mano de obra', 'mo pactada', 'pacted mo',
         'liquidación', 'liquidacion', 'saldo mo', 'mo final', 'laboral', 'técnico'
     ];
-    
+
     return laborKeywords.some(key => cat.includes(key) || con.includes(key)) || con.includes('pago');
 };
 
