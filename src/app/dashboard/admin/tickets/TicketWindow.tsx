@@ -227,8 +227,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
         setIsTransferring(true);
         try {
-            await ticketCostsAPI.transferAllToTicket(ticketData.id, selectedTargetTicket.id);
-            showToast("Gastos Trasladados", `Los gastos se movieron al ticket ${selectedTargetTicket.client_ticket_number || selectedTargetTicket.id}.`, "success");
+            const transferResult: any = await ticketCostsAPI.transferAllToTicket(ticketData.id, selectedTargetTicket.id);
+
+            // Compatibilidad: transferAllToTicket pudo devolver array (costs) o un objeto { movedCosts, movedPayments }
+            let movedCostsCount = 0;
+            let movedPaymentsCount = 0;
+            if (Array.isArray(transferResult)) {
+                movedCostsCount = transferResult.length;
+            } else {
+                movedCostsCount = transferResult?.movedCosts?.length || 0;
+                movedPaymentsCount = transferResult?.movedPayments?.length || 0;
+            }
+
+            showToast(
+                "Gastos Trasladados",
+                `Se trasladaron ${movedCostsCount} costos y ${movedPaymentsCount} pagos al ticket ${selectedTargetTicket.client_ticket_number || selectedTargetTicket.id}.`,
+                "success"
+            );
             
             // Ahora que está limpio, intentar el borrado automático? 
             // Mejor dejar que el admin lo confirme de nuevo para evitar sorpresas.

@@ -818,7 +818,93 @@ export const paymentsAPI = {
             .single();
 
         if (error) throw error;
-        return data;
+
+        const created = data;
+
+        try {
+            const paymentDate = payment.payment_date || new Date().toISOString();
+
+            // 1) Si viene referencia a un costo específico, marcarlo como pagado o consumir parcialmente
+            if (payment.reference_number) {
+                const { data: costRecord, error: costErr } = await supabase
+                    .from('ticket_costs')
+                    .select('*')
+                    .eq('id', payment.reference_number)
+                    .maybeSingle();
+
+                if (!costErr && costRecord) {
+                    const paidAmount = toNumberSafe(payment.amount || payment.monto || 0);
+                    const originalAmount = toNumberSafe(costRecord.monto || 0);
+
+                    if (paidAmount >= originalAmount) {
+                        // Pago completo: marcar pagado
+                        await supabase
+                            .from('ticket_costs')
+                            .update({ estado_pago: 'pagado', fecha_pago: paymentDate })
+                            .eq('id', costRecord.id);
+                    } else if (paidAmount > 0) {
+                        // Pago parcial: marcar registro original como 'abonado' y crear costo por saldo pendiente
+                        try {
+                            await supabase
+                                .from('ticket_costs')
+                                .update({ estado_pago: 'abonado', fecha_pago: paymentDate })
+                                .eq('id', costRecord.id);
+
+                            const remaining = round2(originalAmount - paidAmount);
+                            await supabase
+                                .from('ticket_costs')
+                                .insert({
+                                    ticket_id: costRecord.ticket_id,
+                                    concepto: `Saldo pendiente: ${costRecord.concepto || costRecord.tipo || 'Costo'}`,
+                                    categoria: costRecord.categoria || 'Mano de Obra',
+                                    monto: remaining,
+                                    estado_pago: 'pendiente',
+                                    specialist_id: costRecord.specialist_id || null,
+                                    proveedor: costRecord.proveedor || null
+                                });
+                        } catch (partErr) {
+                            console.error('[paymentsAPI.create] Error handling partial payment:', partErr);
+                        }
+                    }
+                }
+            } else {
+                // 2) Si NO viene referencia y el pago es un ADELANTO, crear un costo 'Adelanto Operativo'
+                // En lugar de marcar todos los adelantos existentes como pagados, creamos un registro de costo
+                // que representa el adelanto recibido. Esto evita marcar parcialmente costos y conserva trazabilidad.
+                const pt = (payment.payment_type || '').toLowerCase();
+                if (pt.includes('adelanto')) {
+                    try {
+                        const { data: createdCost, error: createCostErr } = await supabase
+                            .from('ticket_costs')
+                            .insert({
+                                ticket_id: payment.ticket_id,
+                                concepto: 'Adelanto recibido',
+                                categoria: 'Adelanto Operativo',
+                                monto: payment.amount || 0,
+                                estado_pago: 'pagado',
+                                fecha_pago: paymentDate
+                            })
+                            .select()
+                            .single();
+
+                        if (!createCostErr && createdCost && createdCost.id) {
+                            // Vincular el pago creado con el costo de adelanto para trazabilidad
+                            await supabase
+                                .from('ticket_payments')
+                                .update({ reference_number: createdCost.id })
+                                .eq('id', created.id);
+                        }
+                    } catch (innerErr) {
+                        console.error('[paymentsAPI.create] Error creando costo-adelanto:', innerErr);
+                    }
+                }
+            }
+        } catch (err) {
+            // No fallar la creación del pago si la sincronización de costos falla; loguear para auditoría
+            console.error('[paymentsAPI.create] Post-create sync error:', err);
+        }
+
+        return created;
     },
 
     async update(id: string, updates: Partial<{
@@ -1006,15 +1092,26 @@ export const ticketCostsAPI = {
         if (!response.ok || !result.success) throw new Error(result.error || 'Error al eliminar costo del ticket');
     },
 
-    // Trasladar todos los costos de un ticket a otro (Blindaje Financiero)
+    // Trasladar todos los costos y pagos de un ticket a otro (Blindaje Financiero)
     async transferAllToTicket(sourceTicketId: string, targetTicketId: string) {
-        const { data, error } = await supabase
+        // 1) Mover ticket_costs
+        const { data: movedCosts, error: errCosts } = await supabase
             .from('ticket_costs')
             .update({ ticket_id: targetTicketId })
             .eq('ticket_id', sourceTicketId)
             .select();
 
-        if (error) throw error;
-        return data;
+        if (errCosts) throw errCosts;
+
+        // 2) Mover ticket_payments (si existen) para mantener trazabilidad financiera
+        const { data: movedPayments, error: errPayments } = await supabase
+            .from('ticket_payments')
+            .update({ ticket_id: targetTicketId })
+            .eq('ticket_id', sourceTicketId)
+            .select();
+
+        if (errPayments) throw errPayments;
+
+        return { movedCosts, movedPayments };
     }
 };
