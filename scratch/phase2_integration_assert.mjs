@@ -18,7 +18,8 @@ async function runAssertTest() {
   console.log('Running Phase2 assertion test against', SUPABASE_URL);
   const ticketId = randomUUID();
   try {
-    await supabase.from('tickets').insert({ id: ticketId, ticket_number: `TEST-${ticketId.slice(0,8)}`, status_id: 'nuevo' });
+    // Use numeric ticket_number to match schema expectations
+    await supabase.from('tickets').insert({ id: ticketId, ticket_number: Number(Date.now() % 1000000000), status_id: 'nuevo' });
 
     // Create a cost of 200
     const costId = randomUUID();

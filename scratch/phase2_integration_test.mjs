@@ -15,7 +15,8 @@ async function insertTicket() {
   const id = randomUUID()
   const ticket = {
     id,
-    ticket_number: `TEST-${id.slice(0, 8)}`,
+    // Some DBs expect a numeric ticket_number; use a timestamp-based numeric id
+    ticket_number: Number(Date.now() % 1000000000),
     description: 'Integration test ticket',
     status_id: 'nuevo',
     labor_cost: 0,
