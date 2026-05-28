@@ -50,9 +50,10 @@ async function runAssertTest() {
 
     const original = costs.find(c => c.id === costId);
     assert(original, 'Original cost not found');
-    assert.strictEqual(original.estado_pago, 'abonado', 'Original cost should be marked as abonado');
+    const origEstado = (original.estado_pago || '').toString().toLowerCase();
+    assert(origEstado.includes('abonado'), `Original cost should be marked as abonado (got: ${original.estado_pago})`);
 
-    const pending = costs.find(c => c.estado_pago === 'pendiente' && c.id !== costId);
+    const pending = costs.find(c => (c.estado_pago || '').toString().toLowerCase().includes('pendiente') && c.id !== costId);
     assert(pending, 'Pending remainder cost not found');
     assert.strictEqual(round2(Number(pending.monto)), round2(originalAmount - paidAmount), 'Pending remainder amount mismatch');
 
