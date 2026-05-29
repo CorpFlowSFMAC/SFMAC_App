@@ -672,9 +672,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (isTransitioning.current) return;
         // 🔒 BLOQUEO DE REASIGNACIÓN: Si hay una reasignación en curso, ignorar para evitar parpadeo
         if (isReassigning.current) return;
-        // 🔒 BLOQUEO DE APROBACIÓN LOCAL: Si el usuario acaba de aprobar, proteger el estado approved
-        if (localApprovedState.current) return;
-
 
         if (isProcessingAdvance.current) {
             return;
@@ -854,9 +851,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const isTransitioning = useRef(false);
     // 🔒 BLOQUEO DE REASIGNACIÓN: Durante reasignación de especialista, ignorar updates del prop para evitar parpadeo
     const isReassigning = useRef(false);
-    // 🔒 BLOQUEO DE APROBACIÓN LOCAL: Registrar cuando el usuario hizo clic en "aprobar"
-    // para que ninguna fuerza externa pueda revertir el estado approved
-    const localApprovedState = useRef<string | null>(null);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -1528,9 +1522,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleApproveQuote = () => {
-        // 🔒 BLOQUEO DE TRANSICIÓN: Silenciar updates del prop mientras se procesa la aprobación
+        // 🔒 ACTIVAR BLOQUEO DE TRANSICIÓN
         isTransitioning.current = true;
-        localApprovedState.current = "cotizacion_aprobada"; // ← Registrar aprobación local
 
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
@@ -1538,27 +1531,40 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const approved = {
             ...ticketData,
             estadoId: "cotizacion_aprobada",
-            status_id: "cotizacion_aprobada", // ← CRÍTICO: También setear status_id
+            status_id: "cotizacion_aprobada",
             fechaAprobación: new Date().toISOString(),
             pausadoSLA: false,
             fechaReactivacion: new Date().toISOString(),
             modificacionAutorizada: false,
             costoAjustadoPostAprobación: false,
             omitirAjusteTécnico: false,
-            // BLINDAJE: Asegurar que el monto aprobado se preserve en esta transición
             montoFinal: currentMontoTotal,
             partidas: currentPartidas
         };
 
+        // 🚀 OPTIMISTIC UPDATE: Actualizar caché de TanStack para que el prop no regresse
+        queryClient.setQueryData(
+            queryKeys.tickets.summary(),
+            (old: any[] | undefined) => old
+                ? old.map((t: any) => t.id === ticketData.id
+                    ? { ...t, status_id: "cotizacion_aprobada", estadoId: "cotizacion_aprobada", metadata: { ...(t.metadata || {}), modificacionAutorizada: false } }
+                    : t)
+                : old
+        );
+        queryClient.setQueryData(
+            queryKeys.tickets.detail(ticketData.id),
+            (old: any) => old ? { ...old, status_id: "cotizacion_aprobada", estadoId: "cotizacion_aprobada", metadata: { ...(old.metadata || {}), modificacionAutorizada: false } } : old
+        );
+
+        // 🚀 UI local
         setTicketData(approved);
         syncToSupabase(approved, { allowStateRollback: true });
         showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
 
-        // 🔓 Liberar el bloqueo después de que el servidor procese
-        setTimeout(() => { 
+        // 🔓 Liberar bloqueos
+        setTimeout(() => {
             isTransitioning.current = false;
-            localApprovedState.current = null; // ← Limpiar después del delay
-        }, 1500);
+        }, 3000);
     };
 
     const queryClient = useQueryClient();
