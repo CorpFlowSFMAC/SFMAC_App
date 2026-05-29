@@ -672,6 +672,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (isTransitioning.current) return;
         // 🔒 BLOQUEO DE REASIGNACIÓN: Si hay una reasignación en curso, ignorar para evitar parpadeo
         if (isReassigning.current) return;
+        // 🔒 BLOQUEO DE APROBACIÓN LOCAL: Si el usuario acaba de aprobar, proteger el estado approved
+        if (localApprovedState.current) return;
 
 
         if (isProcessingAdvance.current) {
@@ -818,6 +820,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // ⚠️ NOTA: estadoId y status_id ya fueron establecidos antes de ...ticket
                 // para evitar que ...ticket sobrescriba la preservación del estado más avanzado
                 modificacionAutorizada: finalModificacionAutorizada,
+                // ★★★ BLINDAJE ANTI-REGRESIÓN FINAL: Forzar estado más avanzado después del spread
+                // Esto previene que el prop (ticket.status_id) sobreescriba el estado local approved
+                estadoId: TICKET_STATE_ORDER[prev.estadoId] >= TICKET_STATE_ORDER[ticket.status_id] ? prev.estadoId : (prev.estadoId || ticket.status_id),
+                status_id: TICKET_STATE_ORDER[prev.status_id] >= TICKET_STATE_ORDER[ticket.status_id] ? prev.status_id : (prev.status_id || ticket.status_id),
                 solicitudModificacion: ticket.solicitudModificacion || safeMeta.solicitudModificacion || prev.solicitudModificacion,
                 visitPaymentConfirmed: visitConfirmed,
                 adelantoPagado: advanceConfirmed,
@@ -848,6 +854,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const isTransitioning = useRef(false);
     // 🔒 BLOQUEO DE REASIGNACIÓN: Durante reasignación de especialista, ignorar updates del prop para evitar parpadeo
     const isReassigning = useRef(false);
+    // 🔒 BLOQUEO DE APROBACIÓN LOCAL: Registrar cuando el usuario hizo clic en "aprobar"
+    // para que ninguna fuerza externa pueda revertir el estado approved
+    const localApprovedState = useRef<string | null>(null);
 
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
@@ -1521,6 +1530,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const handleApproveQuote = () => {
         // 🔒 BLOQUEO DE TRANSICIÓN: Silenciar updates del prop mientras se procesa la aprobación
         isTransitioning.current = true;
+        localApprovedState.current = "cotizacion_aprobada"; // ← Registrar aprobación local
 
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
@@ -1528,6 +1538,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const approved = {
             ...ticketData,
             estadoId: "cotizacion_aprobada",
+            status_id: "cotizacion_aprobada", // ← CRÍTICO: También setear status_id
             fechaAprobación: new Date().toISOString(),
             pausadoSLA: false,
             fechaReactivacion: new Date().toISOString(),
@@ -1544,7 +1555,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
 
         // 🔓 Liberar el bloqueo después de que el servidor procese
-        setTimeout(() => { isTransitioning.current = false; }, 1500);
+        setTimeout(() => { 
+            isTransitioning.current = false;
+            localApprovedState.current = null; // ← Limpiar después del delay
+        }, 1500);
     };
 
     const queryClient = useQueryClient();
