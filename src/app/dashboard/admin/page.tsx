@@ -249,7 +249,7 @@ export default function AdminDashboard() {
         return true;
     };
 
-    // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ───────────
+    // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ─────────────────────
     const roi = useMemo(() => {
         // REGLA 1: Solo tickets con actividad o creación en el rango seleccionado
         const inPeriod = tickets.filter((t: any) => {
@@ -261,8 +261,19 @@ export default function AdminDashboard() {
         // Ingresos Generados (Neto, sin IGV) - Mapea directamente de ingresos_reales pre-calculado en vw_ticket_financials
         const ingresosSinIGV = inPeriod.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
 
-        // Inversión Ejecutada (Costos confirmados, reales) - Mapea de inversion_ejecutada o total_costs_agg en vw_ticket_financials
-        const inversionEjecutada = inPeriod.reduce((acc, t) => acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0), 0);
+        // ★ INVERSIÓN EJECUTADA: Usa el Motor Financiero V3 (calculateTicketFinances) con t.costos.
+        // Los tickets traen ticket_costs adjuntos (attachTicketCosts en getSummaryAll).
+        // Suma totalLaborConfirmed + totalOpConfirmed = todos los pagos confirmados por el admin.
+        // Esto es correcto porque 'Adelanto Operativo' al técnico es MO, y viajáticos/materiales son Op.
+        const inversionEjecutada = inPeriod.reduce((acc, t) => {
+            const costs = Array.isArray(t.costos) ? t.costos : [];
+            if (costs.length === 0) {
+                // Si no hay costos en el motor, fallback al campo de la vista
+                return acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+            }
+            const fin = calculateTicketFinances(t, costs);
+            return acc + fin.totalLaborConfirmed + fin.totalOpConfirmed;
+        }, 0);
 
         // Utilidad Neta y Métricas Clave
         const utilidadNeta = round2(ingresosSinIGV - inversionEjecutada);
@@ -279,18 +290,35 @@ export default function AdminDashboard() {
         const byService = SERVICE_TYPES.map(s => {
             const st = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
             const ingNeto = st.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
-            const costReal = st.reduce((acc, t) => acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0), 0);
+            const costReal = st.reduce((acc, t) => {
+                const costs = Array.isArray(t.costos) ? t.costos : [];
+                if (costs.length === 0) return acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                const fin = calculateTicketFinances(t, costs);
+                return acc + fin.totalLaborConfirmed + fin.totalOpConfirmed;
+            }, 0);
             const m = ingNeto > 0 ? ((ingNeto - costReal) / ingNeto) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
         // inversionItems con el campo _investmentTotalReal esperado por la UI
         const inversionItemsList = inPeriod
-            .filter(t => parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0) > 0)
-            .map(t => ({
-                ...t,
-                _investmentTotalReal: round2(parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0))
-            }))
+            .filter(t => {
+                const costs = Array.isArray(t.costos) ? t.costos : [];
+                if (costs.length === 0) return parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0) > 0;
+                const fin = calculateTicketFinances(t, costs);
+                return (fin.totalLaborConfirmed + fin.totalOpConfirmed) > 0;
+            })
+            .map(t => {
+                const costs = Array.isArray(t.costos) ? t.costos : [];
+                let totalReal = 0;
+                if (costs.length === 0) {
+                    totalReal = round2(parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0));
+                } else {
+                    const fin = calculateTicketFinances(t, costs);
+                    totalReal = round2(fin.totalLaborConfirmed + fin.totalOpConfirmed);
+                }
+                return { ...t, _investmentTotalReal: totalReal };
+            })
             .sort((a, b) => b._investmentTotalReal - a._investmentTotalReal);
 
         return { 
@@ -703,7 +731,10 @@ export default function AdminDashboard() {
                         setModalTitle("Análisis de Utilidad Neta (Profitability) - SIN IGV");
                         setModalTickets(roi.ingresosItems.map(t => {
                             const ingNeto = parseFloat(t.ingresos_reales || 0);
-                            const costReal = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                            const costs = Array.isArray(t.costos) ? t.costos : [];
+                            const costReal = costs.length > 0
+                                ? (() => { const fin = calculateTicketFinances(t, costs); return fin.totalLaborConfirmed + fin.totalOpConfirmed; })()
+                                : parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
                             return { 
                                 ...t, 
                                 cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
@@ -723,7 +754,10 @@ export default function AdminDashboard() {
                         setModalTitle("Eficiencia Operativa / ROI");
                         setModalTickets(roi.ingresosItems.map(t => {
                             const ingNeto = parseFloat(t.ingresos_reales || 0);
-                            const costReal = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                            const costs = Array.isArray(t.costos) ? t.costos : [];
+                            const costReal = costs.length > 0
+                                ? (() => { const fin = calculateTicketFinances(t, costs); return fin.totalLaborConfirmed + fin.totalOpConfirmed; })()
+                                : parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
                             return {
                                 ...t,
                                 cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
