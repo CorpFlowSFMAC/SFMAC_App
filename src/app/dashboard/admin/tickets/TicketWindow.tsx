@@ -403,7 +403,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         totalOpPending,
         totalRequested,
         pactedMO,
-        balance: baseRescue
+        balance: baseRescue,
+        netIncome
     } = finances;
 
     const advanceRequestPending = pendingLaborItems.some((item: any) => {
@@ -4278,21 +4279,27 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 </div>
 
                                                 <div className={styles.financialAuditGrid}>
-                                                    <div className={styles.financeCard}>
-                                                        <div className={styles.financeCardHeader}>
+                                                    <div className={styles.financeCard} style={{
+                                                        background: 'linear-gradient(135deg, #F8FAFC, #F1F5F9)',
+                                                        border: '1px solid #CBD5E1'
+                                                    }}>
+                                                        <div className={styles.financeCardHeader} style={{ color: '#475569' }}>
                                                             <TrendingUp size={16} />
                                                             <span>PRESUPUESTO APROBADO</span>
                                                         </div>
-                                                        <div className={styles.financeMainValue}>
+                                                        <div className={styles.financeMainValue} style={{ color: '#1E293B' }}>
                                                             <span className={styles.currencySymbol}>S/</span>
-                                                            <span className={styles.mainAmount}>{techPactedTotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            <span className={styles.mainAmount}>{netIncome.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
                                                         <div className={styles.financeSubRow}>
-                                                            <span>Ingresos totales del servicio</span>
+                                                            <span style={{ color: '#64748B', fontWeight: 600 }}>Ingresos totales del servicio (sin IGV)</span>
                                                         </div>
                                                     </div>
 
-                                                    <div className={styles.financeCard}>
+                                                    <div className={styles.financeCard} style={{
+                                                        background: 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
+                                                        border: '1px solid #FCA5A5'
+                                                    }}>
                                                         <div className={styles.financeCardHeader} style={{ color: '#991B1B' }}>
                                                             <ArrowDownLeft size={16} />
                                                             <span>DEBE HABER (EGRESOS)</span>
@@ -4303,12 +4310,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
                                                         <div className={styles.egresosBreakdown}>
                                                             <div className={styles.breakdownItem}>
-                                                                <span className={styles.breakdownLabel}>Mano de Obra</span>
-                                                                <span className={styles.breakdownValue}>S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                                <span className={styles.breakdownLabel} style={{ color: '#7F1D1D' }}>Mano de Obra</span>
+                                                                <span className={styles.breakdownValue} style={{ color: '#991B1B', fontWeight: 700 }}>S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                             </div>
                                                             <div className={styles.breakdownItem}>
-                                                                <span className={styles.breakdownLabel}>Gastos Operativos</span>
-                                                                <span className={styles.breakdownValue}>S/ {operatingExpenses.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                                <span className={styles.breakdownLabel} style={{ color: '#7F1D1D' }}>Gastos Operativos</span>
+                                                                <span className={styles.breakdownValue} style={{ color: '#991B1B', fontWeight: 700 }}>S/ {operatingExpenses.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4325,7 +4332,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span className={styles.currencySymbol}>S/</span>
                                                             <span className={styles.mainAmount}>{grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
-                                                        <div className={styles.profitMarginBadge}>
+                                                        <div className={styles.profitMarginBadge} style={{
+                                                            background: grossMargin >= 0 ? '#DCFCE7' : '#FEE2E2',
+                                                            color: grossMargin >= 0 ? '#15803d' : '#b91c1c',
+                                                            border: grossMargin >= 0 ? '1px solid #86EFAC' : '1px solid #FCA5A5'
+                                                        }}>
                                                             <Percent size={12} />
                                                             <span>{(pctReal || 0).toFixed(1)}% margen</span>
                                                         </div>
