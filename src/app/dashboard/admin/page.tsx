@@ -230,21 +230,23 @@ export default function AdminDashboard() {
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return false;
         
-        const nowTime = now.getTime();
-        const diffMs = nowTime - d.getTime();
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
         if (dateRange === "today") {
-            // Últimas 24 horas o mismo día calendario
-            return d.toDateString() === now.toDateString() || (diffDays >= -0.2 && diffDays <= 1.2);
+            // Strict today: desde las 00:00:00 del día actual en hora local
+            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return d >= startOfToday;
         }
         if (dateRange === "week") {
-            // Últimos 7 días
-            return diffDays >= -0.2 && diffDays <= 7.2;
+            // Strict calendar week: desde el lunes de la semana actual a las 00:00:00 local
+            const startOfWeek = new Date(now);
+            const day = startOfWeek.getDay() || 7; // 1 = Lunes, ..., 7 = Domingo
+            startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
+            startOfWeek.setHours(0, 0, 0, 0);
+            return d >= startOfWeek;
         }
         if (dateRange === "month") {
-            // Últimos 30 días
-            return diffDays >= -0.2 && diffDays <= 30.2;
+            // Strict calendar month (Mes Actual): desde el 1 del mes actual a las 00:00:00 local
+            const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            return d >= startOfCurrentMonth;
         }
         return true;
     };
@@ -527,7 +529,7 @@ export default function AdminDashboard() {
     const EN_PROCESO_STATES_RRHH = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
 
     const rrhh = useMemo(() => {
-        const inPeriod = tickets.filter((t: any) => isInRange(t.created_at || t.createdAt || t.fechaCreacion));
+        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
         const active = inPeriod.filter((t: any) =>
             !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId))
         );

@@ -85,10 +85,10 @@ SELECT
     -- Saldo técnico = MO Pactada - MO Confirmada
     COALESCE(ROUND(t.labor_cost::numeric, 2), ROUND((t.metadata ->> 'costoManoObra')::numeric, 2), 0::numeric) - COALESCE(c.adelantos_flujo_b, 0::numeric) AS saldo_tecnico,
     
-    -- Dynamic Dates for Roll-over (Hetzner dynamic date logic)
+    -- Dynamic Dates for Roll-over (America/Lima local time alignment)
     CASE 
-        WHEN t.status_id != 'ticket_cerrado' AND t.created_at < date_trunc('month', now() AT TIME ZONE 'UTC') 
-        THEN date_trunc('month', now() AT TIME ZONE 'UTC') 
+        WHEN t.status_id != 'ticket_cerrado' AND (t.created_at AT TIME ZONE 'America/Lima') < date_trunc('month', now() AT TIME ZONE 'America/Lima') 
+        THEN timezone('America/Lima', date_trunc('month', now() AT TIME ZONE 'America/Lima'))
         ELSE t.created_at 
     END AS created_at,
     t.created_at AS original_created_at
@@ -169,10 +169,10 @@ BEGIN
         'service_type', t.service_type, 
         'description', t.description, 
         'client_ticket_number', t.client_ticket_number, 
-        -- OVERRIDDEN WITH DYNAMIC ROLL-OVER DATE
+        -- OVERRIDDEN WITH DYNAMIC ROLL-OVER DATE (America/Lima local time alignment)
         'created_at', CASE 
-            WHEN t.status_id != 'ticket_cerrado' AND t.created_at < date_trunc('month', now() AT TIME ZONE 'UTC') 
-            THEN date_trunc('month', now() AT TIME ZONE 'UTC') 
+            WHEN t.status_id != 'ticket_cerrado' AND (t.created_at AT TIME ZONE 'America/Lima') < date_trunc('month', now() AT TIME ZONE 'America/Lima') 
+            THEN timezone('America/Lima', date_trunc('month', now() AT TIME ZONE 'America/Lima'))
             ELSE t.created_at 
         END, 
         'original_created_at', t.created_at,
