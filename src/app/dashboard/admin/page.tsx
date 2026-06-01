@@ -294,28 +294,29 @@ export default function AdminDashboard() {
     const roi = useMemo(() => {
         const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
 
-        const ingresos  = round2(inPeriod.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0));
-        const inversion = round2(inPeriod.reduce((a, t) => a + ticketInversion(t), 0));
-        const utilidad  = round2(inPeriod.reduce((a, t) => a + ticketUtilidad(t), 0));
-        const margen    = ingresos  > 0 ? (utilidad / ingresos)  * 100 : 0;
-        const ratio     = inversion > 0 ?  utilidad / inversion        : 0;
-
         const closed = inPeriod.filter((t: any) =>
             normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado"
         );
 
+        const ingresos  = round2(closed.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0));
+        const inversion = round2(inPeriod.reduce((a, t) => a + ticketInversion(t), 0));
+        const utilidad  = round2(closed.reduce((a, t) => a + ticketUtilidad(t), 0));
+        const margen    = ingresos  > 0 ? (utilidad / ingresos)  * 100 : 0;
+        const ratio     = inversion > 0 ?  utilidad / inversion        : 0;
+
         const byService = SERVICE_TYPES
             .map(s => {
-                const st   = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
-                const ing  = st.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0);
-                const cost = st.reduce((a, t) => a + ticketInversion(t), 0);
-                const util = st.reduce((a, t) => a + ticketUtilidad(t), 0);
-                return { ...s, tickets: st.length, ingresos: ing, margen: ing > 0 ? (util / ing) * 100 : 0 };
+                const stTotal = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
+                const stClosed = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
+                const ing  = stClosed.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0);
+                const cost = stTotal.reduce((a, t) => a + ticketInversion(t), 0);
+                const util = stClosed.reduce((a, t) => a + ticketUtilidad(t), 0);
+                return { ...s, tickets: stTotal.length, ingresos: ing, margen: ing > 0 ? (util / ing) * 100 : 0 };
             })
             .filter(s => s.tickets > 0)
             .sort((a, b) => b.ingresos - a.ingresos);
 
-        const ingresosItems = inPeriod
+        const ingresosItems = closed
             .filter(t => parseFloat(t.ingresos_reales ?? 0) > 0)
             .sort((a, b) =>
                 new Date(b.closure_date ?? b.updated_at ?? b.created_at ?? 0).getTime() -
