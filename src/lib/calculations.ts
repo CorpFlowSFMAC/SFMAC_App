@@ -43,12 +43,17 @@ export const isConfirmedTicketCostStatus = (status: string | null | undefined): 
 const OPERATING_CATEGORIES = new Set([
     "materiales", "viáticos", "viaticos", "viáticos / movilidad", "viaticos / movilidad",
     "logística", "logistica", "envíos", "envios", "movilidad", "insumos",
-    "adelanto", "adelanto operativo", "otros", "otros egresos", "compras",
+    "otros", "otros egresos", "compras",
 ]);
 
-// Categorías que son labor (solo si el especialista es el técnico del ticket)
+// Categorías de MO/pagos al técnico — se resuelven por regla relacional:
+//   specialist_id === main_technician_id  → 'labor'   (pago al técnico principal)
+//   specialist_id !== main_technician_id  → 'operating' (pago a técnico externo)
 const LABOR_CATEGORIES = new Set([
     "mano de obra", "rescate financiero", "rescate", "honorarios", "bono",
+    // Adelantos de MO: tanto el pago parcial al técnico del ticket (labor)
+    // como el pago a un externo (operating via regla relacional)
+    "adelanto", "adelanto operativo",
 ]);
 
 const OPERATING_KEYWORDS = [

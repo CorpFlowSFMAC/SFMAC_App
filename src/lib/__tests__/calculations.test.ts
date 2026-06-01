@@ -19,18 +19,40 @@ describe('calculateTicketFinances', () => {
     expect(res.realProfitability).toBe(800);
   });
 
-  test('handles adelanto cost as operating expense vs labor correctly', () => {
-    const ticket: any = { labor_cost: 500, total_quoted_amount: 1500 };
+  test('Adelanto Operativo al MISMO tecnico del ticket se clasifica como LABOR (MO advance)', () => {
+    const TECH_ID = 'tech-123';
+    const ticket: any = { labor_cost: 500, total_quoted_amount: 1500, technician_id: TECH_ID };
     const costs: any[] = [
-      { id: 'a1', monto: 200, estado_pago: 'pagado', concepto: 'Adelanto recibido', categoria: 'Adelanto Operativo' },
-      { id: 'a2', monto: 300, estado_pago: 'pagado', concepto: 'Pago MO', categoria: 'Mano de Obra' }
+      // Adelanto al mismo tecnico → LABOR
+      { id: 'a1', monto: 200, estado_pago: 'pagado', concepto: 'Adelanto Operativo (MANO DE OBRA)', categoria: 'Adelanto Operativo', specialist_id: TECH_ID },
+      // Rescate al mismo tecnico → LABOR
+      { id: 'a2', monto: 80,  estado_pago: 'pagado', concepto: 'Rescate Financiero',               categoria: 'Rescate Financiero',  specialist_id: TECH_ID },
     ];
 
     const res = calculateTicketFinances(ticket, costs);
-    // totalOpConfirmed should include adelanto (200), totalLaborConfirmed should include 300
-    expect(res.totalOpConfirmed).toBe(200);
+    // Ambos son LABOR (pagos al tecnico principal)
+    expect(res.totalLaborConfirmed).toBe(280);
+    expect(res.totalOpConfirmed).toBe(0);
+    // realLaborCost = max(pactedMO=500, totalLaborConfirmed=280) = 500
+    // realProfitability = 1500 - 500 = 1000
+    expect(res.realProfitability).toBe(1000);
+  });
+
+  test('Adelanto a tecnico DIFERENTE (externo) se clasifica como OPERATING', () => {
+    const MAIN_TECH = 'tech-main';
+    const EXT_TECH  = 'tech-ext';
+    const ticket: any = { labor_cost: 500, total_quoted_amount: 1500, technician_id: MAIN_TECH };
+    const costs: any[] = [
+      // Adelanto a tecnico externo → OPERATING
+      { id: 'b1', monto: 200, estado_pago: 'pagado', concepto: 'Adelanto externo', categoria: 'Adelanto Operativo', specialist_id: EXT_TECH },
+      // MO al tecnico principal → LABOR
+      { id: 'b2', monto: 300, estado_pago: 'pagado', concepto: 'Pago MO',          categoria: 'Mano de Obra',       specialist_id: MAIN_TECH },
+    ];
+
+    const res = calculateTicketFinances(ticket, costs);
     expect(res.totalLaborConfirmed).toBe(300);
-    // realProfitability = totalVenta (1500) - pactedMO (500) - totalOpConfirmed (200) = 800
+    expect(res.totalOpConfirmed).toBe(200);
+    // realLaborCost = max(500, 300) = 500; realProfitability = 1500 - 500 - 200 = 800
     expect(res.realProfitability).toBe(800);
   });
 
