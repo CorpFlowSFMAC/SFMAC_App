@@ -249,91 +249,57 @@ export default function AdminDashboard() {
         return true;
     };
 
-    // ── MÓDULO 1: Rentabilidad / ROI (AUDITORÍA STRICT - SIN IGV) ─────────────────────
+    // ─── Helper puro: inversión confirmada de un ticket ──────────────────────
+    // Fuente: Motor Financiero V3 (ticket_costs). Fallback a vista SQL si costos vacíos.
+    const ticketInversion = (t: any): number => {
+        const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
+        if (costs.length === 0)
+            return parseFloat(t.inversion_ejecutada ?? t.total_costs_agg ?? 0);
+        return calculateTicketFinances(t, costs).totalExpenses;
+    };
+
+    // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
     const roi = useMemo(() => {
-        // REGLA 1: Solo tickets con actividad o creación en el rango seleccionado
-        const inPeriod = tickets.filter((t: any) => {
-            const createdInRange = isInRange(t.created_at || t.createdAt || t.fechaCreacion);
-            const closedInRange = t.closure_date ? isInRange(t.closure_date) : false;
-            return createdInRange || closedInRange;
-        });
+        const inPeriod = tickets.filter((t: any) =>
+            isInRange(t.created_at ?? t.createdAt ?? t.fechaCreacion) ||
+            (t.closure_date && isInRange(t.closure_date))
+        );
 
-        // Ingresos Generados (Neto, sin IGV) - Mapea directamente de ingresos_reales pre-calculado en vw_ticket_financials
-        const ingresosSinIGV = inPeriod.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
+        const ingresos  = round2(inPeriod.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0));
+        const inversion = round2(inPeriod.reduce((a, t) => a + ticketInversion(t), 0));
+        const utilidad  = round2(ingresos - inversion);
+        const margen    = ingresos  > 0 ? (utilidad / ingresos)  * 100 : 0;
+        const ratio     = inversion > 0 ?  utilidad / inversion        : 0;
 
-        // ★ INVERSIÓN EJECUTADA: Usa el Motor Financiero V3 (calculateTicketFinances) con t.costos.
-        // Los tickets traen ticket_costs adjuntos (attachTicketCosts en getSummaryAll).
-        // Suma totalLaborConfirmed + totalOpConfirmed = todos los pagos confirmados por el admin.
-        // Esto es correcto porque 'Adelanto Operativo' al técnico es MO, y viajáticos/materiales son Op.
-        const inversionEjecutada = inPeriod.reduce((acc, t) => {
-            const costs = Array.isArray(t.costos) ? t.costos : [];
-            if (costs.length === 0) {
-                // Si no hay costos en el motor, fallback al campo de la vista
-                return acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
-            }
-            const fin = calculateTicketFinances(t, costs);
-            return acc + fin.totalLaborConfirmed + fin.totalOpConfirmed;
-        }, 0);
+        const closed = inPeriod.filter((t: any) =>
+            normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado"
+        );
 
-        // Utilidad Neta y Métricas Clave
-        const utilidadNeta = round2(ingresosSinIGV - inversionEjecutada);
-        const margenReal = ingresosSinIGV > 0 ? (utilidadNeta / ingresosSinIGV) * 100 : 0;
-        const ratioEficiencia = inversionEjecutada > 0 ? (utilidadNeta / inversionEjecutada) : 0;
-
-        // Tickets cerrados para los contadores y subtextos
-        const closed = inPeriod.filter((t: any) => {
-            const sid = normalizeStateId(t.status_id || t.estadoId);
-            return sid === "ticket_cerrado";
-        });
-
-        // Agrupación por tipo de servicio usando montos sin IGV
-        const byService = SERVICE_TYPES.map(s => {
-            const st = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
-            const ingNeto = st.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
-            const costReal = st.reduce((acc, t) => {
-                const costs = Array.isArray(t.costos) ? t.costos : [];
-                if (costs.length === 0) return acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
-                const fin = calculateTicketFinances(t, costs);
-                return acc + fin.totalLaborConfirmed + fin.totalOpConfirmed;
-            }, 0);
-            const m = ingNeto > 0 ? ((ingNeto - costReal) / ingNeto) * 100 : 0;
-            return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
-        }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
-
-        // inversionItems con el campo _investmentTotalReal esperado por la UI
-        const inversionItemsList = inPeriod
-            .filter(t => {
-                const costs = Array.isArray(t.costos) ? t.costos : [];
-                if (costs.length === 0) return parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0) > 0;
-                const fin = calculateTicketFinances(t, costs);
-                return (fin.totalLaborConfirmed + fin.totalOpConfirmed) > 0;
+        const byService = SERVICE_TYPES
+            .map(s => {
+                const st   = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
+                const ing  = st.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0);
+                const cost = st.reduce((a, t) => a + ticketInversion(t), 0);
+                return { ...s, tickets: st.length, ingresos: ing, margen: ing > 0 ? ((ing - cost) / ing) * 100 : 0 };
             })
-            .map(t => {
-                const costs = Array.isArray(t.costos) ? t.costos : [];
-                let totalReal = 0;
-                if (costs.length === 0) {
-                    totalReal = round2(parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0));
-                } else {
-                    const fin = calculateTicketFinances(t, costs);
-                    totalReal = round2(fin.totalLaborConfirmed + fin.totalOpConfirmed);
-                }
-                return { ...t, _investmentTotalReal: totalReal };
-            })
+            .filter(s => s.tickets > 0)
+            .sort((a, b) => b.ingresos - a.ingresos);
+
+        const ingresosItems = inPeriod
+            .filter(t => parseFloat(t.ingresos_reales ?? 0) > 0)
+            .sort((a, b) =>
+                new Date(b.closure_date ?? b.updated_at ?? b.created_at ?? 0).getTime() -
+                new Date(a.closure_date ?? a.updated_at ?? a.created_at ?? 0).getTime()
+            );
+
+        const inversionItems = inPeriod
+            .filter(t => ticketInversion(t) > 0)
+            .map(t => ({ ...t, _investmentTotalReal: round2(ticketInversion(t)) }))
             .sort((a, b) => b._investmentTotalReal - a._investmentTotalReal);
 
-        return { 
-            inversion: round2(inversionEjecutada), 
-            ingresos: round2(ingresosSinIGV), 
-            utilidad: utilidadNeta, 
-            margen: margenReal, 
-            ratio: ratioEficiencia, 
-            closed: closed.length, 
-            total: inPeriod.length, 
-            byService,
-            inversionItems: inversionItemsList,
-            ingresosItems: inPeriod.filter(t => parseFloat(t.ingresos_reales || 0) > 0)
-                .sort((a,b) => new Date(b.closure_date || b.updated_at || b.created_at || 0).getTime() - new Date(a.closure_date || a.updated_at || a.created_at || 0).getTime())
-        };
+        return { inversion, ingresos, utilidad, margen, ratio,
+                 closed: closed.length, total: inPeriod.length,
+                 byService, inversionItems, ingresosItems };
     }, [tickets, dateRange]);
 
     // ── MÓDULO ADICIONAL: Datos de Gráficos (Pipeline Aprobado, Clientes y Depósitos) ──
@@ -730,17 +696,13 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Análisis de Utilidad Neta (Profitability) - SIN IGV");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const ingNeto = parseFloat(t.ingresos_reales || 0);
-                            const costs = Array.isArray(t.costos) ? t.costos : [];
-                            const costReal = costs.length > 0
-                                ? (() => { const fin = calculateTicketFinances(t, costs); return fin.totalLaborConfirmed + fin.totalOpConfirmed; })()
-                                : parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
-                            return { 
-                                ...t, 
-                                cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
-                                _viewMode: 'utilidad', 
-                                _utilityAmount: ingNeto - costReal,
-                                _monto: ingNeto - costReal 
+                            const ing  = parseFloat(t.ingresos_reales ?? 0);
+                            const cost = ticketInversion(t);
+                            return { ...t,
+                                cliente: t.cliente?.nombre ?? t.clients?.name ?? 'Cliente',
+                                _viewMode: 'utilidad',
+                                _utilityAmount: ing - cost,
+                                _monto: ing - cost,
                             };
                         }));
                         setShowListModal(true);
@@ -753,16 +715,12 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Eficiencia Operativa / ROI");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const ingNeto = parseFloat(t.ingresos_reales || 0);
-                            const costs = Array.isArray(t.costos) ? t.costos : [];
-                            const costReal = costs.length > 0
-                                ? (() => { const fin = calculateTicketFinances(t, costs); return fin.totalLaborConfirmed + fin.totalOpConfirmed; })()
-                                : parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
-                            return {
-                                ...t,
-                                cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
+                            const ing  = parseFloat(t.ingresos_reales ?? 0);
+                            const cost = ticketInversion(t);
+                            return { ...t,
+                                cliente: t.cliente?.nombre ?? t.clients?.name ?? 'Cliente',
                                 _viewMode: 'ratio',
-                                _monto: costReal > 0 ? (ingNeto - costReal) / costReal : 0
+                                _monto: cost > 0 ? (ing - cost) / cost : 0,
                             };
                         }));
                         setShowListModal(true);
@@ -770,7 +728,6 @@ export default function AdminDashboard() {
                 />
             </div>
 
-            {/* ROI por servicio */}
             {/* ROI por servicio */}
             {roi.byService.length > 0 && (
                 <div style={{
