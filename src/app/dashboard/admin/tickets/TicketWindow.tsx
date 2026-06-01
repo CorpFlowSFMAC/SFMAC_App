@@ -4279,6 +4279,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 </div>
 
                                                 <div className={styles.financialAuditGrid}>
+                                                    {/* Card 1: PRESUPUESTO APROBADO */}
                                                     <div className={styles.financeCard} style={{
                                                         background: 'linear-gradient(135deg, #F8FAFC, #F1F5F9)',
                                                         border: '1px solid #CBD5E1'
@@ -4292,50 +4293,63 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span className={styles.mainAmount}>{netIncome.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
                                                         <div className={styles.financeSubRow}>
-                                                            <span style={{ color: '#64748B', fontWeight: 600 }}>Ingresos totales del servicio (sin IGV)</span>
+                                                            <span style={{ color: '#64748B', fontWeight: 600 }}>Ingreso total (Sin IGV)</span>
                                                         </div>
                                                     </div>
 
+                                                    {/* Card 2: COSTO MANO DE OBRA */}
+                                                    <div className={styles.financeCard} style={{
+                                                        background: 'linear-gradient(135deg, #FFF7ED, #FFEDD5)',
+                                                        border: '1px solid #FDBA74'
+                                                    }}>
+                                                        <div className={styles.financeCardHeader} style={{ color: '#C2410C' }}>
+                                                            <CreditCard size={16} />
+                                                            <span>EGRESOS MANO DE OBRA</span>
+                                                        </div>
+                                                        <div className={styles.financeMainValue} style={{ color: '#EA580C' }}>
+                                                            <span className={styles.currencySymbol}>S/</span>
+                                                            <span className={styles.mainAmount}>{unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                        <div className={styles.financeSubRow}>
+                                                            <span style={{ color: '#C2410C', fontWeight: 600 }}>Pago pactado al Técnico</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Card 3: GASTOS OPERATIVOS */}
                                                     <div className={styles.financeCard} style={{
                                                         background: 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
                                                         border: '1px solid #FCA5A5'
                                                     }}>
                                                         <div className={styles.financeCardHeader} style={{ color: '#991B1B' }}>
                                                             <ArrowDownLeft size={16} />
-                                                            <span>DEBE HABER (EGRESOS)</span>
+                                                            <span>GASTOS OPERATIVOS</span>
                                                         </div>
                                                         <div className={styles.financeMainValue} style={{ color: '#DC2626' }}>
                                                             <span className={styles.currencySymbol}>S/</span>
-                                                            <span className={styles.mainAmount}>{(unifiedPaymentsSum + operatingExpenses).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                                                            <span className={styles.mainAmount}>{operatingExpenses.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
-                                                        <div className={styles.egresosBreakdown}>
-                                                            <div className={styles.breakdownItem}>
-                                                                <span className={styles.breakdownLabel} style={{ color: '#7F1D1D' }}>Mano de Obra</span>
-                                                                <span className={styles.breakdownValue} style={{ color: '#991B1B', fontWeight: 700 }}>S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                            </div>
-                                                            <div className={styles.breakdownItem}>
-                                                                <span className={styles.breakdownLabel} style={{ color: '#7F1D1D' }}>Gastos Operativos</span>
-                                                                <span className={styles.breakdownValue} style={{ color: '#991B1B', fontWeight: 700 }}>S/ {operatingExpenses.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
-                                                            </div>
+                                                        <div className={styles.financeSubRow}>
+                                                            <span style={{ color: '#991B1B', fontWeight: 600 }}>Materiales, viáticos, otros</span>
                                                         </div>
                                                     </div>
 
+                                                    {/* Card 4: UTILIDAD DEL TICKET */}
                                                     <div className={styles.financeCard} style={{
-                                                        background: grossMargin >= 0 ? 'linear-gradient(135deg, #F0FDF4, #DCFCE7)' : 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
-                                                        border: grossMargin >= 0 ? '1px solid #86EFAC' : '1px solid #FCA5A5'
+                                                        background: grossMargin >= 0 ? 'linear-gradient(135deg, #ECFDF5, #D1FAE5)' : 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
+                                                        border: grossMargin >= 0 ? '1px solid #6EE7B7' : '1px solid #FCA5A5'
                                                     }}>
-                                                        <div className={styles.financeCardHeader} style={{ color: grossMargin >= 0 ? '#166534' : '#991B1B' }}>
+                                                        <div className={styles.financeCardHeader} style={{ color: grossMargin >= 0 ? '#065F46' : '#991B1B' }}>
                                                             <Sparkles size={16} />
-                                                            <span>RENTABILIDAD / GANANCIA</span>
+                                                            <span>UTILIDAD DEL TICKET</span>
                                                         </div>
-                                                        <div className={styles.financeMainValue} style={{ color: grossMargin >= 0 ? '#059669' : '#DC2626' }}>
+                                                        <div className={styles.financeMainValue} style={{ color: grossMargin >= 0 ? '#047857' : '#DC2626' }}>
                                                             <span className={styles.currencySymbol}>S/</span>
                                                             <span className={styles.mainAmount}>{grossMargin.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                         </div>
                                                         <div className={styles.profitMarginBadge} style={{
-                                                            background: grossMargin >= 0 ? '#DCFCE7' : '#FEE2E2',
-                                                            color: grossMargin >= 0 ? '#15803d' : '#b91c1c',
-                                                            border: grossMargin >= 0 ? '1px solid #86EFAC' : '1px solid #FCA5A5'
+                                                            background: grossMargin >= 0 ? '#A7F3D0' : '#FEE2E2',
+                                                            color: grossMargin >= 0 ? '#047857' : '#b91c1c',
+                                                            border: grossMargin >= 0 ? '1px solid #6EE7B7' : '1px solid #FCA5A5'
                                                         }}>
                                                             <Percent size={12} />
                                                             <span>{(pctReal || 0).toFixed(1)}% margen</span>
