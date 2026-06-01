@@ -294,15 +294,37 @@ export default function AdminDashboard() {
     const roi = useMemo(() => {
         const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
 
-        const closed = inPeriod.filter((t: any) =>
-            normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado"
-        );
+        let ingresosSum = 0;
+        let inversionSum = 0;
+        let utilidadSum = 0;
+        let costosArrastradosSum = 0;
+        
+        const closed: any[] = [];
+        const arrastradoItems: any[] = [];
 
-        const ingresos  = round2(closed.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0));
-        const inversion = round2(inPeriod.reduce((a, t) => a + ticketInversion(t), 0));
-        const utilidad  = round2(closed.reduce((a, t) => a + ticketUtilidad(t), 0));
-        const margen    = ingresos  > 0 ? (utilidad / ingresos)  * 100 : 0;
-        const ratio     = inversion > 0 ?  utilidad / inversion        : 0;
+        inPeriod.forEach((t: any) => {
+            const inv = ticketInversion(t);
+            inversionSum += inv;
+
+            const isClosed = normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado";
+            if (isClosed) {
+                closed.push(t);
+                ingresosSum += parseFloat(t.ingresos_reales ?? 0);
+                utilidadSum += ticketUtilidad(t);
+            }
+
+            if (isRolledOver(t)) {
+                arrastradoItems.push(t);
+                costosArrastradosSum += inv;
+            }
+        });
+
+        const ingresos = round2(ingresosSum);
+        const inversion = round2(inversionSum);
+        const utilidad = round2(utilidadSum);
+        const margen = ingresos > 0 ? (utilidad / ingresos) * 100 : 0;
+        const ratio = inversion > 0 ? utilidad / inversion : 0;
+        const costosArrastrados = round2(costosArrastradosSum);
 
         const byService = SERVICE_TYPES
             .map(s => {
@@ -327,10 +349,6 @@ export default function AdminDashboard() {
             .filter(t => ticketInversion(t) > 0)
             .map(t => ({ ...t, _investmentTotalReal: round2(ticketInversion(t)) }))
             .sort((a, b) => b._investmentTotalReal - a._investmentTotalReal);
-
-        // Calcular carga financiera arrastrada
-        const arrastradoItems = inPeriod.filter(isRolledOver);
-        const costosArrastrados = round2(arrastradoItems.reduce((a, t) => a + ticketInversion(t), 0));
 
         return { inversion, ingresos, utilidad, margen, ratio,
                  closed: closed.length, total: inPeriod.length,

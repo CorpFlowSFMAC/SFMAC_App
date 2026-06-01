@@ -12,6 +12,23 @@ export const toNum = (val: any): number => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EXTRACTOR DE IGV CENTRALIZADO
+// ─────────────────────────────────────────────────────────────────────────────
+/** Extrae de forma centralizada y segura el IGV de un ticket en cualquiera de sus formatos (root o metadata). */
+export const extractIGV = (ticket: any): number => {
+    if (!ticket) return 0;
+    return toNum(
+        ticket.montoIGV ?? 
+        ticket.monto_igv ?? 
+        ticket.metadata?.montoIGV ?? 
+        ticket.metadata?.monto_igv ?? 
+        ticket.igv ?? 
+        ticket.metadata?.igv ?? 
+        0
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ESTADO DE PAGO CONFIRMADO
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -132,13 +149,15 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     // Ingresos base (sin IGV si aplica)
     const montoFinal =
-        [ticket.ingresos_reales, ticket.monto_presupuesto, ticket.total_quoted_amount,
+        [ticket.monto_presupuesto, ticket.total_quoted_amount,
          ticket.montoFinal, ticket.montoTotalCotizado]
             .map(toNum)
             .find(v => v > 0) ?? 0;
 
-    const igv = toNum(ticket.montoIGV ?? ticket.metadata?.montoIGV ?? ticket.igv ?? ticket.metadata?.igv ?? 0);
-    const montoBase = igv > 0 ? round2(montoFinal - igv) : montoFinal;
+    const igv = extractIGV(ticket);
+    const montoBase = igv > 0 
+        ? round2(montoFinal - igv) 
+        : (ticket.ingresos_reales ? toNum(ticket.ingresos_reales) : montoFinal);
 
     // Normalizar un costo: extraer monto y fecha canónicos
     const normalize = (c: any) => ({
