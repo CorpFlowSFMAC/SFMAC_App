@@ -14,9 +14,9 @@ describe('calculateTicketFinances', () => {
 
     const res = calculateTicketFinances(ticket, costs);
     // montoBase = montoFinal - igv = 2000-200 = 1800
-    // totalLaborConfirmed = 300 -> realProfitability = 1800 - 300 = 1500
+    // pactedMO = 1000 -> realProfitability = 1800 - 1000 = 800
     expect(res.totalVenta).toBe(1800);
-    expect(res.realProfitability).toBe(1500);
+    expect(res.realProfitability).toBe(800);
   });
 
   test('handles adelanto cost as operating expense vs labor correctly', () => {
@@ -30,7 +30,8 @@ describe('calculateTicketFinances', () => {
     // totalOpConfirmed should include adelanto (200), totalLaborConfirmed should include 300
     expect(res.totalOpConfirmed).toBe(200);
     expect(res.totalLaborConfirmed).toBe(300);
-    expect(res.realProfitability).toBe(res.totalVenta - (res.totalOpConfirmed + res.totalLaborConfirmed));
+    // realProfitability = totalVenta (1500) - pactedMO (500) - totalOpConfirmed (200) = 800
+    expect(res.realProfitability).toBe(800);
   });
 
   test('partial payment consumption: abonado + pending remainder', () => {

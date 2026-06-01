@@ -152,8 +152,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     const netLaborBalance = Math.max(0, round2(pactedMO - totalLaborConfirmed));
     
-    // V3 CORE: rentabilidad real = ingresos totales - pagos confirmados en ticket_costs.
-    const realProfitability = round2(montoBase - totalLaborConfirmed - totalOpConfirmed);
+    // V3 CORE: rentabilidad real = ingresos totales - MO pactada - pagos operativos confirmados.
+    const realProfitability = round2(montoBase - pactedMO - totalOpConfirmed);
     const margenReal = montoBase > 0 ? round2((realProfitability / montoBase) * 100) : 0;
 
     const pendingLaborItems = pendingModern.map(normalizePayment).filter(isLabor);
