@@ -40,7 +40,10 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
         return tickets.map((ticket) => ({ ...ticket, costos: [] }));
     }
 
-    const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`);
+    const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
     const result = await response.json();
     if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos de tickets');
 
@@ -636,10 +639,15 @@ export const ticketsAPI = {
         created_by?: string;
         current_step?: number;
         metadata?: any;
+        created_at?: string;
     }) {
+        const payload = {
+            ...ticket,
+            created_at: ticket.created_at || new Date().toISOString()
+        };
         const { data, error } = await supabase
             .from('tickets')
-            .insert(ticket)
+            .insert(payload)
             .select('*, clients(*), branch_offices(*), technicians(*)')
             .single();
 
@@ -1007,7 +1015,10 @@ export const gestorasTargetsAPI = {
 
 export const ticketCostsAPI = {
     async getByTicket(ticketId: string) {
-        const response = await fetch(`/api/v3/ticket-costs?ticket_id=${encodeURIComponent(ticketId)}`);
+        const response = await fetch(`/api/v3/ticket-costs?ticket_id=${encodeURIComponent(ticketId)}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
         const result = await response.json();
 
         if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos del ticket');

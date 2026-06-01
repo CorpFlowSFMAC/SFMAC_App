@@ -1,13 +1,15 @@
-const supabaseUrl = 'http://87.99.137.96:8000';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc3MjIwMzI0LCJleHAiOjIwOTI1ODAzMjR9.bz2FnNU2lPSYg7phNladdHjVqw_mHWYpklHjd-A_EIY';
+const supabaseUrl = 'https://api.sinfimac.pe';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvcnBmbG93c2ZtYWMtaGV0em5lciIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc4NzQ4NTY5LCJleHAiOjIwODU3MjkyOTR9.UVpFZwAHuUFXKEwZANp58HP3x-9wgFGrvVY12yoC9MI';
 
 async function main() {
     console.log("Fetching vw_tickets_strategic via PostgREST...");
     try {
-        const res = await fetch(`${supabaseUrl}/rest/v1/vw_tickets_strategic?select=*&limit=1`, {
+        const res = await fetch(`${supabaseUrl}/rest/v1/rpc/get_payment_tickets_ultra_light`, {
+            method: 'POST',
             headers: {
                 'apikey': supabaseKey,
-                'Authorization': `Bearer ${supabaseKey}`
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json'
             }
         });
         

@@ -253,6 +253,32 @@ export async function PUT(request: NextRequest) {
             throw error;
         }
 
+        // --- NEW LOGIC: TRANSICIÓN AUTOMÁTICA A EJECUCIÓN ---
+        // Si el pago ha sido confirmado (ej. pagado, reembolso pagado, etc.)
+        if (safeUpdates.estado_pago && isConfirmedTicketCostStatus(safeUpdates.estado_pago)) {
+            const { data: ticket, error: ticketErr } = await client
+                .from('tickets')
+                .select('id, status_id')
+                .eq('id', data.ticket_id)
+                .single();
+            
+            if (ticket && !ticketErr) {
+                const currentStatus = String(ticket.status_id);
+                // Si está en 'cotizacion_aprobada' (7) pasa a 'en_ejecucion' (8)
+                if (currentStatus === '7' || currentStatus === 'cotizacion_aprobada') {
+                    const newStatus = typeof ticket.status_id === 'number' ? 8 : 'en_ejecucion';
+                    
+                    await client
+                        .from('tickets')
+                        .update({ status_id: newStatus })
+                        .eq('id', data.ticket_id);
+                    
+                    console.log(`[Ticket Costs API] Ticket ${data.ticket_id} transicionado automáticamente a en_ejecucion tras confirmación de pago.`);
+                }
+            }
+        }
+        // ----------------------------------------------------
+
         return NextResponse.json({ success: true, data });
     } catch (err: any) {
         console.error('[Ticket Costs API] PUT Error:', err);
@@ -280,3 +306,5 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
     }
 }
+
+export const dynamic = 'force-dynamic';
