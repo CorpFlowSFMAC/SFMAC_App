@@ -27,13 +27,29 @@ export const isConfirmedTicketCostStatus = (status: string | null | undefined): 
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CLASIFICADOR RELACIONAL: 'labor' | 'operating' | 'none'
+// CLASIFICADOR: 'labor' | 'operating' | 'none'
 //
 // Jerarquía de reglas (en orden de prioridad):
-//   1. specialist_id === main_technician_id  → labor   (pago al técnico del ticket)
-//   2. specialist_id !== main_technician_id  → operating (pago a tercero externo)
-//   3. sin specialist_id → inferir por palabras clave en categoría/concepto
+//   1. Categoría operativa explícita → operating (siempre, independiente del técnico)
+//   2. Categoría laboral explícita (MO/Rescate) → relacional: mismo técnico=labor, otro=operating
+//   3. Fallback por palabras clave cuando no hay categoría ni ID relacional
+//
+// REGLA DE NEGOCIO CRÍTICA: Materiales, Viáticos, Logística, Adelanto Operativo y Otros
+// son SIEMPRE gastos operativos (reducen utilidad), sin importar a qué técnico se le asignen.
+// Solo pagos de 'Mano de Obra' / 'Rescate Financiero' al técnico principal cuentan como labor.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Categorías que son SIEMPRE gastos operativos (nunca labor)
+const OPERATING_CATEGORIES = new Set([
+    "materiales", "viáticos", "viaticos", "viáticos / movilidad", "viaticos / movilidad",
+    "logística", "logistica", "envíos", "envios", "movilidad", "insumos",
+    "adelanto", "adelanto operativo", "otros", "otros egresos", "compras",
+]);
+
+// Categorías que son labor (solo si el especialista es el técnico del ticket)
+const LABOR_CATEGORIES = new Set([
+    "mano de obra", "rescate financiero", "rescate", "honorarios", "bono",
+]);
 
 const OPERATING_KEYWORDS = [
     "compras", "materiales", "viáticos", "viatico", "logística",
@@ -55,17 +71,29 @@ type CostClass = "labor" | "operating" | "none";
 function classifyItem(item: any): CostClass {
     const sid: string = item.specialist_id ?? "";
     const mid: string = item.main_technician_id ?? "";
+    const cat: string = (item.categoria || "").toLowerCase().trim();
+    const con: string = (item.concepto || item.tipo || "").toLowerCase();
+    const text = `${cat} ${con}`;
 
-    // Regla relacional (fuente de verdad primaria)
+    // ── Regla 1: Categoría operativa explícita → siempre operating ──────────
+    // Materiales, Viáticos, Logística, Adelanto Operativo, Otros SIEMPRE son
+    // gastos que reducen la utilidad, independiente del técnico vinculado.
+    if (OPERATING_CATEGORIES.has(cat)) return "operating";
+
+    // ── Regla 2: Categoría laboral + regla relacional ────────────────────────
+    // Solo 'Mano de Obra', 'Rescate Financiero', etc. se resuelven por relación
+    if (LABOR_CATEGORIES.has(cat)) {
+        if (sid && mid) return sid === mid ? "labor" : "operating";
+        // Fallback por keyword si no hay IDs
+        if (LABOR_KEYWORDS.some(k => text.includes(k))) return "labor";
+    }
+
+    // ── Regla 3: Regla relacional genérica (para categorías no mapeadas) ─────
     if (sid && mid) {
         return sid === mid ? "labor" : "operating";
     }
 
-    // Fallback por palabras clave (solo cuando falta el ID relacional)
-    const cat = (item.categoria || "").toLowerCase();
-    const con = (item.concepto || item.tipo || "").toLowerCase();
-    const text = `${cat} ${con}`;
-
+    // ── Regla 4: Fallback por palabras clave ─────────────────────────────────
     if (OPERATING_KEYWORDS.some(k => text.includes(k))) return "operating";
     if (LABOR_KEYWORDS.some(k => text.includes(k)) || con.includes("pago")) return "labor";
     return "none";
