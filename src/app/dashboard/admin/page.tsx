@@ -9,6 +9,10 @@ import {
     ChevronRight, AlertCircle, Star, Layers,
     BanknoteIcon, Award
 } from "lucide-react";
+import {
+    ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+    PieChart, Pie, Cell
+} from 'recharts';
 import Link from "next/link";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
@@ -220,24 +224,27 @@ export default function AdminDashboard() {
     }, [dateRange]);
 
 
-    const isInRange = (dateStr: string) => {
+    const isInRange = (dateStr: string | null | undefined) => {
+        if (!dateStr) return false;
         if (dateRange === "all") return true;
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return false;
-        const today = new Date();
+        
+        const nowTime = now.getTime();
+        const diffMs = nowTime - d.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
         if (dateRange === "today") {
-            return d.toDateString() === today.toDateString();
+            // Últimas 24 horas o mismo día calendario
+            return d.toDateString() === now.toDateString() || (diffDays >= -0.2 && diffDays <= 1.2);
         }
         if (dateRange === "week") {
-            const startOfWeek = new Date(today);
-            const day = today.getDay() || 7;
-            startOfWeek.setDate(today.getDate() - (day - 1));
-            startOfWeek.setHours(0, 0, 0, 0);
-            return d >= startOfWeek;
+            // Últimos 7 días
+            return diffDays >= -0.2 && diffDays <= 7.2;
         }
         if (dateRange === "month") {
-            return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+            // Últimos 30 días
+            return diffDays >= -0.2 && diffDays <= 30.2;
         }
         return true;
     };
@@ -246,115 +253,116 @@ export default function AdminDashboard() {
     const roi = useMemo(() => {
         // REGLA 1: Solo tickets con actividad o creación en el rango seleccionado
         const inPeriod = tickets.filter((t: any) => {
-            // El ticket entra en el ROI si fue creado en el periodo O si fue cerrado en el periodo
-            const createdInRange = isInRange(t.created_at || t.createdAt);
+            const createdInRange = isInRange(t.created_at || t.createdAt || t.fechaCreacion);
             const closedInRange = t.closure_date ? isInRange(t.closure_date) : false;
             return createdInRange || closedInRange;
         });
 
-        // ✅ CORREGIDO: Solo tickets CERRADOS (no en proceso)
-        const closed = inPeriod.filter((t: any) => {
-            const sid = normalizeStateId(t.status_id || t.estadoId);
-            return sid === "ticket_cerrado";  // SOLO ticket_cerrado
-        });
+        // Ingresos Generados (Neto, sin IGV) - Mapea directamente de ingresos_reales pre-calculado en vw_ticket_financials
+        const ingresosSinIGV = inPeriod.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
 
+        // Inversión Ejecutada (Costos confirmados, reales) - Mapea de inversion_ejecutada o total_costs_agg en vw_ticket_financials
+        const inversionEjecutada = inPeriod.reduce((acc, t) => acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0), 0);
 
-        // REGLA 2: INGRESOS GENERADOS = Tickets CERRADOS con MONTO FINAL (CON IGV)
-        // El monto final facturado YA INCLUYE IGV.
-        let ingresosConIGV = 0;
-        let costosCerrados = 0;
-        
-        closed.forEach((t: any) => {
-            // Buscar monto en varios campos posibles
-            const monto = parseFloat(
-                t.total_quoted_amount ||  // Principal (ya incluye IGV)
-                t.montoFinal || 
-                t.total_amount ||
-                t.monto ||
-                0
-            );
-            const ingresoReal = parseFloat(t.ingresos_reales || t.ingreso_real || 0);
-            
-            // Calcular custos propios del ticket cerrado (mano obra + materiales + visitas)
-            const costoMano = parseFloat(t.labor_cost || t.costoManoObra || 0);
-            const costoMat = parseFloat(t.materials_cost || t.costoMateriales || 0);
-            const costoVis = parseFloat(t.visit_cost || t.costoVisita || 0);
-            const custosDelTicket = costoMano + costoMat + costoVis;
-            costosCerrados += custosDelTicket;
-            
-            // Usar el mayor valor entre monto facturado e ingreso real
-            ingresosConIGV += Math.max(monto, ingresoReal);
-        });
-        
-        // Ingreso NETO (sin IGV) = total_quoted_amount / 1.18
-        const ingresosSinIGV = ingresosConIGV / 1.18;
-        
-        // Para UI: Mostrar CON IGV
-        const ingresosGenerados = ingresosConIGV;
-        
-        // Para calculo: usamos neto (sin IGV)
-        const ingresosNetoCalculo = ingresosSinIGV;
-    
-        // REGLA 3: INVERSIÓN EJECUTADA — Usa calculateTicketFinances para normalizar
-        // datos (fechas, montos, estados) de forma idéntica al módulo de Pagos.
-        // Filtra items confirmados cuya fecha de pago/confirmación cae en el rango.
-        // Prioridad de fecha: fecha_pago > updated_at > fecha (created_at fallback).
-        // updated_at refleja cuándo se confirmó el depósito (cambio de estado a "pagado").
-        const inversionItemsList: any[] = [];
-        let inversionTotal = 0;
-        tickets.forEach((t: any) => {
-            const finances = calculateTicketFinances(t, t.costos || []);
-            const allConfirmed = [...finances.laborItems, ...finances.operatingItems];
-            let ticketInversion = 0;
-            allConfirmed.forEach((c: any) => {
-                const investmentDate = c.fecha_pago || c.updated_at || c.fecha;
-                if (!isInRange(investmentDate)) return;
-                ticketInversion += c.monto;
-            });
-            if (ticketInversion > 0) {
-                inversionItemsList.push({ ...t, _investmentTotalReal: round2(ticketInversion) });
-                inversionTotal += ticketInversion;
-            }
-        });
-        const inversionEjecutada = round2(inversionTotal);
-
-        // Utilidad Neta = Monto Aprobado por el Cliente (SIN IGV) - Inversión Ejecutada (confirmada en ticket_costs)
-        // Se utiliza la inversión ejecutada calculada más arriba (`inversionEjecutada`) para evitar mezclar campos legacy.
-        const utilidadNeta = round2(ingresosNetoCalculo - inversionEjecutada);
-        const margenReal = ingresosNetoCalculo > 0 ? (utilidadNeta / ingresosNetoCalculo) * 100 : 0;
-        
-        // Ratio de Eficiencia: [Utilidad Neta] / [Inversión Ejecutada]
+        // Utilidad Neta y Métricas Clave
+        const utilidadNeta = round2(ingresosSinIGV - inversionEjecutada);
+        const margenReal = ingresosSinIGV > 0 ? (utilidadNeta / ingresosSinIGV) * 100 : 0;
         const ratioEficiencia = inversionEjecutada > 0 ? (utilidadNeta / inversionEjecutada) : 0;
 
-        // AUDIT LOG (Temporal para validación)
-        
-        // Log detallado por ticket cerrado
-        closed.forEach((t: any, idx: number) => {
-            const monto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+        // Tickets cerrados para los contadores y subtextos
+        const closed = inPeriod.filter((t: any) => {
+            const sid = normalizeStateId(t.status_id || t.estadoId);
+            return sid === "ticket_cerrado";
         });
 
-        // Por servicio (Lectura inmutable del backend)
+        // Agrupación por tipo de servicio usando montos sin IGV
         const byService = SERVICE_TYPES.map(s => {
-            const st = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
+            const st = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
             const ingNeto = st.reduce((acc, t) => acc + parseFloat(t.ingresos_reales || 0), 0);
-            const costReal = st.reduce((acc, t) => acc + parseFloat(t.total_costs_agg || 0), 0);
+            const costReal = st.reduce((acc, t) => acc + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0), 0);
             const m = ingNeto > 0 ? ((ingNeto - costReal) / ingNeto) * 100 : 0;
             return { ...s, tickets: st.length, ingresos: ingNeto, margen: m };
         }).filter(s => s.tickets > 0).sort((a, b) => b.ingresos - a.ingresos);
 
+        // inversionItems con el campo _investmentTotalReal esperado por la UI
+        const inversionItemsList = inPeriod
+            .filter(t => parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0) > 0)
+            .map(t => ({
+                ...t,
+                _investmentTotalReal: round2(parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0))
+            }))
+            .sort((a, b) => b._investmentTotalReal - a._investmentTotalReal);
+
         return { 
             inversion: round2(inversionEjecutada), 
-            ingresos: round2(ingresosGenerados), 
+            ingresos: round2(ingresosSinIGV), 
             utilidad: utilidadNeta, 
             margen: margenReal, 
             ratio: ratioEficiencia, 
             closed: closed.length, 
-            total: tickets.length, 
+            total: inPeriod.length, 
             byService,
-            inversionItems: inversionItemsList.sort((a,b) => b._investmentTotalReal - a._investmentTotalReal),
-            ingresosItems: closed.sort((a,b) => new Date(b.closure_date || b.updated_at).getTime() - new Date(a.closure_date || a.updated_at).getTime())
+            inversionItems: inversionItemsList,
+            ingresosItems: inPeriod.filter(t => parseFloat(t.ingresos_reales || 0) > 0)
+                .sort((a,b) => new Date(b.closure_date || b.updated_at || b.created_at || 0).getTime() - new Date(a.closure_date || a.updated_at || a.created_at || 0).getTime())
         };
-    }, [tickets]);
+    }, [tickets, dateRange]);
+
+    // ── MÓDULO ADICIONAL: Datos de Gráficos (Pipeline Aprobado, Clientes y Depósitos) ──
+    const pipelineApprovedData = useMemo(() => {
+        let aprobadas = 0;
+        let enEjecucion = 0;
+        
+        tickets.forEach((t: any) => {
+            if (!isInRange(t.created_at || t.createdAt || t.fechaCreacion)) return;
+            const sid = normalizeStateId(t.status_id || t.estadoId);
+            const val = parseFloat(t.ingresos_reales || 0);
+            if (sid === 'cotizacion_aprobada') aprobadas += val;
+            if (sid === 'en_ejecucion') enEjecucion += val;
+        });
+
+        return [
+            { name: "Aprobada", value: round2(aprobadas), color: "#10B981" },
+            { name: "En Ejecución", value: round2(enEjecucion), color: "#8B5CF6" }
+        ].filter(item => item.value > 0);
+    }, [tickets, dateRange]);
+
+    const clientBillingData = useMemo(() => {
+        const clientMap: Record<string, { id: string, name: string, billing: number, color: string }> = {};
+        tickets.forEach((t: any) => {
+            if (!isInRange(t.created_at || t.createdAt || t.fechaCreacion)) return;
+            const clientName = t.cliente?.nombre || t.clients?.name || t.cliente?.name || t.metadata?.cliente?.nombre || "Otros";
+            const clientId = t.client_id || "otros";
+            const clientColor = t.cliente?.color || t.clients?.color_aura || "#3B82F6";
+            const revenue = parseFloat(t.ingresos_reales || 0);
+            if (revenue <= 0) return;
+            if (!clientMap[clientId]) {
+                clientMap[clientId] = { id: clientId, name: clientName, billing: 0, color: clientColor };
+            }
+            clientMap[clientId].billing += revenue;
+        });
+        return Object.values(clientMap)
+            .map(c => ({ ...c, billing: round2(c.billing) }))
+            .sort((a, b) => b.billing - a.billing)
+            .slice(0, 5); // Top 5
+    }, [tickets, dateRange]);
+
+    const advancesTesoreria = useMemo(() => {
+        let totalAdvances = 0;
+        let totalBudget = 0;
+
+        tickets.forEach((t: any) => {
+            if (!isInRange(t.created_at || t.createdAt || t.fechaCreacion)) return;
+            totalAdvances += parseFloat(t.adelantos_flujo_b || t.metadata?.adelantos_flujo_b || 0);
+            totalBudget += parseFloat(t.ingresos_reales || 0);
+        });
+
+        return {
+            totalAdvances: round2(totalAdvances),
+            totalBudget: round2(totalBudget),
+            percent: totalBudget > 0 ? round2((totalAdvances / totalBudget) * 100) : 0
+        };
+    }, [tickets, dateRange]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
@@ -652,7 +660,7 @@ export default function AdminDashboard() {
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
-                    sub="Pagos confirmados en ticket_costs del periodo" color="#3B82F6"
+                    sub="Costos confirmados (mano de obra + gastos) sin IGV" color="#3B82F6"
                     icon={BanknoteIcon}
                     light={roi.inversion > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
@@ -660,60 +668,69 @@ export default function AdminDashboard() {
                         setModalTickets(roi.inversionItems.map((t: any) => ({
                             ...t,
                             servicio: t.service_type || t.tipo_servicio,
-                            cliente: t.clients?.name || t.clienteNombre || 'Cliente',
+                            cliente: t.cliente?.nombre || t.clients?.name || t.clienteNombre || 'Cliente',
                             _monto: t._investmentTotalReal,
                         })));
                         setShowListModal(true);
                     }}
                 />
                 <RoiCard label="Ingresos Generados" value={`S/ ${fmt(roi.ingresos)}`}
-                    sub={`De ${roi.closed} ticket(s) CERRADO(s) CON IGV`} color="#10B981"
+                    sub="Presupuestos aprobados y facturación (sin IGV)" color="#10B981"
                     icon={DollarSign}
-                    light={(roi.ingresos > 0 && roi.ingresos > roi.inversion) ? "VERDE" : "VERDE"}
+                    light={roi.ingresos > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => {
-                        setModalTitle("Ingresos: Tickets CERRADOS (CON IGV)");
-                        // Mostrar tickets cerrados con monto CON IGV
+                        setModalTitle("Ingresos Generados: Aprobados & Facturados (SIN IGV)");
                         setModalTickets(roi.ingresosItems.map((t: any) => {
-                            const montoFinal = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-                            const montoConIGV = montoFinal; // Ya incluye IGV
+                            const ingresoReal = parseFloat(t.ingresos_reales || 0);
                             return {
                                 ...t,
-                                cliente: t.clients?.name || t.cliente?.nombre || 'Cliente',
+                                cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
                                 sede: t.branch_offices?.name || t.sede?.nombre || 'Sede',
                                 statusId: t.status_id,
-                                _montoConIGV: montoConIGV,
-                                _montoSinIGV: montoFinal,
-                                _fechaCierre: t.closure_date,
-                                _ticketNumber: t.ticket_number || t.numeroTicket || 'N/A'
+                                _monto: ingresoReal,
+                                _fechaCierre: t.closure_date || t.updated_at,
+                                _ticketNumber: t.client_ticket_number || t.ticket_number || 'N/A'
                             };
                         }));
                         setShowListModal(true);
                     }}
                 />
                 <RoiCard label="Utilidad Neta" value={`S/ ${fmt(roi.utilidad)}`}
-                    sub={`Margen: ${Math.round(roi.margen)}% (CERRADOS)`} color="#8B5CF6"
+                    sub={`Margen neto real: ${Math.round(roi.margen)}%`} color="#8B5CF6"
                     icon={TrendingUp}
                     light={roi.margen >= 35 ? "VERDE" : roi.margen >= 20 ? "AMBAR" : "ROJO"}
                     onClick={() => {
-                        setModalTitle("Análisis de Utilidad Neta (Profitability)");
+                        setModalTitle("Análisis de Utilidad Neta (Profitability) - SIN IGV");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const bruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-                            const ingNeto = bruto / 1.18;
-                            const costReal = (parseFloat(t.labor_cost || t.costoManoObra || 0) + 
-                                              parseFloat(t.materials_cost || t.costoMateriales || 0) + 
-                                              parseFloat(t.visit_cost || t.costoVisita || 0));
-                            return { ...t, _viewMode: 'utilidad', _utilityAmount: ingNeto - costReal };
+                            const ingNeto = parseFloat(t.ingresos_reales || 0);
+                            const costReal = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                            return { 
+                                ...t, 
+                                cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
+                                _viewMode: 'utilidad', 
+                                _utilityAmount: ingNeto - costReal,
+                                _monto: ingNeto - costReal 
+                            };
                         }));
                         setShowListModal(true);
                     }}
                 />
                 <RoiCard label="Ratio de Eficiencia" value={`${roi.ratio.toFixed(2)}x`}
-                    sub="Ganancia por S/ invertido" color="#F59E0B"
+                    sub="Ganancia neta por S/ invertido" color="#F59E0B"
                     icon={Target}
                     light={roi.ratio >= 1.5 ? "VERDE" : roi.ratio >= 1 ? "AMBAR" : "ROJO"}
                     onClick={() => {
                         setModalTitle("Eficiencia Operativa / ROI");
-                        setModalTickets(roi.ingresosItems.map(t => ({ ...t, _viewMode: 'ratio' })));
+                        setModalTickets(roi.ingresosItems.map(t => {
+                            const ingNeto = parseFloat(t.ingresos_reales || 0);
+                            const costReal = parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                            return {
+                                ...t,
+                                cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
+                                _viewMode: 'ratio',
+                                _monto: costReal > 0 ? (ingNeto - costReal) / costReal : 0
+                            };
+                        }));
                         setShowListModal(true);
                     }}
                 />
@@ -748,10 +765,141 @@ export default function AdminDashboard() {
                 </div>
             )}
 
-            {/* ══════════════════════════════════
-                MÓDULO 2: TESORERÍA & FLUJO DE CAJA
-            ══════════════════════════════════ */}
             <SectionHeader icon={<Layers size={16} />} title="Tesorería & Flujo de Caja" color="#F59E0B" />
+
+            {/* 📈 NUEVOS GRÁFICOS FINANCIEROS GERENCIALES (RECHARTS + AURA LIST) ─────────── */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
+                
+                {/* 1. Pipeline de Presupuestos Aprobados */}
+                <div style={{ 
+                    background: "linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)", 
+                    border: "1px solid rgba(255,255,255,0.06)", 
+                    borderRadius: "16px", padding: "1.4rem",
+                    display: "flex", flexDirection: "column", gap: "1rem", minHeight: "260px"
+                }}>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        📊 Pipeline de Presupuestos Aprobados (Sin IGV)
+                    </div>
+                    {pipelineApprovedData.length === 0 ? (
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)" }}>
+                            Sin ejecuciones en este periodo
+                        </div>
+                    ) : (
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+                            <div style={{ width: "130px", height: "130px" }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={pipelineApprovedData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={38}
+                                            outerRadius={55}
+                                            paddingAngle={4}
+                                            dataKey="value"
+                                        >
+                                            {pipelineApprovedData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", flex: 1 }}>
+                                {pipelineApprovedData.map(item => (
+                                    <div key={item.name} style={{ display: "flex", flexDirection: "column" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: item.color }} />
+                                            <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>{item.name}</span>
+                                        </div>
+                                        <span style={{ fontSize: "0.95rem", fontWeight: 900, color: "white", paddingLeft: "14px" }}>S/ {fmt(item.value)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* 2. Facturación por Cliente */}
+                <div style={{ 
+                    background: "linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)", 
+                    border: "1px solid rgba(255,255,255,0.06)", 
+                    borderRadius: "16px", padding: "1.4rem",
+                    display: "flex", flexDirection: "column", gap: "0.75rem", minHeight: "260px"
+                }}>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        💼 Facturación por Cliente (Top 5 sin IGV)
+                    </div>
+                    {clientBillingData.length === 0 ? (
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)" }}>
+                            Sin ingresos facturados en este periodo
+                        </div>
+                    ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", flex: 1, justifyContent: "center" }}>
+                            {clientBillingData.map((c, idx) => {
+                                const maxBilling = Math.max(...clientBillingData.map(item => item.billing), 1);
+                                const pct = (c.billing / maxBilling) * 100;
+                                return (
+                                    <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", fontWeight: 700 }}>
+                                            <span style={{ color: "rgba(255,255,255,0.75)", display: "flex", alignItems: "center", gap: "4px" }}>
+                                                <span style={{ fontSize: "0.6rem", fontWeight: 900, background: `${c.color}20`, color: c.color, padding: "1px 5px", borderRadius: "3px" }}>#{idx + 1}</span>
+                                                {c.name}
+                                            </span>
+                                            <span style={{ color: "white", fontWeight: 900 }}>S/ {fmt(c.billing)}</span>
+                                        </div>
+                                        <div style={{ height: "4px", background: "rgba(255,255,255,0.05)", borderRadius: "999px", overflow: "hidden" }}>
+                                            <div style={{ height: "100%", width: `${pct}%`, background: c.color, borderRadius: "999px" }} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. Avances de Depósitos / Tesorería */}
+                <div style={{ 
+                    background: "linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)", 
+                    border: "1px solid rgba(255,255,255,0.06)", 
+                    borderRadius: "16px", padding: "1.4rem",
+                    display: "flex", flexDirection: "column", gap: "1rem", minHeight: "260px"
+                }}>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        🪙 Avances de Depósitos / Tesorería
+                    </div>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "1.1rem" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                                <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.45)", fontWeight: 700 }}>ADELANTOS CONFIRMADOS</span>
+                                <span style={{ fontSize: "1.1rem", fontWeight: 900, color: "#F59E0B" }}>S/ {fmt(advancesTesoreria.totalAdvances)}</span>
+                            </div>
+                            <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)" }}>Suma de Mano de Obra y Viáticos dispersados (sin IGV)</div>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                                <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.45)", fontWeight: 700 }}>PRESUPUESTO TOTAL ASIGNADO</span>
+                                <span style={{ fontSize: "1.1rem", fontWeight: 900, color: "#10B981" }}>S/ {fmt(advancesTesoreria.totalBudget)}</span>
+                            </div>
+                            <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.3)" }}>Total neto de tickets aprobados/ejecución (sin IGV)</div>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", fontWeight: 800 }}>
+                                <span style={{ color: "rgba(255,255,255,0.5)" }}>AVANCE DE FLUJO</span>
+                                <span style={{ color: "#F59E0B" }}>{advancesTesoreria.percent}%</span>
+                            </div>
+                            <div style={{ height: "6px", background: "rgba(255,255,255,0.05)", borderRadius: "999px", overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${Math.min(advancesTesoreria.percent, 100)}%`, background: "linear-gradient(90deg, #F59E0B 0%, #10B981 100%)", borderRadius: "999px" }} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            {/* 📋 LISTADO DE AGING Y DETALLE DE CAJA (Original) ─────────── */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
 
                 {/* Col 1: Gestión de Ingresos y Pipeline */}
