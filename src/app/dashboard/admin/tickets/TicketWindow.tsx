@@ -1002,7 +1002,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
             total_quoted_amount: parseFloat(sourceForPayments?.montoFinal ?? montoTotalCotizado ?? 0),
             technician_id: tecnico?.id || serverTicket?.technician_id,
-            gestiona_id: businessData?.gestora?.id || serverTicket?.gestora_id,
+            gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
             metadata: {
                 ...serverMeta,
                 ...sourceMetadata,
@@ -1518,10 +1518,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
     };
 
-    const handleApproveQuote = () => {
+    const handleApproveQuote = async () => {
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
         const currentMontoTotal = currentDraft?.total ?? montoTotalCotizado;
+        const previousTicketData = { ...ticketData };
         const approved = {
             ...ticketData,
             estadoId: "cotizacion_aprobada",
@@ -1536,8 +1537,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             partidas: currentPartidas
         };
         setTicketData(approved);
-        syncToSupabase(approved);
-        showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
+        try {
+            const success = await syncToSupabase(approved);
+            if (success) {
+                showToast("Cotización Aprobada", "El ticket ha pasado al estado APROBADA y el presupuesto se ha formalizado.", "success");
+            } else {
+                setTicketData(previousTicketData);
+                showToast("Error de Conexión", "No se pudo sincronizar la aprobación de la cotización con el servidor. Se realizó un rollback al estado anterior.", "error");
+            }
+        } catch (err) {
+            console.error("Error approving quote:", err);
+            setTicketData(previousTicketData);
+            showToast("Error de Conexión", "No se pudo sincronizar la aprobación de la cotización con el servidor. Se realizó un rollback al estado anterior.", "error");
+        }
     };
 
     const queryClient = useQueryClient();

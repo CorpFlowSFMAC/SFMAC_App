@@ -1,5 +1,11 @@
 import { supabase } from './supabase'
 import { stripFinancialMetadata } from './financialMetadata'
+import { round2 } from './formatters'
+
+const toNumberSafe = (value: any): number => {
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return isNaN(num) ? 0 : num;
+};
 
 export class DuplicateTicketCostError extends Error {
     constructor() {
@@ -833,7 +839,7 @@ export const paymentsAPI = {
                     .maybeSingle();
 
                 if (!costErr && costRecord) {
-                    const paidAmount = toNumberSafe(payment.amount || payment.monto || 0);
+                    const paidAmount = toNumberSafe(payment.amount || (payment as any).monto || 0);
                     const originalAmount = toNumberSafe(costRecord.monto || 0);
 
                     if (paidAmount >= originalAmount) {

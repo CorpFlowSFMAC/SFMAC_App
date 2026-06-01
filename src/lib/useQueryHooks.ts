@@ -394,6 +394,9 @@ export function useUpdateTicketStatus() {
             updates: Record<string, any>;
         }) => {
             const result = await ticketsAPI.update(ticketId, updates);
+            if (!result) {
+                throw new Error("No data returned from update operation on status change");
+            }
             return normalizeTicket(result);
         },
         // ── OPTIMISTIC UPDATE ──
@@ -456,6 +459,9 @@ export function useUpdateTicket() {
             updates: Record<string, any>;
         }) => {
             const result = await ticketsAPI.update(ticketId, updates);
+            if (!result) {
+                throw new Error("No data returned from update operation");
+            }
             return normalizeTicket(result);
         },
         onMutate: async ({ ticketId, updates }) => {

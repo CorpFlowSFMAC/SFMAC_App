@@ -1,4 +1,4 @@
-export const HETZNER_SUPABASE_URL = 'https://api.sinfimac.pe';
+export const HETZNER_SUPABASE_URL = 'https://corpflow.sinfimac.pe';
 
 const isSupabaseCloudUrl = (value: string) => /\.supabase\.co(?:\/|$)/i.test(value);
 
