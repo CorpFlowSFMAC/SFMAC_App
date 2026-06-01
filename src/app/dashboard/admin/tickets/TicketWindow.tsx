@@ -498,7 +498,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
     }, [ticketData.id, advanceRefreshKey]);
 
-    // Suscripción granular a COSTOS (el ticket se actualiza vía props)
+    // Suscripción granular a COSTOS Y PAGOS (el ticket se actualiza vía props)
     useEffect(() => {
         if (!ticketData?.id) return;
 
@@ -510,6 +510,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     event: '*',
                     schema: 'public',
                     table: 'ticket_costs',
+                    filter: `ticket_id=eq.${ticketData.id}`
+                },
+                () => {
+                    loadCosts();
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'ticket_payments',
                     filter: `ticket_id=eq.${ticketData.id}`
                 },
                 () => {
