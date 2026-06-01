@@ -30,6 +30,15 @@ const isOperating = (item: any) => {
     const cat = (item.categoria || '').toLowerCase();
     const con = (item.concepto || item.tipo || '').toLowerCase();
 
+    // ★ REGLA PRINCIPAL: Si el beneficiario es el técnico principal del ticket,
+    // NUNCA es gasto operativo — siempre es pago de Mano de Obra.
+    // Esto aplica incluso si la categoría dice "Adelanto Operativo".
+    const isPrincipalTechnician = Boolean(
+        item.specialist_id && item.main_technician_id &&
+        item.specialist_id === item.main_technician_id
+    );
+    if (isPrincipalTechnician) return false;
+
     // Palabras que claramente indican gasto operativo / compras
     const operatingKeywords = [
         'compras', 'materiales', 'viáticos', 'viatico', 'logística',
@@ -38,7 +47,7 @@ const isOperating = (item: any) => {
         'repuestos', 'insumo', 'peaje', 'estacionamiento', 'egreso'
     ];
 
-    // 1) Franjas explícitas: "adelanto operativo" debe tratarse como operativo
+    // 1) Franjas explícitas: "adelanto operativo" SIN técnico identificado → operativo
     if (cat.includes('adelanto operativo') || con.includes('adelanto operativo')) {
         return true;
     }
@@ -56,16 +65,28 @@ const isOperating = (item: any) => {
 };
 
 const isLabor = (item: any) => {
-    // Prioridad: si viene de un especialista EXTERNO (specialist_id !== main_technician_id)
-    // lo consideramos "Mano de Obra (Técnico Externo)" — gasto directo por servicios.
-    const isExternalSpecialist = Boolean(
-        item && item.specialist_id && item.main_technician_id && item.specialist_id !== item.main_technician_id
-    );
-    if (isExternalSpecialist) return true;
-
-    // Si fue clasificado explícitamente como "adelanto operativo" evitar marcarlo como mano de obra
     const cat = (item.categoria || '').toLowerCase();
     const con = (item.concepto || item.tipo || '').toLowerCase();
+
+    // ★ REGLA 1 - TÉCNICO PRINCIPAL: Si specialist_id === main_technician_id,
+    // es un pago al técnico del ticket → siempre Mano de Obra.
+    // Aplica incluso si la categoría dice "Adelanto Operativo" (adelanto de MO).
+    const isPrincipalTechnician = Boolean(
+        item && item.specialist_id && item.main_technician_id &&
+        item.specialist_id === item.main_technician_id
+    );
+    if (isPrincipalTechnician) return true;
+
+    // ★ REGLA 2 - ESPECIALISTA EXTERNO: specialist_id diferente al técnico principal
+    // → gasto directo por servicios de terceros (no reduce deuda con técnico principal).
+    const isExternalSpecialist = Boolean(
+        item && item.specialist_id && item.main_technician_id &&
+        item.specialist_id !== item.main_technician_id
+    );
+    if (isExternalSpecialist) return false; // Lo toma isOperating vía categoría
+
+    // ★ REGLA 3 - SIN specialist_id: clasificar por palabras clave en concepto/categoría
+    // Si dice explícitamente "adelanto operativo" y no hay técnico identificado → NO es MO
     if (cat.includes('adelanto operativo') || con.includes('adelanto operativo')) return false;
 
     const laborKeywords = [
