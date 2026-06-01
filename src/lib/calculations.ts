@@ -137,7 +137,7 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
             .map(toNum)
             .find(v => v > 0) ?? 0;
 
-    const igv = toNum(ticket.montoIGV ?? ticket.igv ?? 0);
+    const igv = toNum(ticket.montoIGV ?? ticket.metadata?.montoIGV ?? ticket.igv ?? ticket.metadata?.igv ?? 0);
     const montoBase = igv > 0 ? round2(montoFinal - igv) : montoFinal;
 
     // Normalizar un costo: extraer monto y fecha canónicos
