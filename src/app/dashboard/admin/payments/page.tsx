@@ -1258,6 +1258,9 @@ export default function PaymentsPage() {
                     additionalUpdates.metadataFields.fechaPagoAdelanto = finalDate;
                     additionalUpdates.metadataFields.solicitudAdelanto = null;
                     additionalUpdates.metadataFields.pagoRechazado = null;
+                    if (normalizeStateId(currentTicket.status_id) === 'cotizacion_aprobada') {
+                        additionalUpdates.status_id = 'en_ejecucion';
+                    }
                 } else if (isFinal) {
                     additionalUpdates.status_id = 'ticket_cerrado';
                     additionalUpdates.closure_date = finalDate;
@@ -1323,6 +1326,9 @@ export default function PaymentsPage() {
                         if (additionalUpdates?.status_id) {
                             updated.status_id = additionalUpdates.status_id;
                             updated.estadoId = additionalUpdates.status_id;
+                            if (updated.metadata) {
+                                updated.metadata.estadoId = additionalUpdates.status_id;
+                            }
                         }
                         return updated;
                     }
@@ -1424,10 +1430,12 @@ export default function PaymentsPage() {
             };
 
             if (item.id === `${group.realTicketId}_adelanto`) {
-                // ELIMINADO: No forzar estado 'en_ejecucion' por pago
                 meta.adelantoPagado = true;
                 meta.fechaPagoAdelanto = finalDate;
                 meta.solicitudAdelanto = null;
+                if (normalizeStateId(currentTicket.status_id) === 'cotizacion_aprobada') {
+                    additionalUpdates.status_id = 'en_ejecucion';
+                }
             } else if (item.id === `${group.realTicketId}_refuerzo`) {
                 meta.solicitudAdelantoExtra = null;
             } else if (item.id === `${group.realTicketId}_final` || item.id === `${group.realTicketId}_liquidacion_manual`) {
@@ -1448,6 +1456,13 @@ export default function PaymentsPage() {
                 const found = (meta.solicitudesDeposito || []).find((s: any) => s.id === item.solicitudId);
                 meta.solicitudesAprobadas = [...(meta.solicitudesAprobadas || []), { ...(found || item), ...aprobacionBase }];
                 meta.solicitudesDeposito = (meta.solicitudesDeposito || []).filter((s: any) => s.id !== item.solicitudId);
+                
+                const isAdvance = item.concepto?.toLowerCase().includes('adelanto') || 
+                                  item.tipo?.toLowerCase().includes('adelanto') || 
+                                  (found && (found.concepto?.toLowerCase().includes('adelanto') || found.tipo?.toLowerCase().includes('adelanto')));
+                if (isAdvance && normalizeStateId(currentTicket.status_id) === 'cotizacion_aprobada') {
+                    additionalUpdates.status_id = 'en_ejecucion';
+                }
             }
 
             // ★ MEJORA 2026-05-12: Auto-cerrar si el saldo es 0 y el ticket ya estaba para liquidar
@@ -1518,6 +1533,9 @@ export default function PaymentsPage() {
                     if (additionalUpdates?.status_id) {
                         updated.status_id = additionalUpdates.status_id;
                         updated.estadoId = additionalUpdates.status_id;
+                        if (updated.metadata) {
+                            updated.metadata.estadoId = additionalUpdates.status_id;
+                        }
                     }
                     return updated;
                 }

@@ -17,7 +17,7 @@ export const toNum = (val: any): number => {
 export const isConfirmedTicketCostStatus = (status: string | null | undefined) => {
     const rawSt = (status || '').toLowerCase().trim();
     const valid = [
-        'pagado', 'adelanto', 'abonado', 'confirmado', 'auditado',
+        'pagado', 'abonado', 'confirmado', 'auditado',
         'ejecutado', 'autorizado admin', 'autorizado', 'aprobado',
         'transferido', 'completado', 'depósito', 'deposito'
     ];
