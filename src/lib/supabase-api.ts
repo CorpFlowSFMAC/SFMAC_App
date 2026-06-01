@@ -756,13 +756,31 @@ export const ticketsAPI = {
         const safeDelete = async (table: string, condition: any) => {
             try {
                 const { error } = await supabase.from(table).delete().match(condition);
-                // Ignorar errores de "relation does not exist" - la tabla puede no existir
-                if (error && !error.message.includes('relation') && !error.message.includes('does not exist')) {
-                    throw error;
+                // Ignorar errores de "relation does not exist" - la tabla puede no existir (SQL State 42P01)
+                if (error) {
+                    const isTableMissing = 
+                        error.code === '42P01' || 
+                        error.message?.includes('relation') || 
+                        error.message?.includes('does not exist') ||
+                        error.message?.toLowerCase().includes('relación') ||
+                        error.message?.toLowerCase().includes('no existe');
+                    
+                    if (!isTableMissing) {
+                        throw error;
+                    }
                 }
             } catch (e: any) {
                 // Solo relanzar si no es un error de tabla inexistente
-                if (e.message && !e.message.includes('relation') && !e.message.includes('does not exist')) {
+                const isTableMissing = 
+                    e.code === '42P01' || 
+                    (e.message && (
+                        e.message.includes('relation') || 
+                        e.message.includes('does not exist') ||
+                        e.message.toLowerCase().includes('relación') ||
+                        e.message.toLowerCase().includes('no existe')
+                    ));
+                
+                if (!isTableMissing) {
                     throw e;
                 }
             }
