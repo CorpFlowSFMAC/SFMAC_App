@@ -136,9 +136,27 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const totalLaborPending   = sum(pendingLabor);
     const totalOpPending      = sum(pendingOp);
 
-    const netLaborBalance    = Math.max(0, round2(pactedMO - totalLaborConfirmed));
-    const realProfitability  = round2(montoBase - pactedMO - totalOpConfirmed);
+    const totalVenta         = round2(montoBase);
+    const netIncome          = totalVenta;
+    
+    // Cash Basis (Flujo de Caja Real) - Lo que realmente ha salido de Tesorería
+    const totalCashOut       = round2(totalLaborConfirmed + totalOpConfirmed);
+    
+    // Accrual Basis (Costo Devengado) - El costo real del ticket para la empresa
+    // Si se pagó más de la MO pactada (por rescates/excedentes), el costo real sube.
+    const realLaborCost      = Math.max(pactedMO, totalLaborConfirmed);
+    const totalAccrualCost   = round2(realLaborCost + totalOpConfirmed);
+
+    // Rentabilidad Real (Se calcula sobre el Costo Devengado, garantizando que 
+    // la deuda pendiente con el técnico ya esté restada de la utilidad)
+    const realProfitability  = round2(montoBase - totalAccrualCost);
     const margenReal         = montoBase > 0 ? round2((realProfitability / montoBase) * 100) : 0;
+
+    // Variables de salida (compatibilidad con frontend)
+    // totalExpenses representa la "Inversión Ejecutada" (Cash-Out real)
+    const totalExpenses      = totalCashOut; 
+
+    const netLaborBalance    = Math.max(0, round2(pactedMO - totalLaborConfirmed));
 
     return {
         // ── Ingresos ──────────────────────────────────────────────────────────

@@ -255,19 +255,46 @@ export default function AdminDashboard() {
         const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
         if (costs.length === 0)
             return parseFloat(t.inversion_ejecutada ?? t.total_costs_agg ?? 0);
+        // Retorna el Cash Out Real
         return calculateTicketFinances(t, costs).totalExpenses;
+    };
+
+    const ticketUtilidad = (t: any): number => {
+        const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
+        if (costs.length === 0)
+            return parseFloat(t.rentabilidad ?? 0);
+        // Retorna el Accrual Basis (Toma en cuenta la deuda con el técnico)
+        return calculateTicketFinances(t, costs).realProfitability;
+    };
+
+    // Identificar si un ticket es de arrastre mensual (abierto de meses anteriores)
+    const isRolledOver = (t: any) => {
+        const sid = normalizeStateId(t.status_id ?? t.estadoId);
+        const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+        if (isClosed) return false;
+
+        const created = t.original_created_at ?? t.created_at ?? t.createdAt ?? t.fechaCreacion;
+        if (!created) return false;
+        
+        const origDate = new Date(created);
+        const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return origDate < startOfCurrentMonth;
+    };
+
+    // Filtro de periodo robusto que incluye los tickets en rango y los arrastrados
+    const isTicketInPeriod = (t: any) => {
+        if (isInRange(t.created_at ?? t.createdAt ?? t.fechaCreacion)) return true;
+        if (t.closure_date && isInRange(t.closure_date)) return true;
+        return isRolledOver(t);
     };
 
     // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
     const roi = useMemo(() => {
-        const inPeriod = tickets.filter((t: any) =>
-            isInRange(t.created_at ?? t.createdAt ?? t.fechaCreacion) ||
-            (t.closure_date && isInRange(t.closure_date))
-        );
+        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
 
         const ingresos  = round2(inPeriod.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0));
         const inversion = round2(inPeriod.reduce((a, t) => a + ticketInversion(t), 0));
-        const utilidad  = round2(ingresos - inversion);
+        const utilidad  = round2(inPeriod.reduce((a, t) => a + ticketUtilidad(t), 0));
         const margen    = ingresos  > 0 ? (utilidad / ingresos)  * 100 : 0;
         const ratio     = inversion > 0 ?  utilidad / inversion        : 0;
 
@@ -280,7 +307,8 @@ export default function AdminDashboard() {
                 const st   = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
                 const ing  = st.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0);
                 const cost = st.reduce((a, t) => a + ticketInversion(t), 0);
-                return { ...s, tickets: st.length, ingresos: ing, margen: ing > 0 ? ((ing - cost) / ing) * 100 : 0 };
+                const util = st.reduce((a, t) => a + ticketUtilidad(t), 0);
+                return { ...s, tickets: st.length, ingresos: ing, margen: ing > 0 ? (util / ing) * 100 : 0 };
             })
             .filter(s => s.tickets > 0)
             .sort((a, b) => b.ingresos - a.ingresos);
@@ -297,34 +325,46 @@ export default function AdminDashboard() {
             .map(t => ({ ...t, _investmentTotalReal: round2(ticketInversion(t)) }))
             .sort((a, b) => b._investmentTotalReal - a._investmentTotalReal);
 
+        // Calcular carga financiera arrastrada
+        const arrastradoItems = inPeriod.filter(isRolledOver);
+        const costosArrastrados = round2(arrastradoItems.reduce((a, t) => a + ticketInversion(t), 0));
+
         return { inversion, ingresos, utilidad, margen, ratio,
                  closed: closed.length, total: inPeriod.length,
-                 byService, inversionItems, ingresosItems };
-    }, [tickets, dateRange]);
+                 byService, inversionItems, ingresosItems,
+                 costosArrastrados, arrastradoItems };
+    }, [tickets, dateRange, now]);
 
     // ── MÓDULO ADICIONAL: Datos de Gráficos (Pipeline Aprobado, Clientes y Depósitos) ──
     const pipelineApprovedData = useMemo(() => {
         let aprobadas = 0;
         let enEjecucion = 0;
+        let arrastrados = 0;
         
         tickets.forEach((t: any) => {
-            if (!isInRange(t.created_at || t.createdAt || t.fechaCreacion)) return;
+            if (!isTicketInPeriod(t)) return;
             const sid = normalizeStateId(t.status_id || t.estadoId);
             const val = parseFloat(t.ingresos_reales || 0);
-            if (sid === 'cotizacion_aprobada') aprobadas += val;
-            if (sid === 'en_ejecucion') enEjecucion += val;
+            
+            if (isRolledOver(t)) {
+                arrastrados += ticketInversion(t);
+            } else {
+                if (sid === 'cotizacion_aprobada') aprobadas += val;
+                if (sid === 'en_ejecucion') enEjecucion += val;
+            }
         });
 
         return [
             { name: "Aprobada", value: round2(aprobadas), color: "#10B981" },
-            { name: "En Ejecución", value: round2(enEjecucion), color: "#8B5CF6" }
+            { name: "En Ejecución", value: round2(enEjecucion), color: "#8B5CF6" },
+            { name: "Carga Arrastrada", value: round2(arrastrados), color: "#EF4444" }
         ].filter(item => item.value > 0);
-    }, [tickets, dateRange]);
+    }, [tickets, dateRange, now]);
 
     const clientBillingData = useMemo(() => {
         const clientMap: Record<string, { id: string, name: string, billing: number, color: string }> = {};
         tickets.forEach((t: any) => {
-            if (!isInRange(t.created_at || t.createdAt || t.fechaCreacion)) return;
+            if (!isTicketInPeriod(t)) return;
             const clientName = t.cliente?.nombre || t.clients?.name || t.cliente?.name || t.metadata?.cliente?.nombre || "Otros";
             const clientId = t.client_id || "otros";
             const clientColor = t.cliente?.color || t.clients?.color_aura || "#3B82F6";
@@ -339,14 +379,14 @@ export default function AdminDashboard() {
             .map(c => ({ ...c, billing: round2(c.billing) }))
             .sort((a, b) => b.billing - a.billing)
             .slice(0, 5); // Top 5
-    }, [tickets, dateRange]);
+    }, [tickets, dateRange, now]);
 
     const advancesTesoreria = useMemo(() => {
         let totalAdvances = 0;
         let totalBudget = 0;
 
         tickets.forEach((t: any) => {
-            if (!isInRange(t.created_at || t.createdAt || t.fechaCreacion)) return;
+            if (!isTicketInPeriod(t)) return;
             totalAdvances += parseFloat(t.adelantos_flujo_b || t.metadata?.adelantos_flujo_b || 0);
             totalBudget += parseFloat(t.ingresos_reales || 0);
         });
@@ -356,7 +396,7 @@ export default function AdminDashboard() {
             totalBudget: round2(totalBudget),
             percent: totalBudget > 0 ? round2((totalAdvances / totalBudget) * 100) : 0
         };
-    }, [tickets, dateRange]);
+    }, [tickets, dateRange, now]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
@@ -652,7 +692,7 @@ export default function AdminDashboard() {
                 MÓDULO 1: RENTABILIDAD & ROI
             ══════════════════════════════════ */}
             <SectionHeader icon={<TrendingUp size={16} />} title="Rentabilidad & ROI" color="#10B981" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Inversión Ejecutada" value={`S/ ${fmt(roi.inversion)}`}
                     sub="Costos confirmados (mano de obra + gastos) sin IGV" color="#3B82F6"
                     icon={BanknoteIcon}
@@ -689,6 +729,22 @@ export default function AdminDashboard() {
                         setShowListModal(true);
                     }}
                 />
+                <RoiCard label="Carga Financiera Arrastrada" value={`S/ ${fmt(roi.costosArrastrados)}`}
+                    sub="Costos acumulados de tickets abiertos de meses anteriores" color="#EF4444"
+                    icon={Layers}
+                    light={roi.costosArrastrados > 0 ? "ROJO" : "VERDE"}
+                    onClick={() => {
+                        setModalTitle("Carga Financiera Arrastrada: Tickets abiertos de meses anteriores");
+                        setModalTickets(roi.arrastradoItems.map((t: any) => ({
+                            ...t,
+                            servicio: t.service_type || t.tipo_servicio,
+                            cliente: t.cliente?.nombre || t.clients?.name || t.clienteNombre || 'Cliente',
+                            _monto: ticketInversion(t),
+                            _fecha: t.original_created_at ?? t.created_at ?? t.createdAt ?? t.fechaCreacion,
+                        })));
+                        setShowListModal(true);
+                    }}
+                />
                 <RoiCard label="Utilidad Neta" value={`S/ ${fmt(roi.utilidad)}`}
                     sub={`Margen neto real: ${Math.round(roi.margen)}%`} color="#8B5CF6"
                     icon={TrendingUp}
@@ -698,11 +754,12 @@ export default function AdminDashboard() {
                         setModalTickets(roi.ingresosItems.map(t => {
                             const ing  = parseFloat(t.ingresos_reales ?? 0);
                             const cost = ticketInversion(t);
+                            const util = ticketUtilidad(t);
                             return { ...t,
                                 cliente: t.cliente?.nombre ?? t.clients?.name ?? 'Cliente',
                                 _viewMode: 'utilidad',
-                                _utilityAmount: ing - cost,
-                                _monto: ing - cost,
+                                _utilityAmount: util,
+                                _monto: util,
                             };
                         }));
                         setShowListModal(true);
@@ -717,10 +774,11 @@ export default function AdminDashboard() {
                         setModalTickets(roi.ingresosItems.map(t => {
                             const ing  = parseFloat(t.ingresos_reales ?? 0);
                             const cost = ticketInversion(t);
+                            const util = ticketUtilidad(t);
                             return { ...t,
                                 cliente: t.cliente?.nombre ?? t.clients?.name ?? 'Cliente',
                                 _viewMode: 'ratio',
-                                _monto: cost > 0 ? (ing - cost) / cost : 0,
+                                _monto: cost > 0 ? util / cost : 0,
                             };
                         }));
                         setShowListModal(true);
