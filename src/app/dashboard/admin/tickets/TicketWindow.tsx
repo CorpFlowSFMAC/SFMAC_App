@@ -2047,17 +2047,35 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 ? "Adelanto Operativo (MATERIALES)"
                 : "Adelanto Operativo (MANO DE OBRA)";
 
+            // 🔒 GUARD DE IDEMPOTENCIA: verificar si ya existe un adelanto pendiente del mismo monto
+            // Previene duplicados cuando el gestor re-solicita tras una regresión de estado
             try {
-                await ticketCostsAPI.create({
-                    ticket_id: currentId,
-                    concepto,
-                    categoria: category,
-                    specialist_id: technicianId,
-                    monto: amount,
-                    estado_pago: "pendiente",
-                    solicitado_por: myProfileId || undefined
+                const existingCosts = await ticketCostsAPI.getByTicket(currentId);
+                const existingAdvance = (existingCosts || []).find((c: any) => {
+                    const st = (c.estado_pago || '').toUpperCase();
+                    const conc = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
+                    const isPending = st === 'PENDIENTE';
+                    const isAdvance = conc.includes('adelanto') || conc.includes('rescate');
+                    const sameAmount = Math.abs(parseFloat(c.monto || 0) - amount) < 0.5;
+                    return isPending && isAdvance && sameAmount;
                 });
-                advanceCreated = true;
+
+                if (existingAdvance) {
+                    // Ya existe un adelanto pendiente por el mismo monto — no crear duplicado
+                    advanceCreated = true;
+                    console.warn("[executeRequestAdvance] Adelanto ya existe pendiente:", existingAdvance.id);
+                } else {
+                    await ticketCostsAPI.create({
+                        ticket_id: currentId,
+                        concepto,
+                        categoria: category,
+                        specialist_id: technicianId,
+                        monto: amount,
+                        estado_pago: "pendiente",
+                        solicitado_por: myProfileId || undefined
+                    });
+                    advanceCreated = true;
+                }
             } catch (costErr: any) {
                 console.error("Error creando ticket_cost:", costErr);
                 // Si falla ticketCosts, continuar con metadata (no bloquear totalmente)
@@ -2138,52 +2156,83 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const handleActualLiquidation = async () => {
         setIsSavingNegotiation(true);
         setShowLiquidationConfirm(false);
+        // 🔒 ANTI-REGRESIÓN: Bloquear Realtime durante toda la operación de liquidación
+        isTransitioning.current = true;
         try {
             // 🚀 MOTOR V3: El saldo a liquidar es SIEMPRE el netLaborBalance (Pactado MO - Pagos MO)
-            // No usamos montoTotalCotizado (Precio Cliente) porque eso inflaría el pago del técnico
             const amount = finances.netLaborBalance;
             const costRef = finances.pactedMO;
 
-            // Si el monto es 0 pero hay deuda pactada, alertar
             if (amount <= 0 && costRef > 0 && finances.totalLaborConfirmed < costRef) {
-                console.warn("Saldo calculado como 0 pero aún hay deuda pactada. Revisar categorización de costos.");
+                console.warn("[Liquidación] Saldo 0 con deuda pactada. Revisar costos.");
             }
 
             const isExceeding = (finances.totalLaborConfirmed + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
 
-            // ✅ REGISTRO EN ticket_costs: Crear registro oficial para tracking de liquidez
-            // Esto asegura que la solicitud de pago sea visible en el módulo de Tesorería
+            // ✅ FIX: Usar ticketData.id (no ticket.id) para asegurar el ID correcto en ticket_costs
+            const currentTicketId = ticketData.id;
             const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id;
-            
+
+            // ─── ÚNICO ORIGEN DE VERDAD: ticket_costs ───────────────────────
+            // La solicitud de liquidación solo se registra en ticket_costs.
+            // NO se usa solicitudLiquidacion en metadata para evitar que el módulo
+            // de Tesorería muestre dos ítems pendientes para el mismo pago.
+            // ────────────────────────────────────────────────────────────────
+            // 🔒 GUARD DE IDEMPOTENCIA: verificar si ya existe un costo de liquidación pendiente
+            // Esto previene duplicados cuando el gestor reenvía la solicitud por una regresión de estado
+            let costCreated = false;
             try {
                 if (amount > 0.01 && technicianId) {
-                    await ticketCostsAPI.create({
-                        ticket_id: ticket.id,
-                        monto: amount,
-                        categoria: "Mano de Obra",
-                        concepto: "Liquidación Final - Saldo de Mano de Obra",
-                        specialist_id: technicianId,
-                        estado_pago: isExceeding ? "REQUIERE_APROBACION_ADMIN" : "pendiente",
-                        solicitado_por: myProfileId || undefined
+                    // Verificar costos pendientes existentes antes de crear uno nuevo
+                    const existingCosts = await ticketCostsAPI.getByTicket(currentTicketId);
+                    const existingLiquidation = (existingCosts || []).find((c: any) => {
+                        const st = (c.estado_pago || '').toUpperCase();
+                        const conc = (c.concepto || '').toLowerCase();
+                        const isPending = st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN';
+                        const isLiquidation = conc.includes('liquidación') || conc.includes('liquidacion') || conc.includes('saldo');
+                        const sameAmount = Math.abs(parseFloat(c.monto || 0) - amount) < 0.5;
+                        return isPending && isLiquidation && sameAmount;
                     });
-                    console.log("[handleActualLiquidation] ticket_cost creado:", { amount, isExceeding });
+
+                    if (existingLiquidation) {
+                        // Ya existe — reutilizar en lugar de duplicar
+                        costCreated = true;
+                        console.warn("[handleActualLiquidation] Ya existe ticket_cost de liquidación pendiente:", existingLiquidation.id);
+                    } else {
+                        await ticketCostsAPI.create({
+                            ticket_id: currentTicketId,
+                            monto: amount,
+                            categoria: "Mano de Obra",
+                            concepto: "Liquidación Final - Saldo de Mano de Obra",
+                            specialist_id: technicianId,
+                            estado_pago: isExceeding ? "REQUIERE_APROBACION_ADMIN" : "pendiente",
+                            solicitado_por: myProfileId || undefined
+                        });
+                        costCreated = true;
+                        console.log("[handleActualLiquidation] ticket_cost creado OK:", { amount, newState });
+                    }
                 }
             } catch (costErr) {
-                // Si falla el registro en ticket_costs, continuar con metadata (no bloquear)
-                console.warn("[handleActualLiquidation] Error creando ticket_cost, continuando con metadata:", costErr);
+                console.warn("[handleActualLiquidation] Error creando ticket_cost:", costErr);
+                // Si falla la creación del costo, no continuar para evitar estado inconsistente
+                throw costErr;
             }
 
-            // ✅ UNIFICACIÓN DE ESTRUCTURA: solicitudLiquidacion debe ir dentro de metadata
+            // ✅ metadata NO almacena solicitudLiquidacion cuando el ticket_cost fue creado
+            // (evita ítem fantasma en el módulo de Tesorería).
+            // Si ticket_cost falló (amount=0 o sin técnico), sí guardar en metadata como fallback.
+            const solicitudLiquidacionMeta = costCreated ? null : {
+                fecha: new Date().toISOString(),
+                monto: amount,
+                excedeTope: isExceeding
+            };
+
             const finalMetadata = {
                 ...(ticketData.metadata || {}),
-                solicitudLiquidacion: {
-                    fecha: new Date().toISOString(),
-                    monto: amount,
-                    excedeTope: isExceeding
-                },
+                solicitudLiquidacion: solicitudLiquidacionMeta,
                 isAdminRevision: isExceeding,
-                estadoId: newState // Sincronizar estado interno en metadata
+                estadoId: newState
             };
 
             const updated = {
@@ -2191,63 +2240,52 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estadoId: newState,
                 status_id: newState,
                 final_balance: amount,
-                solicitudLiquidacion: finalMetadata.solicitudLiquidacion, // ★ FIX: Root level for sync
+                solicitudLiquidacion: solicitudLiquidacionMeta,
                 metadata: finalMetadata
             };
 
             setTicketData(updated);
-            
-            // 🚀 SYNC INMEDIATO: Usamos syncToSupabase con override para asegurar 
-            // que se apliquen todas las reglas de negocio y no haya race conditions.
+
+            // 🚀 SYNC DIRECTO: No usar syncToSupabase aquí porque re-lee el servidor
+            // y puede resolver a un estado anterior durante la ventana de latencia.
+            // Escribir directamente con el estado correcto.
             try {
-                const syncResult = await syncToSupabase(updated, { allowStateRollback: true });
-                if (!syncResult) {
-                    console.warn("[handleActualLiquidation] syncToSupabase retornó false, intentando fallback...");
-                    // Fallback: sync directo via ticketsAPI
-                    try {
-                        await ticketsAPI.update(ticketData.id, {
-                            status_id: newState,
-                            metadata: finalMetadata
-                        });
-                    } catch (fallbackErr) {
-                        console.error("Error en fallback de sync:", fallbackErr);
-                    }
-                }
+                await ticketsAPI.update(currentTicketId, {
+                    status_id: newState,
+                    metadata: finalMetadata
+                });
             } catch (syncErr) {
-                console.error("Error en syncToSupabase:", syncErr);
-                // Intentar fallback directo
+                console.error("[handleActualLiquidation] Error en update directo:", syncErr);
+                // Fallback via syncToSupabase con override
                 try {
-                    await ticketsAPI.update(ticketData.id, {
-                        status_id: newState,
-                        metadata: finalMetadata
-                    });
+                    await syncToSupabase(updated, { allowStateRollback: true });
                 } catch (fallbackErr) {
-                    console.error("Error en fallback de sync:", fallbackErr);
+                    console.error("[handleActualLiquidation] Error en fallback syncToSupabase:", fallbackErr);
                 }
             }
-            
-            // 🔄 RECARGA DE COSTOS: Para asegurar que el módulo de Tesorería vea la nueva solicitud
-            // Esto es crítico porque la solicitud ahora se guarda también en ticket_costs
+
+            // 🔄 RECARGA DE COSTOS para que Tesorería vea el nuevo ticket_cost
             try {
                 await loadCosts();
             } catch (loadErr) {
-                console.warn("Error recargando costos:", loadErr);
+                console.warn("[handleActualLiquidation] Error recargando costos:", loadErr);
             }
-            
+
             showToast(
-                isExceeding ? "Revisión Requerida" : "Liquidación Solicitada", 
-                isExceeding 
-                    ? "El monto excede el costo pactado. Se ha enviado a revisión del administrador." 
-                    : "La solicitud ha sido enviada a la bandeja de pagos del administrador.", 
+                isExceeding ? "Revisión Requerida" : "Liquidación Solicitada",
+                isExceeding
+                    ? "El monto excede el costo pactado. Se ha enviado a revisión del administrador."
+                    : "La solicitud ha sido enviada a la bandeja de pagos del administrador.",
                 isExceeding ? "info" : "success"
             );
-
 
         } catch (err) {
             console.error("Error in liquidation request:", err);
             showToast("Error", "No se pudo procesar la liquidación. Intente nuevamente.", "error");
         } finally {
             setIsSavingNegotiation(false);
+            // 🔓 Liberar bloqueo Realtime después de que el servidor haya procesado
+            setTimeout(() => { isTransitioning.current = false; }, 3000);
         }
     };
 
