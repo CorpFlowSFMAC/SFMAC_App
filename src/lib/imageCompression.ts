@@ -8,10 +8,10 @@ export interface CompressionOptions {
 }
 
 const defaultOptions: CompressionOptions = {
-    maxSizeMB: 0.8, // 800 KB max
-    maxWidthOrHeight: 1920,
+    maxSizeMB: 0.28, // ~280 KB max (estricto < 300 KB)
+    maxWidthOrHeight: 1280, // Resolución operativa óptima y ligera
     useWebWorker: true,
-    initialQuality: 0.8
+    initialQuality: 0.75
 };
 
 /**
@@ -25,8 +25,8 @@ export async function compressImage(file: File, options: CompressionOptions = {}
         return file;
     }
 
-    // No comprimir si ya es suficientemente pequeña (e.g. < 500KB)
-    if (file.size < 500 * 1024) {
+    // No comprimir si ya es suficientemente pequeña (e.g. < 200KB)
+    if (file.size < 200 * 1024) {
         return file;
     }
 

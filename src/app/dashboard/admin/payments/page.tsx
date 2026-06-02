@@ -1359,7 +1359,7 @@ export default function PaymentsPage() {
                 await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
                 
                 // ✅ Optimistic Update Local
-                setTickets(prev => prev.map(t => {
+                setRawTickets((prev: any[]) => prev.map((t: any) => {
                     if (t.id === group.realTicketId) {
                         const updated = { ...t };
                         updated.costos = (updated.costos || []).map((c: any) => 
@@ -1546,7 +1546,7 @@ export default function PaymentsPage() {
             await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
             
             // ✅ Optimistic Update Local
-            setTickets(prev => prev.map(t => {
+            setRawTickets((prev: any[]) => prev.map((t: any) => {
                 if (t.id === group.realTicketId) {
                     const updated = { ...t };
                     if (item.solicitudId) {
@@ -2500,20 +2500,41 @@ export default function PaymentsPage() {
                                         style={{ display: 'none' }}
                                         onChange={async (e) => {
                                             const file = e.target.files?.[0];
-                                            if (file) {
-                                                const compressed = await compressImage(file);
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => {
-                                                    const capturedWaiting = waitingVoucher!;
-                                                    setWaitingVoucher(null);
+                                            if (file && waitingVoucher) {
+                                                const capturedWaiting = waitingVoucher;
+                                                setWaitingVoucher(null);
+                                                
+                                                try {
+                                                    const compressed = await compressImage(file);
+                                                    const fileExt = file.name.split('.').pop() || 'jpg';
+                                                    const fileName = `${capturedWaiting.group.realTicketId}_voucher_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+                                                     
+                                                    const { data, error } = await supabase.storage
+                                                        .from('vouchers')
+                                                        .upload(fileName, compressed, {
+                                                            contentType: compressed.type,
+                                                            upsert: true
+                                                        });
+
+                                                    if (error) {
+                                                        console.error('[Storage Voucher Upload Error]:', error.message);
+                                                        throw error;
+                                                    }
+
+                                                    const { data: urlData } = supabase.storage
+                                                        .from('vouchers')
+                                                        .getPublicUrl(fileName);
+
                                                     handleConfirmPayment(
                                                         capturedWaiting.group,
                                                         capturedWaiting.item,
-                                                        reader.result as string,
+                                                        urlData.publicUrl,
                                                         depositDate
                                                     );
-                                                };
-                                                reader.readAsDataURL(compressed);
+                                                } catch (err: any) {
+                                                    console.error("Error al procesar o subir voucher:", err);
+                                                    alert("No se pudo cargar el voucher: " + (err.message || err));
+                                                }
                                             }
                                         }}
                                     />
@@ -2632,14 +2653,34 @@ export default function PaymentsPage() {
                                             style={{ display: 'none' }}
                                             onChange={async (e) => {
                                                 const file = e.target.files?.[0];
-                                                if (file) {
-                                                    const compressed = await compressImage(file);
-                                                    const reader = new FileReader();
-                                                    reader.onloadend = () => {
-                                                        setPendingConfirmation(prev => prev ? { ...prev, voucher: reader.result as string } : null);
+                                                if (file && pendingConfirmation) {
+                                                    try {
+                                                        const compressed = await compressImage(file);
+                                                        const fileExt = file.name.split('.').pop() || 'jpg';
+                                                        const fileName = `${pendingConfirmation.group.realTicketId}_voucher_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+                                                        
+                                                        const { data, error } = await supabase.storage
+                                                            .from('vouchers')
+                                                            .upload(fileName, compressed, {
+                                                                contentType: compressed.type,
+                                                                upsert: true
+                                                            });
+
+                                                        if (error) {
+                                                            console.error('[Storage Confirmation Voucher Upload Error]:', error.message);
+                                                            throw error;
+                                                        }
+
+                                                        const { data: urlData } = supabase.storage
+                                                            .from('vouchers')
+                                                            .getPublicUrl(fileName);
+
+                                                        setPendingConfirmation(prev => prev ? { ...prev, voucher: urlData.publicUrl } : null);
                                                         showToast('📸 Comprobante cargado correctamente');
-                                                    };
-                                                    reader.readAsDataURL(compressed);
+                                                    } catch (err: any) {
+                                                        console.error("Error al procesar o subir comprobante:", err);
+                                                        alert("No se pudo cargar el comprobante: " + (err.message || err));
+                                                    }
                                                 }
                                             }}
                                         />

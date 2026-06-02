@@ -1018,14 +1018,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
 
         const {
-            isMaximized, isMinimized, position, zIndex,
-            cliente, sede, tecnico,
+            isMaximized: _isMaximized, isMinimized: _isMinimized, position: _position, zIndex: _zIndex,
+            cliente: _cliente, sede: _sede, tecnico,
+            clients: _clients, branch_offices: _branch_offices, technicians: _technicians, gestoras: _gestoras, gestora: _gestora,
+            costos: _costos, pendingCosts: _pendingCosts, paidCosts: _paidCosts, exceedanceRequests: _exceedanceRequests, exceedanceRequestsCount: _exceedanceRequestsCount,
             metadata: _unusedMetadata,
             ...businessData
         } = dataToProcess;
 
-        const sourceForPayments = businessData;
-        const sourceMetadata = businessData;
+        // Limpiar businessData de cualquier campo relacional adicional que pudiera haber quedado
+        const cleanedBusinessData = { ...businessData };
+        delete cleanedBusinessData.clients;
+        delete cleanedBusinessData.branch_offices;
+        delete cleanedBusinessData.technicians;
+        delete cleanedBusinessData.gestoras;
+        delete cleanedBusinessData.gestora;
+        delete cleanedBusinessData.costos;
+        delete cleanedBusinessData.pendingCosts;
+        delete cleanedBusinessData.paidCosts;
+        delete cleanedBusinessData.exceedanceRequests;
+        delete cleanedBusinessData.exceedanceRequestsCount;
+
+        const sourceForPayments = cleanedBusinessData;
+        const sourceMetadata = cleanedBusinessData;
 
         const cleanedClientTicketNumber = (() => {
             const val = businessData.client_ticket_number;
@@ -1085,6 +1100,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             ? (localHasNewSolPago ? businessData.solicitudPago : serverMeta.solicitudPago)
             : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null));
         
+        const cleanServerMeta = { ...serverMeta };
+        delete cleanServerMeta.clients;
+        delete cleanServerMeta.cliente;
+        delete cleanServerMeta.branch_offices;
+        delete cleanServerMeta.sede;
+        delete cleanServerMeta.technicians;
+        delete cleanServerMeta.tecnico;
+        delete cleanServerMeta.gestoras;
+        delete cleanServerMeta.gestora;
+        delete cleanServerMeta.costos;
+        delete cleanServerMeta.pendingCosts;
+        delete cleanServerMeta.paidCosts;
+        delete cleanServerMeta.exceedanceRequests;
+        delete cleanServerMeta.exceedanceRequestsCount;
+
         const updates: any = {
             status_id: resolvedStatusId || businessData.status_id,
             description: businessData.description || businessData.descripcionProblema,
@@ -1097,7 +1127,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             technician_id: tecnico?.id || serverTicket?.technician_id || businessData.technician_id,
             gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id || businessData.gestora_id,
             metadata: {
-                ...serverMeta,
+                ...cleanServerMeta,
                 ...sourceMetadata,
                 diagnosis: businessData.diagnosis || sourceMetadata.diagnosis || serverMeta.diagnosis,
                 partidas: businessData.partidas || sourceMetadata.partidas || serverMeta.partidas,
@@ -1388,28 +1418,47 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (e.target.files && e.target.files.length > 0) {
             const rawFiles = Array.from(e.target.files);
             
-            // Compresión de imágenes
-            const compressedFiles = await Promise.all(
-                rawFiles.map(file => compressImage(file))
-            );
+            try {
+                // Compresión de imágenes
+                const compressedFiles = await Promise.all(
+                    rawFiles.map(file => compressImage(file))
+                );
 
-            const promises = compressedFiles.map(file => {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(file);
-                    reader.onload = () => resolve({
+                const uploadPromises = compressedFiles.map(async (file) => {
+                    const fileExt = file.name.split('.').pop() || 'jpg';
+                    const fileName = `${ticketData.id}_field_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+                    
+                    const { data, error } = await supabase.storage
+                        .from('evidencias')
+                        .upload(fileName, file, {
+                            contentType: file.type,
+                            upsert: true
+                        });
+
+                    if (error) {
+                        console.error('[Storage Field Evidence Upload Error]:', error.message);
+                        throw error;
+                    }
+
+                    const { data: urlData } = supabase.storage
+                        .from('evidencias')
+                        .getPublicUrl(fileName);
+
+                    return {
+                        url: urlData.publicUrl,
                         name: file.name,
-                        url: reader.result as string,
                         type: file.type,
                         fecha: new Date().toISOString()
-                    });
-                    reader.onerror = error => reject(error);
+                    };
                 });
-            });
 
-            Promise.all(promises).then(results => {
+                const results = await Promise.all(uploadPromises);
                 setEvidenciasCampo(prev => [...prev, ...results]);
-            }).catch(err => console.error("Error reading files:", err));
+                showToast("Éxito", "Evidencias de campo subidas correctamente.", "success");
+            } catch (err: any) {
+                console.error("Error al subir evidencias de campo:", err);
+                alert("No se pudieron subir las evidencias de campo: " + (err.message || err));
+            }
         }
     };
 
@@ -2533,29 +2582,57 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawFiles = e.target.files;
-        if (!rawFiles) return;
+        if (!rawFiles || rawFiles.length === 0) return;
 
         const files = Array.from(rawFiles);
         
-        // Compresión paralela
-        const compressedFiles = await Promise.all(
-            files.map(file => compressImage(file))
-        );
+        try {
+            // Compresión paralela
+            const compressedFiles = await Promise.all(
+                files.map(file => compressImage(file))
+            );
 
-        compressedFiles.forEach(file => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const url = event.target?.result as string;
-                const newEvidence = { url, name: file.name, size: file.size, type: file.type };
+            const uploadPromises = compressedFiles.map(async (file) => {
+                const fileExt = file.name.split('.').pop() || 'jpg';
+                const fileName = `${ticketData.id}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+                
+                const { data, error } = await supabase.storage
+                    .from('evidencias')
+                    .upload(fileName, file, {
+                        contentType: file.type,
+                        upsert: true
+                    });
 
-                setEvidenciasEjecucion(prev => {
-                    const updated = [...prev, newEvidence];
-                    setTicketData((current: any) => ({ ...current, evidenciasEjecucion: updated }));
-                    return updated;
-                });
-            };
-            reader.readAsDataURL(file);
-        });
+                if (error) {
+                    console.error('[Storage Upload Error]:', error.message);
+                    throw error;
+                }
+
+                const { data: urlData } = supabase.storage
+                    .from('evidencias')
+                    .getPublicUrl(fileName);
+
+                return {
+                    url: urlData.publicUrl,
+                    name: file.name,
+                    size: file.size,
+                    type: file.type
+                };
+            });
+
+            const uploadedEvidences = await Promise.all(uploadPromises);
+
+            setEvidenciasEjecucion(prev => {
+                const updated = [...prev, ...uploadedEvidences];
+                setTicketData((current: any) => ({ ...current, evidenciasEjecucion: updated }));
+                return updated;
+            });
+
+            showToast("Éxito", "Evidencias subidas correctamente.", "success");
+        } catch (err: any) {
+            console.error("Error al procesar y subir evidencias:", err);
+            alert("No se pudieron subir las evidencias: " + (err.message || err));
+        }
 
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
