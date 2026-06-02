@@ -137,13 +137,13 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
     const tech = ticket.technicians || ticket.tecnico;
     if (!ticket.technician_id && !tech && !ticket.technicianId) return null;
 
-    const techName = tech?.nombre || tech?.name || "Técnico Asignado";
-    const techPhone = tech?.celular || tech?.telefono || tech?.phone || "---";
+    const techName = tech?.name || (tech?.first_name ? `${tech.first_name} ${tech.last_name || ''}`.trim() : "Técnico Asignado");
+    const techPhone = tech?.phone || "---";
     const hasScheduling = !!ticket.fechaVisita;
     const scheduleDate = hasScheduling ? new Date(ticket.fechaVisita) : null;
     const scheduleLabel = ticket.programacionLabel || "Visita Programada";
 
-    const visitCost = parseFloat(ticket.costoVisita || ticket.costoPasaje || 0);
+    const visitCost = parseFloat(ticket.visit_cost || 0);
 
     const voucherVisita = useMemo(() => {
         return (ticket.costos || []).find((p: any) => {
@@ -214,7 +214,7 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
             )}
 
 
-            {onReassign && ticket.estadoId !== 'ticket_cerrado' && (
+            {onReassign && ticket.status_id !== 'ticket_cerrado' && (
                 <button
                     className={styles.reassignBtn}
                     onClick={onReassign}
@@ -246,7 +246,7 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
                         </span>
                     </div>
 
-                    {onEditSchedule && ticket.estadoId !== 'ticket_cerrado' && (
+                    {onEditSchedule && ticket.status_id !== 'ticket_cerrado' && (
                         <button
                             className={styles.reassignBtn}
                             onClick={onEditSchedule}
@@ -280,7 +280,7 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
 });
 
 export const DiagnosisInfoBar = memo(function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () => void }) {
-    if (!ticket.diagnostico && !ticket.costoManoObra) return null;
+    if (!ticket.diagnosis && !ticket.labor_cost) return null;
 
     return (
         <div
@@ -306,7 +306,7 @@ export const DiagnosisInfoBar = memo(function DiagnosisInfoBar({ ticket, onEdit 
             <div className={styles.infoItem} style={{ flex: 2 }}>
                 <span className={styles.infoLabel}>Diagnóstico en Campo</span>
                 <p className={styles.infoValue} style={{ fontSize: '11px', lineHeight: '1.2', margin: 0 }}>
-                    {ticket.diagnostico || 'Sin diagnóstico registrado'}
+                    {ticket.diagnosis || 'Sin diagnóstico registrado'}
                 </p>
             </div>
 
@@ -324,11 +324,11 @@ export const DiagnosisInfoBar = memo(function DiagnosisInfoBar({ ticket, onEdit 
                 <div className={styles.budgetGridCompact}>
                     <div className={styles.budgetItemMini}>
                         <span className={styles.budgetLabelMini}>🛠️ MO</span>
-                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.costoManoObra)}</span>
+                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.labor_cost)}</span>
                     </div>
                     <div className={styles.budgetItemMini}>
                         <span className={styles.budgetLabelMini}>📦 MAT</span>
-                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.costoMateriales)}</span>
+                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.materials_cost)}</span>
                     </div>
                 </div>
             </div>
@@ -410,11 +410,11 @@ const QuotationRow = memo(({ p, idx, onChange }: any) => {
 
 export const QuoteAssistantBar = memo(function QuoteAssistantBar({ ticket }: { ticket: any }) {
     // ── CONDICIÓN DE VISIBILIDAD ──
-    const costoMO = parseFloat(ticket.costoManoObra || 0);
-    const costoMat = parseFloat(ticket.costoMateriales || 0);
+    const costoMO = parseFloat(ticket.labor_cost || 0);
+    const costoMat = parseFloat(ticket.materials_cost || 0);
     const costoTotal = costoMO + costoMat;
     const hasCosts = costoTotal > 0;
-    const isQuoting = ["visita_realizada", "en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId);
+    const isQuoting = ["visita_realizada", "en_cotizacion", "cotizacion_enviada"].includes(ticket.status_id);
     if (!hasCosts || !isQuoting) return null;
 
     // ── ESTADOS ──
@@ -465,14 +465,14 @@ export const QuoteAssistantBar = memo(function QuoteAssistantBar({ ticket }: { t
 
         // ── DIAGNÓSTICO TÉCNICO COMPLETO DEL CAMPO ──
         const diagnosticoCompletoStr = [
-            ticket.diagnostico || ticket.diagnosis || '',
+            ticket.diagnosis || '',
             ticket.metadata?.reporteTecnico || '',
             ticket.metadata?.hallazgosCampo || '',
             ticket.metadata?.observaciones || '',
         ].filter(Boolean).join(' | ');
 
         // ── INFORMACIÓN DEL TÉCNICO ──
-        const tecnicoNombre = ticket.tecnico?.nombre || ticket.tecnico?.name || 'Técnico Asignado';
+        const tecnicoNombre = ticket.tecnico?.name || (ticket.tecnico?.first_name ? `${ticket.tecnico.first_name} ${ticket.tecnico.last_name || ''}`.trim() : 'Técnico Asignado');
         const tecnicoCosto = costoMO; // labor_cost = costo del técnico
 
         try {
@@ -695,11 +695,11 @@ export const QuoteAssistantBar = memo(function QuoteAssistantBar({ ticket }: { t
                         </div>
                     </div>
 
-                    {ticket.diagnostico && (
+                    {ticket.diagnosis && (
                         <div>
                             <div style={{ fontSize: '10px', fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', marginBottom: '4px' }}>Diagnóstico de Campo (Apuntes)</div>
                             <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '6px', padding: '8px 10px', fontSize: '12px', color: '#92400E', lineHeight: '1.5' }}>
-                                {ticket.diagnostico}
+                                {ticket.diagnosis}
                             </div>
                         </div>
                     )}
@@ -854,12 +854,12 @@ export const QuoteAssistantBar = memo(function QuoteAssistantBar({ ticket }: { t
 });
 
 export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggleDetails, isCollapsed }: { ticket: any; onToggleDetails?: () => void; isCollapsed?: boolean }) {
-    if (!ticket.partidas || ticket.partidas.length === 0 || ticket.estadoId === 'en_cotizacion') return null;
+    if (!ticket.partidas || ticket.partidas.length === 0 || ticket.status_id === 'en_cotizacion') return null;
 
-    const isEnviada = ticket.estadoId === 'cotizacion_enviada';
+    const isEnviada = ticket.status_id === 'cotizacion_enviada';
 
     // Cálculos de desglose
-    const totalFinal = round2(ticket.montoFinal || 0);
+    const totalFinal = round2(ticket.total_quoted_amount || 0);
     const subtotalLocal = round2(totalFinal / 1.18);
     const igvLocal = round2(totalFinal - subtotalLocal);
 
@@ -883,8 +883,8 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
                 <div className={styles.titleText}>
                     <h3 style={{ color: '#15803D' }}>Presupuesto Formal</h3>
                     <span style={{ color: '#166534' }}>
-                        {ticket.estadoId === 'cotizacion_enviada' ? 'Esperando Aprobación' :
-                            ticket.estadoId === 'cotizacion_aprobada' ?
+                        {ticket.status_id === 'cotizacion_enviada' ? 'Esperando Aprobación' :
+                            ticket.status_id === 'cotizacion_aprobada' ?
                                 (ticket.adelantoPagado ? '✅ Aprobado y Pagado' : '⏳ Esperando Adelanto (50%)') :
                                 'Reloj Pausado'}
                     </span>
@@ -927,7 +927,7 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Total General</span>
                 <span className={styles.infoValue} style={{ fontSize: '14px', fontWeight: '800', color: '#15803D' }}>
-                    S/ {formatSoles(ticket.montoFinal)}
+                    S/ {formatSoles(ticket.total_quoted_amount)}
                 </span>
             </div>
 
@@ -1016,7 +1016,7 @@ export const UnifiedEvidenceBar = memo(function UnifiedEvidenceBar({ ticket }: {
         "pago_realizado",
         "ticket_cerrado"
     ];
-    if (!visibleStates.includes(ticket.estadoId)) return null;
+    if (!visibleStates.includes(ticket.status_id)) return null;
 
     return (
         <div
@@ -1102,7 +1102,7 @@ export const DocumentationSummaryBar = memo(function DocumentationSummaryBar({ t
     if (!hasDocs) return null;
 
     const visibleStates = ["documentacion_enviada", "por_liquidar", "ticket_cerrado"];
-    if (!visibleStates.includes(ticket.estadoId)) return null;
+    if (!visibleStates.includes(ticket.status_id)) return null;
 
     const docs = ticket.documentosValidados;
 
@@ -1176,7 +1176,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
     // Si no hay monto final ni costos base, no hay nada que liquidar aún
-    if (!ticket.montoFinal && !ticket.montoTotalCotizado && !ticket.costoManoObra) return null;
+    if (!ticket.total_quoted_amount && !ticket.labor_cost) return null;
 
     const finances = calculateTicketFinances(ticket, costos);
     const { 
@@ -1192,7 +1192,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
         totalExpenses: gastosReales
     } = finances;
 
-    const montoTotalCliente = ticket.montoFinal || ticket.montoTotalCotizado || 0;
+    const montoTotalCliente = ticket.total_quoted_amount || 0;
     const paymentPercentage = pactadoLaborBase > 0 ? (totalPagadoTecnico / pactadoLaborBase) * 100 : 0;
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
@@ -1205,7 +1205,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
         "ticket_cerrado"
     ];
 
-    if (!visibleStates.includes(ticket.estadoId)) return null;
+    if (!visibleStates.includes(ticket.status_id)) return null;
 
     const availableRescue = propRescue !== undefined ? propRescue : Math.max(finances.netLaborBalance, finances.pactedMO - finances.totalExpenses);
 
@@ -1232,7 +1232,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
 
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>
-                    {["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? "Presupuesto Proyectado" : "Presupuesto Cliente"}
+                    {["en_cotizacion", "cotizacion_enviada"].includes(ticket.status_id) ? "Presupuesto Proyectado" : "Presupuesto Cliente"}
                 </span>
                 <span className={styles.infoValue} style={{ color: '#1E293B', fontWeight: 900 }}>
                     S/ {formatSoles(montoTotalCliente)}
@@ -1240,12 +1240,12 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
             </div>
 
             <div className={styles.infoItem} style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '12px' }}>
-                <span className={styles.infoLabel} style={{ color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? '#3B82F6' : '#059669' }}>
-                    {["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? "Rentabilidad Proyectada" : "Rentabilidad Real"}
+                <span className={styles.infoLabel} style={{ color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.status_id) ? '#3B82F6' : '#059669' }}>
+                    {["en_cotizacion", "cotizacion_enviada"].includes(ticket.status_id) ? "Rentabilidad Proyectada" : "Rentabilidad Real"}
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span className={styles.infoValue} style={{ 
-                        color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.estadoId) ? '#3B82F6' : (rentabilidadReal < 0 ? '#EF4444' : '#059669'), 
+                        color: ["en_cotizacion", "cotizacion_enviada"].includes(ticket.status_id) ? '#3B82F6' : (rentabilidadReal < 0 ? '#EF4444' : '#059669'), 
                         fontWeight: 900,
                         fontSize: '1.1rem'
                     }}>
@@ -1354,7 +1354,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
                 )}
             </div>
 
-            {onOpenMaterials && ticket.estadoId !== 'ticket_cerrado' && (
+            {onOpenMaterials && ticket.status_id !== 'ticket_cerrado' && (
                 <button 
                     className={styles.purchaseBtn}
                     onClick={onOpenMaterials}
@@ -1364,7 +1364,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
                 </button>
             )}
 
-            {onOpenRescue && ticket.estadoId !== "ticket_cerrado" && (
+            {onOpenRescue && ticket.status_id !== "ticket_cerrado" && (
                 <button 
                     className={styles.pillsBtn} 
                     onClick={onOpenRescue}
@@ -1390,11 +1390,11 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Estado Financiero</span>
                 <span className={styles.statusBadge} style={{
-                    background: ticket.estadoId === 'ticket_cerrado' ? '#D1FAE5' : (ticket.adelantoPagado ? '#DBEAFE' : '#FEF3C7'),
-                    color: ticket.estadoId === 'ticket_cerrado' ? '#065F46' : (ticket.adelantoPagado ? '#1E40AF' : '#92400E'),
+                    background: ticket.status_id === 'ticket_cerrado' ? '#D1FAE5' : (ticket.adelantoPagado ? '#DBEAFE' : '#FEF3C7'),
+                    color: ticket.status_id === 'ticket_cerrado' ? '#065F46' : (ticket.adelantoPagado ? '#1E40AF' : '#92400E'),
                     fontSize: '10px'
                 }}>
-                    {ticket.estadoId === 'ticket_cerrado' ? 'TOTALMENTE LIQUIDADO' :
+                    {ticket.status_id === 'ticket_cerrado' ? 'TOTALMENTE LIQUIDADO' :
                         ticket.adelantoPagado ? 'ADELANTO PAGADO' : 'PENDIENTE INICIAL'}
                 </span>
             </div>
@@ -1751,7 +1751,7 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
                 )}
             </div>
 
-            {canAssign && !ticket.estadoId.includes('cerrado') && (
+            {canAssign && !ticket.status_id.includes('cerrado') && (
                 <button 
                     className={styles.reassignBtn}
                     onClick={onAssign}

@@ -84,27 +84,18 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
         const assignmentData = {
             tecnico: {
                 id: selectedTechnician.id,
-                name: selectedTechnician.name,
-                nombre: selectedTechnician.name || `${selectedTechnician.first_name || ''} ${selectedTechnician.last_name || ''}`.trim(),
-                apellido: selectedTechnician.last_name || selectedTechnician.apellido,
-                celular: selectedTechnician.phone || selectedTechnician.celular,
-                zona: selectedTechnician.zone || selectedTechnician.zona,
-                especialidades: selectedTechnician.specialties || selectedTechnician.especialidades,
-                foto: selectedTechnician.photo || selectedTechnician.foto,
-                banco: selectedTechnician.bank_name || selectedTechnician.banco,
-                numeroCuenta: selectedTechnician.account_number || selectedTechnician.numeroCuenta,
-                cci: selectedTechnician.cci,
-                yape: selectedTechnician.yape_number || selectedTechnician.yape,
-                plin: selectedTechnician.plin_number || selectedTechnician.plin,
-                
-                // Columnas físicas nativas de PostgreSQL
+                name: selectedTechnician.name || `${selectedTechnician.first_name || ''} ${selectedTechnician.last_name || ''}`.trim(),
                 first_name: selectedTechnician.first_name || null,
                 last_name: selectedTechnician.last_name || null,
-                phone: selectedTechnician.phone || selectedTechnician.celular || null,
-                bank_name: selectedTechnician.bank_name || selectedTechnician.banco || null,
-                account_number: selectedTechnician.account_number || selectedTechnician.numeroCuenta || null,
-                yape_number: selectedTechnician.yape_number || selectedTechnician.yape || null,
-                plin_number: selectedTechnician.plin_number || selectedTechnician.plin || null
+                phone: selectedTechnician.phone || null,
+                zone: selectedTechnician.zone || null,
+                specialties: selectedTechnician.specialties || [],
+                photo: selectedTechnician.photo || null,
+                bank_name: selectedTechnician.bank_name || null,
+                account_number: selectedTechnician.account_number || null,
+                cci: selectedTechnician.cci || null,
+                yape_number: selectedTechnician.yape_number || null,
+                plin_number: selectedTechnician.plin_number || null
             },
             fechaAsignacion: new Date().toISOString()
         };
