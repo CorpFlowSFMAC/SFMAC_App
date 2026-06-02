@@ -724,12 +724,15 @@ export default function PaymentsPage() {
                 const liqInHistory = liqMonto > 0 && laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
 
                 // V3: detectar solicitudes pendientes — solo fuentes oficiales (ticket_costs + metadata estructurada)
-                const hasExceedancePending = (t.costos || []).some((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
+                const hasCostPending = (t.costos || []).some((c: any) => {
+                    const st = (c.estado_pago || '').toUpperCase();
+                    return st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN';
+                });
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
                                            (meta.solicitudPago && !pagoInHistory) || 
                                            (meta.solicitudLiquidacion && !liqInHistory && liqMonto > 0) ||
                                            (meta.solicitudAdelantoExtra && parseFloat(meta.solicitudAdelantoExtra.monto || 0) > 0) ||
-                                           hasExceedancePending;
+                                           hasCostPending;
 
                 const hasLiquidacionPaid = laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('liquidación'));
                 // No mostrar liquidación automática si hay solicitudes pendientes de excedentes/rescates
