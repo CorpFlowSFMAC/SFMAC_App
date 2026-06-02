@@ -26,6 +26,33 @@ import styles from "./TicketWindow.module.css";
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
 const SANTANDER_ID = "419d87c8-65e1-434f-8253-d8a226ca5f62";
 
+interface TicketData {
+    id: string;
+    ticket_number?: number;
+    client_id: string;
+    branch_id?: string;
+    technician_id?: string | null;
+    status_id: string;
+    estadoId: string;
+    description?: string;
+    client_ticket_number?: string | null;
+    numeroTicketCliente: string;
+    created_at?: string;
+    labor_cost?: number;
+    materials_cost?: number;
+    visit_cost?: number | null;
+    total_quoted_amount?: number;
+    diagnostico?: string;
+    priority?: string;
+    tecnico: any;
+    gestora: any;
+    cliente: any;
+    sede: any;
+    metadata: any;
+    costos: any[];
+    [key: string]: any;
+}
+
 interface TicketWindowProps {
     ticket: any;
     onClose: () => void;
@@ -476,11 +503,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : (costs || []);
                     const v3Finances = calculateTicketFinances(updatedTicket, localCosts);
 
-                    setTicketData((prev: any) => ({
+                    setTicketData((prev: TicketData) => ({
                         ...prev,
-                        ...updatedTicket,
-                        tecnico: updatedTicket.tecnico || prev.tecnico || null,
-                        gestora: updatedTicket.gestora || prev.gestora || null,
+                        estadoId: updatedTicket.estadoId,
+                        status_id: updatedTicket.status_id,
+                        diagnostico: updatedTicket.diagnostico,
+                        costoManoObra: updatedTicket.costoManoObra,
+                        costoMateriales: updatedTicket.costoMateriales,
+                        costoVisita: updatedTicket.costoVisita,
+                        montoFinal: updatedTicket.montoFinal,
+                        numeroTicketCliente: updatedTicket.numeroTicketCliente,
+                        tecnico: updatedTicket.tecnico,
+                        gestora: updatedTicket.gestora,
+                        cliente: updatedTicket.cliente || prev.cliente || null,
+                        sede: updatedTicket.sede || prev.sede || null,
+                        metadata: {
+                            ...prev.metadata,
+                            ...(updatedTicket.metadata || {})
+                        },
                         // Sobrescribir con cálculos frescos del motor V3 (JS Fallback)
                         saldo_tecnico: v3Finances.netLaborBalance,
                         utilidad_neta: v3Finances.netProfit,
@@ -572,7 +612,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     ? 'en_inspeccion'
                     : rawEstadoId;
 
-                    // Restaurar desde cache local O использовать el más avanzado entre cache y servidor
+                    // Restaurar desde caché local o usar el más avanzado entre caché y servidor
                     const savedState = localStorage.getItem(`ticket_state_${ticket.id}`);
                     let cachedMetadata: any = {};
                     let cachedEstadoId: string | undefined;
@@ -585,7 +625,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             if (isTriage) {
                                 cachedMetadata = parsed;
                             } else {
-                                // Para tickets ya avanzados, usar metadata del cache pero NO perder el estado más avanzado
+                                // Para tickets ya avanzados, usar metadata del caché pero no perder el estado más avanzado
                                 const { estadoId: _, status_id: __, ...safe } = parsed;
                                 cachedMetadata = safe;
                             }
@@ -601,7 +641,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         : corregidoEstadoId;
                     const finalStatusId = finalEstadoId;
 
-                    setTicketData((prev: any) => {
+                    setTicketData((prev: TicketData) => {
                         const {
                             adelantoPagado,
                             visitPaymentConfirmed,
@@ -616,7 +656,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             montoAdelanto: cachedMontoAdelanto,
                             fechaPagoAdelanto: cachedFechaPagoAdelanto,
                             AdelantoPagado: cachedUpperAdelantoPagado,
-                            // Excluir campos financieros del cache para que el servidor siempre mande
+                            // Excluir campos financieros del caché para que el servidor siempre mande
                             solicitudAdelanto: _cachedSolicitudAdelanto,
                             solicitudPago: _cachedSolicitudPago,
                             solicitudLiquidacion: _cachedSolicitudLiquidacion,
@@ -625,12 +665,42 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             pagoRechazado: _cachedPagoRechazado,
                             ...safeCachedMetadata
                         } = cachedMetadata;
-                        const merged = {
-                            ...prev, ...fullTicket, ...safeMeta, ...safeCachedMetadata,
+
+                        // Construcción explícita del estado para evitar variables huérfanas o duplicaciones en memoria
+                        const merged: TicketData = {
+                            ...prev,
+                            // Campos directos mapeados (se evita propagar los joins crudos de la base de datos)
+                            id: fullTicket.id,
+                            ticket_number: fullTicket.ticket_number,
+                            client_ticket_number: fullTicket.client_ticket_number,
                             numeroTicketCliente: fullTicket.client_ticket_number || safeMeta.numeroTicketCliente || safeCachedMetadata.numeroTicketCliente || prev.numeroTicketCliente,
+                            estadoId: finalEstadoId,
+                            status_id: finalStatusId,
+                            diagnostico: fullTicket.diagnostico,
+                            descripcionProblema: fullTicket.descripcionProblema,
+                            costoManoObra: fullTicket.costoManoObra,
+                            costoMateriales: fullTicket.costoMateriales,
+                            costoVisita: fullTicket.costoVisita,
+                            montoFinal: fullTicket.montoFinal,
+
+                            // Variables financieras
+                            saldo_tecnico: fullTicket.saldo_tecnico,
+                            margen_real: fullTicket.margen_real,
+                            utilidad_neta: fullTicket.utilidad_neta,
+                            inversion_ejecutada: fullTicket.inversion_ejecutada,
+                            total_costs_agg: fullTicket.total_costs_agg,
+                            ingresos_reales: fullTicket.ingresos_reales,
+                            monto_pactado_mo: fullTicket.monto_pactado_mo,
+
+                            // Relaciones limpias normalizadas
+                            cliente: fullTicket.cliente || prev.cliente || null,
+                            sede: fullTicket.sede || prev.sede || null,
+                            tecnico: fullTicket.tecnico,
+                            gestora: fullTicket.gestora,
+
                             metadata: {
                                 ...safeMeta, ...safeCachedMetadata,
-                                // Campos financieros: SIEMPRE del servidor, nunca del cache local
+                                // Campos financieros: SIEMPRE del servidor, nunca del caché local
                                 solicitudAdelanto: safeMeta.solicitudAdelanto ?? null,
                                 solicitudPago: safeMeta.solicitudPago ?? null,
                                 solicitudLiquidacion: safeMeta.solicitudLiquidacion ?? null,
@@ -638,8 +708,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 solicitudesDeposito: safeMeta.solicitudesDeposito ?? null,
                                 pagoRechazado: safeMeta.pagoRechazado ?? null,
                             },
-                            estadoId: finalEstadoId,
-                            status_id: finalStatusId,
                             adelantoPagado: advanceConfirmed,
                             visitPaymentConfirmed: visitConfirmed,
                             solicitudAdelanto: safeMeta.solicitudAdelanto !== undefined ? safeMeta.solicitudAdelanto : null,
@@ -647,8 +715,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             solicitudLiquidacion: safeMeta.solicitudLiquidacion ?? null,
                             pagoRechazado: safeMeta.pagoRechazado ?? null,
                             solicitudesDeposito: safeMeta.solicitudesDeposito ?? null,
-                            tecnico: fullTicket.tecnico || prev.tecnico || null,
-                            gestora: fullTicket.gestora || safeMeta.gestora || null
                         };
                         // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
                         if (cachedMetadata.costoManoObra > 0 && merged.costoManoObra <= 20) {
