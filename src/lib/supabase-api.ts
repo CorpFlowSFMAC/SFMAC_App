@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { stripFinancialMetadata } from './financialMetadata'
 import { round2 } from './formatters'
+import { sanitizeTicketMetadata } from './calculations'
 
 const toNumberSafe = (value: any): number => {
     const num = typeof value === 'string' ? parseFloat(value) : Number(value);
@@ -26,7 +27,7 @@ const PAYMENT_TICKET_SELECT = `
     id, ticket_number, status_id, service_type, description,
     client_ticket_number, created_at, labor_cost, materials_cost, visit_cost,
     total_quoted_amount, client_id, branch_id, technician_id, gestora_id,
-    diagnosis, priority, sede_reportada_cliente, metadata,
+    diagnosis, priority, sede_reportada_cliente,
     clients(id, name, ruc),
     branch_offices(id, name),
     technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
@@ -643,6 +644,7 @@ export const ticketsAPI = {
     }) {
         const payload = {
             ...ticket,
+            metadata: sanitizeTicketMetadata(ticket.metadata),
             created_at: ticket.created_at || new Date().toISOString()
         };
         const { data, error } = await supabase
@@ -705,9 +707,13 @@ export const ticketsAPI = {
         sla_reactivation_date: string;
         metadata: any;
     }>) {
+        const safeUpdates = {
+            ...updates,
+            ...(updates.metadata ? { metadata: sanitizeTicketMetadata(updates.metadata) } : {})
+        };
         const { data, error } = await supabase
             .from('tickets')
-            .update(updates)
+            .update(safeUpdates)
             .eq('id', id)
             .select('*, clients(*), branch_offices(*), technicians(*)')
             .single();
@@ -737,10 +743,10 @@ export const ticketsAPI = {
         const serverMeta = stripFinancialMetadata(current?.metadata || {});
         const safeMetadataUpdates = stripFinancialMetadata(metadataUpdates);
 
-        const finalMetadata = {
+        const finalMetadata = sanitizeTicketMetadata({
             ...serverMeta,
             ...safeMetadataUpdates,
-        };
+        });
 
         const updates = {
             ...columnUpdates,

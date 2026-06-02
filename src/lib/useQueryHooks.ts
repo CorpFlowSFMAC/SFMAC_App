@@ -276,7 +276,8 @@ export function usePaymentTickets() {
             const data = await ticketsAPI.getForPayments();
             return data || [];
         },
-        staleTime: 1000 * 10, // 10s - Módulo de tesorería V3 reactivo
+        staleTime: 1000 * 60, // 60s - Módulo de tesorería V3 optimizado
+        refetchOnWindowFocus: false, // Evita refetch duplicado al cambiar de pestaña
     });
 }
 

@@ -276,3 +276,33 @@ export function generateTransactionToken(): string {
         return v.toString(16);
     });
 }
+
+/**
+ * Sanitiza el objeto metadata antes de guardarlo en Supabase para evitar el gigantismo de payload redundante.
+ * Elimina duplicados relacionales pesados (como objetos enteros de cliente, sede, gestora, costos y técnicos)
+ * y limpia historiales redundantes, manteniendo únicamente referencias ligeras.
+ */
+export function sanitizeTicketMetadata(metadata: any): any {
+    if (!metadata || typeof metadata !== 'object') return metadata;
+    
+    // Clonar para evitar mutar el estado en memoria
+    const cleaned = { ...metadata };
+    
+    // 1. Eliminar objetos relacionales enteros que ya existen como claves foráneas
+    delete cleaned.clients;
+    delete cleaned.cliente;
+    delete cleaned.branch_offices;
+    delete cleaned.sede;
+    delete cleaned.technicians;
+    delete cleaned.tecnico;
+    delete cleaned.gestoras;
+    delete cleaned.gestora;
+    
+    // 2. Limpiar arrays pesados que crecen infinitamente en metadata
+    delete cleaned.costos;
+    delete cleaned.gastos;
+    delete cleaned.historialPagosTecnico;
+    delete cleaned.historialDepositos;
+    
+    return cleaned;
+}

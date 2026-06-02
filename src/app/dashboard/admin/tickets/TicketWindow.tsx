@@ -14,7 +14,7 @@ import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
-import { calculateTicketFinances, toNum, generateTransactionToken } from "@/lib/calculations";
+import { calculateTicketFinances, toNum, generateTransactionToken, sanitizeTicketMetadata } from "@/lib/calculations";
 import { supabase } from "@/lib/supabase";
 import { DuplicateTicketCostError, ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
@@ -284,12 +284,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const newMO = parseFloat(reportForm.costoManoObra || "0");
             const newMAT = parseFloat(reportForm.costoMateriales || "0");
 
-            const updatedMetadata = {
+            const updatedMetadata = sanitizeTicketMetadata({
                 ...(ticketData.metadata || {}),
                 diagnostico: reportForm.diagnostico,
                 costoManoObra: newMO,
                 costoMateriales: newMAT
-            };
+            });
 
             // 1. Actualizar en Base de Datos (Columnas y Metadata para consistencia absoluta)
             const { error } = await supabase
@@ -1293,12 +1293,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const { error } = await supabase
                 .from('tickets')
                 .update({ 
-                    metadata: { 
+                    metadata: sanitizeTicketMetadata({ 
                         ...(ticketData.metadata || {}), 
                         pagoRechazado: null,
                         mensajeRechazo: null,
                         motivoRechazo: null 
-                    } 
+                    }) 
                 })
                 .eq('id', ticketData.id);
 
@@ -2799,7 +2799,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // También marcar el ticket principal si es riesgoso
             if ((TICKET_STATE_ORDER[ticketData.estadoId] || 0) < 7) {
                 await supabase.from('tickets').update({
-                    metadata: { ...ticketData.metadata, riesgoFinanciero: true }
+                    metadata: sanitizeTicketMetadata({ ...ticketData.metadata, riesgoFinanciero: true })
                 }).eq('id', ticketData.id);
             }
 

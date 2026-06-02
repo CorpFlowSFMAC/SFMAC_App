@@ -337,10 +337,35 @@ function flattenTicketForPayments(t: any) {
 }
 
 export default function PaymentsPage() {
-    const [tickets, setTickets] = useState<any[]>([]);
+    const [rawTickets, setRawTickets] = useState<any[]>([]);
+    const [loadedMetadata, setLoadedMetadata] = useState<{[key: string]: any}>({});
+    const [loadingMetaId, setLoadingMetaId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const fetchTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Procesar tickets de forma reactiva combinando rawTickets y loadedMetadata bajo demanda
+    const tickets = React.useMemo(() => {
+        return (rawTickets || []).map((t: any) => {
+            try {
+                const enrichedTicket = {
+                    ...t,
+                    metadata: loadedMetadata[t.id] || t.metadata
+                };
+                const flat = flattenTicketForPayments(enrichedTicket);
+                const relatedCosts = t.costos || [];
+                flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
+                flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
+                flat.exceedanceRequests = relatedCosts.filter((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
+
+                flat.isOpen = !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id);
+                return flat;
+            } catch (e) {
+                console.error('[Payments] Error processing ticket:', t.id, e);
+                return null;
+            }
+        }).filter(Boolean);
+    }, [rawTickets, loadedMetadata]);
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
         try {
@@ -358,23 +383,7 @@ export default function PaymentsPage() {
 
             const data = await Promise.race([fetchPromise, timeoutPromise]) as any[];
             
-            const processed = (data || []).filter(Boolean).map((t: any) => {
-                try {
-                    const flat = flattenTicketForPayments(t);
-                    const relatedCosts = t.costos || [];
-                    flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
-                    flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
-                    flat.exceedanceRequests = relatedCosts.filter((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
-
-                    flat.isOpen = !['ticket_cerrado', 'ticket_cancelado', 'ticket_rechazado'].includes(t.status_id);
-                    return flat;
-                } catch (e) {
-                    console.error('[Payments] Error processing ticket:', t.id, e);
-                    return null;
-                }
-            }).filter(Boolean);
-            
-            setTickets(processed);
+            setRawTickets(data || []);
         } catch (err: any) {
             console.error('[Payments] Fetch Error:', err);
             setFetchError(err.message || "Error de conexión");
@@ -503,6 +512,36 @@ export default function PaymentsPage() {
         }
     };
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+
+    const handleExpandHistory = async (ticketId: string) => {
+        if (expandedHistory === ticketId) {
+            setExpandedHistory(null);
+            return;
+        }
+        setExpandedHistory(ticketId);
+        
+        if (!loadedMetadata[ticketId]) {
+            setLoadingMetaId(ticketId);
+            try {
+                const { data, error } = await supabase
+                    .from('tickets')
+                    .select('metadata')
+                    .eq('id', ticketId)
+                    .single();
+                if (error) throw error;
+                if (data && data.metadata) {
+                    setLoadedMetadata(prev => ({
+                        ...prev,
+                        [ticketId]: data.metadata
+                    }));
+                }
+            } catch (e) {
+                console.error("Error loading metadata on demand:", e);
+            } finally {
+                setLoadingMetaId(null);
+            }
+        }
+    };
     const [pendingConfirmation, setPendingConfirmation] = useState<{
         group: PaymentTicketGroup;
         item: PaymentItem;
@@ -2261,27 +2300,34 @@ export default function PaymentsPage() {
                                             justifyContent: 'space-between', alignItems: 'center' 
                                         }}>
                                             <button 
-                                                onClick={() => setExpandedHistory(expandedHistory === group.ticketId ? null : group.ticketId)}
+                                                onClick={() => handleExpandHistory(group.realTicketId || group.ticketId)}
                                                 style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                                disabled={loadingMetaId === (group.realTicketId || group.ticketId)}
                                             >
                                                 <History size={14} />
-                                                {expandedHistory === group.ticketId ? 'Ocultar historial' : 'Ver historial'}
+                                                {loadingMetaId === (group.realTicketId || group.ticketId) 
+                                                    ? 'Cargando historial...' 
+                                                    : (expandedHistory === (group.realTicketId || group.ticketId) ? 'Ocultar historial' : 'Ver historial')}
                                             </button>
                                         </div>
                                         
                                         {/* EXPANDED HISTORY (Sub-card style) */}
-                                        {expandedHistory === group.ticketId && (
+                                        {expandedHistory === (group.realTicketId || group.ticketId) && (
                                             <div style={{ padding: '16px', background: '#F1F5F9', borderTop: '1px solid #E2E8F0' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    {group.historialDepositos.map((h: any, i: number) => (
-                                                        <div key={i} style={{ background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                                                            <div>
-                                                                <span style={{ fontWeight: 800, color: '#334155' }}>{h.tipo || h.referencia}</span>
-                                                                <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.65rem' }}>{new Date(h.fecha).toLocaleDateString()}</p>
+                                                    {group.historialDepositos.length === 0 ? (
+                                                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>No hay registros de depósitos previos</p>
+                                                    ) : (
+                                                        group.historialDepositos.map((h: any, i: number) => (
+                                                            <div key={i} style={{ background: 'white', padding: '10px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+                                                                <div>
+                                                                    <span style={{ fontWeight: 800, color: '#334155' }}>{h.tipo || h.referencia}</span>
+                                                                    <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.65rem' }}>{new Date(h.fecha).toLocaleDateString()}</p>
+                                                                </div>
+                                                                <span style={{ fontWeight: 900, color: '#0F172A' }}>S/ {formatSoles(h.monto)}</span>
                                                             </div>
-                                                            <span style={{ fontWeight: 900, color: '#0F172A' }}>S/ {formatSoles(h.monto)}</span>
-                                                        </div>
-                                                    ))}
+                                                        ))
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
