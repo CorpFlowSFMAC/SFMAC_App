@@ -386,15 +386,23 @@ export default function AdminDashboard() {
         const clientMap: Record<string, { id: string, name: string, billing: number, color: string }> = {};
         tickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
+            
+            // Regla de Negocio: Solo mostrar facturación de tickets liquidados (cerrados)
+            const isClosed = normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado";
+            if (!isClosed) return;
+
             const clientName = t.cliente?.nombre || t.clients?.name || t.cliente?.name || t.metadata?.cliente?.nombre || "Otros";
             const clientId = t.client_id || "otros";
             const clientColor = t.cliente?.color || t.clients?.color_aura || "#3B82F6";
-            const revenue = parseFloat(t.ingresos_reales || 0);
-            if (revenue <= 0) return;
+            
+            // Regla de Negocio: Montos CON IGV liquidados
+            const billingAmount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? (parseFloat(t.ingresos_reales ?? 0) * 1.18) ?? 0);
+            if (billingAmount <= 0) return;
+
             if (!clientMap[clientId]) {
                 clientMap[clientId] = { id: clientId, name: clientName, billing: 0, color: clientColor };
             }
-            clientMap[clientId].billing += revenue;
+            clientMap[clientId].billing += billingAmount;
         });
         return Object.values(clientMap)
             .map(c => ({ ...c, billing: round2(c.billing) }))
@@ -898,7 +906,7 @@ export default function AdminDashboard() {
                     display: "flex", flexDirection: "column", gap: "0.75rem", minHeight: "260px"
                 }}>
                     <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        💼 Facturación por Cliente (Top 5 sin IGV)
+                        💼 Facturación por Cliente (Top 5 con IGV)
                     </div>
                     {clientBillingData.length === 0 ? (
                         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)" }}>
