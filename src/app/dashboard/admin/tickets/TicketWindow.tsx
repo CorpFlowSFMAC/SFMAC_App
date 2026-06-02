@@ -3379,7 +3379,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 ...ticketData,
                                                                 fechaVisita: today.toISOString(),
                                                                 programacionLabel: "HOY",
-                                                                estadoId: "visita_realizada"
+                                                                estadoId: "visita_realizada",
+                                                                status_id: "visita_realizada"
                                                             };
                                                             setTicketData(updated);
                                                         }}
@@ -3399,7 +3400,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 ...ticketData,
                                                                 fechaVisita: tomorrow.toISOString(),
                                                                 programacionLabel: "MAÑANA",
-                                                                estadoId: "visita_realizada"
+                                                                estadoId: "visita_realizada",
+                                                                status_id: "visita_realizada"
                                                             };
                                                             setTicketData(updated);
                                                         }}
