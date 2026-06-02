@@ -1398,6 +1398,8 @@ export default function PaymentsPage() {
                 await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
                 await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
                 await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+                await queryClient.invalidateQueries({ queryKey: ['payments'] });
+                await queryClient.invalidateQueries({ queryKey: ['tickets'] });
                 
                 refresh();
                 return;
@@ -1605,6 +1607,8 @@ export default function PaymentsPage() {
             await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
             await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            await queryClient.invalidateQueries({ queryKey: ['payments'] });
+            await queryClient.invalidateQueries({ queryKey: ['tickets'] });
             
             refresh();
         } catch (err: any) {
