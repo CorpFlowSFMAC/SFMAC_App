@@ -188,8 +188,8 @@ export default function TicketsPage() {
 
     const isVisibleForMe = useCallback((t: any) => {
         // REGLA 0: Admin ve TODO (Prioridad absoluta)
-        if (isAdminState) {
-            
+        const localRole = typeof window !== 'undefined' ? (localStorage.getItem('userRole') || '').toLowerCase() : '';
+        if (isAdminState || localRole === 'admin' || localRole === 'superadmin') {
             return true;
         }
 
