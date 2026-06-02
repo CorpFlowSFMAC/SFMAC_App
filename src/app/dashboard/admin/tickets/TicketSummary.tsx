@@ -1557,12 +1557,10 @@ export const PaymentHistoryBar = memo(function PaymentHistoryBar({ ticket, costo
                                 </span>
                             )}
 
-                            {/* Referencia */}
-                            {p.referencia && (
-                                <span style={{ fontSize: '10px', color: '#64748B', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {p.referencia}
-                                </span>
-                            )}
+                            {/* Descripción del pago (concepto o referencia) */}
+                            <span style={{ fontSize: '10px', color: '#64748B', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '8px', paddingLeft: '8px' }}>
+                                {p.concepto || p.referencia || ''}
+                            </span>
 
                             {/* Voucher button */}
                             {voucherSrc && (
