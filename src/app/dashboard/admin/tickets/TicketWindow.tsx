@@ -470,14 +470,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             
             // MOTOR V3: Recalcular finanzas localmente para garantizar coherencia instantánea
             try {
-                const updatedTicket = await ticketsAPI.getById(ticketData.id);
-                if (updatedTicket) {
+                const rawTicket = await ticketsAPI.getById(ticketData.id);
+                if (rawTicket) {
+                    const updatedTicket = normalizeTicket(rawTicket);
                     const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : (costs || []);
                     const v3Finances = calculateTicketFinances(updatedTicket, localCosts);
 
                     setTicketData((prev: any) => ({
                         ...prev,
                         ...updatedTicket,
+                        tecnico: updatedTicket.tecnico || prev.tecnico || null,
+                        gestora: updatedTicket.gestora || prev.gestora || null,
                         // Sobrescribir con cálculos frescos del motor V3 (JS Fallback)
                         saldo_tecnico: v3Finances.netLaborBalance,
                         utilidad_neta: v3Finances.netProfit,
@@ -545,8 +548,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             try {
                 loadCosts();
                 // Solo un fetch al abrir para traer campos pesados (partidas, evidencias)
-                const fullTicket = await ticketsAPI.getById(ticket.id);
-                if (!fullTicket) return;
+                const rawTicket = await ticketsAPI.getById(ticket.id);
+                if (!rawTicket) return;
+                const fullTicket = normalizeTicket(rawTicket);
                 
                 let meta = fullTicket.metadata || {};
                 while (meta.metadata && typeof meta.metadata === 'object') {
@@ -643,6 +647,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             solicitudLiquidacion: safeMeta.solicitudLiquidacion ?? null,
                             pagoRechazado: safeMeta.pagoRechazado ?? null,
                             solicitudesDeposito: safeMeta.solicitudesDeposito ?? null,
+                            tecnico: fullTicket.tecnico || prev.tecnico || null,
                             gestora: fullTicket.gestora || safeMeta.gestora || null
                         };
                         // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
