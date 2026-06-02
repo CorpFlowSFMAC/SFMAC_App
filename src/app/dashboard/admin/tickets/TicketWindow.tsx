@@ -4040,30 +4040,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span>FINALIZAR TRABAJOS Y ENVIAR DOCUMENTACIÓN</span>
                                                         </button>
 
-                                                        <button
-                                                            className={styles.secondaryActionBtn}
-                                                            onClick={() => handleOpenExpenseModal()}
-                                                            style={{ 
-                                                                marginTop: '10px', 
-                                                                display: 'flex', 
-                                                                alignItems: 'center', 
-                                                                justifyContent: 'center', 
-                                                                gap: '8px', 
-                                                                width: '100%', 
-                                                                padding: '12px', 
-                                                                borderRadius: '12px', 
-                                                                border: '2px solid #E2E8F0', 
-                                                                background: '#F8FAFC', 
-                                                                color: '#475569', 
-                                                                fontWeight: 700, 
-                                                                fontSize: '0.85rem', 
-                                                                cursor: 'pointer',
-                                                                transition: 'all 0.2s ease'
-                                                            }}
-                                                        >
-                                                            <Package size={18} />
-                                                            <span>Solicitar Pago Materiales (Técnico Externo)</span>
-                                                        </button>
+                                                        
 
                                                         <p style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '10px', textAlign: 'center' }}>
                                                             La gestión financiera de este ticket se realiza exclusivamente en el panel inferior.
