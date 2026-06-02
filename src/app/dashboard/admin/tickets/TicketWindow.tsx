@@ -38,12 +38,25 @@ interface TicketData {
     client_ticket_number?: string | null;
     numeroTicketCliente: string;
     created_at?: string;
+    updated_at?: string;
     labor_cost?: number;
     materials_cost?: number;
     visit_cost?: number | null;
     total_quoted_amount?: number;
     diagnostico?: string;
+    diagnosis?: string;
     priority?: string;
+    service_type?: string;
+    created_by?: string;
+    current_step?: number;
+    quotation_date?: string;
+    execution_date?: string;
+    closure_date?: string;
+    is_sla_paused?: boolean;
+    sla_pause_date?: string;
+    sla_reactivation_date?: string;
+    sede_reportada_cliente?: string | null;
+    gestora_id?: string | null;
     tecnico: any;
     gestora: any;
     cliente: any;
@@ -1087,16 +1100,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null));
         
         const updates: any = {
-            status_id: resolvedStatusId,
-            description: businessData.descripcionProblema,
-            client_ticket_number: cleanedClientTicketNumber,
-            diagnosis: businessData.diagnostico,
-            labor_cost: parseFloat(sourceForPayments?.costoManoObra || 0),
-            materials_cost: parseFloat(sourceForPayments?.costoMateriales || 0),
-            visit_cost: parseFloat(sourceForPayments?.costoVisita || 0),
-            total_quoted_amount: parseFloat(sourceForPayments?.montoFinal ?? montoTotalCotizado ?? 0),
-            technician_id: tecnico?.id || serverTicket?.technician_id,
-            gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id,
+            status_id: resolvedStatusId || businessData.status_id || businessData.estadoId,
+            description: businessData.description || businessData.descripcionProblema,
+            client_ticket_number: cleanedClientTicketNumber || businessData.client_ticket_number,
+            diagnosis: businessData.diagnosis || businessData.diagnostico,
+            labor_cost: parseFloat(sourceForPayments?.labor_cost || sourceForPayments?.costoManoObra || 0),
+            materials_cost: parseFloat(sourceForPayments?.materials_cost || sourceForPayments?.costoMateriales || 0),
+            visit_cost: parseFloat(sourceForPayments?.visit_cost || sourceForPayments?.costoVisita || 0),
+            total_quoted_amount: parseFloat(sourceForPayments?.total_quoted_amount ?? sourceForPayments?.montoFinal ?? montoTotalCotizado ?? 0),
+            technician_id: tecnico?.id || serverTicket?.technician_id || businessData.technician_id,
+            gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id || businessData.gestora_id,
             metadata: {
                 ...serverMeta,
                 ...sourceMetadata,
@@ -4531,30 +4544,33 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         <div className={styles.destinationMain}>
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Tecnico</span>
-                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.nombre} {ticketData.tecnico?.apellido}</span>
+                                                                <span className={styles.destFieldValue}>
+                                                                    {ticketData.tecnico?.first_name || ticketData.tecnico?.nombre || ''} {ticketData.tecnico?.last_name || ticketData.tecnico?.apellido || ''}
+                                                                    {!(ticketData.tecnico?.first_name || ticketData.tecnico?.nombre) && !(ticketData.tecnico?.last_name || ticketData.tecnico?.apellido) && (ticketData.tecnico?.name || 'Sin Técnico')}
+                                                                </span>
                                                             </div>
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Banco</span>
-                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.banco || 'N/A'}</span>
+                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.bank_name || ticketData.tecnico?.banco || 'N/A'}</span>
                                                             </div>
                                                             <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                 <span className={styles.destFieldLabel}>Cuenta</span>
-                                                                <span className={styles.destFieldValueMono}>{ticketData.tecnico?.numeroCuenta || '---'}</span>
+                                                                <span className={styles.destFieldValueMono}>{ticketData.tecnico?.account_number || ticketData.tecnico?.numeroCuenta || '---'}</span>
                                                             </div>
-                                                            {ticketData.tecnico?.cci && (
+                                                            {(ticketData.tecnico?.cci || ticketData.tecnico?.cci_number) && (
                                                                 <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                     <span className={styles.destFieldLabel}>CCI</span>
-                                                                    <span className={styles.destFieldValueMono}>{ticketData.tecnico.cci}</span>
+                                                                    <span className={styles.destFieldValueMono}>{ticketData.tecnico?.cci || ticketData.tecnico?.cci_number}</span>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {(ticketData.tecnico?.yape || ticketData.tecnico?.plin) && (
+                                                        {(ticketData.tecnico?.yape || ticketData.tecnico?.yape_number || ticketData.tecnico?.plin || ticketData.tecnico?.plin_number) && (
                                                             <div className={styles.destinationWallets}>
-                                                                {ticketData.tecnico?.yape && (
-                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.tecnico.yape}</span>
+                                                                {(ticketData.tecnico?.yape || ticketData.tecnico?.yape_number) && (
+                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.tecnico?.yape || ticketData.tecnico?.yape_number}</span>
                                                                 )}
-                                                                {ticketData.tecnico?.plin && (
-                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.tecnico.plin}</span>
+                                                                {(ticketData.tecnico?.plin || ticketData.tecnico?.plin_number) && (
+                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.tecnico?.plin || ticketData.tecnico?.plin_number}</span>
                                                                 )}
                                                             </div>
                                                         )}

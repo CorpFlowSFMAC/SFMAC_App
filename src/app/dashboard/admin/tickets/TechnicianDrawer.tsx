@@ -95,7 +95,16 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
                 numeroCuenta: selectedTechnician.account_number || selectedTechnician.numeroCuenta,
                 cci: selectedTechnician.cci,
                 yape: selectedTechnician.yape_number || selectedTechnician.yape,
-                plin: selectedTechnician.plin_number || selectedTechnician.plin
+                plin: selectedTechnician.plin_number || selectedTechnician.plin,
+                
+                // Columnas físicas nativas de PostgreSQL
+                first_name: selectedTechnician.first_name || null,
+                last_name: selectedTechnician.last_name || null,
+                phone: selectedTechnician.phone || selectedTechnician.celular || null,
+                bank_name: selectedTechnician.bank_name || selectedTechnician.banco || null,
+                account_number: selectedTechnician.account_number || selectedTechnician.numeroCuenta || null,
+                yape_number: selectedTechnician.yape_number || selectedTechnician.yape || null,
+                plin_number: selectedTechnician.plin_number || selectedTechnician.plin || null
             },
             fechaAsignacion: new Date().toISOString()
         };
