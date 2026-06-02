@@ -1036,6 +1036,8 @@ export const ticketCostsAPI = {
         url_comprobante?: string;
         solicitado_por?: string;
         motivo?: string;
+        /** Token UUID único por transacción — usado para idempotencia exacta en tesorería */
+        transaction_token?: string;
     }) {
         // Strip undefined / empty-string optional UUID fields to avoid FK violations
         const safePayload: Record<string, any> = {
@@ -1045,11 +1047,12 @@ export const ticketCostsAPI = {
             monto: cost.monto,
             estado_pago: cost.estado_pago,
         };
-        if (cost.proveedor)         safePayload.proveedor = cost.proveedor;
-        if (cost.specialist_id)     safePayload.specialist_id = cost.specialist_id;
-        if (cost.url_comprobante)   safePayload.url_comprobante = cost.url_comprobante;
-        if (cost.solicitado_por)    safePayload.solicitado_por = cost.solicitado_por;
-        if (cost.motivo)            safePayload.motivo = cost.motivo;
+        if (cost.proveedor)             safePayload.proveedor = cost.proveedor;
+        if (cost.specialist_id)         safePayload.specialist_id = cost.specialist_id;
+        if (cost.url_comprobante)       safePayload.url_comprobante = cost.url_comprobante;
+        if (cost.solicitado_por)        safePayload.solicitado_por = cost.solicitado_por;
+        if (cost.motivo)                safePayload.motivo = cost.motivo;
+        if (cost.transaction_token)     safePayload.transaction_token = cost.transaction_token;
 
         const response = await fetch('/api/v3/ticket-costs', {
             method: 'POST',

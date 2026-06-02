@@ -14,7 +14,7 @@ import GestoraDrawer from "./GestoraDrawer";
 
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
-import { calculateTicketFinances, toNum } from "@/lib/calculations";
+import { calculateTicketFinances, toNum, generateTransactionToken } from "@/lib/calculations";
 import { supabase } from "@/lib/supabase";
 import { DuplicateTicketCostError, ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
@@ -921,10 +921,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const windowRef = useRef<HTMLDivElement>(null);
 
     const lastSyncData = useRef<string>("");
-    
-    // ✅ FIX 2026-04-27: Refs para prevenir ejecución doble
-    const requestAdvanceRef = useRef(false);
-    const confirmAdvanceRef = useRef(false);
+
+    // ── TOKENS DE TRANSACCIÓN (Idempotencia por UUID) ──────────────────────────
+    // Cada clic de solicitud genera un UUID único. El token activo en el ref
+    // es la única fuente de verdad para saber si hay una operación en curso.
+    // Se compara por igualdad EXACTA — nunca por monto aproximado.
+    const advanceTransactionToken = useRef<string | null>(null);
+    const liquidationTransactionToken = useRef<string | null>(null);
+    const confirmAdvanceRef = useRef(false); // sigue siendo bool; solo para admin confirm
+
+    // ── ESTADO DE ENVÍO (UI blocking) ──────────────────────────────────────────
+    // Deshabilitan físicamente los botones desde el primer clic hasta
+    // que la operación completa o falla — sin importar el estado Realtime.
+    const [isSubmittingAdvance, setIsSubmittingAdvance] = useState(false);
+    const [isSubmittingLiquidation, setIsSubmittingLiquidation] = useState(false);
 
     const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean, manual?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
@@ -1984,8 +1994,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
     };
     const handleRequestAdvance = async () => {
-        // ✅ FIX 2026-04-27: Prevenir ejecución doble
-        if (requestAdvanceRef.current) return;
+        // Bloqueo de re-entrada: si ya hay una operación en curso, abortar.
+        // isSubmittingAdvance está sincronizado con el estado React visible en UI.
+        if (isSubmittingAdvance) return;
         // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita adelanto antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.estadoId] || 0;
         if (currentStageOrder < 7) {
@@ -2006,7 +2017,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const executeRequestAdvance = async () => {
-        requestAdvanceRef.current = true;
+        // ── GENERAR TOKEN ÚNICO DE TRANSACCIÓN ────────────────────────────────────
+        // Cada clic genera un UUID nuevo. Antes de cualquier escritura a DB,
+        // el sistema verifica que el token del ref coincida con el token actual.
+        // Si no coincide (operación cancelada / race condition), abortar.
+        const txToken = generateTransactionToken();
+        advanceTransactionToken.current = txToken;
+
+        setIsSubmittingAdvance(true);
 
         let amount = 0;
         let pctVal = 0;
@@ -2024,20 +2042,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
         if (isNaN(amount) || amount <= 0) {
             showToast("Monto Inválido", "Por favor ingrese un monto válido mayor a cero.", "error");
-            requestAdvanceRef.current = false;
+            advanceTransactionToken.current = null;
+            setIsSubmittingAdvance(false);
             return;
         }
 
         const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id || ticketData.specialist_id;
-        const currentId = ticket.id || ticketData.id;
-        
+        const currentId = ticketData.id;
+
         if (!technicianId) {
             showToast("Técnico no Asignado", "Debe asignar un técnico antes de solicitar un adelanto.", "error");
-            requestAdvanceRef.current = false;
+            advanceTransactionToken.current = null;
+            setIsSubmittingAdvance(false);
             return;
         }
 
-        // 🚀 FORZAR SINCRONIZACIÓN: Asegurar que el override llega a la DB
         isProcessingAdvance.current = true;
         let advanceCreated = false;
         try {
@@ -2047,45 +2066,50 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 ? "Adelanto Operativo (MATERIALES)"
                 : "Adelanto Operativo (MANO DE OBRA)";
 
-            // 🔒 GUARD DE IDEMPOTENCIA: verificar si ya existe un adelanto pendiente del mismo monto
-            // Previene duplicados cuando el gestor re-solicita tras una regresión de estado
+            // ── IDEMPOTENCIA POR TOKEN UUID ────────────────────────────────────────
+            // Verificar en DB si ya existe un ticket_cost con el mismo transaction_token
+            // (campo libre almacenado en concepto con sufijo del token para compatibilidad
+            //  sin migración de schema). La comparación es EXACTA — jamás por monto aprox.
             try {
                 const existingCosts = await ticketCostsAPI.getByTicket(currentId);
-                const existingAdvance = (existingCosts || []).find((c: any) => {
-                    const st = (c.estado_pago || '').toUpperCase();
-                    const conc = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
-                    const isPending = st === 'PENDIENTE';
-                    const isAdvance = conc.includes('adelanto') || conc.includes('rescate');
-                    const sameAmount = Math.abs(parseFloat(c.monto || 0) - amount) < 0.5;
-                    return isPending && isAdvance && sameAmount;
-                });
 
-                if (existingAdvance) {
-                    // Ya existe un adelanto pendiente por el mismo monto — no crear duplicado
+                // Verificar si el token exacto ya fue procesado
+                const tokenAlreadyProcessed = (existingCosts || []).some(
+                    (c: any) => c.transaction_token === txToken
+                );
+
+                if (tokenAlreadyProcessed) {
+                    // Esta transacción ya fue registrada — idempotente seguro
                     advanceCreated = true;
-                    console.warn("[executeRequestAdvance] Adelanto ya existe pendiente:", existingAdvance.id);
+                    console.warn('[executeRequestAdvance] Token ya procesado:', txToken);
                 } else {
+                    // Verificar también si el token en ref fue reemplazado (click doble rápido)
+                    if (advanceTransactionToken.current !== txToken) {
+                        console.warn('[executeRequestAdvance] Token invalidado por operación más reciente. Abortando.');
+                        return;
+                    }
+
                     await ticketCostsAPI.create({
                         ticket_id: currentId,
                         concepto,
                         categoria: category,
                         specialist_id: technicianId,
                         monto: amount,
-                        estado_pago: "pendiente",
+                        estado_pago: 'pendiente',
+                        transaction_token: txToken,
                         solicitado_por: myProfileId || undefined
                     });
                     advanceCreated = true;
                 }
             } catch (costErr: any) {
-                console.error("Error creando ticket_cost:", costErr);
-                // Si falla ticketCosts, continuar con metadata (no bloquear totalmente)
-                if (costErr?.message?.includes('400') || costErr?.message?.includes('Duplicate')) {
-                    showToast("Solicitud Duplicada", "Ya existe un pago pendiente con el mismo monto y concepto.", "info");
-                    requestAdvanceRef.current = false;
+                console.error('Error creando ticket_cost:', costErr);
+                if (costErr?.message?.includes('400') || costErr?.message?.includes('Duplicate') || costErr?.message?.includes('transaction_token')) {
+                    showToast('Solicitud Duplicada', 'Esta solicitud ya fue registrada. Espere la respuesta de Tesorería.', 'info');
+                    advanceTransactionToken.current = null;
+                    setIsSubmittingAdvance(false);
                     return;
                 }
-                // Otros errores de ticket_cost: continuar con metadata
-                console.warn("Continuando sin ticket_cost, usando solo metadata...");
+                console.warn('Continuando sin ticket_cost, usando solo metadata...');
             }
 
             const metadataUpdates = {
@@ -2143,8 +2167,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const message = err?.message || "No se pudo registrar la solicitud.";
             showToast("Error", message, "error");
         } finally {
-            // ✅ Limpiar flags
-            requestAdvanceRef.current = false;
+            // Limpiar token y estado UI — el botón vuelve a habilitarse
+            advanceTransactionToken.current = null;
+            setIsSubmittingAdvance(false);
             setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }
     };
@@ -2154,7 +2179,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
 
     const handleActualLiquidation = async () => {
+        // ── GENERAR TOKEN ÚNICO DE TRANSACCIÓN ────────────────────────────────────
+        // UUID generado en el momento exacto del clic del gestor.
+        // Es la única fuente de verdad para validar si esta liquidación
+        // ya fue registrada — sin comparar montos ni tolerancias.
+        const txToken = generateTransactionToken();
+        liquidationTransactionToken.current = txToken;
+
         setIsSavingNegotiation(true);
+        setIsSubmittingLiquidation(true);
         setShowLiquidationConfirm(false);
         // 🔒 ANTI-REGRESIÓN: Bloquear Realtime durante toda la operación de liquidación
         isTransitioning.current = true;
@@ -2179,38 +2212,41 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // NO se usa solicitudLiquidacion en metadata para evitar que el módulo
             // de Tesorería muestre dos ítems pendientes para el mismo pago.
             // ────────────────────────────────────────────────────────────────
-            // 🔒 GUARD DE IDEMPOTENCIA: verificar si ya existe un costo de liquidación pendiente
-            // Esto previene duplicados cuando el gestor reenvía la solicitud por una regresión de estado
+            // ── IDEMPOTENCIA POR TOKEN UUID ────────────────────────────────────────
+            // Verificamos si el token exacto ya fue registrado en DB.
+            // REGLA: comparación estricta de string. Sin tolerancias de monto.
             let costCreated = false;
             try {
                 if (amount > 0.01 && technicianId) {
-                    // Verificar costos pendientes existentes antes de crear uno nuevo
-                    const existingCosts = await ticketCostsAPI.getByTicket(currentTicketId);
-                    const existingLiquidation = (existingCosts || []).find((c: any) => {
-                        const st = (c.estado_pago || '').toUpperCase();
-                        const conc = (c.concepto || '').toLowerCase();
-                        const isPending = st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN';
-                        const isLiquidation = conc.includes('liquidación') || conc.includes('liquidacion') || conc.includes('saldo');
-                        const sameAmount = Math.abs(parseFloat(c.monto || 0) - amount) < 0.5;
-                        return isPending && isLiquidation && sameAmount;
-                    });
+                    // Verificar que el token no fue reemplazado por un clic posterior
+                    if (liquidationTransactionToken.current !== txToken) {
+                        console.warn('[handleActualLiquidation] Token invalidado. Abortando para evitar duplicado.');
+                        return;
+                    }
 
-                    if (existingLiquidation) {
-                        // Ya existe — reutilizar en lugar de duplicar
+                    const existingCosts = await ticketCostsAPI.getByTicket(currentTicketId);
+
+                    // Búsqueda exacta por token UUID — sin ninguna tolerancia de monto
+                    const tokenAlreadyProcessed = (existingCosts || []).some(
+                        (c: any) => c.transaction_token === txToken
+                    );
+
+                    if (tokenAlreadyProcessed) {
                         costCreated = true;
-                        console.warn("[handleActualLiquidation] Ya existe ticket_cost de liquidación pendiente:", existingLiquidation.id);
+                        console.warn('[handleActualLiquidation] Token ya procesado (idempotente):', txToken);
                     } else {
                         await ticketCostsAPI.create({
                             ticket_id: currentTicketId,
                             monto: amount,
-                            categoria: "Mano de Obra",
-                            concepto: "Liquidación Final - Saldo de Mano de Obra",
+                            categoria: 'Mano de Obra',
+                            concepto: 'Liquidación Final - Saldo de Mano de Obra',
                             specialist_id: technicianId,
-                            estado_pago: isExceeding ? "REQUIERE_APROBACION_ADMIN" : "pendiente",
+                            estado_pago: isExceeding ? 'REQUIERE_APROBACION_ADMIN' : 'pendiente',
+                            transaction_token: txToken,
                             solicitado_por: myProfileId || undefined
                         });
                         costCreated = true;
-                        console.log("[handleActualLiquidation] ticket_cost creado OK:", { amount, newState });
+                        console.log('[handleActualLiquidation] ticket_cost creado OK:', { amount, newState, txToken });
                     }
                 }
             } catch (costErr) {
@@ -2284,6 +2320,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Error", "No se pudo procesar la liquidación. Intente nuevamente.", "error");
         } finally {
             setIsSavingNegotiation(false);
+            setIsSubmittingLiquidation(false);
+            liquidationTransactionToken.current = null;
             // 🔓 Liberar bloqueo Realtime después de que el servidor haya procesado
             setTimeout(() => { isTransitioning.current = false; }, 3000);
         }
@@ -3924,10 +3962,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         <button
                                                                             className={styles.requestAdvanceBtnPremium}
                                                                             onClick={handleRequestAdvance}
-                                                                            disabled={requestAdvanceRef.current || !!ticketData.solicitudAdelanto || advanceRequestPending || (!porcentajeAdelanto && !montoAdelantoManual)}
+                                                                            disabled={isSubmittingAdvance || !!ticketData.solicitudAdelanto || advanceRequestPending || (!porcentajeAdelanto && !montoAdelantoManual)}
                                                                         >
-                                                                            <Send size={18} />
-                                                                            <span>Solicitar Adelanto a Gerencia</span>
+                                                                            {isSubmittingAdvance
+                                                                                ? <Clock size={18} className={styles.spinner} />
+                                                                                : <Send size={18} />}
+                                                                            <span>{isSubmittingAdvance ? 'Enviando...' : 'Solicitar Adelanto a Gerencia'}</span>
                                                                         </button>
                                                                     )
                                                                 )}
@@ -4197,11 +4237,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
                                                 <button
                                                     className={styles.proceedToLiquidationBtn}
-                                                    disabled={(!isSantander && !Object.values(documentosChecklist).every(v => v)) || (!isSantander && !isClientTicketFormatValid(ticketData.numeroTicketCliente))}
+                                                    disabled={
+                                                        isSubmittingLiquidation ||
+                                                        isSavingNegotiation ||
+                                                        (!isSantander && !Object.values(documentosChecklist).every(v => v)) ||
+                                                        (!isSantander && !isClientTicketFormatValid(ticketData.numeroTicketCliente))
+                                                    }
                                                     onClick={handleRequestFinalLiquidation}
                                                 >
-                                                    <span>PASAR A LIQUIDACIÓN FINAL</span>
-                                                    <ArrowRight size={20} />
+                                                    {isSubmittingLiquidation
+                                                        ? <><Clock size={20} className={styles.spinner} /><span>Procesando...</span></>
+                                                        : <><span>PASAR A LIQUIDACIÓN FINAL</span><ArrowRight size={20} /></>
+                                                    }
                                                 </button>
 
                                                 {(!isSantander && (!Object.values(documentosChecklist).every(v => v) || !ticketData.numeroTicketCliente)) && (

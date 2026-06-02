@@ -248,3 +248,31 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         pendingOpItems:      pendingOp,
     };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERADOR DE TOKEN DE TRANSACCIÓN
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Genera un token UUID v4 criptográficamente único para identificar de forma
+ * inequívoca un intento de transacción de pago (adelanto o liquidación).
+ *
+ * REGLA DE ORO: La idempotencia se valida SOLO por igualdad exacta de token.
+ * Jamás se comparan montos, porcentajes ni timestamps con tolerancia.
+ *
+ * Uso:
+ *   const token = generateTransactionToken();
+ *   // guarda el token en el ref y en el payload del ticket_cost
+ *   // si el proceso se repite, el mismo token ya estará en DB → skip
+ */
+export function generateTransactionToken(): string {
+    // Usar crypto.randomUUID() si está disponible (navegadores modernos y Node ≥ 19)
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // Fallback manual para entornos legacy — sigue siendo UUID v4 válido
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
