@@ -1126,6 +1126,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             total_quoted_amount: parseFloat(sourceForPayments?.total_quoted_amount ?? sourceForPayments?.total_quoted_amount ?? totalQuotedAmount ?? 0),
             technician_id: tecnico?.id || serverTicket?.technician_id || businessData.technician_id,
             gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id || businessData.gestora_id,
+            execution_date: businessData.execution_date,
             metadata: {
                 ...cleanServerMeta,
                 ...sourceMetadata,
@@ -3180,7 +3181,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         ticket={ticketData}
                                         onReassign={() => setShowAssignmentDrawer(true)}
                                         onEditSchedule={() => {
-                                            setTicketData({ ...ticketData, estadoId: 'en_inspeccion', fechaVisita: undefined });
+                                            setTicketData({ ...ticketData, estadoId: 'en_inspeccion', status_id: 'en_inspeccion', execution_date: undefined });
                                         }}
                                     />
 
@@ -3373,16 +3374,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 <div className={styles.scheduleOptions}>
                                                     <button
                                                         className={styles.scheduleOptionBtn}
-                                                        onClick={() => {
+                                                        onClick={async () => {
                                                             const today = new Date();
                                                             const updated = {
                                                                 ...ticketData,
-                                                                fechaVisita: today.toISOString(),
+                                                                execution_date: today.toISOString(),
                                                                 programacionLabel: "HOY",
                                                                 estadoId: "visita_realizada",
                                                                 status_id: "visita_realizada"
                                                             };
                                                             setTicketData(updated);
+                                                            await syncToSupabase(updated, { manual: true, allowStateRollback: true });
                                                         }}
                                                     >
                                                         <span className={styles.optLabel}>HOY</span>
@@ -3393,17 +3395,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
                                                     <button
                                                         className={styles.scheduleOptionBtn}
-                                                        onClick={() => {
+                                                        onClick={async () => {
                                                             const tomorrow = new Date();
                                                             tomorrow.setDate(tomorrow.getDate() + 1);
                                                             const updated = {
                                                                 ...ticketData,
-                                                                fechaVisita: tomorrow.toISOString(),
+                                                                execution_date: tomorrow.toISOString(),
                                                                 programacionLabel: "MAÑANA",
                                                                 estadoId: "visita_realizada",
                                                                 status_id: "visita_realizada"
                                                             };
                                                             setTicketData(updated);
+                                                            await syncToSupabase(updated, { manual: true, allowStateRollback: true });
                                                         }}
                                                     >
                                                         <span className={styles.optLabel}>MAÑANA</span>
