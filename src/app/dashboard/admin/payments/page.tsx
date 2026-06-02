@@ -2516,8 +2516,7 @@ export default function PaymentsPage() {
                                                     const { data, error } = await supabase.storage
                                                         .from('vouchers')
                                                         .upload(fileName, compressed, {
-                                                            contentType: compressed.type,
-                                                            upsert: true
+                                                            contentType: compressed.type
                                                         });
 
                                                     if (error) {
@@ -2666,8 +2665,7 @@ export default function PaymentsPage() {
                                                         const { data, error } = await supabase.storage
                                                             .from('vouchers')
                                                             .upload(fileName, compressed, {
-                                                                contentType: compressed.type,
-                                                                upsert: true
+                                                                contentType: compressed.type
                                                             });
 
                                                         if (error) {
