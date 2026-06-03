@@ -18,6 +18,7 @@ export default function GestorTurnoWidget() {
         turnoActivo,
         turnoHoyCerrado,
         turnoLoading,
+        isLoaded,
         esTarde,
         horasTranscurridas,
         handleIngreso,
@@ -32,12 +33,16 @@ export default function GestorTurnoWidget() {
         setBanner6pmDescartado(true);
     };
 
-    // Determinar visibilidad del widget principal
-    const mostrarIngreso = !turnoActivo && !turnoHoyCerrado;
-    const mostrarSalida = turnoActivo && esTarde;
+    // Determinar visibilidad del widget principal según reglas de negocio
+    const currentHour = new Date().getHours();
+    const esHorarioIngreso = currentHour >= 9 && currentHour <= 10;
+    const esHorarioSalida = currentHour >= 18;
 
-    if (!mostrarIngreso && !mostrarSalida) {
-        return null; // Jornada normal en curso o ya finalizada → ocultar widget
+    const mostrarIngreso = isLoaded && !turnoActivo && !turnoHoyCerrado && esHorarioIngreso;
+    const mostrarSalida = isLoaded && turnoActivo && esHorarioSalida;
+
+    if (!isLoaded || (!mostrarIngreso && !mostrarSalida)) {
+        return null; // Cargando o fuera de horario de acción → ocultar widget
     }
 
     const esIngreso = mostrarIngreso;

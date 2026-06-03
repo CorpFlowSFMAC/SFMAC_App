@@ -23,6 +23,7 @@ export interface UseTurnoResult {
     turnoActivo: TurnoActivo | null;
     turnoHoyCerrado: boolean;
     turnoLoading: boolean;
+    isLoaded: boolean;
     esTarde: boolean; // true si hora actual >= 18:00
     horasTranscurridas: string;
     handleIngreso: () => Promise<void>;
@@ -68,6 +69,7 @@ export function useTurno(): UseTurnoResult {
     const [turnoActivo, setTurnoActivo] = useState<TurnoActivo | null>(null);
     const [turnoHoyCerrado, setTurnoHoyCerrado] = useState(false);
     const [turnoLoading, setTurnoLoading] = useState(false);
+    const [isLoaded, setIsLoaded] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
 
     // Calcular si es tarde (>= 18:00) en tiempo de render
@@ -107,7 +109,10 @@ export function useTurno(): UseTurnoResult {
                 .limit(1)
                 .maybeSingle();
 
-            if (!data) return;
+            if (!data) {
+                setIsLoaded(true);
+                return;
+            }
 
             // Compatibilidad con estado anterior (EN_CURSO) y nuevo (en_jornada)
             const estaActivo = data.estado === 'en_jornada' || data.estado === 'EN_CURSO' || data.estado === 'en_refrigerio';
@@ -116,6 +121,7 @@ export function useTurno(): UseTurnoResult {
             } else {
                 setTurnoHoyCerrado(true);
             }
+            setIsLoaded(true);
         };
 
         loadTurno();
@@ -220,6 +226,7 @@ export function useTurno(): UseTurnoResult {
         turnoActivo,
         turnoHoyCerrado,
         turnoLoading,
+        isLoaded,
         esTarde,
         horasTranscurridas,
         handleIngreso,
