@@ -23,6 +23,7 @@ export default function GestorLayout({
     const [realUserName, setRealUserName] = useState<string | null>(null);
     const [userAvatar, setUserAvatar] = useState<string | null>(null);
     const [gestoraNombre, setGestoraNombre] = useState<string | null>(null);
+    const [sessionActiva, setSessionActiva] = useState(false);
 
     // Cargar datos del usuario desde cookies, localStorage y sesión de Supabase
     useEffect(() => {
@@ -61,6 +62,10 @@ export default function GestorLayout({
             setRealUserName(storedName);
             setUserEmail(storedEmail);
             setUserAvatar(storedAvatar);
+
+            // Verificar sesión activa real
+            const { data: { session } } = await supabase.auth.getSession();
+            setSessionActiva(!!session || !!storedEmail);
             
             // Buscar nombre real siempre que tengamos un email
             if (storedEmail) {
@@ -189,7 +194,17 @@ export default function GestorLayout({
                             </div>
                             <div className={styles.userMeta}>
                                 <span className={styles.userName}>{displayName}</span>
-                                <span className={styles.userStatus}>En Línea</span>
+                                <span className={styles.userStatus} style={{
+                                    color: sessionActiva ? '#22c55e' : '#94a3b8',
+                                    display: 'flex', alignItems: 'center', gap: '4px'
+                                }}>
+                                    <span style={{
+                                        width: '7px', height: '7px', borderRadius: '50%',
+                                        background: sessionActiva ? '#22c55e' : '#94a3b8',
+                                        display: 'inline-block', flexShrink: 0
+                                    }} />
+                                    {sessionActiva ? 'En Línea' : 'Conectado'}
+                                </span>
                                 {isMounted && (
                                     <span className={styles.userMotivation}>{motivationalPhrase}</span>
                                 )}

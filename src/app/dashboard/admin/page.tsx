@@ -396,7 +396,7 @@ export default function AdminDashboard() {
             const clientColor = t.cliente?.color || t.clients?.color_aura || "#3B82F6";
             
             // Regla de Negocio: Montos CON IGV liquidados
-            const billingAmount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? (parseFloat(t.ingresos_reales ?? 0) * 1.18) ?? 0);
+            const billingAmount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? String(parseFloat(t.ingresos_reales ?? 0) * 1.18));
             if (billingAmount <= 0) return;
 
             if (!clientMap[clientId]) {

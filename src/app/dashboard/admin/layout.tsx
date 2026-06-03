@@ -42,6 +42,7 @@ export default function AdminLayout({
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const [realUserName, setRealUserName] = useState<string | null>(null);
     const [userAvatar, setUserAvatar] = useState<string | null>(null);
+    const [sessionActiva, setSessionActiva] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
@@ -85,6 +86,10 @@ export default function AdminLayout({
             setRealUserName(name);
             setUserAvatar(avatar);
             setUserEmail(email);
+
+            // Verificar sesión activa de Supabase Auth
+            const { data: { session } } = await supabase.auth.getSession();
+            setSessionActiva(!!session || !!email);
 
             // Buscar nombre real siempre que tengamos un email
             if (email) {
@@ -202,7 +207,17 @@ export default function AdminLayout({
                             </div>
                             <div className={styles.userMeta}>
                                 <span className={styles.userName}>{displayName}</span>
-                                <span className={styles.userStatus}>En Línea</span>
+                                <span className={styles.userStatus} style={{
+                                    color: sessionActiva ? '#22c55e' : '#94a3b8',
+                                    display: 'flex', alignItems: 'center', gap: '4px'
+                                }}>
+                                    <span style={{
+                                        width: '7px', height: '7px', borderRadius: '50%',
+                                        background: sessionActiva ? '#22c55e' : '#94a3b8',
+                                        display: 'inline-block', flexShrink: 0
+                                    }} />
+                                    {sessionActiva ? 'En Línea' : 'Conectado'}
+                                </span>
                                 {isMounted && (
                                     <span className={styles.userMotivation}>{motivationalPhrase}</span>
                                 )}
