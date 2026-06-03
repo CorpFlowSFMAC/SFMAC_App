@@ -1608,6 +1608,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 fechaCotización: new Date().toISOString(),
                 partidas: currentPartidas,
                 total_quoted_amount: currentMontoTotal,
+                labor_cost: round2(currentMontoTotal / 1.18) * 0.6,
+                materials_cost: round2(currentMontoTotal / 1.18) * 0.4,
                 montoFinal: currentMontoTotal,
                 montoSubtotal: round2(currentMontoTotal / 1.18),
                 montoIGV: round2(currentMontoTotal - round2(currentMontoTotal / 1.18)),
@@ -1678,6 +1680,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // BLINDAJE: Asegurar que el monto aprobado se preserve en esta transición
             montoFinal: currentMontoTotal,
             total_quoted_amount: currentMontoTotal,
+            labor_cost: round2(currentMontoTotal / 1.18) * 0.6,
+            materials_cost: round2(currentMontoTotal / 1.18) * 0.4,
             partidas: currentPartidas
         };
         setTicketData(approved);
