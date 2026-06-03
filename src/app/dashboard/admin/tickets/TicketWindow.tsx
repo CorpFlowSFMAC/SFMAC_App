@@ -1608,8 +1608,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 fechaCotización: new Date().toISOString(),
                 partidas: currentPartidas,
                 total_quoted_amount: currentMontoTotal,
-                labor_cost: round2(currentMontoTotal / 1.18) * 0.6,
-                materials_cost: round2(currentMontoTotal / 1.18) * 0.4,
+                labor_cost: parseFloat(laborCost) || 0,
+                materials_cost: parseFloat(materialsCost) || 0,
                 montoFinal: currentMontoTotal,
                 montoSubtotal: round2(currentMontoTotal / 1.18),
                 montoIGV: round2(currentMontoTotal - round2(currentMontoTotal / 1.18)),
@@ -1627,8 +1627,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     const directUpdates = {
                         status_id: "cotizacion_enviada",
                         total_quoted_amount: currentMontoTotal,
-                        labor_cost: round2(currentMontoTotal / 1.18) * 0.6,
-                        materials_cost: round2(currentMontoTotal / 1.18) * 0.4,
+                        labor_cost: parseFloat(laborCost) || 0,
+                        materials_cost: parseFloat(materialsCost) || 0,
                         quotation_date: new Date().toISOString(),
                         is_sla_paused: true,
                         sla_pause_date: new Date().toISOString(),
@@ -1680,8 +1680,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             // BLINDAJE: Asegurar que el monto aprobado se preserve en esta transición
             montoFinal: currentMontoTotal,
             total_quoted_amount: currentMontoTotal,
-            labor_cost: round2(currentMontoTotal / 1.18) * 0.6,
-            materials_cost: round2(currentMontoTotal / 1.18) * 0.4,
+            labor_cost: parseFloat(laborCost) || 0,
+            materials_cost: parseFloat(materialsCost) || 0,
             partidas: currentPartidas
         };
         setTicketData(approved);
@@ -3926,14 +3926,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             ) : ticketData.modificacionAutorizada ? (
                                                                 <button
                                                                     className={styles.saveChangesBtn}
-                                                                    onClick={() => {
-                                                                        setTicketData({
+                                                                    onClick={async () => {
+                                                                        const updatedEdits = {
                                                                             ...ticketData,
                                                                             modificacionAutorizada: false,
                                                                             montoFinal: totalQuotedAmount,
+                                                                            total_quoted_amount: totalQuotedAmount,
+                                                                            labor_cost: parseFloat(laborCost) || 0,
+                                                                            materials_cost: parseFloat(materialsCost) || 0,
                                                                             partidas: partidasCotización,
                                                                             fechaUltimaModificacion: new Date().toISOString()
-                                                                        });
+                                                                        };
+                                                                        setTicketData(updatedEdits);
+                                                                        await syncToSupabase(updatedEdits);
+                                                                        await queryClient.invalidateQueries({ queryKey: ['tickets'] });
+                                                                        await queryClient.invalidateQueries({ queryKey: ['payments'] });
                                                                         showToast("Cotización Guardada", "Cambios guardados y cotización bloqueada nuevamente.", "success");
                                                                     }}
                                                                 >
