@@ -9,6 +9,10 @@ import {
 import { supabase } from "@/lib/supabase";
 
 // ── Tipos ─────────────────────────────────────────────
+// Ventana de transicion: la DB puede tener estados legacy (EN_CURSO/CERRADO)
+// o el vocabulario nuevo (en_jornada/en_refrigerio/finalizado).
+type EstadoTurno = "en_jornada" | "en_refrigerio" | "finalizado" | "EN_CURSO" | "CERRADO";
+
 interface Turno {
     id: string;
     usuario_email: string;
@@ -16,7 +20,7 @@ interface Turno {
     fecha: string;
     hora_ingreso: string;
     hora_salida: string | null;
-    estado: "en_jornada" | "en_refrigerio" | "finalizado";
+    estado: EstadoTurno;
     horas_trabajadas: number | null;
     observaciones: string | null;
 }
