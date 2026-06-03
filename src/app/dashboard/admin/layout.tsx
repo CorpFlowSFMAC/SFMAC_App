@@ -140,12 +140,25 @@ export default function AdminLayout({
         }
     };
 
+    const getCleanDisplayName = (rawName: string) => {
+        if (!rawName) return "Usuario";
+        try {
+            let decoded = decodeURIComponent(rawName);
+            if (decoded.includes('@')) decoded = decoded.split('@')[0];
+            if (decoded.includes('.')) {
+                const parts = decoded.split('.');
+                return parts.map((p, i) => i === 0 && p.length === 1 ? p.toUpperCase() + '.' : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+            }
+            return decoded;
+        } catch(e) { return rawName; }
+    };
+
     const isAdmin = isMounted && userRole?.toLowerCase() === 'admin';
     const avatarLetter = isMounted && gestoraNombre ? gestoraNombre.charAt(0).toUpperCase() : (isMounted && realUserName ? realUserName.charAt(0).toUpperCase() : (isAdmin ? 'A' : 'G'));
     const displayGestora = isMounted && gestoraNombre ? gestoraNombre : (isMounted && realUserName ? realUserName : (isMounted && userEmail ? userEmail.split('@')[0] : (isAdmin ? 'Administrador' : 'Gestora')));
     const fullDisplayName = displayGestora;
-    const displayName = fullDisplayName.split(' ')[0]; // Solo el primer nombre
-    const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName && fullDisplayName !== 'Gestora' && fullDisplayName !== 'Administrador' ? `https://ui-avatars.com/api/?name=${encodeURIComponent(fullDisplayName)}&background=f97316&color=fff&bold=true` : null);
+    const displayName = getCleanDisplayName(fullDisplayName); // Usar nombre amigable
+    const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName && fullDisplayName !== 'Gestora' && fullDisplayName !== 'Administrador' ? `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=f97316&color=fff&bold=true` : null);
     const dashboardHref = isAdmin ? "/dashboard/admin" : "/dashboard/gestor";
 
     const motivationalPhrases = [
