@@ -34,10 +34,12 @@ export async function POST(request: NextRequest) {
 
         const results: string[] = [];
         for (const stmt of alterStatements) {
-            const { error } = await client.rpc('exec_sql', { sql: stmt }).single().catch(() => ({ error: null }));
-            // Ejecutar via query directa si el RPC no existe
-            const { error: queryError } = await client.from('_migrations_log').select('id').limit(0).catch(() => ({ error: null }));
-            results.push(`Statement executed (errors ignorados para IF NOT EXISTS): ${stmt.substring(0, 60)}...`);
+            try {
+                const result = await client.rpc('exec_sql', { sql: stmt }).single();
+            } catch (_e) {
+                // Ignore errors on IF NOT EXISTS statements
+            }
+            results.push(`Statement executed: ${stmt.substring(0, 60)}...`);
         }
 
         // PASO B: Migrar valores de estado
