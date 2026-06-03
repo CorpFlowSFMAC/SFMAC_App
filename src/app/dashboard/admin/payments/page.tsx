@@ -1312,7 +1312,7 @@ export default function PaymentsPage() {
                 }
 
                 // ★ MEJORA: Auto-cerrar si el saldo es 0 (para costos de tabla)
-                const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'cotizacion_aprobada', 'en_ejecucion'].includes(currentTicket.status_id);
+                const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin'].includes(currentTicket.status_id);
                 if (isNearingClosure && !additionalUpdates.status_id) {
                     const { data: currentCosts } = await supabase.from('ticket_costs').select('*').eq('ticket_id', group.realTicketId);
                     const updatedCosts = (currentCosts || []).map(c => c.id === item.costId ? { ...c, estado_pago: 'pagado' } : c);
@@ -1511,7 +1511,7 @@ export default function PaymentsPage() {
 
             // ★ MEJORA 2026-05-12: Auto-cerrar si el saldo es 0 y el ticket ya estaba para liquidar
             // Esto cubre casos donde los adelantos/excedentes cubrieron el 100% de la mano de obra.
-            const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin', 'cotizacion_aprobada', 'en_ejecucion'].includes(currentTicket.status_id);
+            const isNearingClosure = ['por_liquidar', 'esperando_pago_final', 'requiere_revision_admin'].includes(currentTicket.status_id);
             if (isNearingClosure && item.id !== `${group.realTicketId}_visita`) {
                 // Simulamos el historial actualizado para el cálculo
                 const currentHistory = Array.isArray(meta.historialPagosTecnico) ? meta.historialPagosTecnico : [];
