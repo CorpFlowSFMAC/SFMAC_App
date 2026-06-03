@@ -16,7 +16,7 @@ interface Turno {
     fecha: string;
     hora_ingreso: string;
     hora_salida: string | null;
-    estado: "EN_CURSO" | "CERRADO";
+    estado: "en_jornada" | "en_refrigerio" | "finalizado";
     horas_trabajadas: number | null;
     observaciones: string | null;
 }
@@ -69,7 +69,7 @@ export default function AsistenciaAdminPage() {
         new Date().toISOString().split("T")[0]
     );
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
-    const [tick, setTick] = useState(0); // refresco cada minuto para turnos EN_CURSO
+    const [tick, setTick] = useState(0); // refresco cada minuto para turnos en jornada
 
     const fetchTurnos = async () => {
         setLoading(true);
@@ -84,7 +84,7 @@ export default function AsistenciaAdminPage() {
 
     useEffect(() => {
         fetchTurnos();
-        // Tick cada 60s para actualizar horas EN_CURSO sin refetch
+        // Tick cada 60s para actualizar horas en jornada sin refetch
         const interval = setInterval(() => setTick(t => t + 1), 60_000);
         return () => clearInterval(interval);
     }, []);
@@ -107,8 +107,8 @@ export default function AsistenciaAdminPage() {
 
     // KPIs del día
     const kpis = useMemo(() => {
-        const enCurso = turnosDia.filter(t => t.estado === "EN_CURSO");
-        const cerrados = turnosDia.filter(t => t.estado === "CERRADO");
+        const enCurso = turnosDia.filter(t => t.estado === "en_jornada");
+        const cerrados = turnosDia.filter(t => t.estado === "finalizado");
         const conExtra = cerrados.filter(t => (t.horas_trabajadas ?? 0) > 9);
         const promedio = cerrados.length > 0
             ? cerrados.reduce((s, t) => s + (t.horas_trabajadas ?? 0), 0) / cerrados.length
@@ -193,7 +193,7 @@ export default function AsistenciaAdminPage() {
                     iconBg="#EEF2FF"
                     label="Activos ahora"
                     value={kpis.enCurso.length}
-                    sub="Turnos EN_CURSO"
+                    sub="Turnos en Jornada"
                     pulse={kpis.enCurso.length > 0}
                 />
                 <KpiCard
@@ -268,7 +268,7 @@ export default function AsistenciaAdminPage() {
                         </thead>
                         <tbody>
                             {turnosDia.map((turno, idx) => {
-                                const horasActual = turno.estado === "EN_CURSO"
+                                const horasActual = turno.estado === "en_jornada"
                                     ? calcHorasActual(turno.hora_ingreso)
                                     : (turno.horas_trabajadas ?? 0);
                                 const esExtra = horasActual > 9;
@@ -327,10 +327,10 @@ export default function AsistenciaAdminPage() {
                                         {/* Horas */}
                                         <td style={{ padding: "0.9rem 1.25rem" }}>
                                             <HorasBadge
-                                                horas={turno.estado === "EN_CURSO" ? horasActual : turno.horas_trabajadas}
-                                                esEnCurso={turno.estado === "EN_CURSO"}
+                                                horas={turno.estado === "en_jornada" ? horasActual : turno.horas_trabajadas}
+                                                esEnCurso={turno.estado === "en_jornada"}
                                             />
-                                            {turno.estado === "EN_CURSO" && (
+                                            {turno.estado === "en_jornada" && (
                                                 <span style={{ fontSize: "0.65rem", color: "#94A3B8", display: "block", marginTop: "2px" }}>
                                                     (en tiempo real)
                                                 </span>
@@ -338,7 +338,7 @@ export default function AsistenciaAdminPage() {
                                         </td>
                                         {/* Estado */}
                                         <td style={{ padding: "0.9rem 1.25rem" }}>
-                                            {turno.estado === "EN_CURSO" ? (
+                                            {turno.estado === "en_jornada" ? (
                                                 <span style={{
                                                     display: "inline-flex", alignItems: "center", gap: "5px",
                                                     background: "#DCFCE7", color: "#15803D",
@@ -361,7 +361,7 @@ export default function AsistenciaAdminPage() {
                                                     borderRadius: "999px",
                                                     border: `1px solid ${esExtra ? "#86EFAC" : "#E2E8F0"}`
                                                 }}>
-                                                    {esExtra ? "🔥 EXTRA" : "✓ CERRADO"}
+                                                    {esExtra ? "🔥 EXTRA" : "✓ FINALIZADO"}
                                                 </span>
                                             )}
                                         </td>
@@ -457,7 +457,7 @@ export default function AsistenciaAdminPage() {
                                                                 <HorasBadge horas={t.horas_trabajadas} />
                                                             </td>
                                                             <td style={{ padding: "0.65rem 1.25rem" }}>
-                                                                {t.estado === "EN_CURSO" && (
+                                                                {t.estado === "en_jornada" && (
                                                                     <span style={{
                                                                         background: "#DCFCE7", color: "#15803D",
                                                                         fontSize: "0.65rem", fontWeight: 800, padding: "2px 8px", borderRadius: "999px"
