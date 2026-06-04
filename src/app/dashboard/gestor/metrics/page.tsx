@@ -9,7 +9,6 @@ import {
     LogIn, LogOut, Bell, CheckCheck, BarChart3, Wrench
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { useTurno } from "@/lib/useTurno";
 import GestorTurnoWidget from "@/components/GestorTurnoWidget";
 import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard";
 import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
@@ -266,8 +265,6 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         fetchGestora();
     }, [fetchGestora]);
 
-    // ── CONTROL DE ASISTENCIA (centralizado en useTurno) ──────────────────
-    const { turnoActivo, isLoaded } = useTurno();
 
     const handleCreateTicket = async (ticketData: any) => {
         try {
@@ -280,35 +277,49 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
     // ── Filter raw tickets by active gestor ──
     const tickets = useMemo(() => {
+        if (!rawTickets || rawTickets.length === 0) return [];
+        
+        // Si el usuario es administrador, ve todos los tickets
+        if (isAdmin) {
+            return rawTickets;
+        }
+
         if (!authEmail) return [];
+
+        const emailLower = authEmail.toLowerCase().trim();
+
+        // Buscar gestora en el listado de gestoras
+        const myGestora = gestoras.find(g => g.email?.toLowerCase()?.trim() === emailLower);
+        const myGestoraId = myGestora?.id;
+
         return rawTickets.filter((t: any) => {
-            // Direct email match
-            if (t.gestora?.email && t.gestora.email.toLowerCase() === authEmail.toLowerCase()) {
+            // 1. Coincidencia directa por email en la gestora unida
+            if (t.gestora?.email && t.gestora.email.toLowerCase().trim() === emailLower) {
                 return true;
             }
-            if (t.gestoras?.email && t.gestoras.email.toLowerCase() === authEmail.toLowerCase()) {
+            if (t.gestoras?.email && t.gestoras.email.toLowerCase().trim() === emailLower) {
                 return true;
             }
 
-            const myGestora = gestoras.find(g => g.email?.toLowerCase() === authEmail.toLowerCase());
-            if (!myGestora) return false;
+            // 2. Coincidencia por ID de gestora asignada si lo tenemos
+            if (myGestoraId) {
+                const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
+                if (assignedGestoraId && assignedGestoraId === myGestoraId) {
+                    return true;
+                }
 
-            const myGestoraId = myGestora.id;
-            const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
-            if (assignedGestoraId) {
-                return assignedGestoraId === myGestoraId;
+                // 3. Cascada (Sede / Zona / Cliente)
+                if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
+                if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
+                if (t.clients?.gestora_asignada_id === myGestoraId ||
+                    t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
+                    return true;
+                }
             }
 
-            // Cascada
-            if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
-            if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
-            if (t.clients?.gestora_asignada_id === myGestoraId ||
-                t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
-                return true;
-            }
             return false;
         });
-    }, [rawTickets, authEmail, gestoras]);
+    }, [rawTickets, authEmail, gestoras, isAdmin]);
 
     const isVisibleForMe = useCallback((t: any) => {
         return true; // Already pre-filtered at root
@@ -587,19 +598,16 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         </button>
                     </div>
                     <button
-                        onClick={() => turnoActivo && setShowWizard(true)}
-                        disabled={!turnoActivo}
-                        title={!turnoActivo ? 'Debes marcar tu ingreso para crear tickets' : 'Crear nuevo ticket'}
+                        onClick={() => setShowWizard(true)}
+                        title="Crear nuevo ticket"
                         style={{
-                            background: turnoActivo
-                                ? "linear-gradient(135deg,#FF6600,#FF8533)"
-                                : "#CBD5E1",
-                            color: turnoActivo ? "white" : "#94A3B8",
+                            background: "linear-gradient(135deg,#FF6600,#FF8533)",
+                            color: "white",
                             border: "none", borderRadius: "10px", padding: "0.55rem 1.2rem",
-                            cursor: turnoActivo ? "pointer" : "not-allowed",
+                            cursor: "pointer",
                             fontSize: "0.85rem", fontWeight: 700,
                             display: "flex", alignItems: "center", gap: "0.4rem",
-                            boxShadow: turnoActivo ? "0 4px 15px rgba(255,102,0,0.4)" : "none",
+                            boxShadow: "0 4px 15px rgba(255,102,0,0.4)",
                             transition: "all 0.2s"
                         }}
                     >
