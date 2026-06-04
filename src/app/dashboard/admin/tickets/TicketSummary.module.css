@@ -355,6 +355,81 @@
         display: none;
     }
 }
+
+/* ── RESPONSIVIDAD MÓVIL (<768px) ── */
+@media (max-width: 768px) {
+    .container {
+        gap: 8px;
+    }
+
+    /* Info bars: scroll horizontal táctil en lugar de wrap catico */
+    .infoBar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 12px;
+        padding: 12px 14px;
+        scrollbar-width: none; /* Firefox */
+        align-items: flex-start;
+    }
+
+    .infoBar::-webkit-scrollbar {
+        display: none; /* WebKit: ocultar scrollbar pero mantener funcionalidad */
+    }
+
+    /* Título fijo a la izquierda para que siempre sea visible */
+    .titleSection {
+        min-width: 140px;
+        flex-shrink: 0;
+    }
+
+    /* Cada dato tiene ancho mínimo para que sea legible en el scroll */
+    .infoItem {
+        min-width: 100px;
+        flex-shrink: 0;
+    }
+
+    /* El ítem de saldo (grande) se hace más compacto */
+    .infoItem span[style*="18px"],
+    .infoValue {
+        font-size: 0.78rem;
+    }
+
+    /* Botones de compra / rescate: ancho auto */
+    .purchaseBtn,
+    .pillsBtn,
+    .reassignBtn {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+    /* El historial de pagos pasa a columna para más legibilidad */
+    .recentHistoryCompact {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    /* Ocultar la preview grande en móvil (no hay hover) */
+    .largePreview {
+        display: none !important;
+    }
+
+    /* Descripción del servicio: ampliar líneas */
+    .compactProblemText {
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+    }
+
+    /* Boton de continuar ocupa todo el ancho */
+    .actions {
+        justify-content: stretch;
+    }
+    .proceedBtn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
 .purchaseBtn {
     background: #FFEDD5;
     color: #C2410C;

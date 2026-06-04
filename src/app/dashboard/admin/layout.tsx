@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, DollarSign, BarChart3, Route, Shield, Clock, Calculator } from 'lucide-react';
+import { LayoutDashboard, Users, UserCog, LogOut, Ticket, DollarSign, BarChart3, Route, Shield, Clock, Calculator, Menu, X } from 'lucide-react';
 import styles from "./admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
 import { QueryProvider } from "@/lib/QueryProvider";
 import { supabase } from "@/lib/supabase";
+import { supabaseAdmin, startAdminSessionKeepAlive } from "@/lib/supabase-admin";
 
 export default function AdminLayout({
     children,
@@ -19,6 +20,7 @@ export default function AdminLayout({
     const router = useRouter();
     const [userRole, setUserRole] = useState<string | null>(null);
     const [isMounted, setIsMounted] = useState(false);
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
     const handleLogout = async () => {
         try {
@@ -102,6 +104,28 @@ export default function AdminLayout({
         loadUserData();
     }, []);
 
+    // ── Sesión permanente para admin ──────────────────────────────────────────
+    useEffect(() => {
+        if (!isMounted) return;
+        const role = (userRole || '').toLowerCase();
+        if (role !== 'admin') return;
+
+        // Sincronizar la sesión activa al cliente admin persistente
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+                // Establecer la misma sesión en el cliente admin (con persistSession=true)
+                supabaseAdmin.auth.setSession({
+                    access_token: session.access_token,
+                    refresh_token: session.refresh_token,
+                }).catch(() => {});
+            }
+        });
+
+        // Activar el keep-alive infinito
+        const cleanup = startAdminSessionKeepAlive();
+        return cleanup;
+    }, [isMounted, userRole]);
+
     // Buscar nombre real desde perfil o gestora
     // Con mejor manejo de errores para evitar HTTP 400
     const fetchPerfilNombre = async (email: string | null) => {
@@ -179,8 +203,26 @@ export default function AdminLayout({
         <QueryProvider>
             <AppDataProvider>
                 <div className={styles.adminContainer}>
+                    {/* ── Overlay oscuro para cerrar sidebar en móvil ── */}
+                    {mobileSidebarOpen && (
+                        <div
+                            className={styles.mobileOverlay}
+                            onClick={() => setMobileSidebarOpen(false)}
+                            aria-hidden="true"
+                        />
+                    )}
+
+                    {/* ── Botón hamburguesa flotante (solo móvil) ── */}
+                    <button
+                        className={styles.hamburgerBtn}
+                        onClick={() => setMobileSidebarOpen(o => !o)}
+                        aria-label={mobileSidebarOpen ? 'Cerrar menú' : 'Abrir menú'}
+                    >
+                        {mobileSidebarOpen ? <X size={22} /> : <Menu size={22} />}
+                    </button>
+
                     {/* Sidebar */}
-                    <aside className={styles.sidebar}>
+                    <aside className={`${styles.sidebar} ${mobileSidebarOpen ? styles.sidebarMobileOpen : ''}`}>
                         <div className={styles.sidebarHeader}>
                             <Image
                                 src="/logo-final.png"
@@ -304,6 +346,7 @@ export default function AdminLayout({
                             </button>
                         </div>
                     </aside>
+
 
                     {/* Main Content */}
                     <main className={styles.mainContent}>

@@ -141,8 +141,27 @@ export default function LoginPage() {
 
             if (data.user) {
                 const role = data.user.user_metadata?.role || (username.toLowerCase() === 'admin' ? 'admin' : 'gestor');
-                document.cookie = `userRole=${role}; path=/; max-age=86400; SameSite=Lax`;
+                
+                // Cookie con duración según rol: admin = 30 días, gestor = 1 día
+                const maxAge = role === 'admin' ? 60 * 60 * 24 * 30 : 60 * 60 * 24;
+                document.cookie = `userRole=${role}; path=/; max-age=${maxAge}; SameSite=Lax`;
                 localStorage.setItem("userRole", role);
+
+                // Para admins: persistir la sesión en el cliente admin con keep-alive
+                if (role === 'admin' && data.session) {
+                    try {
+                        const { supabaseAdmin } = await import('@/lib/supabase-admin');
+                        await supabaseAdmin.auth.setSession({
+                            access_token: data.session.access_token,
+                            refresh_token: data.session.refresh_token,
+                        });
+                        console.log('[Auth] Admin session synchronized to persistent client ✓');
+                    } catch (e) {
+                        // Silencioso: no bloquear el flujo de login
+                        console.warn('[Auth] Could not sync admin session:', e);
+                    }
+                }
+
                 router.push(role === 'admin' ? "/dashboard/admin" : "/dashboard/gestor");
             }
         } catch (err: any) {

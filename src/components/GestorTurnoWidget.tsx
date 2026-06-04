@@ -48,19 +48,19 @@ export default function GestorTurnoWidget() {
     const esIngreso = mostrarIngreso;
 
     return (
-        <div style={{ padding: "0 2rem", marginTop: "1.5rem" }}>
+        <div style={{ padding: "0 clamp(0.75rem, 3vw, 2rem)", marginTop: "1.5rem" }}>
 
             {/* Banner recordatorio de salida (18:00+) */}
             {turnoActivo && esTarde && !banner6pmDescartado && (
                 <div style={{
                     position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)',
                     zIndex: 9999, background: 'linear-gradient(135deg,#FFFBEB,#FEF3C7)',
-                    border: '1px solid #FCD34D', borderRadius: '14px', padding: '12px 20px',
-                    display: 'flex', alignItems: 'center', gap: '12px',
+                    border: '1px solid #FCD34D', borderRadius: '14px', padding: '12px 16px',
+                    display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
                     boxShadow: '0 8px 32px rgba(251,191,36,0.3)', maxWidth: '520px', width: '90%'
                 }}>
                     <Bell size={20} color="#D97706" style={{ flexShrink: 0 }} />
-                    <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, color: '#92400E', flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: '0.83rem', fontWeight: 600, color: '#92400E', flex: 1, minWidth: '180px' }}>
                         ⏰ Tu jornada regular ha terminado. Recuerda marcar tu salida.
                     </p>
                     <button
@@ -84,30 +84,40 @@ export default function GestorTurnoWidget() {
                 </div>
             )}
 
-            {/* Banner principal de marcado */}
+            {/* Banner principal de marcado — responsivo para móvil */}
             <div style={{
                 background: esIngreso
                     ? 'linear-gradient(135deg, #2563EB 0%, #1E40AF 100%)'
                     : 'linear-gradient(135deg, #EA580C 0%, #9A3412 100%)',
                 borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)',
-                padding: '1.25rem 2rem', marginBottom: '1.25rem',
+                padding: 'clamp(0.9rem, 3vw, 1.25rem) clamp(1rem, 4vw, 2rem)',
+                marginBottom: '1.25rem',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                flexWrap: 'wrap', gap: 'clamp(0.75rem, 2vw, 1rem)',
                 boxShadow: esIngreso ? '0 10px 25px rgba(37,99,235,0.3)' : '0 10px 25px rgba(234,88,12,0.3)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: '1 1 220px', minWidth: 0 }}>
                     <div style={{
-                        width: 50, height: 50, borderRadius: '14px',
+                        width: 46, height: 46, borderRadius: '12px',
                         background: 'rgba(255,255,255,0.15)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)'
+                        backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)',
+                        flexShrink: 0
                     }}>
-                        <Clock size={26} color="white" />
+                        <Clock size={24} color="white" />
                     </div>
-                    <div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 900, color: 'white', letterSpacing: '-0.3px' }}>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{
+                            fontSize: 'clamp(0.88rem, 2.5vw, 1.15rem)',
+                            fontWeight: 900, color: 'white', letterSpacing: '-0.3px',
+                            lineHeight: 1.25
+                        }}>
                             {esIngreso ? '¡Buen día! Inicia tu jornada laboral' : '¡Jornada finalizada! Registra tu salida'}
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.85)', marginTop: '2px' }}>
+                        <div style={{
+                            fontSize: 'clamp(0.7rem, 1.8vw, 0.85rem)',
+                            color: 'rgba(255,255,255,0.85)', marginTop: '3px', lineHeight: 1.4
+                        }}>
                             {esIngreso
                                 ? 'Marca tu ingreso para habilitar todas las funciones del sistema.'
                                 : `Has trabajado durante ${horasTranscurridas}. Presiona el botón para cerrar tu turno.`}
@@ -119,15 +129,17 @@ export default function GestorTurnoWidget() {
                     onClick={esIngreso ? handleIngreso : handleSalida}
                     disabled={turnoLoading}
                     style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                         background: 'white',
                         color: esIngreso ? '#1E40AF' : '#9A3412',
                         border: 'none', borderRadius: '12px',
-                        padding: '0.7rem 1.5rem', cursor: turnoLoading ? 'not-allowed' : 'pointer',
-                        fontSize: '0.95rem', fontWeight: 900,
+                        padding: '0.7rem 1.4rem', cursor: turnoLoading ? 'not-allowed' : 'pointer',
+                        fontSize: 'clamp(0.82rem, 2vw, 0.95rem)', fontWeight: 900,
                         boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
                         opacity: turnoLoading ? 0.7 : 1, transition: 'all 0.2s',
-                        transform: turnoLoading ? 'scale(0.98)' : 'scale(1)'
+                        transform: turnoLoading ? 'scale(0.98)' : 'scale(1)',
+                        flex: '1 1 auto', minWidth: '150px', maxWidth: '220px',
+                        whiteSpace: 'nowrap'
                     }}
                 >
                     {esIngreso ? <LogIn size={18} /> : <LogOut size={18} />}
