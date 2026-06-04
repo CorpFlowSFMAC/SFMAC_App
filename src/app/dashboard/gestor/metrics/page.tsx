@@ -303,20 +303,20 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const financialMetrics = useMemo(() => {
         let totalInversion = 0;
         let totalFacturacion = 0;
+        let totalUtilidad = 0;
 
         periodTickets.forEach((t: any) => {
             const finances = calculateTicketFinances(t, t.costos || []);
-            // Inversión = materials_cost + labor_cost + operating expenses (gastos reales)
-            const ticketInversion = toNum(t.materials_cost) + toNum(t.labor_cost) + finances.totalOpConfirmed;
-            totalInversion += ticketInversion;
+            // Inversión = todos los depósitos realizados (flujo real) = totalExpenses
+            totalInversion += finances.totalExpenses;
 
             const state = normalizeStateId(t.estadoId);
-            if (APPROVED_EXEC_STATES.includes(state)) {
+            // Facturación y Utilidad generada solo sobre tickets cerrados
+            if (state === "ticket_cerrado") {
                 totalFacturacion += finances.netIncome; // net income
+                totalUtilidad += finances.realProfitability;
             }
         });
-
-        const totalUtilidad = totalFacturacion - totalInversion;
 
         return {
             inversion: totalInversion,
@@ -432,10 +432,11 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             dayTickets.forEach((t: any) => {
                 const state = normalizeStateId(t.estadoId);
                 const finances = calculateTicketFinances(t, t.costos || []);
-                if (APPROVED_EXEC_STATES.includes(state)) {
+                // Facturación y Utilidad generada solo sobre tickets cerrados
+                if (state === "ticket_cerrado") {
                     billing += finances.netIncome;
+                    profit += finances.realProfitability;
                 }
-                profit += finances.realProfitability;
             });
 
             return {
@@ -693,7 +694,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     S/ {formatSoles(financialMetrics.inversion)}
                                 </div>
                                 <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
-                                    Materiales, mano de obra y viáticos
+                                    Total de depósitos realizados
                                 </p>
                             </div>
                         </div>
@@ -723,7 +724,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     Facturación Generada (Neto)
                                 </span>
                                 <span style={{ background: "rgba(79,70,229,0.15)", color: "#818CF8", padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 700, border: "1px solid rgba(79,70,229,0.2)" }}>
-                                    Aprobado + Ejecución
+                                    Tickets Cerrados
                                 </span>
                             </div>
                             <div>
@@ -731,7 +732,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     S/ {formatSoles(financialMetrics.facturacion)}
                                 </div>
                                 <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
-                                    Presupuesto total sin IGV
+                                    Facturación de tickets finalizados
                                 </p>
                             </div>
                         </div>

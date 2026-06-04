@@ -1,6 +1,21 @@
+const fs = require('fs');
+const path = require('path');
 
-require('dotenv').config({ path: '.env.local' });
-console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-console.log('ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-console.log('SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY);
-console.log('SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY);
+function loadEnvFile(fileName) {
+  const filePath = path.join(__dirname, '..', fileName);
+  if (!fs.existsSync(filePath)) {
+    console.log(`${fileName} does not exist`);
+    return;
+  }
+  const content = fs.readFileSync(filePath, 'utf-8');
+  console.log(`\n--- Content of ${fileName} ---`);
+  content.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      console.log(trimmed);
+    }
+  });
+}
+
+loadEnvFile('.env');
+loadEnvFile('.env.local');

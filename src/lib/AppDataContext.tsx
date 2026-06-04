@@ -80,6 +80,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const [userEmail, setUserEmail] = React.useState<string | null>(null);
     const [userRole, setUserRole] = React.useState<string | null>(null);
     const [authLoading, setAuthLoading] = React.useState(true);
+    const [isSupabaseAuthenticated, setIsSupabaseAuthenticated] = React.useState(false);
 
     useEffect(() => {
         let active = true;
@@ -95,6 +96,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                     email = user?.email || null;
                     if (user && !role) role = user.user_metadata?.role || null;
                 }
+
+                // Consideramos autenticado solo si Supabase responde con usuario válido
+                const isRealAuth = !!email;
 
                 if (!email && typeof window !== "undefined") {
                     email = localStorage.getItem("userEmail");
@@ -116,6 +120,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 if (active) {
                     setUserEmail(email);
                     setUserRole(role);
+                    setIsSupabaseAuthenticated(isRealAuth);
                     setAuthLoading(false);
                 }
             } catch (err) {
@@ -135,6 +140,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             if (active) {
                 if (email) setUserEmail(email);
                 if (role) setUserRole(role);
+                setIsSupabaseAuthenticated(!!email);
             }
         });
 
@@ -145,30 +151,33 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     // ── Queries ──────────────────────────────
+    // Solo habilitar las queries si la sesión de Supabase Auth está lista para evitar "Auth session missing!" y HTTP 400
+    const queriesEnabled = !authLoading && isSupabaseAuthenticated;
+
     const {
         data: tickets = [],
         isLoading: queryLoadingTickets,
-    } = useTickets(userEmail, !authLoading);
+    } = useTickets(userEmail, queriesEnabled);
 
     const {
         data: clients = [],
         isLoading: queryLoadingClients,
-    } = useClientsQuery(userEmail, !authLoading);
+    } = useClientsQuery(userEmail, queriesEnabled);
 
     const {
         data: technicians = [],
         isLoading: queryLoadingTechnicians,
-    } = useTechniciansQuery(userEmail, !authLoading);
+    } = useTechniciansQuery(userEmail, queriesEnabled);
 
     const {
         data: gestoras = [],
         isLoading: queryLoadingGestoras,
-    } = useGestorasQuery(userEmail, !authLoading);
+    } = useGestorasQuery(userEmail, queriesEnabled);
 
     const {
         data: gestorasTargets = [],
         isLoading: queryLoadingTargets,
-    } = useGestorasTargetsQuery(userEmail, !authLoading);
+    } = useGestorasTargetsQuery(userEmail, queriesEnabled);
 
     // Resolve activeGestora and isAdmin based on resolved email and role
     const activeGestora = React.useMemo(() => {
