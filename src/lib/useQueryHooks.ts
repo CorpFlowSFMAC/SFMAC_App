@@ -216,8 +216,19 @@ import { supabase } from "@/lib/supabase";
 // Helper to filter tickets for a gestor by email
 async function filterTicketsForActiveGestor(ticketsList: any[]) {
     try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user?.email) return ticketsList;
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        // Si hay error de auth o no hay usuario, retornar sin filtrar
+        // para evitar HTTP 400 por credenciales inválidas
+        if (authError) {
+            console.warn('[filterTicketsForActiveGestor] Auth error, returning unfiltered:', authError.message);
+            return ticketsList;
+        }
+        
+        if (!user?.email) {
+            console.warn('[filterTicketsForActiveGestor] No user email found, returning unfiltered');
+            return ticketsList;
+        }
 
         let userRole = "";
         if (typeof window !== "undefined") {
@@ -230,7 +241,14 @@ async function filterTicketsForActiveGestor(ticketsList: any[]) {
         }
 
         const emailLower = user.email.toLowerCase();
-        const allGestoras = await gestorasAPI.getAll();
+        
+        // Timeout para la query de gestoras
+        const gestorasPromise = gestorasAPI.getAll();
+        const timeoutPromise = new Promise<any[]>((_, reject) => 
+            setTimeout(() => reject(new Error('Gestoras timeout')), 5000)
+        );
+        
+        const allGestoras = await Promise.race([gestorasPromise, timeoutPromise]).catch(() => []);
         const myGestora = (allGestoras || []).find(g => g.email?.toLowerCase() === emailLower);
         const myGestoraId = myGestora?.id;
 
@@ -254,8 +272,9 @@ async function filterTicketsForActiveGestor(ticketsList: any[]) {
             }
             return false;
         });
-    } catch (e) {
-        console.error("[filterTicketsForActiveGestor] Error filtering:", e);
+    } catch (e: any) {
+        console.error('[filterTicketsForActiveGestor] Error filtering:', e);
+        // En caso de error, retornar sin filtrar para no perder datos
         return ticketsList;
     }
 }
@@ -274,28 +293,52 @@ export function useTickets() {
                 const normalized = (data || []).map(normalizeTicket).filter(Boolean);
                 return await filterTicketsForActiveGestor(normalized);
             } catch (primaryError: any) {
-                console.log('[useTickets] Primary method failed, trying server fallback:', primaryError.message);
+                console.warn('[useTickets] Primary method failed, trying server fallback:', primaryError.message);
                 
+                // Si es error HTTP 400 (Bad Request), intentar con fetch directo
+                if (primaryError?.message?.includes('400') || primaryError?.status === 400) {
+                    console.warn('[useTickets] HTTP 400 detected, attempting direct fetch fallback');
+                    try {
+                        const response = await fetch('/api/v3/tickets-server?summary=1', {
+                            method: 'GET',
+                            headers: { 'Content-Type': 'application/json' },
+                            signal: AbortSignal.timeout(15000)
+                        });
+                        if (response.ok) {
+                            const result = await response.json();
+                            const normalized = (result.data || []).map(normalizeTicket).filter(Boolean);
+                            return normalized;
+                        }
+                    } catch (fetchError: any) {
+                        console.error('[useTickets] Direct fetch also failed:', fetchError.message);
+                    }
+                }
+                
+                // Segundo fallback: endpoint del servidor
                 try {
-                    // Fallback: endpoint del servidor (usa service role)
-                    const response = await fetch('/api/v3/tickets-server?summary=1');
+                    const response = await fetch('/api/v3/tickets-server?summary=1', {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' },
+                        signal: AbortSignal.timeout(15000)
+                    });
                     if (response.ok) {
                         const result = await response.json();
                         const normalized = (result.data || []).map(normalizeTicket).filter(Boolean);
                         return await filterTicketsForActiveGestor(normalized);
                     }
                 } catch (fallbackError: any) {
-                    console.log('[useTickets] Server fallback failed:', fallbackError.message);
+                    console.error('[useTickets] Server fallback failed:', fallbackError.message);
                 }
                 
-                // Si todo falla, retornar array vacío (no throw)
+                // Si todo falla, retornar array vacío (no throw para no romper la UI)
+                console.warn('[useTickets] All methods failed, returning empty array');
                 return [];
             }
         },
         staleTime: 1000 * 30, // 30s - V3: datos más reactivos para sincronización bancaria
         gcTime: 1000 * 60 * 5, // 5 min
-        // No mostrar errores al usuario - manejo silencioso
-        retry: 1, // Solo reintentar una vez
+        retry: 2, // Reintentar hasta 2 veces en caso de errores de red
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     });
 }
 
