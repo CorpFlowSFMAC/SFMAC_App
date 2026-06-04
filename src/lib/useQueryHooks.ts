@@ -270,7 +270,7 @@ async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: strin
 // useTickets — Hook principal para lista/kanban
 // ─────────────────────────────────────────────
 // Usa fallback: intenta primero la API, si falla usa server endpoint
-export function useTickets(userEmail?: string | null) {
+export function useTickets(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
         queryKey: [...queryKeys.tickets.summary(), userEmail],
         queryFn: async () => {
@@ -326,7 +326,7 @@ export function useTickets(userEmail?: string | null) {
         gcTime: 1000 * 60 * 5, // 5 min
         retry: 2, // Reintentar hasta 2 veces en caso de errores de red
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-        enabled: !!userEmail,
+        enabled: !!userEmail && isAuthReady,
     });
 }
 
@@ -350,7 +350,7 @@ export function useTicketDetail(ticketId: string | null) {
 // ─────────────────────────────────────────────
 // usePaymentTickets — Hook para módulo de pagos (con metadata)
 // ─────────────────────────────────────────────
-export function usePaymentTickets(userEmail?: string | null) {
+export function usePaymentTickets(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
         queryKey: [...queryKeys.tickets.payments(), userEmail],
         queryFn: async () => {
@@ -360,14 +360,14 @@ export function usePaymentTickets(userEmail?: string | null) {
         },
         staleTime: 1000 * 60, // 60s - Módulo de tesorería V3 optimizado
         refetchOnWindowFocus: false, // Evita refetch duplicado al cambiar de pestaña
-        enabled: !!userEmail,
+        enabled: !!userEmail && isAuthReady,
     });
 }
 
 // ─────────────────────────────────────────────
 // useClients — Hook para clientes (CACHÉ 24h)
 // ─────────────────────────────────────────────
-export function useClients(userEmail?: string | null) {
+export function useClients(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
         queryKey: [...queryKeys.clients.all, userEmail],
         queryFn: async () => {
@@ -376,14 +376,14 @@ export function useClients(userEmail?: string | null) {
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 horas - Clientes casi nunca cambian
         gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
-        enabled: !!userEmail,
+        enabled: !!userEmail && isAuthReady,
     });
 }
 
 // ─────────────────────────────────────────────
 // useTechnicians — Hook para técnicos (CACHÉ 24h)
 // ─────────────────────────────────────────────
-export function useTechnicians(userEmail?: string | null) {
+export function useTechnicians(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
         queryKey: [...queryKeys.technicians.all, userEmail],
         queryFn: async () => {
@@ -392,14 +392,14 @@ export function useTechnicians(userEmail?: string | null) {
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 horas - Técnicos son estables
         gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
-        enabled: !!userEmail,
+        enabled: !!userEmail && isAuthReady,
     });
 }
 
 // ─────────────────────────────────────────────
 // useGestoras — Hook para gestoras (CACHÉ 24h)
 // ─────────────────────────────────────────────
-export function useGestoras(userEmail?: string | null) {
+export function useGestoras(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
         queryKey: [...queryKeys.gestoras.all, userEmail],
         queryFn: async () => {
@@ -408,14 +408,14 @@ export function useGestoras(userEmail?: string | null) {
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 horas - Gestoras casi nunca cambian
         gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
-        enabled: !!userEmail,
+        enabled: !!userEmail && isAuthReady,
     });
 }
 
 // ─────────────────────────────────────────────
 // useGestorasTargets — Hook para metas y bonos (CACHÉ 1h)
 // ─────────────────────────────────────────────
-export function useGestorasTargets(userEmail?: string | null) {
+export function useGestorasTargets(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
         queryKey: [...queryKeys.gestorasTargets.all, userEmail],
         queryFn: async () => {
@@ -424,7 +424,7 @@ export function useGestorasTargets(userEmail?: string | null) {
         },
         staleTime: 1000 * 60 * 60, // 1 hora - Metas cambian mensual
         gcTime: 1000 * 60 * 60, // Mantener en caché 1h
-        enabled: !!userEmail,
+        enabled: !!userEmail && isAuthReady,
     });
 }
 

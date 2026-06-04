@@ -58,6 +58,12 @@ export default function GestorLayout({
                 }
             }
             
+            // Sincronizar cookies → localStorage
+            if (role) localStorage.setItem("userRole", role);
+            if (storedName) localStorage.setItem("userName", storedName || '');
+            if (storedAvatar) localStorage.setItem("userAvatar", storedAvatar || '');
+            if (storedEmail) localStorage.setItem("userEmail", storedEmail || '');
+
             setUserRole(role);
             setRealUserName(storedName);
             setUserEmail(storedEmail);

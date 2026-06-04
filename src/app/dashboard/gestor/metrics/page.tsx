@@ -2,11 +2,9 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
-    Plus, Filter, Search, Clock, CheckCircle2, Zap, Sparkles, ArrowRight,
-    MapPin, AlertCircle, TrendingUp, TrendingDown, Target, BarChart2,
-    Activity, AlertTriangle, Flame, Timer, Trophy, Users, ChevronRight,
-    Calendar, X, RefreshCw, Gauge, Star, Award, MessageCircle,
-    LogIn, LogOut, Bell, CheckCheck, BarChart3, Wrench
+    Plus, Search, CheckCircle2, Zap, MapPin, TrendingUp, TrendingDown, 
+    Target, BarChart2, Activity, AlertTriangle, Flame, Timer, Trophy, 
+    Users, ChevronRight, Gauge, Star, Award, BarChart3, Wrench
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import GestorTurnoWidget from "@/components/GestorTurnoWidget";
@@ -19,7 +17,6 @@ import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 import { formatSoles, round2 } from "@/lib/formatters";
 import { calculateTicketFinances } from "@/lib/calculations";
 import { ZONES } from "@/lib/zones";
-import styles from "./gestor.module.css";
 
 import {
     ResponsiveContainer,
@@ -66,7 +63,7 @@ const QUOTES = [
     "Los problemas son oportunidades disfrazadas de trabajo urgente."
 ];
 
-// ── SLA Gauge Component (pure CSS/SVG) ────────
+// ── SLA Gauge Component (pure SVG) ────────
 function SlaGauge({ pct }: { pct: number }) {
     const r = 50, cx = 70, cy = 70;
     const circumference = Math.PI * r; // half-circle
@@ -78,7 +75,7 @@ function SlaGauge({ pct }: { pct: number }) {
             {/* Track */}
             <path
                 d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-                fill="none" stroke="#e2e8f0" strokeWidth="10" strokeLinecap="round"
+                fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="10" strokeLinecap="round"
             />
             {/* Fill */}
             <path
@@ -92,7 +89,7 @@ function SlaGauge({ pct }: { pct: number }) {
             <text x={cx} y={cy - 10} textAnchor="middle" fontSize="20" fontWeight="900" fill={color}>
                 {Math.round(pct)}%
             </text>
-            <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="#64748B" fontWeight="600">
+            <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.5)" fontWeight="600">
                 SLA Actual
             </text>
         </svg>
@@ -111,7 +108,7 @@ function UtilityGauge({ pct }: { pct: number }) {
             {/* Track */}
             <path
                 d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-                fill="none" stroke="#e2e8f0" strokeWidth="10" strokeLinecap="round"
+                fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="10" strokeLinecap="round"
             />
             {/* Fill */}
             <path
@@ -125,7 +122,7 @@ function UtilityGauge({ pct }: { pct: number }) {
             <text x={cx} y={cy - 10} textAnchor="middle" fontSize="20" fontWeight="900" fill={color}>
                 {Math.round(pct)}%
             </text>
-            <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="#64748B" fontWeight="600">
+            <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.5)" fontWeight="600">
                 Meta Utilidad
             </text>
         </svg>
@@ -139,15 +136,15 @@ function RelativeBar({ value, benchmark, label, color }: { value: number; benchm
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
-                <span style={{ color: "#64748B", fontWeight: 600 }}>{label}</span>
-                <span style={{ color, fontWeight: 800 }}>{formatHours(value)} <span style={{ color: "#94A3B8", fontWeight: 400 }}>/ meta {formatHours(benchmark)}</span></span>
+                <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>{label}</span>
+                <span style={{ color, fontWeight: 800 }}>{formatHours(value)} <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400 }}>/ meta {formatHours(benchmark)}</span></span>
             </div>
-            <div style={{ height: "8px", background: "#F1F5F9", borderRadius: "999px", position: "relative", overflow: "hidden" }}>
+            <div style={{ height: "8px", background: "rgba(255,255,255,0.08)", borderRadius: "999px", position: "relative", overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "999px", transition: "width 1s ease" }} />
                 {/* Benchmark marker */}
                 <div style={{
                     position: "absolute", top: 0, left: `${benchmarkPct}%`,
-                    width: "2px", height: "100%", background: "#64748B", opacity: 0.5
+                    width: "2px", height: "100%", background: "rgba(255,255,255,0.3)", opacity: 0.5
                 }} />
             </div>
         </div>
@@ -162,10 +159,32 @@ interface GestorPageProps {
 }
 
 export default function GestorDashboard({ tab }: GestorPageProps) {
-    const { tickets: rawTickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets, technicians } = useAppData();
+    const {
+        tickets: rawTickets,
+        loadingTickets: loading,
+        createTicket,
+        updateTicket,
+        gestoras,
+        gestorasTargets,
+        technicians,
+        userEmail,
+        activeGestora,
+        isAdmin
+    } = useAppData();
+
+    const myGestoraId = activeGestora?.id || null;
+    const myGestoraNombre = activeGestora?.name || activeGestora?.nombre || null;
+    const authEmail = userEmail;
+
     const [showWizard, setShowWizard] = useState(false);
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
     const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "technicians" | "reportes">(() => { return (tab as any) || "dashboard"; });
+    const [mounted, setMounted] = useState(false);
+
+    // Control de montaje para Recharts
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     // Leer parámetro de vista desde URL
     useEffect(() => {
@@ -193,77 +212,9 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const [priorityFilter, setPriorityFilter] = useState<"" | "Alta" | "Media" | "Baja">("");
     const [serviceFilter, setServiceFilter] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
-    const [showFilters, setShowFilters] = useState(false);
 
     const quote = useMemo(() => QUOTES[new Date().getDay() % QUOTES.length], []);
     const now = useMemo(() => new Date(), []);
-
-    // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
-    const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
-    const [myGestoraNombre, setMyGestoraNombre] = useState<string | null>(null);
-    const [isAdmin, setIsAdmin] = useState<boolean>(false);
-    const [authEmail, setAuthEmail] = useState<string | null>(null);
-
-    const fetchGestora = useCallback(async () => {
-        try {
-            // Leer email desde la sesión activa de Supabase Auth
-            const { data: { user } } = await supabase.auth.getUser();
-            let email = user?.email || localStorage.getItem('userEmail');
-            
-            if (!email) {
-                // Fallback: intentar cookie
-                const cookies = document.cookie.split(';').reduce((acc, c) => {
-                    const [k, v] = c.trim().split('=');
-                    acc[k] = v;
-                    return acc;
-                }, {} as Record<string, string>);
-                email = cookies['userEmail'];
-            }
-
-            if (!email) {
-                console.warn("[Gestor] Sin email de usuario");
-                return;
-            }
-
-            setAuthEmail(email);
-
-            const userRole = (localStorage.getItem('userRole') || (() => {
-                const m = document.cookie.match(/userRole=([^;]+)/);
-                return m ? decodeURIComponent(m[1]) : '';
-            })()).toUpperCase();
-            if (userRole === 'ADMIN' || userRole === 'SUPERADMIN') {
-                setIsAdmin(true);
-            }
-
-            // Buscar gestora por email
-            const { data: g } = await supabase.from('gestoras').select('id, name').ilike('email', email).maybeSingle();
-            if (g?.id) {
-                setMyGestoraId(g.id);
-                setMyGestoraNombre(g.name || null);
-            } else {
-                // Buscar en perfiles (dos pasos para evitar error 400)
-                const { data: p } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
-                if (p) {
-                    const { data: perfilData } = await supabase.from('perfiles').select('rol,nombre').eq('id', p.id).maybeSingle();
-                    if (p.id) setMyGestoraId(p.id);
-                    if (perfilData?.nombre) setMyGestoraNombre(perfilData.nombre);
-                    const normalizedRole = perfilData?.rol?.toUpperCase();
-                    if (normalizedRole === 'ADMIN') setIsAdmin(true);
-                } else {
-                    // Si es ADMIN pero no tiene gestora, usar null para ver todo
-                    if (userRole === 'ADMIN') {
-                        console.log("[Gestor] Admin sin gestora asignada - mostrar todo");
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("Error fetching gestora context:", error);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchGestora();
-    }, [fetchGestora]);
 
 
     const handleCreateTicket = async (ticketData: any) => {
@@ -522,17 +473,17 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
     if (loading) {
         return (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#F8FAFC", fontFamily: "Inter, system-ui, sans-serif" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "transparent", fontFamily: "Inter, system-ui, sans-serif" }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-                    <div style={{ width: 40, height: 40, border: "4px solid #4338CA", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-                    <p style={{ color: "#64748B", fontSize: "0.9rem", fontWeight: 600 }}>Cargando panel de rendimiento...</p>
+                    <div style={{ width: 40, height: 40, border: "4px solid #ff6600", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                    <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 600 }}>Cargando panel de rendimiento...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div style={{ padding: "1.5rem 2rem", minHeight: "100vh", background: "#F8FAFC", fontFamily: "Inter, system-ui, sans-serif" }}>
+        <div style={{ padding: "1.5rem 2rem", minHeight: "100vh", background: "transparent", fontFamily: "Inter, system-ui, sans-serif" }}>
 
             <GestorTurnoWidget />
 
@@ -631,17 +582,18 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             {activeView === "dashboard" && (
             <div style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
-                background: "white", borderRadius: "12px", padding: "0.65rem 1.25rem",
-                marginBottom: "1.25rem", border: "1px solid #E2E8F0",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                borderRadius: "12px", padding: "0.65rem 1.25rem",
+                marginBottom: "1.25rem", border: "1px solid rgba(255,255,255,0.08)",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
             }}>
                 <div style={{ display: "flex", gap: "0.35rem" }}>
                     {(["today", "week", "month", "all"] as const).map(f => (
                         <button key={f} onClick={() => setDateFilter(f)} style={{
                             padding: "0.35rem 0.9rem", borderRadius: "8px", border: "none", cursor: "pointer",
                             fontSize: "0.78rem", fontWeight: 700,
-                            background: dateFilter === f ? "#4338CA" : "#F1F5F9",
-                            color: dateFilter === f ? "white" : "#64748B",
+                            background: dateFilter === f ? "#ff6600" : "rgba(255,255,255,0.04)",
+                            color: dateFilter === f ? "white" : "rgba(255,255,255,0.6)",
                             transition: "all 0.2s"
                         }}>
                             {{ today: "Hoy", week: "7 días", month: "30 días", all: "Todo" }[f]}
@@ -655,15 +607,15 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         value={priorityFilter}
                         onChange={e => setPriorityFilter(e.target.value as any)}
                         style={{
-                            padding: "0.35rem 0.8rem", borderRadius: "8px", border: "1px solid #E2E8F0",
-                            fontSize: "0.78rem", cursor: "pointer", background: "white",
-                            color: "#475569", fontWeight: 600
+                            padding: "0.35rem 0.8rem", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)",
+                            fontSize: "0.78rem", cursor: "pointer", background: "rgba(255,255,255,0.05)",
+                            color: "white", fontWeight: 600, outline: "none"
                         }}
                     >
-                        <option value="">Todas las prioridades</option>
-                        <option value="Alta">🔴 Alta (SLA en riesgo)</option>
-                        <option value="Media">🟡 Media</option>
-                        <option value="Baja">🟢 Baja</option>
+                        <option value="" style={{ backgroundColor: "#020C1F", color: "white" }}>Todas las prioridades</option>
+                        <option value="Alta" style={{ backgroundColor: "#020C1F", color: "white" }}>🔴 Alta (SLA en riesgo)</option>
+                        <option value="Media" style={{ backgroundColor: "#020C1F", color: "white" }}>🟡 Media</option>
+                        <option value="Baja" style={{ backgroundColor: "#020C1F", color: "white" }}>🟢 Baja</option>
                     </select>
 
                     {/* Service filter */}
@@ -671,23 +623,23 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         value={serviceFilter}
                         onChange={e => setServiceFilter(e.target.value)}
                         style={{
-                            padding: "0.35rem 0.8rem", borderRadius: "8px", border: "1px solid #E2E8F0",
-                            fontSize: "0.78rem", cursor: "pointer", background: "white",
-                            color: "#475569", fontWeight: 600
+                            padding: "0.35rem 0.8rem", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)",
+                            fontSize: "0.78rem", cursor: "pointer", background: "rgba(255,255,255,0.05)",
+                            color: "white", fontWeight: 600, outline: "none"
                         }}
                     >
-                        <option value="">Todos los servicios</option>
+                        <option value="" style={{ backgroundColor: "#020C1F", color: "white" }}>Todos los servicios</option>
                         {SERVICE_TYPES.map(s => (
-                            <option key={s.id} value={s.id}>{s.nombreCorto}</option>
+                            <option key={s.id} value={s.id} style={{ backgroundColor: "#020C1F", color: "white" }}>{s.nombreCorto}</option>
                         ))}
                     </select>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: "#F1F5F9", borderRadius: "8px", padding: "0.35rem 0.8rem" }}>
-                        <Search size={13} color="#94A3B8" />
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", padding: "0.35rem 0.8rem" }}>
+                        <Search size={13} color="rgba(255,255,255,0.4)" />
                         <input
                             type="text" placeholder="Buscar ticket..." value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            style={{ background: "transparent", border: "none", outline: "none", fontSize: "0.78rem", color: "#475569", width: "130px" }}
+                            style={{ background: "transparent", border: "none", outline: "none", fontSize: "0.78rem", color: "white", width: "130px" }}
                         />
                     </div>
                 </div>
@@ -708,14 +660,14 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                     }}>
                         {/* INVERSIÓN */}
                         <div style={{
-                            background: "white",
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
                             borderRadius: "16px",
                             padding: "1.25rem 1.5rem",
                             borderLeft: "6px solid #F59E0B", // Amber-500 Naranja Enérgico
-                            borderTop: "1px solid #E2E8F0",
-                            borderRight: "1px solid #E2E8F0",
-                            borderBottom: "1px solid #E2E8F0",
-                            boxShadow: "0 4px 15px rgba(245,158,11,0.08)",
+                            borderTop: "1px solid rgba(255,255,255,0.08)",
+                            borderRight: "1px solid rgba(255,255,255,0.08)",
+                            borderBottom: "1px solid rgba(255,255,255,0.08)",
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
                             display: "flex",
                             flexDirection: "column",
                             justifyContent: "space-between",
@@ -727,18 +679,18 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                                     Inversión Ejecutada
                                 </span>
-                                <span style={{ background: "#FFF7ED", color: "#D97706", padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 700 }}>
+                                <span style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 700, border: "1px solid rgba(245,158,11,0.2)" }}>
                                     Costos + Gastos
                                 </span>
                             </div>
                             <div>
-                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#1E293B", lineHeight: 1.1 }}>
+                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "white", lineHeight: 1.1 }}>
                                     S/ {formatSoles(financialMetrics.inversion)}
                                 </div>
-                                <p style={{ fontSize: "0.7rem", color: "#94A3B8", margin: "4px 0 0" }}>
+                                <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
                                     Materiales, mano de obra y viáticos
                                 </p>
                             </div>
@@ -746,14 +698,14 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         {/* FACTURACIÓN */}
                         <div style={{
-                            background: "white",
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
                             borderRadius: "16px",
                             padding: "1.25rem 1.5rem",
                             borderLeft: "6px solid #4F46E5", // Indigo-600 Azul Eléctrico
-                            borderTop: "1px solid #E2E8F0",
-                            borderRight: "1px solid #E2E8F0",
-                            borderBottom: "1px solid #E2E8F0",
-                            boxShadow: "0 4px 15px rgba(79,70,229,0.08)",
+                            borderTop: "1px solid rgba(255,255,255,0.08)",
+                            borderRight: "1px solid rgba(255,255,255,0.08)",
+                            borderBottom: "1px solid rgba(255,255,255,0.08)",
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
                             display: "flex",
                             flexDirection: "column",
                             justifyContent: "space-between",
@@ -765,18 +717,18 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                                     Facturación Generada (Neto)
                                 </span>
-                                <span style={{ background: "#EEF2FF", color: "#4F46E5", padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 700 }}>
+                                <span style={{ background: "rgba(79,70,229,0.15)", color: "#818CF8", padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 700, border: "1px solid rgba(79,70,229,0.2)" }}>
                                     Aprobado + Ejecución
                                 </span>
                             </div>
                             <div>
-                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#1E293B", lineHeight: 1.1 }}>
+                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "white", lineHeight: 1.1 }}>
                                     S/ {formatSoles(financialMetrics.facturacion)}
                                 </div>
-                                <p style={{ fontSize: "0.7rem", color: "#94A3B8", margin: "4px 0 0" }}>
+                                <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
                                     Presupuesto total sin IGV
                                 </p>
                             </div>
@@ -784,14 +736,14 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         {/* UTILIDAD */}
                         <div style={{
-                            background: "white",
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
                             borderRadius: "16px",
                             padding: "1.25rem 1.5rem",
                             borderLeft: "6px solid #10B981", // Emerald-500 Verde Esmeralda
-                            borderTop: "1px solid #E2E8F0",
-                            borderRight: "1px solid #E2E8F0",
-                            borderBottom: "1px solid #E2E8F0",
-                            boxShadow: "0 4px 15px rgba(16,185,129,0.08)",
+                            borderTop: "1px solid rgba(255,255,255,0.08)",
+                            borderRight: "1px solid rgba(255,255,255,0.08)",
+                            borderBottom: "1px solid rgba(255,255,255,0.08)",
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
                             display: "flex",
                             flexDirection: "column",
                             justifyContent: "space-between",
@@ -803,24 +755,24 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                                     Utilidad Real
                                 </span>
                                 {financialMetrics.utilidad >= 0 ? (
-                                    <span style={{ background: "#ECFDF5", color: "#047857", padding: "2px 8px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "2px" }}>
+                                    <span style={{ background: "rgba(16,185,129,0.15)", color: "#10B981", padding: "2px 8px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "2px", border: "1px solid rgba(16,185,129,0.2)" }}>
                                         Margen Positivo <TrendingUp size={10} />
                                     </span>
                                 ) : (
-                                    <span style={{ background: "#FEF2F2", color: "#DC2626", padding: "2px 8px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "2px" }}>
+                                    <span style={{ background: "rgba(239,68,68,0.15)", color: "#EF4444", padding: "2px 8px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "2px", border: "1px solid rgba(239,68,68,0.2)" }}>
                                         Margen Negativo <TrendingDown size={10} />
                                     </span>
                                 )}
                             </div>
                             <div>
-                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#059669", lineHeight: 1.1 }}>
+                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#10B981", lineHeight: 1.1 }}>
                                     S/ {formatSoles(financialMetrics.utilidad)}
                                 </div>
-                                <p style={{ fontSize: "0.7rem", color: "#94A3B8", margin: "4px 0 0" }}>
+                                <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
                                     Retorno neto del gestor
                                 </p>
                             </div>
@@ -885,16 +837,17 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         {/* Bar Chart: Tickets por día */}
                         <div style={{
-                            background: "white", borderRadius: "16px", padding: "1.5rem",
-                            border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "16px", padding: "1.5rem",
+                            border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
                         }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                                <h3 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                    <BarChart2 size={16} color="#4338CA" /> Rendimiento Financiero Reciente
+                                <h3 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "white", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                    <BarChart2 size={16} color="#ff6600" /> Rendimiento Financiero Reciente
                                 </h3>
-                                <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.72rem", fontWeight: 700 }}>
+                                <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>
                                     <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                        <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#4F46E5", display: "inline-block" }} />
+                                        <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#ff6600", display: "inline-block" }} />
                                         Facturación Neto
                                     </span>
                                     <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -903,28 +856,31 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     </span>
                                 </div>
                             </div>
-                            <div className="w-full h-[300px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ReChartsBarChart data={financialBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                                        <XAxis dataKey="label" stroke="#94A3B8" fontSize={10} tickLine={false} />
-                                        <YAxis stroke="#94A3B8" fontSize={10} tickLine={false} axisLine={false} />
-                                        <ReChartsTooltip formatter={(value: any) => [`S/ ${formatSoles(Number(value))}`]} />
-                                        <Bar dataKey="Facturación" fill="#4F46E5" radius={[4, 4, 0, 0]} barSize={12} />
-                                        <Bar dataKey="Utilidad" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} />
-                                    </ReChartsBarChart>
-                                </ResponsiveContainer>
+                            <div style={{ width: "100%", height: 300, minHeight: 300, position: "relative" }}>
+                                {mounted && (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ReChartsBarChart data={financialBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.08)" />
+                                            <XAxis dataKey="label" stroke="rgba(255,255,255,0.4)" fontSize={10} tickLine={false} />
+                                            <YAxis stroke="rgba(255,255,255,0.4)" fontSize={10} tickLine={false} axisLine={false} />
+                                            <ReChartsTooltip contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.95)", borderColor: "rgba(255,255,255,0.12)", borderRadius: "8px", color: "white" }} formatter={(value: any) => [`S/ ${formatSoles(Number(value))}`]} />
+                                            <Bar dataKey="Facturación" fill="#ff6600" radius={[4, 4, 0, 0]} barSize={12} />
+                                            <Bar dataKey="Utilidad" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} />
+                                        </ReChartsBarChart>
+                                    </ResponsiveContainer>
+                                )}
                             </div>
                         </div>
 
                         {/* SLA & Meta Gauges */}
                         <div style={{
-                            background: "white", borderRadius: "16px", padding: "1.5rem",
-                            border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "16px", padding: "1.5rem",
+                            border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
                             display: "flex", flexDirection: "column", alignItems: "center"
                         }}>
-                            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem", width: "100%" }}>
-                                <Target size={16} color="#4338CA" /> Eficiencia & Meta Financiera
+                            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 800, color: "white", display: "flex", alignItems: "center", gap: "0.4rem", width: "100%" }}>
+                                <Target size={16} color="#ff6600" /> Eficiencia & Meta Financiera
                             </h3>
                             <div style={{ display: "flex", justifyContent: "space-around", width: "100%", gap: "10px" }}>
                                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -935,12 +891,12 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                 </div>
                             </div>
                             <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", flexDirection: "row", width: "100%" }}>
-                                <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", padding: "0.4rem 0.5rem", borderRadius: "8px", background: "#FEF2F2" }}>
-                                    <span style={{ color: "#64748B" }}>🔴 Críticos</span>
+                                <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", padding: "0.4rem 0.5rem", borderRadius: "8px", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
+                                    <span style={{ color: "rgba(255,255,255,0.7)" }}>🔴 Críticos</span>
                                     <span style={{ fontWeight: 800, color: "#EF4444" }}>{kpis.critical.length}</span>
                                 </div>
-                                <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", padding: "0.4rem 0.5rem", borderRadius: "8px", background: "#FFF7ED" }}>
-                                    <span style={{ color: "#64748B" }}>🟡 Alerta</span>
+                                <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", padding: "0.4rem 0.5rem", borderRadius: "8px", background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.2)" }}>
+                                    <span style={{ color: "rgba(255,255,255,0.7)" }}>🟡 Alerta</span>
                                     <span style={{ fontWeight: 800, color: "#F59E0B" }}>{kpis.warning.length}</span>
                                 </div>
                             </div>
@@ -948,10 +904,11 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         {/* Productividad relativa */}
                         <div style={{
-                            background: "white", borderRadius: "16px", padding: "1.5rem",
-                            border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "16px", padding: "1.5rem",
+                            border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
                         }}>
-                            <h3 style={{ margin: "0 0 1.25rem", fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <h3 style={{ margin: "0 0 1.25rem", fontSize: "0.9rem", fontWeight: 800, color: "white", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                                 <Trophy size={16} color="#F59E0B" /> Objetivos de Rendimiento
                             </h3>
                             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -971,14 +928,15 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     label="Tickets cerrados"
                                     value={kpis.closed.length}
                                     benchmark={Math.max(kpis.total * 0.5, 1)}
-                                    color="#4338CA"
+                                    color="#ff6600"
                                 />
                             </div>
                             <div style={{
                                 marginTop: "1.25rem", padding: "0.6rem 0.9rem",
-                                background: mttrBetter ? "#ECFDF5" : "#FEF2F2",
+                                background: mttrBetter ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                                border: mttrBetter ? "1px solid rgba(16,185,129,0.25)" : "1px solid rgba(239,68,68,0.25)",
                                 borderRadius: "10px", fontSize: "0.75rem",
-                                color: mttrBetter ? "#059669" : "#DC2626", fontWeight: 700,
+                                color: mttrBetter ? "#10B981" : "#EF4444", fontWeight: 700,
                                 display: "flex", gap: "0.4rem", alignItems: "center"
                             }}>
                                 <Award size={14} />
@@ -1034,7 +992,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         const barColor = percentAchieved >= 100 ? '#10B981' : percentAchieved >= 80 ? '#22C55E' : percentAchieved >= 50 ? '#F59E0B' : '#EF4444';
 
                         return (
-                            <div style={{ marginBottom: '1.25rem', background: 'white', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                            <div style={{ marginBottom: '1.25rem', background: 'linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 4px 20px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
                                 <div style={{ padding: '1rem 1.5rem', background: 'linear-gradient(135deg,#1E1B4B,#312E81)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <Target size={18} color="#A78BFA" />
@@ -1053,14 +1011,14 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                 <div style={{ padding: '1rem 1.5rem' }}>
                                     {/* Main progress bar */}
                                     <div style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
-                                        <span style={{ color: '#64748B', fontWeight: 600 }}>Progreso hacia bono de S/ {formatSoles(metaBono)}</span>
+                                        <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>Progreso hacia bono de S/ {formatSoles(metaBono)}</span>
                                         <span style={{ color: barColor, fontWeight: 900 }}>S/ {formatSoles(bonusEarned)} ganado</span>
                                     </div>
-                                    <div style={{ height: '10px', background: '#F1F5F9', borderRadius: '5px', overflow: 'hidden', marginBottom: '0.5rem', position: 'relative' }}>
+                                    <div style={{ height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden', marginBottom: '0.5rem', position: 'relative' }}>
                                         <div style={{ width: `${percentAchieved}%`, height: '100%', background: `linear-gradient(90deg,${barColor},${barColor}99)`, borderRadius: '5px', transition: 'width 1s ease' }} />
-                                        <div style={{ position: 'absolute', top: 0, left: '80%', width: '2px', height: '100%', background: '#94A3B8', opacity: 0.7 }} title="Mínimo 80% para bono" />
+                                        <div style={{ position: 'absolute', top: 0, left: '80%', width: '2px', height: '100%', background: 'rgba(255,255,255,0.3)', opacity: 0.7 }} title="Mínimo 80% para bono" />
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94A3B8', marginBottom: '0.75rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginBottom: '0.75rem' }}>
                                         <span>Utilidad neta lograda: S/ {formatSoles(utilityTotal)}</span>
                                         <span>↑ 80% min. para activar bono</span>
                                         <span>Meta: S/ {formatSoles(targetUtility)}</span>
@@ -1073,19 +1031,19 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                             { label: 'Bono Ganado', val: `S/ ${formatSoles(bonusEarned)}`, color: '#8B5CF6' },
                                             { label: faltante > 0 ? 'Faltante para meta' : '🎉 Meta Superada', val: faltante > 0 ? `S/ ${formatSoles(faltante)}` : `S/ ${formatSoles(metaBono)}`, color: faltante > 0 ? '#F59E0B' : '#10B981' }
                                         ].map((s, i) => (
-                                            <div key={i} style={{ background: '#F8FAFC', borderRadius: '10px', padding: '0.6rem 0.9rem', border: '1px solid #F1F5F9' }}>
+                                            <div key={i} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '10px', padding: '0.6rem 0.9rem', border: '1px solid rgba(255,255,255,0.05)' }}>
                                                 <div style={{ fontSize: '1rem', fontWeight: 900, color: s.color }}>{s.val}</div>
-                                                <div style={{ fontSize: '0.68rem', color: '#94A3B8', fontWeight: 600, marginTop: '2px' }}>{s.label}</div>
+                                                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600, marginTop: '2px' }}>{s.label}</div>
                                             </div>
                                         ))}
                                     </div>
 
                                     {/* IMPULSO FINAL */}
                                     {faltante > 0 && impulsoTickets.length > 0 && (
-                                        <div style={{ background: 'linear-gradient(135deg,#F5F3FF,#EDE9FE)', border: '1px solid #C4B5FD', borderRadius: '12px', padding: '0.9rem 1rem' }}>
+                                        <div style={{ background: 'linear-gradient(135deg,rgba(139,92,246,0.15) 0%,rgba(109,40,217,0.05) 100%)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '12px', padding: '0.9rem 1rem' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                                                <Zap size={14} color="#7C3AED" />
-                                                <span style={{ color: '#7C3AED', fontWeight: 900, fontSize: '0.82rem' }}>
+                                                <Zap size={14} color="#A78BFA" />
+                                                <span style={{ color: '#A78BFA', fontWeight: 900, fontSize: '0.82rem' }}>
                                                     IMPULSO FINAL — Cierra estos tickets para asegurar tu bono de S/ {formatSoles(metaBono)}
                                                 </span>
                                             </div>
@@ -1093,15 +1051,15 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                                 <div
                                                     key={j}
                                                     onClick={() => { if (!openTicketIds.includes(t.id)) setOpenTicketIds([...openTicketIds, t.id]); }}
-                                                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'white', borderRadius: '8px', marginBottom: '4px', cursor: 'pointer', border: '1px solid #DDD6FE' }}
+                                                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', marginBottom: '4px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.08)' }}
                                                 >
                                                     <div>
-                                                        <span style={{ color: '#1E293B', fontWeight: 700, fontSize: '0.8rem' }}>{t.numeroTicketCliente || t.id?.slice(0,8)}</span>
-                                                        <span style={{ color: '#94A3B8', fontSize: '0.72rem', marginLeft: '8px' }}>{normalizeStateId(t.estadoId).replace(/_/g,' ')}</span>
+                                                        <span style={{ color: 'white', fontWeight: 700, fontSize: '0.8rem' }}>{t.numeroTicketCliente || t.id?.slice(0,8)}</span>
+                                                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.72rem', marginLeft: '8px' }}>{normalizeStateId(t.estadoId).replace(/_/g,' ')}</span>
                                                     </div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ color: '#059669', fontWeight: 900, fontSize: '0.82rem' }}>+S/ {formatSoles(t._utility)}</span>
-                                                        <ChevronRight size={13} color="#94A3B8" />
+                                                        <span style={{ color: '#10B981', fontWeight: 900, fontSize: '0.82rem' }}>+S/ {formatSoles(t._utility)}</span>
+                                                        <ChevronRight size={13} color="rgba(255,255,255,0.4)" />
                                                     </div>
                                                 </div>
                                             ))}
@@ -1109,8 +1067,8 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     )}
 
                                     {faltante <= 0 && percentAchieved > 0 && (
-                                        <div style={{ background: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)', border: '1px solid #6EE7B7', borderRadius: '12px', padding: '0.75rem 1rem', textAlign: 'center' }}>
-                                            <span style={{ color: '#059669', fontWeight: 800, fontSize: '0.85rem' }}>🎉 ¡Felicidades! Tu bono de S/ {formatSoles(bonusEarned)} ha sido confirmado.</span>
+                                        <div style={{ background: 'linear-gradient(135deg,rgba(16,185,129,0.15) 0%,rgba(4,120,87,0.05) 100%)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '12px', padding: '0.75rem 1rem', textAlign: 'center' }}>
+                                            <span style={{ color: '#10B981', fontWeight: 800, fontSize: '0.85rem' }}>🎉 ¡Felicidades! Tu bono de S/ {formatSoles(bonusEarned)} ha sido confirmado.</span>
                                         </div>
                                     )}
                                 </div>
@@ -1124,14 +1082,15 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         {/* Top 5 urgentes */}
                         <div style={{
-                            background: "white", borderRadius: "16px", padding: "1.5rem",
-                            border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "16px", padding: "1.5rem",
+                            border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
                         }}>
-                            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 800, color: "white", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                                 <Flame size={16} color="#EF4444" /> Top 5 Tickets más Urgentes
                             </h3>
                             {top5Urgent.length === 0 ? (
-                                <div style={{ textAlign: "center", padding: "2rem", color: "#94A3B8" }}>
+                                <div style={{ textAlign: "center", padding: "2rem", color: "rgba(255,255,255,0.4)" }}>
                                     <CheckCircle2 size={32} style={{ margin: "0 auto 0.5rem" }} />
                                     <p style={{ margin: 0, fontSize: "0.85rem" }}>¡Sin urgencias! Excelente trabajo.</p>
                                 </div>
@@ -1140,7 +1099,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     {top5Urgent.map((t: any, idx: number) => {
                                         const sla = t._sla as "ok" | "warning" | "critical" | "expired";
                                         const slaColors = { ok: "#10B981", warning: "#F59E0B", critical: "#EF4444", expired: "#7F1D1D" };
-                                        const slaBg = { ok: "#ECFDF5", warning: "#FFF7ED", critical: "#FEF2F2", expired: "#FFF1F2" };
+                                        const slaBg = { ok: "rgba(16,185,129,0.1)", warning: "rgba(245,158,11,0.1)", critical: "rgba(239,68,68,0.1)", expired: "rgba(127,29,29,0.2)" };
                                         const service = getServiceById(t.tipoServicio);
                                         return (
                                             <div
@@ -1160,11 +1119,11 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                                     fontSize: "0.7rem", fontWeight: 900, flexShrink: 0
                                                 }}>{idx + 1}</span>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#1E293B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                    <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                         {t.cliente?.nombre || t.branch_offices?.clients?.name || "Sin cliente"}
-                                                        {t.numeroTicketCliente && <span style={{ fontSize: "0.7rem", color: "#94A3B8", marginLeft: "6px" }}>#{t.numeroTicketCliente}</span>}
+                                                        {t.numeroTicketCliente && <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", marginLeft: "6px" }}>#{t.numeroTicketCliente}</span>}
                                                     </div>
-                                                    <div style={{ fontSize: "0.72rem", color: "#64748B" }}>
+                                                    <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.5)" }}>
                                                         {service?.nombreCorto || "—"} · {formatHours(t._ageH)} transcurrido
                                                     </div>
                                                 </div>
@@ -1175,7 +1134,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                                 }}>
                                                     {sla === "expired" ? "VENCIDO" : sla === "critical" ? "CRÍTICO" : sla === "warning" ? "ALERTA" : "OK"}
                                                 </span>
-                                                <ChevronRight size={14} color="#94A3B8" />
+                                                <ChevronRight size={14} color="rgba(255,255,255,0.4)" />
                                             </div>
                                         );
                                     })}
@@ -1185,11 +1144,12 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         {/* Pipeline por estado */}
                         <div style={{
-                            background: "white", borderRadius: "16px", padding: "1.5rem",
-                            border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "16px", padding: "1.5rem",
+                            border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
                         }}>
-                            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                <Activity size={16} color="#4338CA" /> Pipeline Operativo
+                            <h3 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 800, color: "white", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                <Activity size={16} color="#ff6600" /> Pipeline Operativo
                             </h3>
                             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                                 {TICKET_STATES.filter(s => s.order >= 1 && s.order <= 11).map(estado => {
@@ -1208,10 +1168,10 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                                 <Icon size={13} color={estado.color} />
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: "0.76rem", fontWeight: 600, color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                <div style={{ fontSize: "0.76rem", fontWeight: 600, color: "rgba(255,255,255,0.8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                     {estado.nombreCorto}
                                                 </div>
-                                                <div style={{ height: "5px", background: "#F1F5F9", borderRadius: "999px", marginTop: "3px", overflow: "hidden" }}>
+                                                <div style={{ height: "5px", background: "rgba(255,255,255,0.08)", borderRadius: "999px", marginTop: "3px", overflow: "hidden" }}>
                                                     <div style={{
                                                         height: "100%", width: `${(count / maxCount) * 100}%`,
                                                         background: estado.color, borderRadius: "999px",
@@ -1220,7 +1180,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                                 </div>
                                             </div>
                                             <span style={{
-                                                fontSize: "0.82rem", fontWeight: 900, color: count > 0 ? estado.color : "#CBD5E1",
+                                                fontSize: "0.82rem", fontWeight: 900, color: count > 0 ? estado.color : "rgba(255,255,255,0.2)",
                                                 minWidth: "20px", textAlign: "right"
                                             }}>{count}</span>
                                         </div>
@@ -1272,18 +1232,18 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                     {/* Header de técnicos */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                        <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#1E293B" }}>
+                        <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "white" }}>
                             {technicians?.length || 0} Técnicos Activos
                         </h2>
                     </div>
                     
                     {loading ? (
-                        <div style={{ textAlign: "center", padding: "4rem", color: "#94A3B8" }}>
+                        <div style={{ textAlign: "center", padding: "4rem", color: "rgba(255,255,255,0.4)" }}>
                             <div style={{ width: 40, height: 40, border: "4px solid #f97316", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 1rem" }} />
                             <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>Cargando técnicos...</p>
                         </div>
                     ) : !technicians || technicians.length === 0 ? (
-                        <div style={{ textAlign: "center", padding: "4rem", color: "#94A3B8" }}>
+                        <div style={{ textAlign: "center", padding: "4rem", color: "rgba(255,255,255,0.4)" }}>
                             <Users size={40} style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
                             <p style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>No hay técnicos registrados</p>
                         </div>
@@ -1300,9 +1260,10 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                 
                                 return (
                                 <div key={tech.id} style={{
-                                    background: "white", borderRadius: "14px", padding: "1rem",
-                                    border: "1px solid #E2E8F0",
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                                    background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                                    borderRadius: "14px", padding: "1rem",
+                                    border: "1px solid rgba(255,255,255,0.08)",
+                                    boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
                                     transition: "all 0.2s"
                                 }}>
                                     {/* Header con foto y estado */}
@@ -1317,23 +1278,23 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                             {fullName.charAt(0).toUpperCase()}
                                         </div>
                                         <div style={{ flex: 1 }}>
-                                            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.95rem", color: "#1E293B" }}>
+                                            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.95rem", color: "white" }}>
                                                 {fullName}
                                             </p>
-                                            <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#64748B" }}>
+                                            <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>
                                                 {docType}: {docNumber}
                                             </p>
                                             {/* Rating */}
                                             <div style={{ display: "flex", gap: "2px", marginTop: "0.25rem" }}>
                                                 {[1,2,3,4,5].map(s => (
-                                                    <Star key={s} size={12} fill={s <= rating ? "#F59E0B" : "transparent"} color={s <= rating ? "#F59E0B" : "#CBD5E1"} />
+                                                    <Star key={s} size={12} fill={s <= rating ? "#F59E0B" : "transparent"} color={s <= rating ? "#F59E0B" : "rgba(255,255,255,0.2)"} />
                                                 ))}
                                             </div>
                                         </div>
                                         <div style={{
                                             padding: "0.3rem 0.6rem", borderRadius: "20px",
-                                            background: tech.estado === 'ACTIVO' ? "#ECFDF5" : "#F1F5F9",
-                                            color: tech.estado === 'ACTIVO' ? "#059669" : "#64748B",
+                                            background: tech.estado === 'ACTIVO' ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.08)",
+                                            color: tech.estado === 'ACTIVO' ? "#10B981" : "rgba(255,255,255,0.5)",
                                             fontSize: "0.7rem", fontWeight: 700,
                                             textTransform: "uppercase"
                                         }}>
@@ -1343,11 +1304,12 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     
                                     {/* Teléfono en recuadro verde */}
                                     <div style={{
-                                        background: "#ECFDF5", borderRadius: "8px", padding: "0.5rem 0.75rem",
-                                        display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem"
+                                        background: "rgba(16,185,129,0.1)", borderRadius: "8px", padding: "0.5rem 0.75rem",
+                                        display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem",
+                                        border: "1px solid rgba(16,185,129,0.2)"
                                     }}>
-                                        <span style={{ fontSize: "0.8rem", color: "#059669" }}>📱</span>
-                                        <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#047857" }}>{phone}</span>
+                                        <span style={{ fontSize: "0.8rem", color: "#10B981" }}>📱</span>
+                                        <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#10B981" }}>{phone}</span>
                                     </div>
                                     
                                     {/* Especialidades */}
@@ -1377,9 +1339,9 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                                     <div key={z} style={{
                                                         display: "flex", alignItems: "center", gap: "0.3rem",
                                                         padding: "0.2rem 0.4rem", borderRadius: "6px",
-                                                        background: zone?.color ? `${zone.color}15` : "#F1F5F9",
+                                                        background: zone?.color ? `${zone.color}25` : "rgba(255,255,255,0.08)",
                                                         fontSize: "0.65rem", fontWeight: 600,
-                                                        color: zone?.color ? "#1E293B" : "#64748B"
+                                                        color: zone?.color ? "white" : "rgba(255,255,255,0.7)"
                                                     }}>
                                                         <MapPin size={10} />
                                                         {z}
@@ -1398,37 +1360,46 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
             {activeView === "reportes" && (
                 <div style={{ padding: "1rem" }}>
-                    <div style={{ textAlign: "center", padding: "3rem", background: "white", borderRadius: "12px", border: "1px solid #E2E8F0" }}>
-                        <BarChart3 size={48} style={{ margin: "0 auto 1rem", color: "#4338CA" }} />
-                        <h2 style={{ margin: "0 0 0.5rem", color: "#1E293B", fontSize: "1.25rem" }}>Reportes de Eficiencia</h2>
-                        <p style={{ margin: 0, color: "#64748B" }}>
+                    <div style={{
+                        textAlign: "center", padding: "3rem",
+                        background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                        borderRadius: "16px", border: "1px solid rgba(255,255,255,0.08)",
+                        boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
+                    }}>
+                        <BarChart3 size={48} style={{ margin: "0 auto 1rem", color: "#ff6600" }} />
+                        <h2 style={{ margin: "0 0 0.5rem", color: "white", fontSize: "1.25rem" }}>Reportes de Eficiencia</h2>
+                        <p style={{ margin: 0, color: "rgba(255,255,255,0.5)" }}>
                             Período: {dateFilter === "today" ? "Hoy" : dateFilter === "week" ? "Esta Semana" : dateFilter === "month" ? "Este Mes" : "Todos"}
                         </p>
                         
                         {/* KPI Summary */}
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginTop: "2rem" }}>
-                            <div style={{ padding: "1rem", background: "#F8FAFC", borderRadius: "8px" }}>
-                                <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#4338CA" }}>{kpis.total}</div>
-                                <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Total Tickets</div>
+                            <div style={{ padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                                <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#8B5CF6" }}>{kpis.total}</div>
+                                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>Total Tickets</div>
                             </div>
-                            <div style={{ padding: "1rem", background: "#F8FAFC", borderRadius: "8px" }}>
+                            <div style={{ padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
                                 <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#10B981" }}>{kpis.closed.length}</div>
-                                <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Cerrados</div>
+                                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>Cerrados</div>
                             </div>
-                            <div style={{ padding: "1rem", background: "#F8FAFC", borderRadius: "8px" }}>
+                            <div style={{ padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
                                 <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#F59E0B" }}>{kpis.backlog.length}</div>
-                                <div style={{ fontSize: "0.75rem", color: "#64748B" }}>En Proceso</div>
+                                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>En Proceso</div>
                             </div>
                         </div>
                         
                         {/* Stats detailed */}
-                        <div style={{ marginTop: "1.5rem", textAlign: "left", padding: "1rem", background: "#EEF2FF", borderRadius: "8px" }}>
-                            <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#4338CA" }}>Metricas Detalladas</h3>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem" }}>
+                        <div style={{
+                            marginTop: "1.5rem", textAlign: "left", padding: "1.2rem",
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "12px", border: "1px solid rgba(255,255,255,0.08)"
+                        }}>
+                            <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#ff6600", fontWeight: 800 }}>Métricas Detalladas</h3>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", color: "rgba(255,255,255,0.8)" }}>
                                 <div>SLA Cumplimiento:</div>
-                                <div style={{ fontWeight: 700 }}>{kpis.slaCompliance}%</div>
+                                <div style={{ fontWeight: 700, color: "white" }}>{kpis.slaCompliance}%</div>
                                 <div>MTTR Promedio:</div>
-                                <div style={{ fontWeight: 700 }}>{kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : "-"}</div>
+                                <div style={{ fontWeight: 700, color: "white" }}>{kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : "-"}</div>
                                 <div>SLA Vencidos:</div>
                                 <div style={{ fontWeight: 700, color: kpis.expiredOpen.length > 0 ? "#EF4444" : "#10B981" }}>{kpis.expiredOpen.length}</div>
                                 <div>Backlog:</div>
@@ -1443,41 +1414,84 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 }
 
 // ── KPI Card Component ────────────────────────
-function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
-    label: string; value: any; icon: React.ReactNode;
-    iconBg: string; sub: string; trend: "up" | "down" | null; alert?: boolean;
-}) {
+interface KpiCardProps {
+    label: string;
+    value: string | number;
+    icon: React.ReactNode;
+    iconBg: string;
+    sub?: string;
+    trend?: "up" | "down" | null;
+    alert?: boolean;
+}
+
+function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: KpiCardProps) {
     const displayValue = (value === null || value === undefined) ? "0" : String(value);
     const isZero = displayValue === "0" || displayValue === "0.0";
+    
+    const borderColor = alert 
+        ? "rgba(239, 68, 68, 0.4)" 
+        : trend === "up" 
+            ? "rgba(16, 185, 129, 0.2)" 
+            : trend === "down" 
+                ? "rgba(245, 158, 11, 0.2)" 
+                : "rgba(255, 255, 255, 0.08)";
+    const shadowColor = alert 
+        ? "rgba(239, 68, 68, 0.05)" 
+        : trend === "up" 
+            ? "rgba(16, 185, 129, 0.03)" 
+            : "rgba(255, 255, 255, 0.02)";
 
     return (
         <div style={{
-            background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem",
-            border: `1px solid ${alert ? "#FCA5A550" : "#E2E8F0"}`,
-            boxShadow: alert ? "0 0 0 2px #FCA5A530" : "0 2px 8px rgba(0,0,0,0.04)",
-            display: "flex", flexDirection: "column", gap: "0.5rem",
-            transition: "transform 0.2s, box-shadow 0.2s",
+            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
+            border: `1px solid ${borderColor}`,
+            borderRadius: "16px",
+            padding: "1.25rem 1.4rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+            boxShadow: `0 4px 20px ${shadowColor}`,
+            position: "relative",
+            overflow: "hidden",
+            transition: "all 0.2s ease-in-out",
             cursor: "default"
         }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 25px rgba(0,0,0,0.08)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ""; (e.currentTarget as HTMLElement).style.boxShadow = alert ? "0 0 0 2px #FCA5A530" : "0 2px 8px rgba(0,0,0,0.04)"; }}
+            onMouseEnter={e => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0.02) 100%)";
+            }}
+            onMouseLeave={e => {
+                e.currentTarget.style.transform = "";
+                e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)";
+            }}
         >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: iconBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {label}
+                </span>
+                <div style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "rgba(255,255,255,0.08)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backdropFilter: "blur(4px)"
+                }}>
                     {icon}
                 </div>
-                {trend && (
-                    <span style={{ fontSize: "0.7rem", fontWeight: 800, color: trend === "up" ? "#10B981" : "#EF4444", display: "flex", alignItems: "center", gap: "2px" }}>
-                        {trend === "up" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        {trend === "up" ? "Bien" : "Atención"}
-                    </span>
-                )}
             </div>
             <div>
-                <div style={{ fontSize: "1.6rem", fontWeight: 900, color: isZero ? "#94A3B8" : alert ? "#EF4444" : "#1E293B", lineHeight: 1 }}>{displayValue}</div>
-                <div style={{ fontSize: "0.73rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px", marginTop: "4px" }}>{label}</div>
+                <div style={{ fontSize: "1.6rem", fontWeight: 900, color: isZero ? "rgba(255,255,255,0.4)" : alert ? "#EF4444" : "white", lineHeight: 1.1 }}>
+                    {displayValue}
+                </div>
+                {sub && (
+                    <p style={{ fontSize: "0.7rem", color: alert ? "#EF4444" : "rgba(255,255,255,0.4)", margin: "4px 0 0", fontWeight: alert ? 600 : 400 }}>
+                        {sub}
+                    </p>
+                )}
             </div>
-            <div style={{ fontSize: "0.71rem", color: "#94A3B8" }}>{sub}</div>
         </div>
     );
 }

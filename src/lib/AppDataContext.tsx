@@ -58,6 +58,12 @@ interface AppDataContextType {
     loadingTargets: boolean;
     refreshTargets: () => Promise<void>;
     setTarget: (gestoraId: string, monthKey: string, updates: any) => Promise<any>;
+
+    // Auth & Identity
+    userEmail: string | null;
+    userRole: string | null;
+    activeGestora: any | null;
+    isAdmin: boolean;
 }
 
 const AppDataContext = createContext<AppDataContextType | null>(null);
@@ -71,6 +77,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     // ── Auth Lifecycle State ──
     const [userEmail, setUserEmail] = React.useState<string | null>(null);
+    const [userRole, setUserRole] = React.useState<string | null>(null);
     const [authLoading, setAuthLoading] = React.useState(true);
 
     useEffect(() => {
@@ -80,14 +87,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 let email = session?.user?.email || null;
+                let role = session?.user?.user_metadata?.role || null;
                 
                 if (!email) {
                     const { data: { user } } = await supabase.auth.getUser();
                     email = user?.email || null;
+                    if (user && !role) role = user.user_metadata?.role || null;
                 }
 
                 if (!email && typeof window !== "undefined") {
                     email = localStorage.getItem("userEmail");
+                }
+                if (!role && typeof window !== "undefined") {
+                    role = localStorage.getItem("userRole");
                 }
 
                 if (!email && typeof window !== "undefined") {
@@ -97,10 +109,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                         return acc;
                     }, {} as Record<string, string>);
                     email = cookies["userEmail"] || null;
+                    if (!role) role = cookies["userRole"] || null;
                 }
 
                 if (active) {
                     setUserEmail(email);
+                    setUserRole(role);
                     setAuthLoading(false);
                 }
             } catch (err) {
@@ -116,10 +130,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         // Subscribe to auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             const email = session?.user?.email || null;
+            const role = session?.user?.user_metadata?.role || null;
             if (active) {
-                if (email) {
-                    setUserEmail(email);
-                }
+                if (email) setUserEmail(email);
+                if (role) setUserRole(role);
             }
         });
 
@@ -133,27 +147,40 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const {
         data: tickets = [],
         isLoading: queryLoadingTickets,
-    } = useTickets(userEmail);
+    } = useTickets(userEmail, !authLoading);
 
     const {
         data: clients = [],
         isLoading: queryLoadingClients,
-    } = useClientsQuery(userEmail);
+    } = useClientsQuery(userEmail, !authLoading);
 
     const {
         data: technicians = [],
         isLoading: queryLoadingTechnicians,
-    } = useTechniciansQuery(userEmail);
+    } = useTechniciansQuery(userEmail, !authLoading);
 
     const {
         data: gestoras = [],
         isLoading: queryLoadingGestoras,
-    } = useGestorasQuery(userEmail);
+    } = useGestorasQuery(userEmail, !authLoading);
 
     const {
         data: gestorasTargets = [],
         isLoading: queryLoadingTargets,
-    } = useGestorasTargetsQuery(userEmail);
+    } = useGestorasTargetsQuery(userEmail, !authLoading);
+
+    // Resolve activeGestora and isAdmin based on resolved email and role
+    const activeGestora = React.useMemo(() => {
+        if (!userEmail || !gestoras || gestoras.length === 0) return null;
+        const emailLower = userEmail.toLowerCase().trim();
+        return gestoras.find((g: any) => g.email?.toLowerCase()?.trim() === emailLower) || null;
+    }, [userEmail, gestoras]);
+
+    const isAdmin = React.useMemo(() => {
+        if (!userRole) return false;
+        const r = userRole.toUpperCase();
+        return r === "ADMIN" || r === "SUPERADMIN";
+    }, [userRole]);
 
     const loadingTickets = authLoading || queryLoadingTickets;
     const loadingClients = authLoading || queryLoadingClients;
@@ -848,6 +875,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 loadingTargets,
                 refreshTargets,
                 setTarget,
+                userEmail,
+                userRole,
+                activeGestora,
+                isAdmin,
             }}
         >
             {children}
