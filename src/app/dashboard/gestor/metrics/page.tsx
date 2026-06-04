@@ -1428,10 +1428,9 @@ function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
     label: string; value: any; icon: React.ReactNode;
     iconBg: string; sub: string; trend: "up" | "down" | null; alert?: boolean;
 }) {
-    // Normalizar valor: mostrar "-" o "0" si es null/undefined
     const displayValue = (value === null || value === undefined) ? "0" : String(value);
     const isZero = displayValue === "0" || displayValue === "0.0";
-    
+
     return (
         <div style={{
             background: "white", borderRadius: "14px", padding: "1.1rem 1.25rem",
@@ -1462,11 +1461,5 @@ function KpiCard({ label, value, icon, iconBg, sub, trend, alert = false }: {
             <div style={{ fontSize: "0.71rem", color: "#94A3B8" }}>{sub}</div>
         </div>
     );
-<style>{`
-@keyframes spin { to { transform: rotate(360deg); } }
-`}</style>
 }
 
-<style>{`
-@keyframes spin { to { transform: rotate(360deg); } }
-`}</style>
