@@ -520,6 +520,17 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const slaColor = kpis.slaCompliance >= 90 ? "#10B981" : kpis.slaCompliance >= 70 ? "#F59E0B" : "#EF4444";
     const mttrBetter = kpis.mttrHours > 0 && kpis.mttrHours < TEAM_BENCHMARK_MTTR;
 
+    if (loading) {
+        return (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#F8FAFC", fontFamily: "Inter, system-ui, sans-serif" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                    <div style={{ width: 40, height: 40, border: "4px solid #4338CA", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                    <p style={{ color: "#64748B", fontSize: "0.9rem", fontWeight: 600 }}>Cargando panel de rendimiento...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{ padding: "1.5rem 2rem", minHeight: "100vh", background: "#F8FAFC", fontFamily: "Inter, system-ui, sans-serif" }}>
 
@@ -892,7 +903,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                     </span>
                                 </div>
                             </div>
-                            <div style={{ width: "100%", height: 160 }}>
+                            <div className="w-full h-[300px]">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ReChartsBarChart data={financialBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />

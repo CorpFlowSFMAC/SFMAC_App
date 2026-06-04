@@ -213,22 +213,9 @@ export function useStrategicMetrics(startDate: string, endDate: string) {
 
 import { supabase } from "@/lib/supabase";
 
-// Helper to filter tickets for a gestor by email
-async function filterTicketsForActiveGestor(ticketsList: any[]) {
+async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: string | null) {
     try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
-        // Si hay error de auth o no hay usuario, retornar sin filtrar
-        // para evitar HTTP 400 por credenciales inválidas
-        if (authError) {
-            console.warn('[filterTicketsForActiveGestor] Auth error, returning unfiltered:', authError.message);
-            return ticketsList;
-        }
-        
-        if (!user?.email) {
-            console.warn('[filterTicketsForActiveGestor] No user email found, returning unfiltered');
-            return ticketsList;
-        }
+        if (!userEmail) return ticketsList;
 
         let userRole = "";
         if (typeof window !== "undefined") {
@@ -240,7 +227,7 @@ async function filterTicketsForActiveGestor(ticketsList: any[]) {
             return ticketsList;
         }
 
-        const emailLower = user.email.toLowerCase();
+        const emailLower = userEmail.toLowerCase();
         
         // Timeout para la query de gestoras
         const gestorasPromise = gestorasAPI.getAll();
@@ -283,15 +270,15 @@ async function filterTicketsForActiveGestor(ticketsList: any[]) {
 // useTickets — Hook principal para lista/kanban
 // ─────────────────────────────────────────────
 // Usa fallback: intenta primero la API, si falla usa server endpoint
-export function useTickets() {
+export function useTickets(userEmail?: string | null) {
     return useQuery({
-        queryKey: queryKeys.tickets.summary(),
+        queryKey: [...queryKeys.tickets.summary(), userEmail],
         queryFn: async () => {
             try {
                 // Intentar método primario: RPC de Supabase
                 const data = await ticketsAPI.getSummaryAll();
                 const normalized = (data || []).map(normalizeTicket).filter(Boolean);
-                return await filterTicketsForActiveGestor(normalized);
+                return await filterTicketsForActiveGestor(normalized, userEmail || null);
             } catch (primaryError: any) {
                 console.warn('[useTickets] Primary method failed, trying server fallback:', primaryError.message);
                 
@@ -324,7 +311,7 @@ export function useTickets() {
                     if (response.ok) {
                         const result = await response.json();
                         const normalized = (result.data || []).map(normalizeTicket).filter(Boolean);
-                        return await filterTicketsForActiveGestor(normalized);
+                        return await filterTicketsForActiveGestor(normalized, userEmail || null);
                     }
                 } catch (fallbackError: any) {
                     console.error('[useTickets] Server fallback failed:', fallbackError.message);
@@ -339,6 +326,7 @@ export function useTickets() {
         gcTime: 1000 * 60 * 5, // 5 min
         retry: 2, // Reintentar hasta 2 veces en caso de errores de red
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+        enabled: !!userEmail,
     });
 }
 
@@ -362,76 +350,81 @@ export function useTicketDetail(ticketId: string | null) {
 // ─────────────────────────────────────────────
 // usePaymentTickets — Hook para módulo de pagos (con metadata)
 // ─────────────────────────────────────────────
-export function usePaymentTickets() {
+export function usePaymentTickets(userEmail?: string | null) {
     return useQuery({
-        queryKey: queryKeys.tickets.payments(),
+        queryKey: [...queryKeys.tickets.payments(), userEmail],
         queryFn: async () => {
             const data = await ticketsAPI.getForPayments();
             const normalized = data || [];
-            return await filterTicketsForActiveGestor(normalized);
+            return await filterTicketsForActiveGestor(normalized, userEmail || null);
         },
         staleTime: 1000 * 60, // 60s - Módulo de tesorería V3 optimizado
         refetchOnWindowFocus: false, // Evita refetch duplicado al cambiar de pestaña
+        enabled: !!userEmail,
     });
 }
 
 // ─────────────────────────────────────────────
 // useClients — Hook para clientes (CACHÉ 24h)
 // ─────────────────────────────────────────────
-export function useClients() {
+export function useClients(userEmail?: string | null) {
     return useQuery({
-        queryKey: queryKeys.clients.all,
+        queryKey: [...queryKeys.clients.all, userEmail],
         queryFn: async () => {
             const data = await clientsAPI.getAll();
             return data || [];
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 horas - Clientes casi nunca cambian
         gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
+        enabled: !!userEmail,
     });
 }
 
 // ─────────────────────────────────────────────
 // useTechnicians — Hook para técnicos (CACHÉ 24h)
 // ─────────────────────────────────────────────
-export function useTechnicians() {
+export function useTechnicians(userEmail?: string | null) {
     return useQuery({
-        queryKey: queryKeys.technicians.all,
+        queryKey: [...queryKeys.technicians.all, userEmail],
         queryFn: async () => {
             const data = await techniciansAPI.getAll();
             return data || [];
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 horas - Técnicos son estables
         gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
+        enabled: !!userEmail,
     });
 }
 
 // ─────────────────────────────────────────────
 // useGestoras — Hook para gestoras (CACHÉ 24h)
 // ─────────────────────────────────────────────
-export function useGestoras() {
+export function useGestoras(userEmail?: string | null) {
     return useQuery({
-        queryKey: queryKeys.gestoras.all,
+        queryKey: [...queryKeys.gestoras.all, userEmail],
         queryFn: async () => {
             const data = await gestorasAPI.getAll();
             return data || [];
         },
         staleTime: 1000 * 60 * 60 * 24, // 24 horas - Gestoras casi nunca cambian
         gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
+        enabled: !!userEmail,
     });
 }
 
 // ─────────────────────────────────────────────
 // useGestorasTargets — Hook para metas y bonos (CACHÉ 1h)
 // ─────────────────────────────────────────────
-export function useGestorasTargets() {
+export function useGestorasTargets(userEmail?: string | null) {
     return useQuery({
-        queryKey: queryKeys.gestorasTargets.all,
+        queryKey: [...queryKeys.gestorasTargets.all, userEmail],
         queryFn: async () => {
             const data = await gestorasTargetsAPI.getAll();
             return data || [];
         },
         staleTime: 1000 * 60 * 60, // 1 hora - Metas cambian mensual
         gcTime: 1000 * 60 * 60, // Mantener en caché 1h
+        enabled: !!userEmail,
     });
 }
 

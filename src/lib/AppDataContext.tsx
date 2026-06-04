@@ -69,31 +69,97 @@ const AppDataContext = createContext<AppDataContextType | null>(null);
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const queryClient = useQueryClient();
 
+    // ── Auth Lifecycle State ──
+    const [userEmail, setUserEmail] = React.useState<string | null>(null);
+    const [authLoading, setAuthLoading] = React.useState(true);
+
+    useEffect(() => {
+        let active = true;
+
+        async function resolveUser() {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                let email = session?.user?.email || null;
+                
+                if (!email) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    email = user?.email || null;
+                }
+
+                if (!email && typeof window !== "undefined") {
+                    email = localStorage.getItem("userEmail");
+                }
+
+                if (!email && typeof window !== "undefined") {
+                    const cookies = document.cookie.split(";").reduce((acc, c) => {
+                        const [k, v] = c.trim().split("=");
+                        if (k) acc[k] = v ? decodeURIComponent(v) : "";
+                        return acc;
+                    }, {} as Record<string, string>);
+                    email = cookies["userEmail"] || null;
+                }
+
+                if (active) {
+                    setUserEmail(email);
+                    setAuthLoading(false);
+                }
+            } catch (err) {
+                console.error("[AppDataContext] Error resolving auth user:", err);
+                if (active) {
+                    setAuthLoading(false);
+                }
+            }
+        }
+
+        resolveUser();
+
+        // Subscribe to auth state changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            const email = session?.user?.email || null;
+            if (active) {
+                if (email) {
+                    setUserEmail(email);
+                }
+            }
+        });
+
+        return () => {
+            active = false;
+            subscription.unsubscribe();
+        };
+    }, []);
+
     // ── Queries ──────────────────────────────
     const {
         data: tickets = [],
-        isLoading: loadingTickets,
-    } = useTickets();
+        isLoading: queryLoadingTickets,
+    } = useTickets(userEmail);
 
     const {
         data: clients = [],
-        isLoading: loadingClients,
-    } = useClientsQuery();
+        isLoading: queryLoadingClients,
+    } = useClientsQuery(userEmail);
 
     const {
         data: technicians = [],
-        isLoading: loadingTechnicians,
-    } = useTechniciansQuery();
+        isLoading: queryLoadingTechnicians,
+    } = useTechniciansQuery(userEmail);
 
     const {
         data: gestoras = [],
-        isLoading: loadingGestoras,
-    } = useGestorasQuery();
+        isLoading: queryLoadingGestoras,
+    } = useGestorasQuery(userEmail);
 
     const {
         data: gestorasTargets = [],
-        isLoading: loadingTargets,
-    } = useGestorasTargetsQuery();
+        isLoading: queryLoadingTargets,
+    } = useGestorasTargetsQuery(userEmail);
+
+    const loadingTickets = authLoading || queryLoadingTickets;
+    const loadingClients = authLoading || queryLoadingClients;
+    const loadingTechnicians = authLoading || queryLoadingTechnicians;
+    const loadingGestoras = authLoading || queryLoadingGestoras;
+    const loadingTargets = authLoading || queryLoadingTargets;
 
     // ── Refresh = invalidar caché → TanStack refetch automáticamente ──
     const refreshTickets = useCallback(async () => {
