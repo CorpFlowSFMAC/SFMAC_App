@@ -280,7 +280,10 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
 });
 
 export const DiagnosisInfoBar = memo(function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () => void }) {
-    if (!ticket.diagnosis && !ticket.labor_cost) return null;
+    if (!ticket.diagnosis && !ticket.labor_cost && !ticket.monto_pactado_mo) return null;
+
+    const mo = [ticket.labor_cost, ticket.monto_pactado_mo, ticket.costoManoObra, ticket.monto_acordado].map(v => Number(v) || 0).find(v => v > 0) ?? 0;
+    const mat = [ticket.materials_cost, ticket.costoMateriales].map(v => Number(v) || 0).find(v => v > 0) ?? 0;
 
     return (
         <div
@@ -324,11 +327,11 @@ export const DiagnosisInfoBar = memo(function DiagnosisInfoBar({ ticket, onEdit 
                 <div className={styles.budgetGridCompact}>
                     <div className={styles.budgetItemMini}>
                         <span className={styles.budgetLabelMini}>🛠️ MO</span>
-                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.labor_cost)}</span>
+                        <span className={styles.budgetValueMini}>S/ {formatSoles(mo)}</span>
                     </div>
                     <div className={styles.budgetItemMini}>
                         <span className={styles.budgetLabelMini}>📦 MAT</span>
-                        <span className={styles.budgetValueMini}>S/ {formatSoles(ticket.materials_cost)}</span>
+                        <span className={styles.budgetValueMini}>S/ {formatSoles(mat)}</span>
                     </div>
                 </div>
             </div>
