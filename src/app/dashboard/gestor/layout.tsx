@@ -41,7 +41,10 @@ export default function GestorLayout({
             const getCookie = (name: string): string | null => {
                 const value = `; ${document.cookie}`;
                 const parts = value.split(`; ${name}=`);
-                if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+                if (parts.length === 2) {
+                    const raw = parts.pop()?.split(';').shift();
+                    return raw ? decodeURIComponent(raw) : null;
+                }
                 return null;
             };
             
@@ -92,24 +95,24 @@ export default function GestorLayout({
             // Buscar en tabla gestoras por email
             const { data: g } = await supabase
                 .from('gestoras')
-                .select('id, name, nombre')
+                .select('id, name')
                 .ilike('email', email)
                 .maybeSingle();
             
-            if (g?.name || g?.nombre) {
-                setGestoraNombre(g.name || g.nombre);
+            if (g?.name) {
+                setGestoraNombre(g.name);
                 return;
             }
             
             // Buscar en perfiles
             const { data: p } = await supabase
                 .from('perfiles')
-                .select('id, nombre_completo, nombre')
+                .select('id, nombre_completo')
                 .ilike('email', email)
                 .maybeSingle();
             
-            if (p?.nombre_completo || p?.nombre) {
-                setGestoraNombre(p.nombre_completo || p.nombre);
+            if (p?.nombre_completo) {
+                setGestoraNombre(p.nombre_completo);
             } else {
                 //Fallback: usar el nombre desde Azure/email
                 setGestoraNombre(email.split('@')[0]);

@@ -5,7 +5,7 @@ import { getServiceById } from "@/lib/serviceTypes";
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { supabase } from "@/lib/supabase";
 import { round2, formatSoles } from "@/lib/formatters";
-import { calculateTicketFinances, extractIGV } from "@/lib/calculations";
+import { calculateTicketFinances, extractIGV, toNum } from "@/lib/calculations";
 import styles from "./TicketSummary.module.css";
 
 interface InfoBarBaseProps {
@@ -282,8 +282,8 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
 export const DiagnosisInfoBar = memo(function DiagnosisInfoBar({ ticket, onEdit }: { ticket: any, onEdit?: () => void }) {
     if (!ticket.diagnosis && !ticket.labor_cost && !ticket.monto_pactado_mo) return null;
 
-    const mo = [ticket.labor_cost, ticket.monto_pactado_mo, ticket.costoManoObra, ticket.monto_acordado].map(v => Number(v) || 0).find(v => v > 0) ?? 0;
-    const mat = [ticket.materials_cost, ticket.costoMateriales].map(v => Number(v) || 0).find(v => v > 0) ?? 0;
+    const mo = [ticket.labor_cost, ticket.monto_pactado_mo, ticket.costoManoObra, ticket.monto_acordado].map(toNum).find(v => v > 0) ?? 0;
+    const mat = [ticket.materials_cost, ticket.costoMateriales].map(toNum).find(v => v > 0) ?? 0;
 
     return (
         <div
