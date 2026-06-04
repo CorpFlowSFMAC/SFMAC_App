@@ -509,14 +509,23 @@ export const ticketsAPI = {
             .limit(300);
 
         if (error) {
-            console.error('[ticketsAPI] Error fetching strategic summary:', error.message);
+            // No hacer mucho ruido en consola si es por Auth, ya que el fallback del servidor lo resolverá
+            if (error.message?.includes('Auth session')) {
+                console.warn('[ticketsAPI] Sesión Auth no lista, usando fallback del servidor para tickets...');
+            } else {
+                console.error('[ticketsAPI] Error fetching strategic summary:', error.message);
+            }
+            
             const { data: fallbackData, error: fallbackError } = await supabase
                 .from('tickets')
                 .select(TICKET_LIST_SELECT)
                 .order('created_at', { ascending: false })
                 .limit(300);
 
-            if (fallbackError) throw fallbackError;
+            if (fallbackError) {
+                // Si esto también falla (ej. por RLS), simplemente devolveremos vacío en el catch exterior
+                throw fallbackError;
+            }
 
             const fallbackWithCosts = await attachTicketCosts(fallbackData || []);
             return fallbackWithCosts.map((t: any) => ({

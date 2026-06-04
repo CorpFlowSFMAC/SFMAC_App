@@ -5,7 +5,7 @@ import { getServiceById } from "@/lib/serviceTypes";
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { supabase } from "@/lib/supabase";
 import { round2, formatSoles } from "@/lib/formatters";
-import { calculateTicketFinances } from "@/lib/calculations";
+import { calculateTicketFinances, extractIGV } from "@/lib/calculations";
 import styles from "./TicketSummary.module.css";
 
 interface InfoBarBaseProps {
@@ -860,8 +860,8 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
 
     // Cálculos de desglose
     const totalFinal = round2(ticket.total_quoted_amount || 0);
-    const subtotalLocal = round2(totalFinal / 1.18);
-    const igvLocal = round2(totalFinal - subtotalLocal);
+    const igvLocal = extractIGV(ticket);
+    const subtotalLocal = round2(totalFinal - igvLocal);
 
     const finances = calculateTicketFinances(ticket, ticket.costos || []);
     const profit = finances.realProfitability;
@@ -1252,7 +1252,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
                         S/ {formatSoles(rentabilidadReal)}
                     </span>
                     <span style={{ fontSize: '9px', color: '#64748B', fontWeight: 600, marginTop: '2px' }}>
-                        ({formatSoles(montoTotalCliente)} Venta - {formatSoles(gastosReales)} Gasto Real)
+                        ({formatSoles(finances.netIncome)} V. Neta - {formatSoles(finances.netIncome - rentabilidadReal)} Devengado)
                     </span>
                 </div>
             </div>

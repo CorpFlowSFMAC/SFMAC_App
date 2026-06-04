@@ -247,59 +247,59 @@ export function findGestoraByEmail(gestorasList: any[], email: string | null) {
 }
 
 async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: string | null) {
+    if (!userEmail) return ticketsList;
+
+    let userRole = "";
+    if (typeof window !== "undefined") {
+        userRole = (localStorage.getItem("userRole") || "").toUpperCase();
+    }
+
+    // Only filter if they are not an admin/superadmin
+    if (userRole === "ADMIN" || userRole === "SUPERADMIN") {
+        return ticketsList;
+    }
+
+    const emailLower = userEmail.toLowerCase().trim();
+    
+    // Intentar obtener gestoras, si falla (ej. Auth missing), se usa un arreglo vacío
+    let allGestoras: any[] = [];
     try {
-        if (!userEmail) return ticketsList;
-
-        let userRole = "";
-        if (typeof window !== "undefined") {
-            userRole = (localStorage.getItem("userRole") || "").toUpperCase();
-        }
-
-        // Only filter if they are not an admin/superadmin
-        if (userRole === "ADMIN" || userRole === "SUPERADMIN") {
-            return ticketsList;
-        }
-
-        const emailLower = userEmail.toLowerCase().trim();
-        
-        // Timeout para la query de gestoras
         const gestorasPromise = gestorasAPI.getAll();
         const timeoutPromise = new Promise<any[]>((_, reject) => 
             setTimeout(() => reject(new Error('Gestoras timeout')), 5000)
         );
-        
-        const allGestoras = await Promise.race([gestorasPromise, timeoutPromise]).catch(() => []);
-        const myGestora = findGestoraByEmail(allGestoras || [], userEmail);
-        const myGestoraId = myGestora?.id;
+        allGestoras = await Promise.race([gestorasPromise, timeoutPromise]);
+    } catch(e: any) {
+        console.warn('[filterTicketsForActiveGestor] No se pudo obtener gestoras, usando caché local/fallback:', e.message);
+    }
+    
+    const myGestora = findGestoraByEmail(allGestoras || [], userEmail);
+    const myGestoraId = myGestora?.id;
 
-        return ticketsList.filter((t: any) => {
-            const tGestoraEmail = t.gestora?.email || t.gestoras?.email || '';
-            const matchDirectEmail = tGestoraEmail.toLowerCase().trim() === emailLower;
-            const matchFuzzyEmail = myGestora && tGestoraEmail.toLowerCase().includes('portocarrero') && emailLower.includes('portocarrero');
-            const matchFuzzyEmailMarin = myGestora && tGestoraEmail.toLowerCase().includes('marin') && emailLower.includes('marin');
-            
-            if (matchDirectEmail || matchFuzzyEmail || matchFuzzyEmailMarin) {
+    return ticketsList.filter((t: any) => {
+        const tGestoraEmail = t.gestora?.email || t.gestoras?.email || '';
+        const matchDirectEmail = tGestoraEmail && tGestoraEmail.toLowerCase().trim() === emailLower;
+        // Match fuzzy no depende de que la DB de gestoras funcione
+        const matchFuzzyEmail = tGestoraEmail.toLowerCase().includes('portocarrero') && emailLower.includes('portocarrero');
+        const matchFuzzyEmailMarin = tGestoraEmail.toLowerCase().includes('marin') && emailLower.includes('marin');
+        
+        if (matchDirectEmail || matchFuzzyEmail || matchFuzzyEmailMarin) {
+            return true;
+        }
+        
+        if (myGestoraId) {
+            const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
+            if (assignedGestoraId === myGestoraId) return true;
+
+            if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
+            if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
+            if (t.clients?.gestora_asignada_id === myGestoraId ||
+                t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
                 return true;
             }
-            
-            if (myGestoraId) {
-                const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
-                if (assignedGestoraId === myGestoraId) return true;
-
-                if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
-                if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
-                if (t.clients?.gestora_asignada_id === myGestoraId ||
-                    t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
-                    return true;
-                }
-            }
-            return false;
-        });
-    } catch (e: any) {
-        console.error('[filterTicketsForActiveGestor] Error filtering:', e);
-        // En caso de error, retornar sin filtrar para no perder datos
-        return ticketsList;
-    }
+        }
+        return false;
+    });
 }
 
 
