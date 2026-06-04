@@ -34,6 +34,9 @@ export default function GestorLayout({
             let role = localStorage.getItem("userRole");
             let storedName = localStorage.getItem("userName");
             let storedEmail = localStorage.getItem("userEmail");
+            if (storedEmail && storedEmail.includes('%40')) {
+                storedEmail = decodeURIComponent(storedEmail);
+            }
             let storedAvatar = localStorage.getItem("userAvatar");
             
             // 2. Fallback a cookies (Azure AD redirecciones no setean localStorage)

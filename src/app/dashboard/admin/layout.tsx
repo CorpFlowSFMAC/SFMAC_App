@@ -52,9 +52,14 @@ export default function AdminLayout({
         const loadUserData = async () => {
             // 1. Intentar desde localStorage
             let role = localStorage.getItem("userRole");
+            let storedEmail = localStorage.getItem("userEmail");
+            if (storedEmail && storedEmail.includes('%40')) {
+                storedEmail = decodeURIComponent(storedEmail);
+            }
+            let storedAvatar = localStorage.getItem("userAvatar");
+            let email = storedEmail;
             let name = localStorage.getItem("userName");
-            let avatar = localStorage.getItem("userAvatar");
-            let email = localStorage.getItem("userEmail");
+            let avatar = storedAvatar;
             
             // 2. Fallback a cookies (Azure AD redirecciones no setean localStorage)
             const getCookie = (cookieName: string): string | null => {

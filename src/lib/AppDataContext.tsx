@@ -97,11 +97,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                     if (user && !role) role = user.user_metadata?.role || null;
                 }
 
-                // Consideramos autenticado solo si Supabase responde con usuario válido
-                const isRealAuth = !!email;
+
 
                 if (!email && typeof window !== "undefined") {
                     email = localStorage.getItem("userEmail");
+                    if (email && email.includes('%40')) {
+                        email = decodeURIComponent(email);
+                    }
                 }
                 if (!role && typeof window !== "undefined") {
                     role = localStorage.getItem("userRole");
@@ -116,6 +118,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                     email = cookies["userEmail"] || null;
                     if (!role) role = cookies["userRole"] || null;
                 }
+
+                // Consideramos autenticado si logramos conseguir un email por cualquier vía
+                const isRealAuth = !!email;
 
                 if (active) {
                     setUserEmail(email);
