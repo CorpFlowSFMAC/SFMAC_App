@@ -211,6 +211,55 @@ export function useStrategicMetrics(startDate: string, endDate: string) {
     });
 }
 
+import { supabase } from "@/lib/supabase";
+
+// Helper to filter tickets for a gestor by email
+async function filterTicketsForActiveGestor(ticketsList: any[]) {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) return ticketsList;
+
+        let userRole = "";
+        if (typeof window !== "undefined") {
+            userRole = (localStorage.getItem("userRole") || "").toUpperCase();
+        }
+
+        // Only filter if they are not an admin/superadmin
+        if (userRole === "ADMIN" || userRole === "SUPERADMIN") {
+            return ticketsList;
+        }
+
+        const emailLower = user.email.toLowerCase();
+        const allGestoras = await gestorasAPI.getAll();
+        const myGestora = (allGestoras || []).find(g => g.email?.toLowerCase() === emailLower);
+        const myGestoraId = myGestora?.id;
+
+        return ticketsList.filter((t: any) => {
+            if (t.gestora?.email && t.gestora.email.toLowerCase() === emailLower) {
+                return true;
+            }
+            if (t.gestoras?.email && t.gestoras.email.toLowerCase() === emailLower) {
+                return true;
+            }
+            if (myGestoraId) {
+                const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
+                if (assignedGestoraId === myGestoraId) return true;
+
+                if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
+                if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
+                if (t.clients?.gestora_asignada_id === myGestoraId ||
+                    t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    } catch (e) {
+        console.error("[filterTicketsForActiveGestor] Error filtering:", e);
+        return ticketsList;
+    }
+}
+
 // ─────────────────────────────────────────────
 // useTickets — Hook principal para lista/kanban
 // ─────────────────────────────────────────────
@@ -222,8 +271,8 @@ export function useTickets() {
             try {
                 // Intentar método primario: RPC de Supabase
                 const data = await ticketsAPI.getSummaryAll();
-                
-                return (data || []).map(normalizeTicket).filter(Boolean);
+                const normalized = (data || []).map(normalizeTicket).filter(Boolean);
+                return await filterTicketsForActiveGestor(normalized);
             } catch (primaryError: any) {
                 console.log('[useTickets] Primary method failed, trying server fallback:', primaryError.message);
                 
@@ -232,7 +281,8 @@ export function useTickets() {
                     const response = await fetch('/api/v3/tickets-server?summary=1');
                     if (response.ok) {
                         const result = await response.json();
-                        return (result.data || []).map(normalizeTicket).filter(Boolean);
+                        const normalized = (result.data || []).map(normalizeTicket).filter(Boolean);
+                        return await filterTicketsForActiveGestor(normalized);
                     }
                 } catch (fallbackError: any) {
                     console.log('[useTickets] Server fallback failed:', fallbackError.message);
@@ -274,7 +324,8 @@ export function usePaymentTickets() {
         queryKey: queryKeys.tickets.payments(),
         queryFn: async () => {
             const data = await ticketsAPI.getForPayments();
-            return data || [];
+            const normalized = data || [];
+            return await filterTicketsForActiveGestor(normalized);
         },
         staleTime: 1000 * 60, // 60s - Módulo de tesorería V3 optimizado
         refetchOnWindowFocus: false, // Evita refetch duplicado al cambiar de pestaña

@@ -17,15 +17,27 @@ import AdminTicketsPage from "@/app/dashboard/admin/tickets/page";
 import { useAppData } from "@/lib/AppDataContext";
 import { getServiceById, SERVICE_TYPES, SKILL_ICONS, SKILL_COLORS } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
-import { formatSoles } from "@/lib/formatters";
+import { formatSoles, round2 } from "@/lib/formatters";
 import { calculateTicketFinances } from "@/lib/calculations";
 import { ZONES } from "@/lib/zones";
 import styles from "./gestor.module.css";
 
+import {
+    ResponsiveContainer,
+    BarChart as ReChartsBarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip as ReChartsTooltip,
+    Legend as ReChartsLegend,
+    CartesianGrid
+} from "recharts";
+
 // ── SLA Constants ─────────────────────────────
 const SLA_HOURS = 72;
 const BACKLOG_HOURS = 24;
-const TEAM_BENCHMARK_MTTR = 18; // horas promedio del equipo (mock)
+const TEAM_BENCHMARK_MTTR = 18; // horas promedio de meta (mock)
+const APPROVED_EXEC_STATES = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin", "ticket_cerrado"];
 
 // ── Time helpers ──────────────────────────────
 function hoursAgo(dateStr: string): number {
@@ -57,73 +69,67 @@ const QUOTES = [
 
 // ── SLA Gauge Component (pure CSS/SVG) ────────
 function SlaGauge({ pct }: { pct: number }) {
-    const r = 70, cx = 90, cy = 90;
+    const r = 50, cx = 70, cy = 70;
     const circumference = Math.PI * r; // half-circle
     const offset = circumference * (1 - Math.min(pct, 100) / 100);
     const color = pct >= 90 ? "#10B981" : pct >= 70 ? "#F59E0B" : "#EF4444";
 
     return (
-        <svg width="180" height="110" viewBox="0 0 180 110">
+        <svg width="140" height="90" viewBox="0 0 140 90">
             {/* Track */}
             <path
                 d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-                fill="none" stroke="#e2e8f0" strokeWidth="14" strokeLinecap="round"
+                fill="none" stroke="#e2e8f0" strokeWidth="10" strokeLinecap="round"
             />
             {/* Fill */}
             <path
                 d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-                fill="none" stroke={color} strokeWidth="14" strokeLinecap="round"
+                fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
                 strokeDasharray={circumference}
                 strokeDashoffset={offset}
                 style={{ transition: "stroke-dashoffset 1.2s ease, stroke 0.5s" }}
             />
             {/* Center text */}
-            <text x={cx} y={cy - 10} textAnchor="middle" fontSize="26" fontWeight="900" fill={color}>
+            <text x={cx} y={cy - 10} textAnchor="middle" fontSize="20" fontWeight="900" fill={color}>
                 {Math.round(pct)}%
             </text>
-            <text x={cx} y={cy + 12} textAnchor="middle" fontSize="11" fill="#64748B" fontWeight="600">
+            <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="#64748B" fontWeight="600">
                 SLA Actual
             </text>
-            {/* Labels */}
-            <text x={cx - r} y={cy + 18} textAnchor="middle" fontSize="9" fill="#94A3B8">0%</text>
-            <text x={cx + r} y={cy + 18} textAnchor="middle" fontSize="9" fill="#94A3B8">100%</text>
         </svg>
     );
 }
 
-// ── Mini Bar Chart (CSS) ──────────────────────
-function BarChart({ data }: { data: { label: string; open: number; closed: number }[] }) {
-    const maxVal = Math.max(...data.flatMap(d => [d.open, d.closed]), 1);
+// ── Utility Gauge Component ──────────────────
+function UtilityGauge({ pct }: { pct: number }) {
+    const r = 50, cx = 70, cy = 70;
+    const circumference = Math.PI * r;
+    const offset = circumference * (1 - Math.min(pct, 100) / 100);
+    const color = "#10B981"; // Emerald-600
+
     return (
-        <div style={{ display: "flex", gap: "6px", alignItems: "flex-end", height: "120px", padding: "0 4px" }}>
-            {data.map((d, i) => (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "96px" }}>
-                        <div
-                            title={`Abiertos: ${d.open}`}
-                            style={{
-                                width: "11px", borderRadius: "4px 4px 0 0",
-                                background: "linear-gradient(180deg,#EF4444,#FCA5A5)",
-                                height: `${(d.open / maxVal) * 96}px`,
-                                minHeight: d.open ? "4px" : "0",
-                                transition: "height 0.8s ease"
-                            }}
-                        />
-                        <div
-                            title={`Cerrados: ${d.closed}`}
-                            style={{
-                                width: "11px", borderRadius: "4px 4px 0 0",
-                                background: "linear-gradient(180deg,#10B981,#6EE7B7)",
-                                height: `${(d.closed / maxVal) * 96}px`,
-                                minHeight: d.closed ? "4px" : "0",
-                                transition: "height 0.8s ease"
-                            }}
-                        />
-                    </div>
-                    <span style={{ fontSize: "9px", color: "#94A3B8", fontWeight: 600, textAlign: "center" }}>{d.label}</span>
-                </div>
-            ))}
-        </div>
+        <svg width="140" height="90" viewBox="0 0 140 90">
+            {/* Track */}
+            <path
+                d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+                fill="none" stroke="#e2e8f0" strokeWidth="10" strokeLinecap="round"
+            />
+            {/* Fill */}
+            <path
+                d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+                fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={offset}
+                style={{ transition: "stroke-dashoffset 1.2s ease, stroke 0.5s" }}
+            />
+            {/* Center text */}
+            <text x={cx} y={cy - 10} textAnchor="middle" fontSize="20" fontWeight="900" fill={color}>
+                {Math.round(pct)}%
+            </text>
+            <text x={cx} y={cy + 8} textAnchor="middle" fontSize="9" fill="#64748B" fontWeight="600">
+                Meta Utilidad
+            </text>
+        </svg>
     );
 }
 
@@ -135,7 +141,7 @@ function RelativeBar({ value, benchmark, label, color }: { value: number; benchm
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem" }}>
                 <span style={{ color: "#64748B", fontWeight: 600 }}>{label}</span>
-                <span style={{ color, fontWeight: 800 }}>{formatHours(value)} <span style={{ color: "#94A3B8", fontWeight: 400 }}>/ equipo {formatHours(benchmark)}</span></span>
+                <span style={{ color, fontWeight: 800 }}>{formatHours(value)} <span style={{ color: "#94A3B8", fontWeight: 400 }}>/ meta {formatHours(benchmark)}</span></span>
             </div>
             <div style={{ height: "8px", background: "#F1F5F9", borderRadius: "999px", position: "relative", overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: "999px", transition: "width 1s ease" }} />
@@ -157,7 +163,7 @@ interface GestorPageProps {
 }
 
 export default function GestorDashboard({ tab }: GestorPageProps) {
-    const { tickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets, technicians } = useAppData();
+    const { tickets: rawTickets, loadingTickets: loading, createTicket, updateTicket, gestoras, gestorasTargets, technicians } = useAppData();
     const [showWizard, setShowWizard] = useState(false);
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
     const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "technicians" | "reportes">(() => { return (tab as any) || "dashboard"; });
@@ -197,11 +203,13 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
     const [myGestoraNombre, setMyGestoraNombre] = useState<string | null>(null);
     const [isAdmin, setIsAdmin] = useState<boolean>(false);
+    const [authEmail, setAuthEmail] = useState<string | null>(null);
 
     const fetchGestora = useCallback(async () => {
         try {
-            // Leer email desde cookies de Azure AD
-            let email = localStorage.getItem('userEmail');
+            // Leer email desde la sesión activa de Supabase Auth
+            const { data: { user } } = await supabase.auth.getUser();
+            let email = user?.email || localStorage.getItem('userEmail');
             
             if (!email) {
                 // Fallback: intentar cookie
@@ -217,6 +225,8 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                 console.warn("[Gestor] Sin email de usuario");
                 return;
             }
+
+            setAuthEmail(email);
 
             const userRole = (localStorage.getItem('userRole') || (() => {
                 const m = document.cookie.match(/userRole=([^;]+)/);
@@ -268,39 +278,47 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         }
     };
 
-    // ── Date and Gestora filter ──
-    // 🔒 La gestora solo debe ver tickets asignados a ella (directamente o vía cascada
-    // sede/zona/cliente). Si no se ha resuelto su identidad aún, no mostramos nada
-    // hasta que esté lista — así evitamos fugas de tickets ajenos.
+    // ── Filter raw tickets by active gestor ──
+    const tickets = useMemo(() => {
+        if (!authEmail) return [];
+        return rawTickets.filter((t: any) => {
+            // Direct email match
+            if (t.gestora?.email && t.gestora.email.toLowerCase() === authEmail.toLowerCase()) {
+                return true;
+            }
+            if (t.gestoras?.email && t.gestoras.email.toLowerCase() === authEmail.toLowerCase()) {
+                return true;
+            }
+
+            const myGestora = gestoras.find(g => g.email?.toLowerCase() === authEmail.toLowerCase());
+            if (!myGestora) return false;
+
+            const myGestoraId = myGestora.id;
+            const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
+            if (assignedGestoraId) {
+                return assignedGestoraId === myGestoraId;
+            }
+
+            // Cascada
+            if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
+            if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
+            if (t.clients?.gestora_asignada_id === myGestoraId ||
+                t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
+                return true;
+            }
+            return false;
+        });
+    }, [rawTickets, authEmail, gestoras]);
+
     const isVisibleForMe = useCallback((t: any) => {
-        // REGLA 0: Admin ve TODO
-        if (isAdmin) return true;
+        return true; // Already pre-filtered at root
+    }, []);
 
-        // REGLA 1: Identidad requerida - sin ID, NO mostrar (evita fuga)
-        if (!myGestoraId) return false;
-
-        // EXCLUSIVIDAD: Si el ticket tiene una GESTORA DIRECTA ya asignada
-        const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
-        if (assignedGestoraId) {
-            return assignedGestoraId === myGestoraId;
-        }
-
-        // CASCADA (Solo si no hay gestora directa): ¿A quién le toca tomarlo?
-        // 1. Asignación por Sede (Branch)
-        if (t.branch_offices?.gestora_asignada_id === myGestoraId) return true;
-
-        // 2. Asignación por Zona (Cascada 1)
-        if (t.branch_offices?.zonas?.gestora_asignada_id === myGestoraId) return true;
-
-        // 3. Asignación por Cliente o Sede-Cliente (Cascada 2)
-        if (t.clients?.gestora_asignada_id === myGestoraId ||
-            t.branch_offices?.clients?.gestora_asignada_id === myGestoraId) {
-            return true;
-        }
-
-        // Sin match → ticket ajeno, NO mostrar
-        return false;
-    }, [myGestoraId, isAdmin]);
+    const toNum = (val: any): number => {
+        if (typeof val === "number") return val;
+        if (typeof val === "string") return parseFloat(val.replace(/[^0-9.-]/g, "")) || 0;
+        return 0;
+    };
 
     const isInDateRange = useCallback((dateStr: string) => {
         const d = new Date(dateStr);
@@ -313,9 +331,63 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
     // ── Filtered tickets for the period ──
     const periodTickets = useMemo(() =>
-        tickets.filter((t: any) => isVisibleForMe(t) && isInDateRange(t.createdAt || t.created_at || now.toISOString())),
-        [tickets, isVisibleForMe, isInDateRange, now]
+        tickets.filter((t: any) => isInDateRange(t.createdAt || t.created_at || now.toISOString())),
+        [tickets, isInDateRange, now]
     );
+
+    // ── Financial Metrics Calculation ──
+    const financialMetrics = useMemo(() => {
+        let totalInversion = 0;
+        let totalFacturacion = 0;
+
+        periodTickets.forEach((t: any) => {
+            const finances = calculateTicketFinances(t, t.costos || []);
+            // Inversión = materials_cost + labor_cost + operating expenses (gastos reales)
+            const ticketInversion = toNum(t.materials_cost) + toNum(t.labor_cost) + finances.totalOpConfirmed;
+            totalInversion += ticketInversion;
+
+            const state = normalizeStateId(t.estadoId);
+            if (APPROVED_EXEC_STATES.includes(state)) {
+                totalFacturacion += finances.netIncome; // net income
+            }
+        });
+
+        const totalUtilidad = totalFacturacion - totalInversion;
+
+        return {
+            inversion: totalInversion,
+            facturacion: totalFacturacion,
+            utilidad: totalUtilidad
+        };
+    }, [periodTickets]);
+
+    // ── Month Utility Target Percent ──
+    const utilityTargetPercent = useMemo(() => {
+        const activeGestoraId = myGestoraId || (authEmail ? gestoras.find(g => g.email?.toLowerCase() === authEmail.toLowerCase())?.id : null);
+        if (!activeGestoraId) return 0;
+        const now2 = new Date();
+        const month = now2.getMonth();
+        const year = now2.getFullYear();
+        const monthKey2 = `${year}-${String(month + 1).padStart(2, '0')}`;
+        const startOfMonth = new Date(year, month, 1);
+        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+        const gestoraObj = gestoras.find(g => g.id === activeGestoraId);
+        const targetObj = gestorasTargets.find(tg => tg.gestora_id === activeGestoraId && tg.month_key === monthKey2);
+        const targetUtility = parseFloat(targetObj?.target_amount || gestoraObj?.meta_mensual_utilidad || "35000");
+
+        const achievedTickets = tickets.filter(t => {
+            if (!t.closure_date) return false;
+            const d = new Date(t.closure_date);
+            return d >= startOfMonth && d <= endOfMonth;
+        });
+
+        const utilityTotal = achievedTickets.reduce((a, t) => {
+            const finances = calculateTicketFinances(t, t.costos || []);
+            return a + Math.max(0, finances.realProfitability);
+        }, 0);
+
+        return targetUtility > 0 ? Math.min((utilityTotal / targetUtility) * 100, 100) : 0;
+    }, [tickets, myGestoraId, authEmail, gestoras, gestorasTargets]);
 
     // ── Core KPI calculations ──
     const kpis = useMemo(() => {
@@ -377,27 +449,38 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     }, [tickets, isVisibleForMe, now]);
 
     // ── 7-day bar chart data ──
-    const barData = useMemo(() => {
+    const financialBarData = useMemo(() => {
         const days = Array.from({ length: 7 }, (_, i) => {
             const d = new Date(now);
             d.setDate(d.getDate() - (6 - i));
             return d;
         });
         return days.map(day => {
-            const label = day.toLocaleDateString("es-PE", { weekday: "short" });
-            const open = tickets.filter((t: any) => {
+            const label = day.toLocaleDateString("es-PE", { weekday: "short", day: "numeric" });
+            const dayTickets = tickets.filter((t: any) => {
                 const c = new Date(t.createdAt || t.created_at || "");
-                return isVisibleForMe(t) && c.toDateString() === day.toDateString() &&
-                    !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId));
-            }).length;
-            const closed = tickets.filter((t: any) => {
-                const c = new Date(t.createdAt || t.created_at || "");
-                return isVisibleForMe(t) && c.toDateString() === day.toDateString() &&
-                    normalizeStateId(t.estadoId) === "ticket_cerrado";
-            }).length;
-            return { label, open, closed };
+                return c.toDateString() === day.toDateString();
+            });
+
+            let billing = 0;
+            let profit = 0;
+
+            dayTickets.forEach((t: any) => {
+                const state = normalizeStateId(t.estadoId);
+                const finances = calculateTicketFinances(t, t.costos || []);
+                if (APPROVED_EXEC_STATES.includes(state)) {
+                    billing += finances.netIncome;
+                }
+                profit += finances.realProfitability;
+            });
+
+            return {
+                label,
+                "Facturación": round2(billing),
+                "Utilidad": round2(profit)
+            };
         });
-    }, [tickets, isVisibleForMe, now]);
+    }, [tickets, now]);
 
     // ── Filtered tickets for list view ──
     const filteredTickets = useMemo(() => {
@@ -597,6 +680,134 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             ════════════════════════════════════════ */}
             {activeView === "dashboard" && (
                 <>
+                    {/* ── METRICAS FINANCIERAS PRINCIPALES (Estilo Energético) ── */}
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, 1fr)",
+                        gap: "1.25rem",
+                        marginBottom: "1.25rem"
+                    }}>
+                        {/* INVERSIÓN */}
+                        <div style={{
+                            background: "white",
+                            borderRadius: "16px",
+                            padding: "1.25rem 1.5rem",
+                            borderLeft: "6px solid #F59E0B", // Amber-500 Naranja Enérgico
+                            borderTop: "1px solid #E2E8F0",
+                            borderRight: "1px solid #E2E8F0",
+                            borderBottom: "1px solid #E2E8F0",
+                            boxShadow: "0 4px 15px rgba(245,158,11,0.08)",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            minHeight: "115px",
+                            transition: "transform 0.2s",
+                            cursor: "default"
+                        }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
+                        >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                    Inversión Ejecutada
+                                </span>
+                                <span style={{ background: "#FFF7ED", color: "#D97706", padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 700 }}>
+                                    Costos + Gastos
+                                </span>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#1E293B", lineHeight: 1.1 }}>
+                                    S/ {formatSoles(financialMetrics.inversion)}
+                                </div>
+                                <p style={{ fontSize: "0.7rem", color: "#94A3B8", margin: "4px 0 0" }}>
+                                    Materiales, mano de obra y viáticos
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* FACTURACIÓN */}
+                        <div style={{
+                            background: "white",
+                            borderRadius: "16px",
+                            padding: "1.25rem 1.5rem",
+                            borderLeft: "6px solid #4F46E5", // Indigo-600 Azul Eléctrico
+                            borderTop: "1px solid #E2E8F0",
+                            borderRight: "1px solid #E2E8F0",
+                            borderBottom: "1px solid #E2E8F0",
+                            boxShadow: "0 4px 15px rgba(79,70,229,0.08)",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            minHeight: "115px",
+                            transition: "transform 0.2s",
+                            cursor: "default"
+                        }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
+                        >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                    Facturación Generada (Neto)
+                                </span>
+                                <span style={{ background: "#EEF2FF", color: "#4F46E5", padding: "2px 8px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 700 }}>
+                                    Aprobado + Ejecución
+                                </span>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#1E293B", lineHeight: 1.1 }}>
+                                    S/ {formatSoles(financialMetrics.facturacion)}
+                                </div>
+                                <p style={{ fontSize: "0.7rem", color: "#94A3B8", margin: "4px 0 0" }}>
+                                    Presupuesto total sin IGV
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* UTILIDAD */}
+                        <div style={{
+                            background: "white",
+                            borderRadius: "16px",
+                            padding: "1.25rem 1.5rem",
+                            borderLeft: "6px solid #10B981", // Emerald-500 Verde Esmeralda
+                            borderTop: "1px solid #E2E8F0",
+                            borderRight: "1px solid #E2E8F0",
+                            borderBottom: "1px solid #E2E8F0",
+                            boxShadow: "0 4px 15px rgba(16,185,129,0.08)",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            minHeight: "115px",
+                            transition: "transform 0.2s",
+                            cursor: "default"
+                        }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
+                        >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                    Utilidad Real
+                                </span>
+                                {financialMetrics.utilidad >= 0 ? (
+                                    <span style={{ background: "#ECFDF5", color: "#047857", padding: "2px 8px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "2px" }}>
+                                        Margen Positivo <TrendingUp size={10} />
+                                    </span>
+                                ) : (
+                                    <span style={{ background: "#FEF2F2", color: "#DC2626", padding: "2px 8px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "2px" }}>
+                                        Margen Negativo <TrendingDown size={10} />
+                                    </span>
+                                )}
+                            </div>
+                            <div>
+                                <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "#059669", lineHeight: 1.1 }}>
+                                    S/ {formatSoles(financialMetrics.utilidad)}
+                                </div>
+                                <p style={{ fontSize: "0.7rem", color: "#94A3B8", margin: "4px 0 0" }}>
+                                    Retorno neto del gestor
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* ── KPI CARDS ───────────────────────── */}
                     <div style={{
                         display: "grid", gridTemplateColumns: "repeat(5, 1fr)",
@@ -626,7 +837,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             value={kpis.frtHours > 0 ? formatHours(kpis.frtHours) : "—"}
                             icon={<Timer size={18} color="#F59E0B" />}
                             iconBg="#FFF7ED"
-                            sub={`Promedio equipo: 4h`}
+                            sub={`Meta individual: 4h`}
                             trend={kpis.frtHours > 0 && kpis.frtHours < 4 ? "up" : kpis.frtHours >= 8 ? "down" : null}
                         />
                         {/* 4. MTTR */}
@@ -635,7 +846,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             value={kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : "—"}
                             icon={<Gauge size={18} color={mttrBetter ? "#10B981" : "#EF4444"} />}
                             iconBg={mttrBetter ? "#ECFDF5" : "#FEF2F2"}
-                            sub={`Benchmark: ${formatHours(TEAM_BENCHMARK_MTTR)}`}
+                            sub={`Meta individual: ${formatHours(TEAM_BENCHMARK_MTTR)}`}
                             trend={mttrBetter ? "up" : kpis.mttrHours >= TEAM_BENCHMARK_MTTR ? "down" : null}
                         />
                         {/* 5. Backlog */}
@@ -660,39 +871,57 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                                 <h3 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                    <BarChart2 size={16} color="#4338CA" /> Tickets Últimos 7 Días
+                                    <BarChart2 size={16} color="#4338CA" /> Rendimiento Financiero Reciente
                                 </h3>
                                 <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.72rem", fontWeight: 700 }}>
                                     <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                        <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#EF4444", display: "inline-block" }} />
-                                        Abiertos
+                                        <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#4F46E5", display: "inline-block" }} />
+                                        Facturación Neto
                                     </span>
                                     <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                                         <span style={{ width: "10px", height: "10px", borderRadius: "3px", background: "#10B981", display: "inline-block" }} />
-                                        Cerrados
+                                        Utilidad Real
                                     </span>
                                 </div>
                             </div>
-                            <BarChart data={barData} />
+                            <div style={{ width: "100%", height: 160 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ReChartsBarChart data={financialBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                                        <XAxis dataKey="label" stroke="#94A3B8" fontSize={10} tickLine={false} />
+                                        <YAxis stroke="#94A3B8" fontSize={10} tickLine={false} axisLine={false} />
+                                        <ReChartsTooltip formatter={(value: any) => [`S/ ${formatSoles(Number(value))}`]} />
+                                        <Bar dataKey="Facturación" fill="#4F46E5" radius={[4, 4, 0, 0]} barSize={12} />
+                                        <Bar dataKey="Utilidad" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} />
+                                    </ReChartsBarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
 
-                        {/* SLA Gauge */}
+                        {/* SLA & Meta Gauges */}
                         <div style={{
                             background: "white", borderRadius: "16px", padding: "1.5rem",
                             border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                             display: "flex", flexDirection: "column", alignItems: "center"
                         }}>
                             <h3 style={{ margin: "0 0 1rem", fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem", width: "100%" }}>
-                                <Target size={16} color="#4338CA" /> Cumplimiento SLA
+                                <Target size={16} color="#4338CA" /> Eficiencia & Meta Financiera
                             </h3>
-                            <SlaGauge pct={kpis.slaCompliance} />
-                            <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", flexDirection: "column", width: "100%" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", padding: "0.4rem 0.75rem", borderRadius: "8px", background: "#FEF2F2" }}>
+                            <div style={{ display: "flex", justifyContent: "space-around", width: "100%", gap: "10px" }}>
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                    <SlaGauge pct={kpis.slaCompliance} />
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                    <UtilityGauge pct={utilityTargetPercent} />
+                                </div>
+                            </div>
+                            <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", flexDirection: "row", width: "100%" }}>
+                                <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", padding: "0.4rem 0.5rem", borderRadius: "8px", background: "#FEF2F2" }}>
                                     <span style={{ color: "#64748B" }}>🔴 Críticos</span>
                                     <span style={{ fontWeight: 800, color: "#EF4444" }}>{kpis.critical.length}</span>
                                 </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", padding: "0.4rem 0.75rem", borderRadius: "8px", background: "#FFF7ED" }}>
-                                    <span style={{ color: "#64748B" }}>🟡 En alerta</span>
+                                <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", padding: "0.4rem 0.5rem", borderRadius: "8px", background: "#FFF7ED" }}>
+                                    <span style={{ color: "#64748B" }}>🟡 Alerta</span>
                                     <span style={{ fontWeight: 800, color: "#F59E0B" }}>{kpis.warning.length}</span>
                                 </div>
                             </div>
@@ -704,7 +933,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             border: "1px solid #E2E8F0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
                         }}>
                             <h3 style={{ margin: "0 0 1.25rem", fontSize: "0.9rem", fontWeight: 800, color: "#1E293B", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                                <Trophy size={16} color="#F59E0B" /> Productividad Relativa
+                                <Trophy size={16} color="#F59E0B" /> Objetivos de Rendimiento
                             </h3>
                             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                                 <RelativeBar
@@ -735,10 +964,10 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             }}>
                                 <Award size={14} />
                                 {mttrBetter
-                                    ? "¡Por encima del promedio del equipo! 🏆"
+                                    ? "¡Objetivo individual logrado! 🏆"
                                     : kpis.mttrHours === 0
                                         ? "Sin tickets cerrados aún — ¡a por ellos!"
-                                        : "Por debajo del promedio — hay oportunidad de mejora"}
+                                        : "Por debajo del objetivo — hay oportunidad de mejora"}
                             </div>
                         </div>
                     </div>
