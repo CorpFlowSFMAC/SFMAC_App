@@ -59,7 +59,20 @@ const useTicketAge = (createdAt: string) => {
 
 export default function TicketsPage() {
     // Usar contexto global de datos (Realtime compartido entre módulos)
-    const { tickets, loadingTickets, createTicket, updateTicket, refreshTickets } = useAppData();
+    const {
+        tickets,
+        loadingTickets,
+        createTicket,
+        updateTicket,
+        refreshTickets,
+        activeGestora,
+        isAdmin
+    } = useAppData();
+
+    const myGestoraId = activeGestora?.id || null;
+    const isAdminState = isAdmin;
+    const gestoraResolved = !loadingTickets;
+
     const queryClient = useQueryClient();
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
@@ -82,109 +95,6 @@ export default function TicketsPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"triage" | "active" | "closed">("active");
     const [statFilter, setStatFilter] = useState<"all" | "nuevos" | "enProceso" | "revision" | string>("all");
-    // 🚀 Cache inicial de identidad en sessionStorage para evitar flash del empty state
-    // mientras se resuelve la identidad del gestor (race condition).
-    const [myGestoraId, setMyGestoraId] = useState<string | null>(() => {
-        if (typeof window === 'undefined') return null;
-        return sessionStorage.getItem('tickets_my_gestora_id') || null;
-    });
-    const [isAdminState, setIsAdminState] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        // Detectar admin del localStorage; fallback a cookie (Azure AD callback solo
-        // escribe cookies — sin este fallback el admin queda con isAdminState=false
-        // y la bandeja sale vacía).
-        let storedRole = (localStorage.getItem('userRole') || '').toLowerCase();
-        if (!storedRole) {
-            const roleMatch = document.cookie.match(/userRole=([^;]+)/);
-            storedRole = roleMatch ? decodeURIComponent(roleMatch[1]).toLowerCase() : '';
-        }
-        if (storedRole === 'admin' || storedRole === 'superadmin') return true;
-        return sessionStorage.getItem('tickets_is_admin') === '1';
-    });
-    const [gestoraResolved, setGestoraResolved] = useState<boolean>(() => {
-        if (typeof window === 'undefined') return false;
-        return sessionStorage.getItem('tickets_gestora_resolved') === '1';
-    });
-
-
-    const fetchGestora = useCallback(async () => {
-        try {
-            // 🔧 Helper: leer una cookie por nombre (Azure AD callback escribe en cookies)
-            const readCookie = (name: string): string | null => {
-                if (typeof document === 'undefined') return null;
-                const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
-                return m ? decodeURIComponent(m[1]) : null;
-            };
-
-            const { data: { user } } = await supabase.auth.getUser();
-            const rawEmail = user?.email
-                || localStorage.getItem('userEmail')
-                || readCookie('userEmail');
-            if (!rawEmail) {
-                setGestoraResolved(true);
-                if (typeof window !== 'undefined') sessionStorage.setItem('tickets_gestora_resolved', '1');
-                return;
-            }
-
-            const userEmail = rawEmail.toLowerCase();
-            const rawRole = localStorage.getItem('userRole') || readCookie('userRole') || '';
-            const userRole = rawRole.toUpperCase();
-            let resolvedAdmin = false;
-            let resolvedGestoraId: string | null = null;
-
-            if (userRole === 'SUPERADMIN' || userRole === 'ADMIN') {
-                resolvedAdmin = true;
-                setIsAdminState(true);
-                if (typeof window !== 'undefined') sessionStorage.setItem('tickets_is_admin', '1');
-            }
-
-            // REVISIÓN DE GESTORAS
-            const { data: g, error: errorG } = await supabase.from('gestoras').select('id, name, email').ilike('email', userEmail).maybeSingle();
-            if (errorG) console.warn('[TicketsPage] Error gestoras:', errorG.message);
-            if (g?.id) {
-                resolvedGestoraId = g.id;
-                setMyGestoraId(g.id);
-            }
-
-            // REVISIÓN DE ROL EN PERFILES (Independiente de si es gestora o no)
-            // Dos pasos: primero ID, luego rol
-            const { data: p, error: errorP } = await supabase.from('perfiles').select('id').ilike('email', userEmail).maybeSingle();
-            if (errorP) console.warn('[TicketsPage] Error perfiles:', errorP.message);
-            
-            if (p) {
-                // Segunda consulta solo para rol
-                const { data: perfilData } = await supabase.from('perfiles').select('rol').eq('id', p.id).maybeSingle();
-                const normalizedRole = (perfilData?.rol || rawRole || '').toUpperCase();
-                if (normalizedRole === 'SUPERADMIN' || normalizedRole === 'ADMIN') {
-                    resolvedAdmin = true;
-                    setIsAdminState(true);
-                }
-                if (!g?.id && p.id) {
-                    resolvedGestoraId = p.id;
-                    setMyGestoraId(p.id);
-                }
-            }
-
-            // Persistir en sessionStorage para que la próxima navegación sea instantánea
-            if (typeof window !== 'undefined') {
-                if (resolvedGestoraId) {
-                    sessionStorage.setItem('tickets_my_gestora_id', resolvedGestoraId);
-                } else {
-                    sessionStorage.removeItem('tickets_my_gestora_id');
-                }
-                sessionStorage.setItem('tickets_is_admin', resolvedAdmin ? '1' : '0');
-                sessionStorage.setItem('tickets_gestora_resolved', '1');
-            }
-        } catch (error) {
-            console.error("Error fetching gestora context:", error);
-        } finally {
-            setGestoraResolved(true);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchGestora();
-    }, [fetchGestora]);
 
     const isVisibleForMe = useCallback((t: any) => {
         // REGLA 0: Admin ve TODO (Prioridad absoluta)
