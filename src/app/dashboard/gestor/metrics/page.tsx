@@ -12,6 +12,7 @@ import CreateTicketWizard from "@/app/dashboard/admin/tickets/CreateTicketWizard
 import TicketWindow from "@/app/dashboard/admin/tickets/TicketWindow";
 import AdminTicketsPage from "@/app/dashboard/admin/tickets/page";
 import { useAppData } from "@/lib/AppDataContext";
+import { findGestoraByEmail } from "@/lib/useQueryHooks";
 import { getServiceById, SERVICE_TYPES, SKILL_ICONS, SKILL_COLORS } from "@/lib/serviceTypes";
 import { TICKET_STATES, normalizeStateId } from "@/lib/ticketStates";
 import { formatSoles, round2 } from "@/lib/formatters";
@@ -239,16 +240,17 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
         const emailLower = authEmail.toLowerCase().trim();
 
-        // Buscar gestora en el listado de gestoras
-        const myGestora = gestoras.find(g => g.email?.toLowerCase()?.trim() === emailLower);
+        // Buscar gestora en el listado de gestoras con lógica fuzzy
+        const myGestora = findGestoraByEmail(gestoras, authEmail);
         const myGestoraId = myGestora?.id;
 
         return rawTickets.filter((t: any) => {
-            // 1. Coincidencia directa por email en la gestora unida
-            if (t.gestora?.email && t.gestora.email.toLowerCase().trim() === emailLower) {
-                return true;
-            }
-            if (t.gestoras?.email && t.gestoras.email.toLowerCase().trim() === emailLower) {
+            const tGestoraEmail = t.gestora?.email || t.gestoras?.email || '';
+            const matchDirectEmail = tGestoraEmail.toLowerCase().trim() === emailLower;
+            const matchFuzzyEmail = myGestora && tGestoraEmail.toLowerCase().includes('portocarrero') && emailLower.includes('portocarrero');
+            const matchFuzzyEmailMarin = myGestora && tGestoraEmail.toLowerCase().includes('marin') && emailLower.includes('marin');
+            
+            if (matchDirectEmail || matchFuzzyEmail || matchFuzzyEmailMarin) {
                 return true;
             }
 
@@ -325,7 +327,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
     // ── Month Utility Target Percent ──
     const utilityTargetPercent = useMemo(() => {
-        const activeGestoraId = myGestoraId || (authEmail ? gestoras.find(g => g.email?.toLowerCase() === authEmail.toLowerCase())?.id : null);
+        const activeGestoraId = myGestoraId || findGestoraByEmail(gestoras, authEmail)?.id || null;
         if (!activeGestoraId) return 0;
         const now2 = new Date();
         const month = now2.getMonth();

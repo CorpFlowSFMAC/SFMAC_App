@@ -213,6 +213,39 @@ export function useStrategicMetrics(startDate: string, endDate: string) {
 
 import { supabase } from "@/lib/supabase";
 
+export function findGestoraByEmail(gestorasList: any[], email: string | null) {
+    if (!email) return null;
+    const emailLower = email.toLowerCase().trim();
+    const username = emailLower.split('@')[0];
+    
+    // 1. Coincidencia exacta
+    let found = gestorasList.find((g: any) => g.email?.toLowerCase()?.trim() === emailLower);
+    if (found) return found;
+    
+    // 2. Coincidencia exacta de la parte del usuario
+    found = gestorasList.find((g: any) => {
+        const gEmail = g.email?.toLowerCase()?.trim() || "";
+        const gUsername = gEmail.split('@')[0];
+        return gUsername === username;
+    });
+    if (found) return found;
+    
+    // 3. Coincidencias fuzzy para gestoras conocidas
+    // Janeth Portocarrero: j.portocarrero@sinfimac.pe
+    if (emailLower.includes('portocarrero') || username === 'jp' || username === 'janeth' || username === 'jportocarrero') {
+        found = gestorasList.find((g: any) => g.email?.toLowerCase()?.includes('portocarrero'));
+        if (found) return found;
+    }
+    
+    // Francen Marin: francen.marin@sinfimac.pe
+    if (emailLower.includes('marin') || username === 'francen' || username === 'fmarin' || username === 'fhmarin') {
+        found = gestorasList.find((g: any) => g.email?.toLowerCase()?.includes('marin'));
+        if (found) return found;
+    }
+    
+    return null;
+}
+
 async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: string | null) {
     try {
         if (!userEmail) return ticketsList;
@@ -227,7 +260,7 @@ async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: strin
             return ticketsList;
         }
 
-        const emailLower = userEmail.toLowerCase();
+        const emailLower = userEmail.toLowerCase().trim();
         
         // Timeout para la query de gestoras
         const gestorasPromise = gestorasAPI.getAll();
@@ -236,16 +269,19 @@ async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: strin
         );
         
         const allGestoras = await Promise.race([gestorasPromise, timeoutPromise]).catch(() => []);
-        const myGestora = (allGestoras || []).find(g => g.email?.toLowerCase() === emailLower);
+        const myGestora = findGestoraByEmail(allGestoras || [], userEmail);
         const myGestoraId = myGestora?.id;
 
         return ticketsList.filter((t: any) => {
-            if (t.gestora?.email && t.gestora.email.toLowerCase() === emailLower) {
+            const tGestoraEmail = t.gestora?.email || t.gestoras?.email || '';
+            const matchDirectEmail = tGestoraEmail.toLowerCase().trim() === emailLower;
+            const matchFuzzyEmail = myGestora && tGestoraEmail.toLowerCase().includes('portocarrero') && emailLower.includes('portocarrero');
+            const matchFuzzyEmailMarin = myGestora && tGestoraEmail.toLowerCase().includes('marin') && emailLower.includes('marin');
+            
+            if (matchDirectEmail || matchFuzzyEmail || matchFuzzyEmailMarin) {
                 return true;
             }
-            if (t.gestoras?.email && t.gestoras.email.toLowerCase() === emailLower) {
-                return true;
-            }
+            
             if (myGestoraId) {
                 const assignedGestoraId = t.gestora_id || t.metadata?.gestora_id;
                 if (assignedGestoraId === myGestoraId) return true;
@@ -265,6 +301,7 @@ async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: strin
         return ticketsList;
     }
 }
+
 
 // ─────────────────────────────────────────────
 // useTickets — Hook principal para lista/kanban

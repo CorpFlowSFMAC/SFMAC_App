@@ -18,6 +18,7 @@ import {
     useGestorasTargets as useGestorasTargetsQuery,
     queryKeys,
     normalizeTicket,
+    findGestoraByEmail,
 } from "@/lib/useQueryHooks";
 
 // ─────────────────────────────────────────────
@@ -171,9 +172,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     // Resolve activeGestora and isAdmin based on resolved email and role
     const activeGestora = React.useMemo(() => {
-        if (!userEmail || !gestoras || gestoras.length === 0) return null;
-        const emailLower = userEmail.toLowerCase().trim();
-        return gestoras.find((g: any) => g.email?.toLowerCase()?.trim() === emailLower) || null;
+        return findGestoraByEmail(gestoras, userEmail);
     }, [userEmail, gestoras]);
 
     const isAdmin = React.useMemo(() => {
