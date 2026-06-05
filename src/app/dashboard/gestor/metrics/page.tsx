@@ -305,16 +305,28 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         let totalFacturacion = 0;
         let totalUtilidad = 0;
 
-        periodTickets.forEach((t: any) => {
+        // Evaluamos TODOS los tickets del gestor, no solo los creados en el periodo (periodTickets),
+        // porque queremos depósitos hechos hoy (aunque el ticket sea viejo) y tickets cerrados hoy (aunque el ticket sea viejo).
+        tickets.forEach((t: any) => {
             const finances = calculateTicketFinances(t, t.costos || []);
-            // Inversión = todos los depósitos realizados (flujo real) = totalExpenses
-            totalInversion += finances.totalExpenses;
+            
+            // Inversión: Sumamos únicamente los costos (depósitos confirmados) cuya fecha cae dentro del rango
+            const confirmedCosts = [...finances.laborItems, ...finances.operatingItems];
+            confirmedCosts.forEach((c: any) => {
+                const cDate = c.fecha_pago || c.fecha || c.date || c.created_at || t.createdAt || t.created_at;
+                if (isInDateRange(cDate || now.toISOString())) {
+                    totalInversion += c.monto;
+                }
+            });
 
-            const state = normalizeStateId(t.estadoId);
-            // Facturación y Utilidad generada solo sobre tickets cerrados
+            // Facturación y Utilidad: Solo para tickets cerrados cuya FECHA DE CIERRE cae en el periodo
+            const state = normalizeStateId(t.estadoId || t.status_id);
             if (state === "ticket_cerrado") {
-                totalFacturacion += finances.netIncome; // net income
-                totalUtilidad += finances.realProfitability;
+                const closureDate = t.fechaPagoFinal || t.closure_date || t.updated_at || t.createdAt || t.created_at;
+                if (isInDateRange(closureDate || now.toISOString())) {
+                    totalFacturacion += finances.netIncome;
+                    totalUtilidad += finances.realProfitability;
+                }
             }
         });
 
@@ -323,7 +335,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             facturacion: totalFacturacion,
             utilidad: totalUtilidad
         };
-    }, [periodTickets]);
+    }, [tickets, isInDateRange, now]);
 
     // ── Month Utility Target Percent ──
     const utilityTargetPercent = useMemo(() => {
