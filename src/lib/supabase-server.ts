@@ -56,7 +56,7 @@ async function getTicketsSummaryDirect(gestorId?: string) {
         .from('tickets')
         .select(TICKET_SUMMARY_SELECT)
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(2000);
 
     if (gestorId) {
         query = query.eq('gestora_id', gestorId);
@@ -134,7 +134,7 @@ export async function getAllTicketsLite(gestorId?: string) {
         .from('vw_tickets_strategic')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(2000);
 
     if (gestorId) {
         query = query.eq('gestora_id', gestorId);
@@ -165,7 +165,7 @@ export async function getTicketsSummary() {
         .from('vw_tickets_strategic')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(2000);
 
     if (error) {
         console.log('[Supabase Server] Error fetching strategic summary:', error.message);

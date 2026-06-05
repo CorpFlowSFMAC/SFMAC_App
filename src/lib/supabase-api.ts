@@ -494,7 +494,7 @@ export const ticketsAPI = {
             .from('tickets')
             .select('*, clients(*), branch_offices(*, clients(*), zonas(*)), technicians(*), gestora:gestoras(*)')
             .order('created_at', { ascending: false })
-            .limit(200); // Límite de seguridad para evitar egress masivo
+            .limit(2000); // Límite ampliado para incluir tickets recientes de todos los gestores
 
         if (error) throw error;
         return data;
@@ -506,7 +506,7 @@ export const ticketsAPI = {
             .from('vw_tickets_strategic')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(300);
+            .limit(2000);
 
         if (error) {
             // No hacer mucho ruido en consola si es por Auth, ya que el fallback del servidor lo resolverá
@@ -520,7 +520,7 @@ export const ticketsAPI = {
                 .from('tickets')
                 .select(TICKET_LIST_SELECT)
                 .order('created_at', { ascending: false })
-                .limit(300);
+                .limit(2000);
 
             if (fallbackError) {
                 // Si esto también falla (ej. por RLS), simplemente devolveremos vacío en el catch exterior
