@@ -314,6 +314,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
     const handleSaveReportUpdate = async () => {
         if (isSavingReport) return;
+
+        // ✅ BLOQUEO DE PRESUPUESTO POST-APROBACIÓN
+        // Estados que sellan el presupuesto: no se permite cambiar MO/Materiales
+        const SEALED_STATES = ['cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar', 'pago_realizado', 'ticket_cerrado'];
+        const isSealedState = SEALED_STATES.includes(ticketData.status_id);
+        const userRole = localStorage.getItem('userRole');
+        const isAdminUser = userRole?.toLowerCase() === 'admin' || userRole?.toLowerCase() === 'superadmin';
+        if (isSealedState && !isAdminUser) {
+            showToast("Presupuesto Sellado", "No se puede modificar el reporte técnico de un ticket aprobado. Contacte al Administrador.", "error");
+            setShowReportUpdateModal(false);
+            return;
+        }
+
         setIsSavingReport(true);
         try {
             const oldMO = parseFloat(String(ticketData.labor_cost || "0"));

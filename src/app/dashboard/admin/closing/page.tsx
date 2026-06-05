@@ -581,7 +581,11 @@ export default function ClosingPage() {
                                 <td style={{ padding: '14px 12px', color: 'white', fontWeight: 800 }}>{g.rolloverCount}</td>
                                 <td style={{ padding: '14px 12px', color: '#F59E0B', fontWeight: 900 }}>S/ {formatSoles(g.utilityProyectada)}</td>
                                 <td style={{ padding: '14px 12px', color: 'rgba(255,255,255,0.35)', fontSize: '0.8rem' }}>
-                                    +{Math.round((g.utilityProyectada / g.targetAmount) * 100)}% hacia la meta del siguiente mes
+                                    {/* ✅ CORRECCIÓN DIVISIÓN POR CERO: Proteger contra targetAmount = 0 */}
+                                    {g.targetAmount > 0
+                                        ? <>+{Math.round((g.utilityProyectada / g.targetAmount) * 100)}% hacia la meta del siguiente mes</>
+                                        : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Meta no definida</span>
+                                    }
                                 </td>
                             </tr>
                         ))}

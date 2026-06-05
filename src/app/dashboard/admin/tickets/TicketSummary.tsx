@@ -861,10 +861,12 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
 
     const isEnviada = ticket.status_id === 'cotizacion_enviada';
 
-    // Cálculos de desglose
+    // ✅ CORRECCIÓN IGV 2024: Cálculo dinámico del 18% estándar Perú
+    // El IGV se calcula como 18% del subtotal (neto sin impuestos)
+    // Total = Subtotal + IGV = Subtotal × 1.18
     const totalFinal = round2(ticket.total_quoted_amount || 0);
-    const igvLocal = extractIGV(ticket);
-    const subtotalLocal = round2(totalFinal - igvLocal);
+    const subtotalLocal = totalFinal > 0 ? round2(totalFinal / 1.18) : 0;
+    const igvLocal = round2(subtotalLocal * 0.18);
 
     const finances = calculateTicketFinances(ticket, ticket.costos || []);
     const profit = finances.realProfitability;
