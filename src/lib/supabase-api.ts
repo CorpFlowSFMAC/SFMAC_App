@@ -802,6 +802,40 @@ export const ticketsAPI = {
             .delete()
             .eq('id', id);
         if (errorTicket) throw errorTicket;
+    },
+
+    async updatePaymentSafe(ticketId: string, nuevoPago: any, additionalUpdates?: any) {
+        const { data: ticket, error: fetchErr } = await supabase
+            .from('tickets')
+            .select('metadata')
+            .eq('id', ticketId)
+            .single();
+        if (fetchErr || !ticket) throw new Error("Ticket not found");
+        
+        const meta = ticket.metadata || {};
+        const history = meta.historialPagosTecnico || [];
+        
+        const filtered = history.filter((p: any) => p.id !== nuevoPago.id);
+        filtered.push(nuevoPago);
+        
+        const newMeta = {
+            ...meta,
+            ...additionalUpdates?.metadataFields,
+            historialPagosTecnico: filtered,
+            montoAdelanto: filtered.reduce((s: number, p: any) => s + (p.monto || 0), 0)
+        };
+        
+        const updates: any = { metadata: newMeta };
+        if (additionalUpdates?.status_id) {
+            updates.status_id = additionalUpdates.status_id;
+            newMeta.estadoId = additionalUpdates.status_id;
+        }
+        if (additionalUpdates?.closure_date) updates.closure_date = additionalUpdates.closure_date;
+        
+        const { error } = await supabase.from('tickets').update(updates).eq('id', ticketId);
+        if (error) throw error;
+        
+        return updates;
     }
 };
 
