@@ -90,16 +90,16 @@ export default function GestorLayout({
         loadUserData();
     }, []);
 
-    // Buscar nombre real desde perfil o gestora
+    // Buscar nombre real desde perfil o gestora (solo cuando email está disponible)
     const fetchPerfilNombre = async (email: string | null) => {
-        if (!email) return;
+        if (!email || typeof email !== 'string' || !email.includes('@')) return;
         
         try {
-            // Buscar en tabla gestoras por email
+            // Buscar en tabla gestoras por email (case-insensitive con eq)
             const { data: g } = await supabase
                 .from('gestoras')
                 .select('id, name')
-                .ilike('email', email)
+                .eq('email', email.toLowerCase())
                 .maybeSingle();
             
             if (g?.name) {
@@ -107,11 +107,11 @@ export default function GestorLayout({
                 return;
             }
             
-            // Buscar en perfiles
+            // Buscar en perfiles (case-insensitive con eq)
             const { data: p } = await supabase
                 .from('perfiles')
                 .select('id, nombre_completo')
-                .ilike('email', email)
+                .eq('email', email.toLowerCase())
                 .maybeSingle();
             
             if (p?.nombre_completo) {

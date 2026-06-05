@@ -396,15 +396,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     useEffect(() => {
         const fetchMe = async () => {
             const email = localStorage.getItem('userEmail');
-            if (!email) return;
+            if (!email || typeof email !== 'string' || !email.includes('@')) return;
 
             // Intentar obtener ID de gestora (para permisos operativas)
-            const { data: gestoraData, error: errG } = await supabase.from('gestoras').select('id').ilike('email', email).maybeSingle();
+            const { data: gestoraData, error: errG } = await supabase.from('gestoras').select('id').eq('email', email.toLowerCase()).maybeSingle();
             if (errG) console.warn('[TicketWindow] Error gestoras:', errG.message);
             if (gestoraData?.id) setMyGestoraId(gestoraData.id);
 
             // Intentar obtener ID de perfil (para registros de tesorería solicitado_por)
-            const { data: profileData, error: errP } = await supabase.from('perfiles').select('id').ilike('email', email).maybeSingle();
+            const { data: profileData, error: errP } = await supabase.from('perfiles').select('id').eq('email', email.toLowerCase()).maybeSingle();
             if (errP) console.warn('[TicketWindow] Error perfiles:', errP.message);
             if (profileData?.id) setMyProfileId(profileData.id);
         };

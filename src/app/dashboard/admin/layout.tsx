@@ -134,16 +134,16 @@ export default function AdminLayout({
         return cleanup;
     }, [isMounted, userRole]);
 
-    // Buscar nombre real desde perfil o gestora
+    // Buscar nombre real desde perfil o gestora (solo cuando email está disponible y válido)
     // Con mejor manejo de errores para evitar HTTP 400
     const fetchPerfilNombre = async (email: string | null) => {
-        if (!email) return;
+        if (!email || typeof email !== 'string' || !email.includes('@')) return;
         try {
-            // Buscar en perfiles primero
+            // Buscar en perfiles primero (case-insensitive con eq)
             const { data: p, error: errorP } = await supabase
                 .from('perfiles')
                 .select('id, nombre_completo')
-                .ilike('email', email)
+                .eq('email', email.toLowerCase())
                 .maybeSingle();
             
             if (errorP) {
@@ -155,11 +155,11 @@ export default function AdminLayout({
                 return;
             }
 
-            // Fallback a gestoras
+            // Fallback a gestoras (case-insensitive con eq)
             const { data: g, error: errorG } = await supabase
                 .from('gestoras')
                 .select('id, name')
-                .ilike('email', email)
+                .eq('email', email.toLowerCase())
                 .maybeSingle();
             
             if (errorG) {
