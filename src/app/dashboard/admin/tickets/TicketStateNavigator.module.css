@@ -259,24 +259,70 @@
 /* Responsive */
 @media (max-width: 768px) {
     .kanbanFlow {
-        justify-content: center;
+        justify-content: flex-start;
         gap: 8px;
+        padding: 10px 16px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        /* Scroll suave táctil */
+        scroll-behavior: smooth;
+        /* Padding extra para evitar que el primer/last item quede pegado al borde */
+        padding-left: max(16px, env(safe-area-inset-left, 16px));
+        padding-right: max(16px, env(safe-area-inset-right, 16px));
+    }
+
+    .kanbanFlow::-webkit-scrollbar {
+        height: 0;
+        display: none;
+    }
+
+    .kanbanFlow {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
     }
 
     .kanbanStep {
         width: 60px;
+        scroll-snap-align: center;
+        flex-shrink: 0;
     }
 
     .stepIcon {
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
     }
 
     .stepName {
         font-size: 8px;
     }
 
+    .connector {
+        min-width: 4px;
+        flex-shrink: 0;
+    }
+
     .connectorLine {
-        width: 8px;
+        width: 12px;
+    }
+
+    /* Indicador visual de scroll disponible */
+    .kanbanContainer::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 30px;
+        height: 30px;
+        background: linear-gradient(90deg, transparent, rgba(0,42,143,0.3));
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .kanbanContainer {
+        position: relative;
+        overflow: visible;
     }
 }

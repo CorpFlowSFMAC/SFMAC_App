@@ -360,6 +360,48 @@ export default function AdminLayout({
                     <main className={styles.mainContent}>
                         {children}
                     </main>
+
+                    {/* ── Bottom Navigation Bar (solo móvil) ── */}
+                    <nav className={styles.mobileBottomNav} aria-label="Navegación principal móvil">
+                        <Link
+                            href="/dashboard/admin"
+                            className={`${styles.bottomNavItem} ${pathname === '/dashboard/admin' ? styles.bottomNavItemActive : ''}`}
+                        >
+                            <LayoutDashboard size={22} />
+                            <span>Inicio</span>
+                        </Link>
+                        <Link
+                            href="/dashboard/admin/tickets"
+                            className={`${styles.bottomNavItem} ${pathname.includes('/tickets') ? styles.bottomNavItemActive : ''}`}
+                        >
+                            <Ticket size={22} />
+                            <span>Tickets</span>
+                        </Link>
+                        {isAdmin && (
+                            <Link
+                                href="/dashboard/admin/payments"
+                                className={`${styles.bottomNavItem} ${pathname.includes('/payments') || pathname.includes('/tesoreria') ? styles.bottomNavItemActive : ''}`}
+                            >
+                                <DollarSign size={22} />
+                                <span>Tesorería</span>
+                            </Link>
+                        )}
+                        <Link
+                            href="/dashboard/admin/reportes"
+                            className={`${styles.bottomNavItem} ${pathname.includes('/reportes') ? styles.bottomNavItemActive : ''}`}
+                        >
+                            <BarChart3 size={22} />
+                            <span>Reportes</span>
+                        </Link>
+                        <button
+                            className={styles.bottomNavItem}
+                            onClick={() => setMobileSidebarOpen(true)}
+                            aria-label="Más opciones"
+                        >
+                            <Menu size={22} />
+                            <span>Más</span>
+                        </button>
+                    </nav>
                 </div>
             </AppDataProvider>
         </QueryProvider>
