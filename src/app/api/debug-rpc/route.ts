@@ -6,10 +6,7 @@ const supabaseUrl = getSupabaseUrl();
 const supabaseKey = getSupabaseAuthKey();
 
 /**
- * DEBUG ENDPOINT — SINFIMAC V3
- * Valida el motor principal de pagos (JS directo con Joins).
- * La RPC get_payment_tickets_ultra_light está DEPRECADA como motor primario.
- *
+ * DIAGNOSTIC ENDPOINT — SINFIMAC V3
  * POST /api/debug-rpc
  */
 export async function POST(request: Request) {
@@ -18,37 +15,55 @@ export async function POST(request: Request) {
             auth: { persistSession: false }
         });
 
-        const ESTADOS_EXCLUIDOS = [
-            'borrador',
-            'ticket_cerrado',
-            'ticket_rechazado',
-            'ticket_cancelado',
-            'rechazado',
-            'cancelado',
-        ];
+        // 1. Conteo total de tickets en la tabla física sin filtros
+        const { count: totalTickets, error: countError } = await supabase
+            .from('tickets')
+            .select('id', { count: 'exact', head: true });
 
-        const { data, error } = await supabase
-            .from('vw_tickets_strategic')
-            .select('*')
-            .limit(5);
-
-        if (error) {
-            return NextResponse.json({
-                engine: 'js_direct_v3',
-                error: error.message,
-                hint: error.hint,
-                details: error.details
-            }, { status: 500 });
+        if (countError) {
+            return NextResponse.json({ error: 'Error counting tickets: ' + countError.message }, { status: 500 });
         }
 
+        // 2. Obtener la lista de todos los tickets
+        const { data: tickets, error: ticketsError } = await supabase
+            .from('tickets')
+            .select(`
+                id,
+                ticket_number,
+                client_ticket_number,
+                status_id,
+                created_at,
+                gestora_id,
+                gestoras:gestoras (
+                    id,
+                    name,
+                    email
+                )
+            `)
+            .order('created_at', { ascending: false });
+
+        if (ticketsError) {
+            return NextResponse.json({ error: 'Error fetching tickets: ' + ticketsError.message }, { status: 500 });
+        }
+
+        // 3. Obtener todas las gestoras registradas
+        const { data: gestoras, error: gestorasError } = await supabase
+            .from('gestoras')
+            .select('*');
+
+        // 4. Obtener zona horaria de la base de datos (vía timestamp)
+        // Compararemos la hora del servidor con now()
+        const nowServer = new Date().toISOString();
+
         return NextResponse.json({
-            engine: 'js_direct_v3',
             success: true,
-            count: data?.length || 0,
-            estados_excluidos: ESTADOS_EXCLUIDOS,
-            sample: data?.[0] || null
+            totalTicketsCount: totalTickets,
+            nowServer,
+            gestoras,
+            tickets: tickets || [],
+            gestorasError: gestorasError ? gestorasError.message : null
         });
     } catch (e: any) {
-        return NextResponse.json({ engine: 'js_direct_v3', error: e.message }, { status: 500 });
+        return NextResponse.json({ error: e.message }, { status: 500 });
     }
 }
