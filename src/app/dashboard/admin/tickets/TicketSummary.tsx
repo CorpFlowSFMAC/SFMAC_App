@@ -863,9 +863,9 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
 
     // Cálculos de desglose
     const finances = calculateTicketFinances(ticket, ticket.costos || []);
-    const igvLocal = extractIGV(ticket);
+    const igvLocal = finances.igv;
     const subtotalLocal = finances.totalVenta;
-    const totalFinal = round2(subtotalLocal + igvLocal);
+    const totalFinal = finances.totalGeneral;
 
     const profit = finances.realProfitability;
     const margin = subtotalLocal > 0 ? (profit / subtotalLocal) * 100 : 0;
@@ -1195,7 +1195,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
         totalExpenses: gastosReales
     } = finances;
 
-    const montoTotalCliente = round2(finances.totalVenta + extractIGV(ticket));
+    const montoTotalCliente = finances.totalGeneral;
     const paymentPercentage = pactadoLaborBase > 0 ? (totalPagadoTecnico / pactadoLaborBase) * 100 : 0;
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)

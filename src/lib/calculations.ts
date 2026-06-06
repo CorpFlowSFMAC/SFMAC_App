@@ -148,16 +148,41 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
             .find(v => v > 0) ?? 0;
 
     // Ingresos base (sin IGV si aplica)
-    const montoFinal =
+    const rawAmount =
         [ticket.monto_presupuesto, ticket.total_quoted_amount,
          ticket.montoFinal, ticket.montoTotalCotizado]
             .map(toNum)
             .find(v => v > 0) ?? 0;
 
-    const igv = extractIGV(ticket);
-    const montoBase = igv > 0 
-        ? round2(montoFinal - igv) 
-        : (ticket.ingresos_reales ? toNum(ticket.ingresos_reales) : montoFinal);
+    const commercialRound = (val: number) => Math.round(val * 100) / 100;
+
+    // Detectar intención tributaria
+    const hasLegacyIgv = extractIGV(ticket) > 0;
+    const aplicaIGV = ticket.incluye_igv === true || ticket.has_igv === true || hasLegacyIgv;
+    const esTodoIncluido = ticket.incluye_igv !== false; // Por defecto A Todo Costo
+
+    let montoBase = 0;
+    let igvCalculado = 0;
+    let totalGeneral = 0;
+
+    if (aplicaIGV) {
+        if (esTodoIncluido) {
+            // SI EL PRECIO ES TODO INCLUIDO
+            montoBase = commercialRound(rawAmount / 1.18);
+            igvCalculado = commercialRound(montoBase * 0.18);
+            totalGeneral = rawAmount;
+        } else {
+            // SI EL PRECIO ES MÁS IGV
+            montoBase = rawAmount;
+            igvCalculado = commercialRound(montoBase * 0.18);
+            totalGeneral = commercialRound(montoBase + igvCalculado);
+        }
+    } else {
+        // Sin IGV
+        montoBase = ticket.ingresos_reales ? toNum(ticket.ingresos_reales) : rawAmount;
+        igvCalculado = 0;
+        totalGeneral = montoBase;
+    }
 
     // Normalizar un costo: extraer monto y fecha canónicos
     const normalize = (c: any) => ({
@@ -214,6 +239,8 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
         // ── Ingresos ──────────────────────────────────────────────────────────
         totalVenta:          montoBase,
         netIncome:           montoBase,       // alias
+        igv:                 igvCalculado,
+        totalGeneral:        totalGeneral,
 
         // ── MO ────────────────────────────────────────────────────────────────
         pactedMO,
