@@ -6,17 +6,18 @@ Esta documentación detalla el funcionamiento del motor financiero centralizado 
 
 ## 1. Conceptos Fundamentales
 
-### A. Ingresos (Venta)
-*   **Monto Total Cotizado:** Es el valor final que se factura al cliente.
-*   **Monto Base:** Si el ticket incluye IGV, el sistema calcula automáticamente el monto base restando el impuesto para que la rentabilidad se calcule sobre la utilidad real neta de la empresa.
-*   **Campos de Referencia:** `total_quoted_amount`, `monto_final`, `ingresos_reales`.
+### A. Ingresos y el IGV
+*   **Regla Constructiva:** El cálculo del IGV se ejecuta exclusivamente de manera constructiva hacia adelante: `Subtotal Neto + 18% de IGV = Total General`.
+*   **Prohibición Estricta:** Queda estrictamente prohibido que la UI o los componentes expongan totales basados en restas inversas de campos estáticos manipulados.
 
 ### B. Mano de Obra Pactada (MO)
 *   Representa el presupuesto asignado al técnico principal para la ejecución del servicio.
 *   Es un **pasivo (deuda)** para la empresa desde el momento en que se aprueba la cotización.
-*   **Campos de Referencia:** `labor_cost`, `monto_pactado_mo`.
 
-### C. Gastos Operativos (Compras)
+### C. Compatibilidad de Campos (Campos Muertos)
+> **Nota de Arquitectura:** A partir de junio de 2026, las variables `total_quoted_amount`, `monto_final`, `labor_cost` y similares quedan oficialmente en estado **Deprecado**. La interfaz de usuario debe consumir única y exclusivamente los métodos resueltos del motor central (`finances.netLaborBalance` y `finances.totalVenta`).
+
+### D. Gastos Operativos (Compras)
 *   Incluye todo egreso adicional necesario para el servicio: materiales, viáticos, logística y pagos a especialistas externos (terceros).
 *   Estos montos **reducen directamente la utilidad** del ticket.
 
