@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
 
             const { data, error } = await client
                 .from('technicians')
+                // @ts-ignore
                 .update(safeUpdates as any)
                 .eq('id', id)
                 .select()

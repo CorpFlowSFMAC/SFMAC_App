@@ -190,7 +190,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
         if (isSelected) {
             // Remove zone and related branch assignments
             const branchesInZone = allBranches
-                .filter(b => (b.zone || b.zona) === zoneId)
+                .filter(b => (b.zonas?.codigo || b.zona_id || b.zone || b.zona) === zoneId)
                 .map((b: any) => b.id);
             setFormData(prev => ({
                 ...prev,
@@ -223,7 +223,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     // Get branches for a zone, with search filter
     const getBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b => {
-            const branchZone = b.zone || b.zona || '';
+            const branchZone = b.zonas?.codigo || b.zona_id || b.zone || b.zona || '';
             const matchesZone = branchZone === zoneId;
             const matchesSearch = !branchSearch ||
                 (b.name || '').toLowerCase().includes(branchSearch.toLowerCase()) ||
@@ -234,7 +234,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
     const getSelectedBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b =>
-            (b.zone || b.zona) === zoneId &&
+            (b.zonas?.codigo || b.zona_id || b.zone || b.zona) === zoneId &&
             formData.agenciasAsignadas.includes(b.id)
         );
     };
@@ -315,7 +315,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
     // ── Coverage stats ────────────────────────────────────────────────────
     const totalBranchesInSelectedZones = allBranches.filter(b =>
-        formData.zonas.includes(b.zone || b.zona || '')
+        formData.zonas.includes(b.zonas?.codigo || b.zona_id || b.zone || b.zona || '')
     ).length;
 
     const totalSelectedBranches = formData.agenciasAsignadas.length;

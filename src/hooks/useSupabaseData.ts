@@ -379,7 +379,7 @@ const normalizeTicket = (t: any) => {
         ...sedeRaw,
         nombre: sedeRaw.name || sedeRaw.nombre || 'Sin Sede',
         direccion: sedeRaw.address || sedeRaw.direccion || 'Sin dirección',
-        zona: sedeRaw.zone || sedeRaw.zona || (sedeRaw.zonas?.nombre) || 'PAN PERÚ',
+        zona: sedeRaw.zonas?.codigo || sedeRaw.zone || sedeRaw.zona || (sedeRaw.zonas?.nombre) || 'PAN PERÚ',
         departamento: sedeRaw.departamento || realMetadata.departamento,
         provincia: sedeRaw.provincia || realMetadata.provincia,
         distrito: sedeRaw.distrito || realMetadata.distrito

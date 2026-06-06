@@ -157,7 +157,7 @@ export const branchesAPI = {
     async getAll() {
         const { data, error } = await supabase
             .from('branch_offices')
-            .select('*, clients(*)')
+            .select('*, clients(*), zonas(*)')
             .order('name');
 
         if (error) throw error;
