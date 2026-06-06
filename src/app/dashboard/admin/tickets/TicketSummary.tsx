@@ -861,14 +861,12 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
 
     const isEnviada = ticket.status_id === 'cotizacion_enviada';
 
-    // ✅ CORRECCIÓN IGV 2024: Cálculo dinámico del 18% estándar Perú
-    // El IGV se calcula como 18% del subtotal (neto sin impuestos)
-    // Total = Subtotal + IGV = Subtotal × 1.18
-    const totalFinal = round2(ticket.total_quoted_amount || 0);
-    const subtotalLocal = totalFinal > 0 ? round2(totalFinal / 1.18) : 0;
-    const igvLocal = round2(subtotalLocal * 0.18);
-
+    // Cálculos de desglose
     const finances = calculateTicketFinances(ticket, ticket.costos || []);
+    const igvLocal = extractIGV(ticket);
+    const subtotalLocal = finances.totalVenta;
+    const totalFinal = round2(subtotalLocal + igvLocal);
+
     const profit = finances.realProfitability;
     const margin = subtotalLocal > 0 ? (profit / subtotalLocal) * 100 : 0;
 
@@ -932,7 +930,7 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
             <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Total General</span>
                 <span className={styles.infoValue} style={{ fontSize: '14px', fontWeight: '800', color: '#15803D' }}>
-                    S/ {formatSoles(ticket.total_quoted_amount)}
+                    S/ {formatSoles(totalFinal)}
                 </span>
             </div>
 
@@ -1180,10 +1178,10 @@ export const DocumentationSummaryBar = memo(function DocumentationSummaryBar({ t
 export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ ticket, onOpenMaterials, onOpenRescue, costos, availableRescue: propRescue }: FinancialLiquidationBarProps) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
 
-    // Si no hay monto final ni costos base, no hay nada que liquidar aún
-    if (!ticket.total_quoted_amount && !ticket.labor_cost) return null;
-
     const finances = calculateTicketFinances(ticket, costos);
+
+    // Si no hay monto final ni costos base, no hay nada que liquidar aún
+    if (!finances.totalVenta && !finances.pactedMO) return null;
     const { 
         pactedMO: pactadoLaborBase, 
         totalLaborConfirmed: totalPagadoTecnico, 
@@ -1197,7 +1195,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
         totalExpenses: gastosReales
     } = finances;
 
-    const montoTotalCliente = ticket.total_quoted_amount || 0;
+    const montoTotalCliente = round2(finances.totalVenta + extractIGV(ticket));
     const paymentPercentage = pactadoLaborBase > 0 ? (totalPagadoTecnico / pactadoLaborBase) * 100 : 0;
 
     // Lista de estados donde la barra es relevante (desde que se envía la cotización o se aprueba)
@@ -1212,7 +1210,7 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
 
     if (!visibleStates.includes(ticket.status_id)) return null;
 
-    const availableRescue = propRescue !== undefined ? propRescue : Math.max(finances.netLaborBalance, finances.pactedMO - finances.totalExpenses);
+    const availableRescue = propRescue !== undefined ? propRescue : finances.netLaborBalance;
 
     return (
         <div
