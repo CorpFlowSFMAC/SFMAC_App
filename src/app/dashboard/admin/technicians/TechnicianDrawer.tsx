@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
     X, User, Wrench, CreditCard, ChevronRight, CheckCircle, MapPin, Compass,
     CreditCard as CardIcon, FileText, Landmark, Sun, Mountain, Map, Trees,
@@ -185,12 +185,36 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     if (!isOpen) return null;
 
     // ── Helpers: Zone & Branch selection ────────────────────────────────────
+    
+    /**
+     * Obtiene el código de zona normalizado para una agencia.
+     * Prioriza b.zonas.codigo (join de Supabase) sobre b.zone/b.zona (string legacy).
+     * NO usa b.zona_id (UUID) directamente - solo como fallback si hay join con tabla zonas.
+     */
+    const getBranchZoneCode = (b: any): string => {
+        // 1. Intentar con el join de zonas (tabla relacionada)
+        if (b.zonas?.codigo) {
+            return b.zonas.codigo;
+        }
+        // 2. Usar campo directo de zona (string, no UUID)
+        if (b.zone || b.zona) {
+            return normalizeZone(b.zone || b.zona);
+        }
+        // 3. Fallback: si hay zona_id UUID en b.zonas (relación), usar su código
+        // Esto ocurre cuando Supabase hace el join correctamente
+        if (b.zonas?.id) {
+            return normalizeZone(b.zonas.id);
+        }
+        // 4. Default: LIMA
+        return "LIMA";
+    };
+
     const toggleZone = (zoneId: string) => {
         const isSelected = formData.zonas.includes(zoneId);
         if (isSelected) {
             // Remove zone and related branch assignments
             const branchesInZone = allBranches
-                .filter(b => normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona) === normalizeZone(zoneId))
+                .filter(b => getBranchZoneCode(b) === normalizeZone(zoneId))
                 .map((b: any) => b.id);
             setFormData(prev => ({
                 ...prev,
@@ -223,7 +247,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     // Get branches for a zone, with search filter
     const getBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b => {
-            const branchZone = normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona);
+            const branchZone = getBranchZoneCode(b);
             const matchesZone = branchZone === normalizeZone(zoneId);
             const matchesSearch = !branchSearch ||
                 (b.name || '').toLowerCase().includes(branchSearch.toLowerCase()) ||
@@ -235,7 +259,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
     const getSelectedBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b =>
-            normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona) === normalizeZone(zoneId) &&
+            getBranchZoneCode(b) === normalizeZone(zoneId) &&
             formData.agenciasAsignadas.includes(b.id)
         );
     };
@@ -315,9 +339,11 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     };
 
     // ── Coverage stats ────────────────────────────────────────────────────
-    const totalBranchesInSelectedZones = allBranches.filter(b =>
-        formData.zonas.includes(normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona))
-    ).length;
+    // Use getBranchZoneCode para cálculo correcto de cobertura
+    const totalBranchesInSelectedZones = allBranches.filter(b => {
+        const branchZone = getBranchZoneCode(b);
+        return formData.zonas.some(z => normalizeZone(z) === branchZone);
+    }).length;
 
     const totalSelectedBranches = formData.agenciasAsignadas.length;
     const hasMixedCoverage = totalSelectedBranches > 0;
