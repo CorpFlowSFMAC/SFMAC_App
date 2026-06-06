@@ -36,7 +36,7 @@ export default function TicketStateNavigator({ currentStateId }: TicketStateNavi
     const triageState = getStateById("borrador");
 
     return (
-        <div className={styles.kanbanContainer}>
+        <div className={`${styles.kanbanContainer} overflow-x-auto whitespace-nowrap scrollbar-none flex items-center gap-3`}>
             <div className={styles.kanbanFlow}>
 
                 {/* Paso especial: TRIAGE */}
@@ -65,7 +65,7 @@ export default function TicketStateNavigator({ currentStateId }: TicketStateNavi
                             <div className={styles.stepInfo}>
                                 <span className={styles.stepNumber}>⚡</span>
                                 <span
-                                    className={styles.stepName}
+                                    className={`${styles.stepName} text-xs md:text-sm`}
                                     style={{ color: isTriage ? triageState.color : '#10B981' }}
                                 >
                                     Triage
@@ -125,7 +125,7 @@ export default function TicketStateNavigator({ currentStateId }: TicketStateNavi
                                 <div className={styles.stepInfo}>
                                     <span className={styles.stepNumber}>{state.order}</span>
                                     <span
-                                        className={styles.stepName}
+                                        className={`${styles.stepName} text-xs md:text-sm`}
                                         style={{ color: isActive ? state.color : undefined }}
                                     >
                                         {state.nombreCorto}

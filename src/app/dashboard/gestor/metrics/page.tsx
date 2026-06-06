@@ -349,7 +349,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
         const gestoraObj = gestoras.find(g => g.id === activeGestoraId);
         const targetObj = gestorasTargets.find(tg => tg.gestora_id === activeGestoraId && tg.month_key === monthKey2);
-        const targetUtility = parseFloat(targetObj?.target_amount || gestoraObj?.meta_mensual_utilidad || "35000");
+        const targetUtility = parseFloat(targetObj?.target_amount || gestoraObj?.meta_mensual_utilidad || "15000") || 15000;
 
         const achievedTickets = tickets.filter(t => {
             if (!t.closure_date) return false;

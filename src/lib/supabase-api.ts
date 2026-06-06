@@ -757,37 +757,7 @@ export const ticketsAPI = {
         const result = await response.json();
 
         if (response.ok && result.success) return result.data;
-
-        const { data: current, error: fetchErr } = await supabase
-            .from('tickets')
-            .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
-            .eq('id', id)
-            .single();
-
-        if (fetchErr) return this.update(id, { ...columnUpdates, metadata: metadataUpdates });
-
-        const serverMeta = stripFinancialMetadata(current?.metadata || {});
-        const safeMetadataUpdates = stripFinancialMetadata(metadataUpdates);
-
-        const finalMetadata = sanitizeTicketMetadata({
-            ...serverMeta,
-            ...safeMetadataUpdates,
-        });
-
-        const updates = {
-            ...columnUpdates,
-            metadata: finalMetadata
-        };
-
-        const { data, error } = await supabase
-            .from('tickets')
-            .update(updates)
-            .eq('id', id)
-            .select('*, clients(*), branch_offices(*), technicians(*)')
-            .single();
-
-        if (error) throw error;
-        return data;
+        throw new Error(result.error || 'Error al actualizar metadata (Server Patch)');
     },
 
     // Eliminación completa de ticket con todas sus ramificaciones reales
@@ -849,8 +819,8 @@ export const ticketsAPI = {
         }
         if (additionalUpdates?.closure_date) updates.closure_date = additionalUpdates.closure_date;
         
-        const { error } = await supabase.from('tickets').update(updates).eq('id', ticketId);
-        if (error) throw error;
+        const { metadata, ...colUpdates } = updates;
+        await this.patchMetadata(ticketId, newMeta, colUpdates);
         
         return updates;
     }
