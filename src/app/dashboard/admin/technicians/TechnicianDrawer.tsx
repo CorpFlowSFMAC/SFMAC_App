@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import styles from "./technicianDrawer.module.css";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
-import { ZONES as STANDARDIZED_ZONES } from "@/lib/zones";
+import { ZONES as STANDARDIZED_ZONES, normalizeZone } from "@/lib/zones";
 import { techniciansAPI, branchesAPI } from "@/lib/supabase-api";
 
 interface TechnicianDrawerProps {
@@ -190,7 +190,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
         if (isSelected) {
             // Remove zone and related branch assignments
             const branchesInZone = allBranches
-                .filter(b => (b.zonas?.codigo || b.zona_id || b.zone || b.zona) === zoneId)
+                .filter(b => normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona) === normalizeZone(zoneId))
                 .map((b: any) => b.id);
             setFormData(prev => ({
                 ...prev,
@@ -223,18 +223,19 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     // Get branches for a zone, with search filter
     const getBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b => {
-            const branchZone = b.zonas?.codigo || b.zona_id || b.zone || b.zona || '';
-            const matchesZone = branchZone === zoneId;
+            const branchZone = normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona);
+            const matchesZone = branchZone === normalizeZone(zoneId);
             const matchesSearch = !branchSearch ||
                 (b.name || '').toLowerCase().includes(branchSearch.toLowerCase()) ||
-                (b.codigo_topaz || '').toLowerCase().includes(branchSearch.toLowerCase());
+                (b.codigo_topaz || '').toLowerCase().includes(branchSearch.toLowerCase()) ||
+                (b.clients?.name || '').toLowerCase().includes(branchSearch.toLowerCase());
             return matchesZone && matchesSearch;
         });
     };
 
     const getSelectedBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b =>
-            (b.zonas?.codigo || b.zona_id || b.zone || b.zona) === zoneId &&
+            normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona) === normalizeZone(zoneId) &&
             formData.agenciasAsignadas.includes(b.id)
         );
     };
@@ -315,7 +316,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
     // ── Coverage stats ────────────────────────────────────────────────────
     const totalBranchesInSelectedZones = allBranches.filter(b =>
-        formData.zonas.includes(b.zonas?.codigo || b.zona_id || b.zone || b.zona || '')
+        formData.zonas.includes(normalizeZone(b.zonas?.codigo || b.zona_id || b.zone || b.zona))
     ).length;
 
     const totalSelectedBranches = formData.agenciasAsignadas.length;
