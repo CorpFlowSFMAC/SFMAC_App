@@ -388,20 +388,25 @@ export const techniciansAPI = {
     }>) {
         // Actualizar name si cambian first_name o last_name y no se proporciona name
         if (!updates.name && (updates.first_name || updates.last_name)) {
-            // Para ser precisos tendríamos que obtener el registro actual, 
-            // pero como en el UI solemos enviar todo el form, 
-            // confiamos en que TechnicianDrawer envíe el name actualizado.
+            // Confiamos en que TechnicianDrawer envíe el name actualizado.
         }
 
-        const { data, error } = await supabase
-            .from('technicians')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
+        const response = await fetch('/api/v3/technicians-server?action=patch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id,
+                columnUpdates: updates
+            })
+        });
 
-        if (error) throw error;
-        return data;
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || 'Error al actualizar técnico (Server Patch)');
+        }
+
+        const resData = await response.json();
+        return resData.data;
     },
 
     async delete(id: string) {
@@ -729,6 +734,41 @@ export const ticketsAPI = {
 
         if (error) throw error;
         return data;
+        const serverMeta = await this.getServerMetadata(id);
+        const safeMetadataUpdates = stripFinancialMetadata(additionalUpdates?.metadata || {});
+
+        const finalMetadata = sanitizeTicketMetadata({
+            ...serverMeta,
+            ...safeMetadataUpdates,
+        });
+
+        const columnUpdates: any = {
+            status_id: additionalUpdates?.status_id,
+            technician_id: additionalUpdates?.technician_id,
+            gestora_id: additionalUpdates?.gestora_id,
+            closure_date: additionalUpdates?.closure_date
+        };
+
+        // Removes undefined
+        Object.keys(columnUpdates).forEach(key => columnUpdates[key] === undefined && delete columnUpdates[key]);
+
+        const response = await fetch('/api/v3/tickets-server?action=patch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id,
+                metadataUpdates: safeMetadataUpdates,
+                columnUpdates
+            })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || 'Error al actualizar ticket (Server Patch)');
+        }
+
+        const resData = await response.json();
+        return resData.data;
     },
 
     async patchMetadata(id: string, metadataUpdates: Record<string, any>, columnUpdates: Record<string, any> = {}) {
