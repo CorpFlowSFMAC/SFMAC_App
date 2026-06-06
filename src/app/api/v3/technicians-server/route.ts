@@ -22,13 +22,22 @@ export async function POST(request: NextRequest) {
 
             const { data, error } = await client
                 .from('technicians')
-                .update(safeUpdates)
+                .update(safeUpdates as any)
                 .eq('id', id)
                 .select()
                 .single();
 
             if (error) throw error;
-            return NextResponse.json({ success: true, data });
+
+            // Re-inyectar las variables removidas para que el cache frontend las asimile sin perder información visual
+            const typedData = (data as any) || {};
+            const enrichedData = {
+                ...typedData,
+                assigned_zones: assigned_zones || typedData?.assigned_zones || [],
+                specialties: specialties || typedData?.specialties || []
+            };
+
+            return NextResponse.json({ success: true, data: enrichedData });
         }
         
         return NextResponse.json({ success: false, error: 'Acción no reconocida' }, { status: 400 });

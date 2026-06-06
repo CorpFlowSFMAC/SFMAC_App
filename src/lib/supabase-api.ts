@@ -720,44 +720,21 @@ export const ticketsAPI = {
         sla_pause_date: string;
         sla_reactivation_date: string;
         metadata: any;
+        gestora_id: string;
     }>) {
-        const safeUpdates = {
-            ...updates,
-            ...(updates.metadata ? { metadata: sanitizeTicketMetadata(updates.metadata) } : {})
-        };
-        const { data, error } = await supabase
-            .from('tickets')
-            .update(safeUpdates)
-            .eq('id', id)
-            .select('*, clients(*), branch_offices(*), technicians(*)')
-            .single();
-
-        if (error) throw error;
-        return data;
-        const serverMeta = await this.getServerMetadata(id);
-        const safeMetadataUpdates = stripFinancialMetadata(additionalUpdates?.metadata || {});
-
-        const finalMetadata = sanitizeTicketMetadata({
-            ...serverMeta,
-            ...safeMetadataUpdates,
-        });
-
-        const columnUpdates: any = {
-            status_id: additionalUpdates?.status_id,
-            technician_id: additionalUpdates?.technician_id,
-            gestora_id: additionalUpdates?.gestora_id,
-            closure_date: additionalUpdates?.closure_date
-        };
+        const { metadata, ...columnUpdates } = updates;
+        
+        const metadataUpdates = metadata ? sanitizeTicketMetadata(metadata) : {};
 
         // Removes undefined
-        Object.keys(columnUpdates).forEach(key => columnUpdates[key] === undefined && delete columnUpdates[key]);
+        Object.keys(columnUpdates).forEach(key => (columnUpdates as any)[key] === undefined && delete (columnUpdates as any)[key]);
 
         const response = await fetch('/api/v3/tickets-server?action=patch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 id,
-                metadataUpdates: safeMetadataUpdates,
+                metadataUpdates,
                 columnUpdates
             })
         });
