@@ -187,23 +187,23 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     // ── Helpers: Zone & Branch selection ────────────────────────────────────
     
     /**
-     * Obtiene el código de zona normalizado para una agencia.
-     * Prioriza b.zonas.codigo (join de Supabase) sobre b.zone/b.zona (string legacy).
-     * NO usa b.zona_id (UUID) directamente - solo como fallback si hay join con tabla zonas.
+     * Obtiene el código de zona normalizado para una agencia (formato MiBanco).
+     * Verifica el campo 'zone' de la tabla branch_offices primero (Supabase),
+     * luego el join de Supabase (b.zonas.codigo), y finalmente b.zona legacy.
+     * NO normaliza UUIDs directamente - usa solo valores de texto legibles.
      */
     const getBranchZoneCode = (b: any): string => {
-        // 1. Intentar con el join de zonas (tabla relacionada)
+        // 1. Campo 'zone' de la tabla branch_offices (Supabase)
+        if (b.zone) {
+            return normalizeZone(b.zone);
+        }
+        // 2. Campo b.zona (formato MiBanco legacy: "Lima", "Norte", etc.)
+        if (b.zona) {
+            return normalizeZone(b.zona);
+        }
+        // 3. Join de Supabase: b.zonas.codigo (zona relacionada)
         if (b.zonas?.codigo) {
-            return b.zonas.codigo;
-        }
-        // 2. Usar campo directo de zona (string, no UUID)
-        if (b.zone || b.zona) {
-            return normalizeZone(b.zone || b.zona);
-        }
-        // 3. Fallback: si hay zona_id UUID en b.zonas (relación), usar su código
-        // Esto ocurre cuando Supabase hace el join correctamente
-        if (b.zonas?.id) {
-            return normalizeZone(b.zonas.id);
+            return normalizeZone(b.zonas.codigo);
         }
         // 4. Default: LIMA
         return "LIMA";
