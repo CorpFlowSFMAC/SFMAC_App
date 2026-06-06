@@ -2133,6 +2133,15 @@ export default function PaymentsPage() {
                                                     }}>
                                                         {hasPending ? 'Pendiente' : 'Pagado'}
                                                     </div>
+                                                    {group.statusId === 'ticket_cerrado' ? (
+                                                        <div className="bg-emerald-50 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded font-medium">
+                                                            ✅ CERRADO
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded font-medium">
+                                                            🔧 EN PROCESO
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
                                                     <Building2 size={12} color="#64748B" />
@@ -2181,9 +2190,12 @@ export default function PaymentsPage() {
                                                 <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.utilidad > 0 ? '#2563EB' : '#DC2626' }}>S/ {formatSoles(group.utilidad)}</span>
                                             </div>
                                             {/* Saldo Pendiente integrado */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right', background: group.saldoPendiente > 0 ? '#FEF2F2' : 'transparent', padding: group.saldoPendiente > 0 ? '2px 6px' : '0', borderRadius: '4px' }}>
-                                                <span style={{ fontSize: '0.55rem', color: group.saldoPendiente > 0 ? '#991B1B' : '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Saldo</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#DC2626' : '#1E293B' }}>S/ {formatSoles(group.saldoPendiente)}</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right' }}>
+                                                <span style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Saldo</span>
+                                                <span className={group.saldoPendiente > 0 ? 'text-red-600 font-bold bg-red-50 px-1 rounded text-[0.75rem]' : 'text-slate-400 font-normal text-[0.75rem] flex items-center gap-1'}>
+                                                    {group.saldoPendiente <= 0 && <CheckCircle2 size={10} className="text-emerald-500" />}
+                                                    S/ {formatSoles(group.saldoPendiente)}
+                                                </span>
                                             </div>
                                         </div>
 
