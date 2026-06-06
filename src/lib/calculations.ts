@@ -156,32 +156,24 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     const commercialRound = (val: number) => Math.round(val * 100) / 100;
 
-    // Detectar intención tributaria
-    const hasLegacyIgv = extractIGV(ticket) > 0;
-    const aplicaIGV = ticket.incluye_igv === true || ticket.has_igv === true || hasLegacyIgv;
-    const esTodoIncluido = ticket.incluye_igv !== false; // Por defecto A Todo Costo
+    // Regla de Oro Inmutable: TODO TICKET aplica IGV matemáticamente hacia adelante, SIN EXCEPCIÓN.
+    // Se elimina la dependencia de flags legacy como 'has_igv' o 'aplicaIGV'.
+    const esMasIGV = ticket.mas_igv === true || ticket.incluye_igv === false;
 
     let montoBase = 0;
     let igvCalculado = 0;
     let totalGeneral = 0;
 
-    if (aplicaIGV) {
-        if (esTodoIncluido) {
-            // SI EL PRECIO ES TODO INCLUIDO
-            montoBase = commercialRound(rawAmount / 1.18);
-            igvCalculado = commercialRound(montoBase * 0.18);
-            totalGeneral = rawAmount;
-        } else {
-            // SI EL PRECIO ES MÁS IGV
-            montoBase = rawAmount;
-            igvCalculado = commercialRound(montoBase * 0.18);
-            totalGeneral = commercialRound(montoBase + igvCalculado);
-        }
+    if (esMasIGV) {
+        // SI EL PRECIO ES MÁS IGV
+        montoBase = rawAmount;
+        igvCalculado = commercialRound(montoBase * 0.18);
+        totalGeneral = commercialRound(montoBase + igvCalculado);
     } else {
-        // Sin IGV
-        montoBase = ticket.ingresos_reales ? toNum(ticket.ingresos_reales) : rawAmount;
-        igvCalculado = 0;
-        totalGeneral = montoBase;
+        // SI EL PRECIO ES TODO INCLUIDO (DEFAULT UNIVERSAL)
+        montoBase = commercialRound(rawAmount / 1.18);
+        igvCalculado = commercialRound(montoBase * 0.18);
+        totalGeneral = rawAmount;
     }
 
     // Normalizar un costo: extraer monto y fecha canónicos
