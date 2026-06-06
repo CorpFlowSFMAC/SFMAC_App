@@ -2103,132 +2103,94 @@ export default function PaymentsPage() {
                                         transition: 'transform 0.2s, box-shadow 0.2s',
                                         position: 'relative'
                                     }}>
-                                        {/* HEADER CARD */}
-                                        <div style={{ padding: '20px', borderBottom: '1px solid #F1F5F9' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {/* HEADER CARD (COMPACTO) */}
+                                        <div style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            {/* Columna Izquierda: Cliente, Sede, Ticket */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '60%' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <span style={{ 
-                                                        fontFamily: 'monospace', fontWeight: 900, color: '#2563EB', 
-                                                        background: '#EFF6FF', padding: '4px 10px', borderRadius: '8px', 
-                                                        fontSize: '0.9rem', width: 'fit-content' 
+                                                        fontFamily: 'monospace', fontWeight: 800, color: '#2563EB', 
+                                                        background: '#EFF6FF', padding: '2px 6px', borderRadius: '4px', 
+                                                        fontSize: '0.75rem' 
                                                     }}>
-                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         {group.ticketNum}
-                                                        {group.riesgoFinanciero && (
-                                                            <div 
-                                                                title="ALERTA: Solicitud de pago prematura (Presupuesto NO aprobado)"
-                                                                style={{ 
-                                                                    display: 'flex', alignItems: 'center', gap: '4px',
-                                                                    background: '#FEF2F2', color: '#EF4444', 
-                                                                    padding: '4px 10px', borderRadius: '8px',
-                                                                    fontSize: '0.75rem', fontWeight: 800, border: '1px solid #FEE2E2'
-                                                                }}
-                                                            >
-                                                                <ShieldAlert size={14} />
-                                                                <span>RIESGO</span>
-                                                            </div>
-                                                        )}
-                                                     </div>
                                                     </span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                                                        <Building2 size={14} color="#64748B" />
-                                                        <strong style={{ color: '#0F172A', fontSize: '1rem' }}>{group.cliente}</strong>
-                                                    </div>
-                                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#94A3B8', fontWeight: 500 }}>{group.sede}</p>
-                                                </div>
-                                                <div style={{ 
-                                                    padding: '4px 12px', borderRadius: '20px', 
-                                                    fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase',
-                                                    background: hasPending ? '#FEF3C7' : '#D1FAE5',
-                                                    color: hasPending ? '#D97706' : '#059669'
-                                                }}>
-                                                    {hasPending ? '⏳ Pendiente' : '✅ Pagado'}
-                                                </div>
-                                            </div>
-                                            
-                                            {/* BENEFICIARIO */}
-                                            <div style={{ 
-                                                background: '#F8FAFC', padding: '12px', borderRadius: '12px', 
-                                                border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '12px' 
-                                            }}>
-                                                <div style={{ 
-                                                    width: 40, height: 40, borderRadius: '50%', background: '#7C3AED', 
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' 
-                                                }}>
-                                                    <User size={20} />
-                                                </div>
-                                                <div style={{ flex: 1 }}>
-                                                    <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#1E293B' }}>{group.tecnico.nombre}</p>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
-                                                        <CreditCard size={12} />
-                                                        {group.tecnico.banco}
-                                                        <div style={{ display: 'flex', gap: '4px', marginLeft: '4px' }}>
-                                                            {group.tecnico.yape && <span style={{ color: '#7C3AED' }}>YAPE</span>}
-                                                            {group.tecnico.plin && <span style={{ color: '#0EA5E9' }}>PLIN</span>}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }}
-                                                    style={{ background: 'white', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px', cursor: 'pointer' }}>
-                                                    <Copy size={14} color="#64748B" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* RESUMEN FINANCIERO COMPACTO */}
-                                        <div style={{ 
-                                            padding: '12px 20px', background: '#FAFAFA', 
-                                            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.2fr', gap: '8px',
-                                            borderBottom: '1px solid #F1F5F9',
-                                            alignItems: 'center'
-                                        }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Pactado MO</span>
-                                                <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#1E293B' }}>S/ {formatSoles(group.montoPactado)}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
-                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Pagado Tech</span>
-                                                <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado - group.gastosOperativos)}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
-                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Gastos Oper.</span>
-                                                <span style={{ fontSize: '0.9rem', fontWeight: 900, color: '#DB2777' }}>S/ {formatSoles(group.gastosOperativos)}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right', borderLeft: '1px solid #E2E8F0', paddingLeft: '8px' }}>
-                                                <span style={{ fontSize: '0.6rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Utilidad Est.</span>
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                                    <span style={{ fontSize: '1rem', fontWeight: 950, color: group.utilidad > 0 ? '#2563EB' : '#DC2626' }}>
-                                                        S/ {formatSoles(group.utilidad)}
-                                                    </span>
-                                                    <span style={{ fontSize: '8px', color: '#94A3B8', fontWeight: 600 }}>
-                                                        ({formatSoles(group.montoFacturado)} Venta - {formatSoles(group.montoAdelantado)} Gasto Real)
-                                                    </span>
-                                                    {group.margen !== undefined && (
-                                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: group.margen > 20 ? '#059669' : '#D97706', background: group.margen > 20 ? '#ECFDF5' : '#FFFBEB', padding: '0 4px', borderRadius: '4px', marginTop: '2px' }}>
-                                                            {group.margen}% Margen
+                                                    {group.riesgoFinanciero && (
+                                                        <span title="ALERTA: Solicitud de pago prematura (Presupuesto NO aprobado)" style={{ 
+                                                            display: 'flex', alignItems: 'center', gap: '2px',
+                                                            background: '#FEF2F2', color: '#EF4444', 
+                                                            padding: '2px 6px', borderRadius: '4px',
+                                                            fontSize: '0.65rem', fontWeight: 800, border: '1px solid #FEE2E2'
+                                                        }}>
+                                                            <ShieldAlert size={10} /> RIESGO
                                                         </span>
                                                     )}
+                                                    <div style={{ 
+                                                        padding: '2px 6px', borderRadius: '4px', 
+                                                        fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase',
+                                                        background: hasPending ? '#FEF3C7' : '#D1FAE5',
+                                                        color: hasPending ? '#D97706' : '#059669'
+                                                    }}>
+                                                        {hasPending ? 'Pendiente' : 'Pagado'}
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                                                    <Building2 size={12} color="#64748B" />
+                                                    <strong style={{ color: '#0F172A', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.cliente}</strong>
+                                                </div>
+                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94A3B8', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.sede}</p>
+                                            </div>
+
+                                            {/* Columna Derecha: Técnico */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', textAlign: 'right' }}>
+                                                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1E293B' }}>{group.tecnico.nombre}</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>
+                                                    <CreditCard size={10} /> {group.tecnico.banco}
+                                                    <button onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }}
+                                                        style={{ background: 'none', border: 'none', padding: '0', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Copiar cuenta">
+                                                        <Copy size={12} color="#64748B" />
+                                                    </button>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                                                    {group.tecnico.yape && <span style={{ color: '#7C3AED', fontSize: '0.65rem', fontWeight: 700, background: '#F3E8FF', padding: '1px 4px', borderRadius: '3px' }}>YAPE</span>}
+                                                    {group.tecnico.plin && <span style={{ color: '#0EA5E9', fontSize: '0.65rem', fontWeight: 700, background: '#E0F2FE', padding: '1px 4px', borderRadius: '3px' }}>PLIN</span>}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* PÍLDORA DE SALDO (Solo si hay saldo) */}
-                                        {group.saldoPendiente > 0 && (
-                                            <div style={{ 
-                                                margin: '8px 20px 0', padding: '6px 12px', 
-                                                background: '#FEF2F2', borderRadius: '10px', 
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                border: '1px solid #FEE2E2'
-                                            }}>
-                                                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#991B1B' }}>SALDO PENDIENTE (TÉCNICO)</span>
-                                                <span style={{ fontSize: '0.95rem', fontWeight: 950, color: '#DC2626' }}>S/ {formatSoles(group.saldoPendiente)}</span>
+                                        {/* RESUMEN FINANCIERO COMPACTO (1 LÍNEA) */}
+                                        <div style={{ 
+                                            padding: '8px 16px', background: '#FAFAFA', 
+                                            display: 'flex', justifyContent: 'space-between', gap: '4px',
+                                            borderBottom: '1px solid #F1F5F9', alignItems: 'center'
+                                        }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Pactado MO</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1E293B' }}>S/ {formatSoles(group.montoPactado)}</span>
                                             </div>
-                                        )}
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center' }}>
+                                                <span style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Pagado</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>S/ {formatSoles(group.montoAdelantado - group.gastosOperativos)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center' }}>
+                                                <span style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>G. Oper.</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#DB2777' }}>S/ {formatSoles(group.gastosOperativos)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'center' }}>
+                                                <span style={{ fontSize: '0.55rem', color: '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Utilidad</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.utilidad > 0 ? '#2563EB' : '#DC2626' }}>S/ {formatSoles(group.utilidad)}</span>
+                                            </div>
+                                            {/* Saldo Pendiente integrado */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right', background: group.saldoPendiente > 0 ? '#FEF2F2' : 'transparent', padding: group.saldoPendiente > 0 ? '2px 6px' : '0', borderRadius: '4px' }}>
+                                                <span style={{ fontSize: '0.55rem', color: group.saldoPendiente > 0 ? '#991B1B' : '#64748B', fontWeight: 800, textTransform: 'uppercase' }}>Saldo</span>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: group.saldoPendiente > 0 ? '#DC2626' : '#1E293B' }}>S/ {formatSoles(group.saldoPendiente)}</span>
+                                            </div>
+                                        </div>
 
-                                        {/* SOLICITUDES ACTUALES */}
-                                        <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {/* SOLICITUDES ACTUALES (BOTONES REDUCIDOS) */}
+                                        <div style={{ padding: '12px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                             {group.items.length === 0 ? (
-                                                <p style={{ margin: 0, fontSize: '0.8rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>No hay solicitudes de pago actuales</p>
+                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>No hay solicitudes de pago actuales</p>
                                             ) : (
                                                 group.items.map((item, idx) => {
                                                     const isPending = item.estado === 'pendiente';
@@ -2237,54 +2199,52 @@ export default function PaymentsPage() {
                                                     return (
                                                         <div key={idx} style={{ 
                                                             background: isPending ? '#FFFBEB' : '#FFFFFF',
-                                                            border: isPending ? '2px solid #F59E0B' : '1px solid #F1F5F9',
-                                                            borderRadius: '14px', padding: '12px',
+                                                            border: isPending ? '1px solid #FCD34D' : '1px solid #F1F5F9',
+                                                            borderRadius: '8px', padding: '8px 12px',
                                                             display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                                         }}>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                                                 <span style={{ 
-                                                                    fontSize: '0.65rem', fontWeight: 900, padding: '2px 8px', borderRadius: '6px',
+                                                                    fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
                                                                     background: typeCfg.bg, color: typeCfg.color, width: 'fit-content'
                                                                 }}>
                                                                     {typeCfg.label}
                                                                 </span>
-                                                                <span style={{ fontSize: '1.25rem', fontWeight: 950, color: '#1E293B' }}>S/ {formatSoles(item.monto)}</span>
-                                                                {item.concepto && <span style={{ fontSize: '0.75rem', color: '#64748B', fontStyle: 'italic' }}>{item.concepto}</span>}
+                                                                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#1E293B' }}>S/ {formatSoles(item.monto)}</span>
+                                                                {item.concepto && <span style={{ fontSize: '0.65rem', color: '#64748B', fontStyle: 'italic' }}>{item.concepto}</span>}
                                                             </div>
                                                             
-                                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                            <div style={{ display: 'flex', gap: '6px' }}>
                                                                 {isPending ? (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                                    <>
                                                                         <button 
                                                                             onClick={() => handleSmartPayment(group, item)}
                                                                             style={{ 
                                                                                 background: '#10B981', color: 'white', border: 'none', 
-                                                                                borderRadius: '10px', padding: '10px 16px', fontWeight: 800,
-                                                                                fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 10px rgba(16,185,129,0.2)'
+                                                                                borderRadius: '6px', padding: '6px 12px', fontWeight: 700,
+                                                                                fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
                                                                             }}
                                                                         >
-                                                                            PAGAR
+                                                                            <CheckCircle2 size={12} /> Pagar
                                                                         </button>
                                                                         <button 
                                                                             onClick={() => handleDenyPayment(group, item)}
                                                                             style={{ 
-                                                                                background: '#FEF2F2', color: '#DC2626', border: 'none', 
-                                                                                borderRadius: '8px', padding: '6px', fontWeight: 700,
-                                                                                fontSize: '0.7rem', cursor: 'pointer'
+                                                                                background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', 
+                                                                                borderRadius: '6px', padding: '6px 8px', fontWeight: 700,
+                                                                                fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center'
                                                                             }}
                                                                         >
-                                                                            DENEGAR
+                                                                            Denegar
                                                                         </button>
-                                                                    </div>
+                                                                    </>
                                                                 ) : (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                                                        <div style={{ background: '#DCFCE7', borderRadius: '50%', padding: '6px', color: '#10B981' }}>
-                                                                            <CheckCircle2 size={18} />
-                                                                        </div>
-                                                                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                                                        <div style={{ color: '#10B981' }}><CheckCircle2 size={16} /></div>
+                                                                        <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
                                                                         {item.voucherRef && (
                                                                             <button onClick={() => setShowVoucher(item.voucherRef || null)}
-                                                                                style={{ fontSize: '0.65rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
+                                                                                style={{ fontSize: '0.6rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
                                                                                 VOUCHER
                                                                             </button>
                                                                         )}
