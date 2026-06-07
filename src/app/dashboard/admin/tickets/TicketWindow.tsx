@@ -1373,8 +1373,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             } else {
                 await ticketsAPI.update(ticketData.id, dbUpdates);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error persisting assignment to Supabase:', err);
+            alert("❌ Error al asignar el técnico: " + (err.message || "Error en el servidor"));
+            isReassigning.current = false;
+            return;
         }
 
         // ✅ FIX: Actualizar tanto tecnico como technician_id correctamente
