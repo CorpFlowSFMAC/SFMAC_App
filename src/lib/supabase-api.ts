@@ -8,6 +8,18 @@ const toNumberSafe = (value: any): number => {
     return isNaN(num) ? 0 : num;
 };
 
+/**
+ * Helper para obtener el código de zona de una relación zonas de Supabase.
+ * La relación puede retornar un array o un objeto según el contexto.
+ */
+const getZonaCodigo = (zonasRelation: any): string | null => {
+    if (!zonasRelation) return null;
+    if (Array.isArray(zonasRelation)) {
+        return zonasRelation[0]?.codigo || null;
+    }
+    return zonasRelation.codigo || null;
+};
+
 export class DuplicateTicketCostError extends Error {
     constructor() {
         super('Ya existe un pago confirmado con el mismo ticket, monto y concepto.');
@@ -322,21 +334,326 @@ export const techniciansAPI = {
 
     // Retorna los técnicos disponibles para atender una agencia específica
     // usando la función PL/pgSQL que implementa la lógica de microzonificación
+    // Si la RPC no existe, usa fallback local
     async getAvailableForBranch(branchId: string) {
-        const { data, error } = await supabase
-            .rpc('get_technicians_for_branch', { p_branch_id: branchId });
-        if (error) throw error;
-        return data || [];
+        try {
+            const { data, error } = await supabase
+                .rpc('get_technicians_for_branch', { p_branch_id: branchId });
+            if (!error && data) return data || [];
+        } catch (e) {
+            console.warn('[getAvailableForBranch] RPC not available, using fallback');
+        }
+        
+        // Fallback: obtener técnicos cuyas zonas incluyan la zona de la agencia
+        const { data: branch } = await supabase
+            .from('branch_offices')
+            .select('zone, zona_id, zonas(codigo)')
+            .eq('id', branchId)
+            .single();
+        
+        if (!branch) return [];
+        
+        // Determinar la zona de la agencia
+        const branchZone = branch.zone || getZonaCodigo(branch.zonas) || null;
+        if (!branchZone) return [];
+        
+        // Buscar técnicos de esa zona
+        const { data: technicians } = await supabase
+            .from('technicians')
+            .select('*, technician_branches(branch_id)')
+            .or(`assigned_zones.cs.{"${branchZone}"},zone.eq.${branchZone}`)
+            .eq('status', 'active');
+        
+        return technicians || [];
     },
 
-    // Obtiene las agencias asignadas a un técnico
+    /**
+     * Obtiene los técnicos que atienden a un cliente específico.
+     * Un técnico atiende a un cliente si:
+     * 1. Tiene al menos una agencia del cliente asignada directamente, O
+     * 2. Tiene al menos una zona en común con las zonas del cliente
+     */
+    async getByClient(clientId: string) {
+        // 1. Obtener todas las agencias del cliente con sus zonas
+        const { data: branches } = await supabase
+            .from('branch_offices')
+            .select('id, zone, zona_id, zonas(codigo, nombre)')
+            .eq('client_id', clientId);
+        
+        if (!branches || branches.length === 0) return [];
+        
+        // Extraer zonas únicas del cliente
+        const clientZones = new Set<string>();
+        branches.forEach(b => {
+            if (b.zone) clientZones.add(b.zone);
+            const zonaCodigo = getZonaCodigo(b.zonas);
+            if (zonaCodigo) clientZones.add(zonaCodigo);
+        });
+        
+        // 2. Obtener técnicos que tienen agencias directas del cliente
+        const branchIds = branches.map(b => b.id);
+        const { data: techWithBranches } = await supabase
+            .from('technician_branches')
+            .select('technician_id, branch_id, technicians(*)')
+            .in('branch_id', branchIds);
+        
+        // 3. Obtener técnicos que tienen zonas en común
+        const zonesArray = Array.from(clientZones);
+        const { data: techWithZones } = await supabase
+            .from('technicians')
+            .select('*, technician_branches(branch_id)')
+            .or(`assigned_zones.cs.{${zonesArray.join(',')}},zone.eq.${zonesArray[0]}`)
+            .eq('status', 'active');
+        
+        // Combinar y deduplicar
+        const techMap = new Map();
+        
+        if (techWithBranches) {
+            techWithBranches.forEach((tb: any) => {
+                if (tb.technicians && !techMap.has(tb.technicians.id)) {
+                    techMap.set(tb.technicians.id, {
+                        ...tb.technicians,
+                        _coverageType: 'direct_branch',
+                        _servedBranches: []
+                    });
+                }
+            });
+        }
+        
+        if (techWithZones) {
+            techWithZones.forEach((tech: any) => {
+                if (!techMap.has(tech.id)) {
+                    techMap.set(tech.id, {
+                        ...tech,
+                        _coverageType: 'zone_based',
+                        _servedBranches: []
+                    });
+                }
+            });
+        }
+        
+        return Array.from(techMap.values());
+    },
+
+    /**
+     * Obtiene técnicos filtrados por zonas específicas.
+     * Un técnico es retornado si alguna de sus zonas coincide con las solicitadas.
+     */
+    async getByZones(zoneIds: string[]) {
+        if (!zoneIds || zoneIds.length === 0) return [];
+        
+        const { data, error } = await supabase
+            .from('technicians')
+            .select('*, technician_branches(branch_id)')
+            .eq('status', 'active');
+        
+        if (error) throw error;
+        
+        // Filtrar por coincidencia de zonas
+        const normalizedZones = zoneIds.map(z => z.toUpperCase());
+        return (data || []).filter((tech: any) => {
+            const techZones: string[] = tech.assigned_zones || (tech.zone ? [tech.zone] : []);
+            const normalizedTechZones = techZones.map(z => z.toUpperCase());
+            return normalizedZones.some(z => normalizedTechZones.includes(z));
+        });
+    },
+
+    /**
+     * Obtiene técnicos que pueden atender una lista de agencias específicas.
+     * Útil para verificar cobertura antes de asignar.
+     */
+    async getByBranches(branchIds: string[]) {
+        if (!branchIds || branchIds.length === 0) return [];
+        
+        // 1. Obtener info de las agencias (zonas y clientes)
+        const { data: branches } = await supabase
+            .from('branch_offices')
+            .select('id, zone, client_id')
+            .in('id', branchIds);
+        
+        if (!branches || branches.length === 0) return [];
+        
+        // 2. Obtener técnicos con ramas asignadas que coincidan
+        const { data: techBranches } = await supabase
+            .from('technician_branches')
+            .select('technician_id, branch:branch_offices(id, name, zone, client_id)')
+            .in('branch_id', branchIds);
+        
+        // 3. Extraer técnicos únicos
+        const techIds = [...new Set((techBranches || []).map((tb: any) => tb.technician_id))];
+        
+        if (techIds.length === 0) return [];
+        
+        const { data: technicians } = await supabase
+            .from('technicians')
+            .select('*, technician_branches(branch_id)')
+            .in('id', techIds);
+        
+        return technicians || [];
+    },
+
+    // Obtiene las agencias asignadas a un técnico con info completa
     async getAssignedBranches(technicianId: string) {
         const { data, error } = await supabase
             .from('technician_branches')
-            .select('branch_id, branch_offices(id, name, zone, address, departamento)')
+            .select('branch_id, branch_offices(id, name, zone, address, departamento, client_id, client:clients(id, name))')
             .eq('technician_id', technicianId);
         if (error) throw error;
         return (data || []).map((r: any) => r.branch_offices);
+    },
+
+    /**
+     * Verifica la consistencia de zonas entre un técnico y sus agencias asignadas.
+     * Retorna problemas encontrados y sugerencias de corrección.
+     */
+    async verifyZoneConsistency(technicianId: string) {
+        const issues: string[] = [];
+        const suggestions: string[] = [];
+        
+        // 1. Obtener datos del técnico
+        const { data: tech, error: techError } = await supabase
+            .from('technicians')
+            .select('id, name, zone, assigned_zones')
+            .eq('id', technicianId)
+            .single();
+        
+        if (techError || !tech) {
+            issues.push('Técnico no encontrado');
+            return { isConsistent: false, issues, suggestions };
+        }
+        
+        // 2. Obtener agencias asignadas
+        const { data: branches } = await supabase
+            .from('technician_branches')
+            .select('branch_id, branch_offices(zone)')
+            .eq('technician_id', technicianId);
+        
+        const branchZones = (branches || [])
+            .map((b: any) => b.branch_offices?.zone)
+            .filter(Boolean);
+        
+        // 3. Obtener zonas únicas de las agencias
+        const uniqueBranchZones = [...new Set(branchZones)];
+        
+        // 4. Comparar con zonas del técnico
+        const techZones: string[] = tech.assigned_zones || (tech.zone ? [tech.zone] : []);
+        const normalizedTechZones = techZones.map(z => z.toUpperCase());
+        const normalizedBranchZones = uniqueBranchZones.map(z => z.toUpperCase());
+        
+        // Verificar si las zonas del técnico cubren las zonas de sus agencias
+        const uncoveredZones = normalizedBranchZones.filter(
+            bz => !normalizedTechZones.some(tz => tz === bz)
+        );
+        
+        if (uncoveredZones.length > 0) {
+            issues.push(`El técnico tiene agencias en zonas no asignadas: ${uncoveredZones.join(', ')}`);
+            suggestions.push(`Agregar las zonas [${uncoveredZones.join(', ')}] a assigned_zones del técnico`);
+        }
+        
+        // Verificar zonas huérfanas (zonas asignadas al técnico pero sin agencias en esas zonas)
+        const orphanedZones = normalizedTechZones.filter(
+            tz => !normalizedBranchZones.some(bz => bz === tz) && normalizedBranchZones.length > 0
+        );
+        
+        if (orphanedZones.length > 0) {
+            suggestions.push(`Zonas asignadas sin agencias: ${orphanedZones.join(', ')}. Considerar removerlas o agregar agencias en esas zonas.`);
+        }
+        
+        return {
+            isConsistent: issues.length === 0,
+            technician: { id: tech.id, name: tech.name, zones: techZones },
+            branchZones: uniqueBranchZones,
+            issues,
+            suggestions
+        };
+    },
+
+    /**
+     * Obtiene un resumen de cobertura de técnicos por cliente y zona.
+     * Útil para dashboards de asignación.
+     */
+    async getCoverageSummary() {
+        // Obtener todos los técnicos con sus agencias
+        const { data: technicians } = await supabase
+            .from('technicians')
+            .select('id, name, zone, assigned_zones, status, technician_branches(branch_id)')
+            .eq('status', 'active');
+        
+        // Obtener todas las agencias con info de cliente y zona
+        const { data: branches } = await supabase
+            .from('branch_offices')
+            .select('id, name, zone, client_id, client:clients(id, name)');
+        
+        if (!technicians || !branches) {
+            return { byClient: [], byZone: [], stats: {} };
+        }
+        
+        // Crear mapa de agencias por cliente
+        const branchesByClient = new Map<string, any[]>();
+        const branchesByZone = new Map<string, any[]>();
+        
+        branches.forEach(b => {
+            // Por cliente
+            const clientId = b.client_id;
+            if (!branchesByClient.has(clientId)) {
+                branchesByClient.set(clientId, []);
+            }
+            branchesByClient.get(clientId)!.push(b);
+            
+            // Por zona
+            const zone = b.zone || 'SIN_ZONA';
+            if (!branchesByZone.has(zone)) {
+                branchesByZone.set(zone, []);
+            }
+            branchesByZone.get(zone)!.push(b);
+        });
+        
+        // Calcular cobertura por cliente
+        const byClient = Array.from(branchesByClient.entries()).map(([clientId, clientBranches]) => {
+            const clientName = clientBranches[0]?.client?.name || 'Cliente desconocido';
+            const branchIds = clientBranches.map(b => b.id);
+            
+            const servingTechs = (technicians || []).filter(t => {
+                const techBranchIds = (t.technician_branches || []).map((tb: any) => tb.branch_id);
+                return techBranchIds.some(id => branchIds.includes(id));
+            });
+            
+            return {
+                clientId,
+                clientName,
+                totalBranches: clientBranches.length,
+                assignedTechs: servingTechs.length,
+                techNames: servingTechs.map(t => t.name)
+            };
+        });
+        
+        // Calcular cobertura por zona
+        const byZone = Array.from(branchesByZone.entries()).map(([zone, zoneBranches]) => {
+            const branchIds = zoneBranches.map(b => b.id);
+            
+            const servingTechs = (technicians || []).filter(t => {
+                const techZones = t.assigned_zones || (t.zone ? [t.zone] : []);
+                const normalizedTechZones = techZones.map((z: string) => z.toUpperCase());
+                return normalizedTechZones.includes(zone.toUpperCase());
+            });
+            
+            return {
+                zone,
+                totalBranches: zoneBranches.length,
+                assignedTechs: servingTechs.length,
+                techNames: servingTechs.map(t => t.name)
+            };
+        });
+        
+        return {
+            byClient,
+            byZone,
+            stats: {
+                totalTechnicians: (technicians || []).length,
+                totalBranches: branches.length,
+                totalClients: branchesByClient.size
+            }
+        };
     },
 
     // Sincroniza las agencias asignadas a un técnico (vía server para bypass RLS)
