@@ -197,6 +197,39 @@ export const branchesAPI = {
         return data;
     },
 
+    /**
+     * Valida que los IDs de agencias existan en la base de datos.
+     * Retorna solo los IDs válidos, filtrando IDs corruptos o no existentes.
+     * Esto previene errores de Foreign Key en operaciones de sync.
+     */
+    async validateBranchIds(candidateIds: string[]): Promise<{ validIds: string[]; invalidIds: string[] }> {
+        if (!candidateIds || candidateIds.length === 0) {
+            return { validIds: [], invalidIds: [] };
+        }
+
+        // Obtener todos los IDs válidos de una sola query
+        const { data, error } = await supabase
+            .from('branch_offices')
+            .select('id')
+            .in('id', candidateIds);
+
+        if (error) {
+            console.error('[validateBranchIds] Error querying branch_offices:', error);
+            // En caso de error, asumir que todos los IDs son válidos y dejar que el servidor valide
+            return { validIds: candidateIds, invalidIds: [] };
+        }
+
+        const validIdSet = new Set((data || []).map((b: any) => b.id));
+        const validIds = candidateIds.filter(id => validIdSet.has(id));
+        const invalidIds = candidateIds.filter(id => !validIdSet.has(id));
+
+        if (invalidIds.length > 0) {
+            console.warn('[validateBranchIds] Invalid branch IDs filtered out:', invalidIds);
+        }
+
+        return { validIds, invalidIds };
+    },
+
     async create(branch: {
         client_id: string;
         name: string;
@@ -307,21 +340,45 @@ export const techniciansAPI = {
     },
 
     // Sincroniza las agencias asignadas a un técnico (vía server para bypass RLS)
+    // Incluye validación de integridad referencial para evitar FK errors
     async syncBranchAssignments(technicianId: string, branchIds: string[]) {
+        // STEP 3: Validar integridad referencial - filtrar IDs que no existen
+        const { validIds, invalidIds } = await branchesAPI.validateBranchIds(branchIds);
+        
+        if (invalidIds.length > 0) {
+            console.warn('[syncBranchAssignments] Filtering invalid branch IDs:', invalidIds);
+            // Los IDs inválidos se filtran - solo se procesan IDs válidos
+        }
+        
+        if (validIds.length === 0 && branchIds.length > 0) {
+            // Todos los IDs eran inválidos - lanzar error específico
+            throw new Error(`Ninguna de las agencias seleccionadas existe en el catálogo. IDs inválidos: ${invalidIds.slice(0, 3).join(', ')}${invalidIds.length > 3 ? '...' : ''}`);
+        }
+        
         const response = await fetch('/api/v3/technicians-server?action=sync_branches', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ technician_id: technicianId, branch_ids: branchIds })
+            body: JSON.stringify({ technician_id: technicianId, branch_ids: validIds })
         });
         
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error || 'Error al sincronizar agencias del técnico');
+        // Parse response body for error details
+        let errData: { error?: string; success?: boolean } = {};
+        try {
+            errData = await response.json();
+        } catch (e) {
+            // JSON parse failed, use generic message
         }
         
-        const resData = await response.json();
-        if (!resData.success) {
-            throw new Error(resData.error || 'Fallo en la sincronización de agencias');
+        // Explicitly check response status - throw detailed error to propagate to UI
+        if (!response.ok) {
+            console.error('[syncBranchAssignments] HTTP error:', response.status, errData);
+            throw new Error(errData.error || `Error HTTP ${response.status} al sincronizar agencias del técnico`);
+        }
+        
+        // Check for server-side business logic errors
+        if (errData.success === false || errData.error) {
+            console.error('[syncBranchAssignments] Server error:', errData.error);
+            throw new Error(errData.error || 'Fallo en la sincronización de agencias');
         }
     },
 

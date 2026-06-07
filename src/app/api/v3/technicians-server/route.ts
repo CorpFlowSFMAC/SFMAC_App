@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
                 .delete()
                 .eq('technician_id', technician_id);
             
-            if (delErr) {
+            if (delErr !== null) {
+                console.error('[sync_branches] Delete error:', delErr);
                 return NextResponse.json({ error: delErr.message || 'Error al eliminar asignaciones' }, { status: 500 });
             }
 
@@ -59,7 +60,8 @@ export async function POST(request: NextRequest) {
                     // @ts-ignore
                     .insert(rows);
                 
-                if (insErr) {
+                if (insErr !== null) {
+                    console.error('[sync_branches] Insert error:', insErr);
                     return NextResponse.json({ error: insErr.message || 'Error al insertar asignaciones' }, { status: 500 });
                 }
             }
