@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const action = searchParams.get('action');
+        const accion = searchParams.get('action');
         
         if (action === 'patch') {
             const client = getClient();
@@ -32,37 +32,37 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: true, data });
         }
         
-        if (action === 'sync_branches') {
+        if (accion === 'sincronizar_agencias') {
             const client = getClient();
             if (!client) throw new Error('Supabase server client is not configured');
 
             const body = await request.json();
-            const { technician_id, branch_ids } = body;
+            const { tecnico_id, branch_ids } = body;
             
-            console.log('[sync_branches] Received request:', { technician_id, branch_ids, branchIdsCount: branch_ids?.length });
+            console.log('[sincronizar_agencias] Received request:', { tecnico_id, branch_ids, branchIdsCount: branch_ids?.length });
             
-            if (!technician_id || !Array.isArray(branch_ids)) {
-                return NextResponse.json({ success: false, error: 'technician_id y branch_ids (array) son requeridos' }, { status: 400 });
+            if (!tecnico_id || !Array.isArray(branch_ids)) {
+                return NextResponse.json({ success: false, error: 'tecnico_id y branch_ids (array) son requeridos' }, { status: 400 });
             }
 
             // 1. Borrar asignaciones existentes
-            console.log('[sync_branches] Deleting existing assignments for technician:', technician_id);
+            console.log('[sincronizar_agencias] Deleting existing assignments for technician:', tecnico_id);
             const { error: delErr } = await client
                 .from('technician_branches')
                 .delete()
-                .eq('technician_id', technician_id);
+                .eq('tecnico_id', tecnico_id);
             
             if (delErr !== null) {
-                console.error('[sync_branches] Delete error:', delErr);
+                console.error('[sincronizar_agencias] Delete error:', delErr);
                 return NextResponse.json({ error: delErr.message || 'Error al eliminar asignaciones' }, { status: 500 });
             }
-            console.log('[sync_branches] Delete successful');
+            console.log('[sincronizar_agencias] Delete successful');
 
             // 2. Insertar nuevas asignaciones si existen
             if (branch_ids.length > 0) {
-                console.log('[sync_branches] Inserting', branch_ids.length, 'branch assignments');
-                const rows = branch_ids.map((bid: string) => ({ technician_id, branch_id: bid }));
-                console.log('[sync_branches] Insert rows:', rows);
+                console.log('[sincronizar_agencias] Inserting', branch_ids.length, 'branch assignments');
+                const rows = branch_ids.map((bid: string) => ({ tecnico_id, branch_id: bid }));
+                console.log('[sincronizar_agencias] Insert rows:', rows);
                 
                 const { error: insErr } = await client
                     .from('technician_branches')
@@ -70,15 +70,15 @@ export async function POST(request: NextRequest) {
                     .insert(rows);
                 
                 if (insErr !== null) {
-                    console.error('[sync_branches] Insert error:', insErr);
+                    console.error('[sincronizar_agencias] Insert error:', insErr);
                     return NextResponse.json({ error: insErr.message || 'Error al insertar asignaciones' }, { status: 500 });
                 }
-                console.log('[sync_branches] Insert successful');
+                console.log('[sincronizar_agencias] Insert successful');
             } else {
-                console.log('[sync_branches] No branches to insert (empty array) - keeping only deleted state');
+                console.log('[sincronizar_agencias] No branches to insert (empty array) - keeping only deleted state');
             }
 
-            console.log('[sync_branches] Returning success');
+            console.log('[sincronizar_agencias] Returning success');
             return NextResponse.json({ success: true });
         }
         
@@ -93,21 +93,21 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const action = searchParams.get('action');
+        const accion = searchParams.get('action');
 
         if (action === 'get_assigned_branches') {
             const client = getClient();
             if (!client) throw new Error('Supabase server client is not configured');
 
-            const technicianId = searchParams.get('technician_id');
+            const technicianId = searchParams.get('tecnico_id');
             if (!technicianId) {
-                return NextResponse.json({ success: false, error: 'technician_id es requerido' }, { status: 400 });
+                return NextResponse.json({ success: false, error: 'tecnico_id es requerido' }, { status: 400 });
             }
 
             const { data, error } = await client
                 .from('technician_branches')
                 .select('branch_id, branch_offices(id, name, zone, address, departamento, client_id, client:clients(id, name))')
-                .eq('technician_id', technicianId);
+                .eq('tecnico_id', technicianId);
 
             if (error) throw error;
             
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
             // Fetch ALL technician branches, bypassing RLS
             const { data, error } = await client
                 .from('technician_branches')
-                .select('technician_id, branch_id');
+                .select('tecnico_id, branch_id');
 
             if (error) throw error;
             

@@ -31,7 +31,7 @@ interface TicketData {
     ticket_number?: number;
     client_id: string;
     branch_id?: string;
-    technician_id?: string | null;
+    tecnico_id?: string | null;
     status_id: string;
     description?: string;
     client_ticket_number?: string | null;
@@ -784,7 +784,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ★ INCLUIR cambios en costos financieros para evitar parpadeo post-guardado
         setTicketData((prev: any) => {
             const hasStatusChanged = ticket.status_id !== prev.status_id;
-            const hasTechChanged = ticket.technician_id !== prev.technician_id;
+            const hasTechChanged = ticket.tecnico_id !== prev.tecnico_id;
             const hasGestoraChanged = ticket.gestora_id !== prev.gestora_id;
             const hasMetaChanged = JSON.stringify(ticket.metadata) !== JSON.stringify(prev.metadata);
             // Detectores de cambio financiero (evita parpadeo tras guardar reporte técnico)
@@ -866,7 +866,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 tecnico: (() => {
                     const incomingTech = ticket.technicians || ticket.tecnico;
                     // Si el prop está actualizado Y coincide con el estado local, usar prop (más fresco)
-                    if (incomingTech?.id === ticket.technician_id && incomingTech?.id === prev.tecnico?.id) {
+                    if (incomingTech?.id === ticket.tecnico_id && incomingTech?.id === prev.tecnico?.id) {
                         return incomingTech;
                     }
                     // En cualquier otro caso, preservar el estado local para evitar parpadeo
@@ -969,7 +969,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             categoria: category,
             concepto: concepto,
             monto: category === 'Viáticos / Movilidad' ? (ticketData.visit_cost || '').toString() : '',
-            specialist_id: ticketData.technician_id || '',
+            specialist_id: ticketData.tecnico_id || '',
             specialistName: ticketData.tecnico?.name || '',
             searchQuery: ticketData.tecnico?.name || '',
             showDropdown: false
@@ -1065,7 +1065,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // Esto evita que si la ventana estuvo abierta mucho tiempo, sobreescriba pagos hechos por tesorería.
         const { data: serverTicket } = await supabase
             .from('tickets')
-            .select('metadata, status_id, technician_id, gestora_id')
+            .select('metadata, status_id, tecnico_id, gestora_id')
             .eq('id', ticketData.id)
             .single();
 
@@ -1137,7 +1137,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             materials_cost: parseFloat(sourceForPayments?.materials_cost || 0),
             visit_cost: parseFloat(sourceForPayments?.visit_cost || 0),
             total_quoted_amount: parseFloat(sourceForPayments?.total_quoted_amount ?? sourceForPayments?.total_quoted_amount ?? totalQuotedAmount ?? 0),
-            technician_id: tecnico?.id || serverTicket?.technician_id || businessData.technician_id,
+            tecnico_id: tecnico?.id || serverTicket?.tecnico_id || businessData.tecnico_id,
             gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id || businessData.gestora_id,
             execution_date: businessData.execution_date,
             metadata: {
@@ -1288,7 +1288,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         const serverFields = {
                             status_id: incomingOrder >= currentOrder ? incomingStatus : prev.status_id,
                             estadoId: incomingOrder >= currentOrder ? normalizeStateId(incomingStatus) : prev.status_id,
-                            technician_id: freshServerData.technician_id,
+                            tecnico_id: freshServerData.tecnico_id,
                             gestora_id: freshServerData.gestora_id,
                             labor_cost: freshServerData.labor_cost,
                             materials_cost: freshServerData.materials_cost,
@@ -1354,10 +1354,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         
         // ✅ FIX: Contrato de datos estandarizado (ahora siempre es 'tecnico')
         const newTecnicoObj = assignmentData.tecnico || null;
-        const newTechnicianId = newTecnicoObj?.id || null;
+        const tecnico_id = newTecnicoObj?.id || null;
 
         const dbUpdates: any = {
-            technician_id: newTechnicianId,
+            tecnico_id: tecnico_id,
             visit_cost: isInitialAssignment ? null : (ticketData.visit_cost || null),
             status_id: newEstadoId,
             metadata: {
@@ -1374,7 +1374,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             } else {
                 // ✅ FIX: Forzar mutación obligatoria a través del backend seguro (SERVICE ROLE bypass)
                 const { metadata, ...columnUpdates } = dbUpdates;
-                const response = await fetch('/api/v3/tickets-server?action=patch', {
+                const response = await fetch('/api/v3/tickets-server?accion=parchar_ticket', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1396,11 +1396,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             return;
         }
 
-        // ✅ FIX: Actualizar tanto tecnico como technician_id correctamente
+        // ✅ FIX: Actualizar tanto tecnico como tecnico_id correctamente
         setTicketData((prev: any) => ({
             ...prev,
             tecnico: newTecnicoObj,
-            technician_id: newTechnicianId,
+            tecnico_id: tecnico_id,
             status_id: newEstadoId
         }));
         setShowAssignmentDrawer(false);
@@ -1826,7 +1826,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setIsSaving(true);
         try {
             const currentId = ticket.id || ticketData.id;
-            const technicianId = ticketData.tecnico?.id || ticketData.technician_id;
+            const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id;
 
             // 1. Si hay costo de movilidad, registrarlo como gasto real
             if (mobility > 0 && technicianId) {
@@ -1998,7 +1998,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             return;
         }
 
-        const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id || ticketData.specialist_id;
+        const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id || ticket.tecnico_id || ticketData.specialist_id;
         const currentId = ticket.id || ticketData.id;
 
         if (!technicianId) {
@@ -2201,7 +2201,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             return;
         }
 
-        const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id || ticketData.specialist_id;
+        const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id || ticket.tecnico_id || ticketData.specialist_id;
         const currentId = ticketData.id;
 
         if (!technicianId) {
@@ -2359,7 +2359,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
 
             // ✅ FIX: Usar ticketData.id (no ticket.id) para asegurar el ID correcto en ticket_costs
             const currentTicketId = ticketData.id;
-            const technicianId = ticketData.tecnico?.id || ticketData.technician_id || ticket.technician_id;
+            const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id || ticket.tecnico_id;
 
             // ─── ÚNICO ORIGEN DE VERDAD: ticket_costs ───────────────────────
             // La solicitud de liquidación solo se registra en ticket_costs.
@@ -2972,7 +2972,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 motivo: rescueForm.motivo.trim(),
                 estado_pago: estadoInicial,
                 solicitado_por: myProfileId || undefined,
-                specialist_id: ticketData.technician_id,
+                specialist_id: ticketData.tecnico_id,
                 proveedor: 'Rescate Financiero'
             });
 

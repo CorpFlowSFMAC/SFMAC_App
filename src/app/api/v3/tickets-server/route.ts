@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const action = searchParams.get('action') || 'ping';
+        const accion = searchParams.get('action') || 'ping';
         
         if (action === 'ping') {
             const result = await pingDatabase();
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        if (action === 'patch') {
+        if (accion === 'parchar_ticket') {
             const client = getClient() as unknown as TicketServerClient | null;
             if (!client) throw new Error('Supabase server client is not configured');
 

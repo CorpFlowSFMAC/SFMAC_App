@@ -72,8 +72,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
         direccion: "",
         foto: null as string | null,
         especialidades: [] as string[],
-        zonas: [] as string[],          // ← NUEVO: array de zonas
-        agenciasAsignadas: [] as string[], // ← NUEVO: IDs de agencias específicas
+        zonas_asignadas: [] as string[],          // ← NUEVO: array de zonas
+        agencias_asignadas: [] as string[], // ← NUEVO: IDs de agencias específicas
         banco: "BCP",
         tipoCuenta: "Ahorros",
         numeroCuenta: "",
@@ -144,8 +144,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                     direccion: technician.address || technician.direccion || "",
                     foto: technician.photo || technician.foto || null,
                     especialidades: technician.specialties || technician.especialidades || [],
-                    zonas: existingZonas,
-                    agenciasAsignadas: assignedBranchIds,
+                    zonas_asignadas: existingZonas,
+                    agencias_asignadas: assignedBranchIds,
                     banco: technician.bank_name || technician.banco || "BCP",
                     tipoCuenta: technician.account_type || technician.tipoCuenta || "Ahorros",
                     numeroCuenta: technician.account_number || technician.numeroCuenta || "",
@@ -166,8 +166,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                     direccion: "",
                     foto: null,
                     especialidades: [],
-                    zonas: [],
-                    agenciasAsignadas: [],
+                    zonas_asignadas: [],
+                    agencias_asignadas: [],
                     banco: "BCP",
                     tipoCuenta: "Ahorros",
                     numeroCuenta: "",
@@ -210,7 +210,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     };
 
     const toggleZone = (zoneId: string) => {
-        const isSelected = formData.zonas.includes(zoneId);
+        const isSelected = formData.zonas_asignadas.includes(zoneId);
         if (isSelected) {
             // Remove zone and related branch assignments
             const branchesInZone = allBranches
@@ -218,25 +218,25 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                 .map((b: any) => String(b.id));
             setFormData(prev => ({
                 ...prev,
-                zonas: prev.zonas.filter(z => z !== zoneId),
-                agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchesInZone.includes(String(id)))
+                zonas_asignadas: prev.zonas.filter(z => z !== zoneId),
+                agencias_asignadas: prev.agencias_asignadas.filter(id => !branchesInZone.includes(String(id)))
             }));
         } else {
-            setFormData(prev => ({ ...prev, zonas: [...prev.zonas, zoneId] }));
+            setFormData(prev => ({ ...prev, zonas_asignadas: [...prev.zonas, zoneId] }));
         }
     };
 
     const toggleBranch = (branchId: string | number) => {
         const idStr = String(branchId);
-        if (formData.agenciasAsignadas.some(id => String(id) === idStr)) {
+        if (formData.agencias_asignadas.some((id: any) => String(id) === idStr)) {
             setFormData(prev => ({
                 ...prev,
-                agenciasAsignadas: prev.agenciasAsignadas.filter(id => String(id) !== idStr)
+                agencias_asignadas: prev.agencias_asignadas.filter((id: any) => String(id) !== idStr)
             }));
         } else {
             setFormData(prev => ({
                 ...prev,
-                agenciasAsignadas: [...prev.agenciasAsignadas, idStr]
+                agencias_asignadas: [...prev.agencias_asignadas, idStr]
             }));
         }
     };
@@ -261,7 +261,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     const getSelectedBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b =>
             getBranchZoneCode(b) === normalizeZone(zoneId) &&
-            formData.agenciasAsignadas.some(id => String(id) === String(b.id))
+            formData.agencias_asignadas.some((id: any) => String(id) === String(b.id))
         );
     };
 
@@ -304,7 +304,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
-        if (formData.zonas.length === 0) {
+        if (formData.zonas_asignadas.length === 0) {
             alert("❌ Debe seleccionar al menos una zona de operación");
             setCurrentStep(2);
             return;
@@ -312,7 +312,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
 
         // DEBUG: Verificar estado de agencias antes del submit
         console.log('[handleSubmit] DEBUG - allBranches count:', allBranches.length);
-        console.log('[handleSubmit] DEBUG - formData.agenciasAsignadas:', formData.agenciasAsignadas);
+        console.log('[handleSubmit] DEBUG - formData.agencias_asignadas:', formData.agencias_asignadas);
         console.log('[handleSubmit] DEBUG - loadingBranches:', loadingBranches);
 
         // Transformar al formato Supabase
@@ -326,8 +326,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             phone_secondary: formData.celular2,
             email: formData.email,
             address: formData.direccion,
-            zone: formData.zonas[0] || "LIMA",          // ← Legacy: primera zona
-            assigned_zones: formData.zonas,              // ← Nuevo
+            zone: formData.zonas_asignadas[0] || "LIMA",          // ← Legacy: primera zona
+            assigned_zones: formData.zonas_asignadas,              // ← Nuevo
             specialties: formData.especialidades,
             photo: formData.foto,
             rating: technician?.rating || technician?.calificacion || 5,
@@ -338,7 +338,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             yape_number: formData.yape,
             plin_number: formData.plin,
             status: 'active',
-            _agenciasAsignadas: formData.agenciasAsignadas.filter(id => {
+            _agencias_asignadas: formData.agencias_asignadas.filter(id => {
                 // Solo filtrar si allBranches está cargado
                 if (allBranches.length === 0) {
                     console.warn('[handleSubmit] allBranches empty - passing through IDs without filter');
@@ -348,7 +348,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             })
         };
 
-        console.log('[handleSubmit] DEBUG - supabaseData._agenciasAsignadas:', supabaseData._agenciasAsignadas);
+        console.log('[handleSubmit] DEBUG - supabaseData._agencias_asignadas:', supabaseData._agencias_asignadas);
 
         onSave(supabaseData);
     };
@@ -357,10 +357,10 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     // Use getBranchZoneCode para cálculo correcto de cobertura
     const totalBranchesInSelectedZones = allBranches.filter(b => {
         const branchZone = getBranchZoneCode(b);
-        return formData.zonas.some(z => normalizeZone(z) === branchZone);
+        return formData.zonas_asignadas.some(z => normalizeZone(z) === branchZone);
     }).length;
 
-    const totalSelectedBranches = formData.agenciasAsignadas.length;
+    const totalSelectedBranches = formData.agencias_asignadas.length;
     const hasMixedCoverage = totalSelectedBranches > 0;
 
     return (
@@ -524,12 +524,12 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                             <div className={styles.sectionLabel} style={{ marginTop: '1.25rem' }}>
                                 🌍 Zonas de Operación *
                                 <span className={styles.sectionBadge}>
-                                    {formData.zonas.length} zona{formData.zonas.length !== 1 ? 's' : ''} seleccionada{formData.zonas.length !== 1 ? 's' : ''}
+                                    {formData.zonas_asignadas.length} zona{formData.zonas_asignadas.length !== 1 ? 's' : ''} seleccionada{formData.zonas_asignadas.length !== 1 ? 's' : ''}
                                 </span>
                             </div>
                             <div className={styles.zoneGrid}>
                                 {ZONES.map((zone) => {
-                                    const isSelected = formData.zonas.includes(zone.id);
+                                    const isSelected = formData.zonas_asignadas.includes(zone.id);
                                     const Icon = zone.icon;
                                     const selectedBranchCount = getSelectedBranchesForZone(zone.id).length;
                                     const totalBranchCount = getBranchesForZone(zone.id).length;
@@ -564,7 +564,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                             </div>
 
                             {/* ── Agencias específicas (microzonificación) ── */}
-                            {formData.zonas.length > 0 && (
+                            {formData.zonas_asignadas.length > 0 && (
                                 <div className={styles.microzonSection}>
                                     <div className={styles.microzonHeader}>
                                         <Building2 size={18} color="#8B5CF6" />
@@ -584,7 +584,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                             <span>
                                                 {hasMixedCoverage
                                                     ? `${totalSelectedBranches} agencias específicas asignadas`
-                                                    : `Cobertura total: ~${totalBranchesInSelectedZones} agencias en ${formData.zonas.length} zona${formData.zonas.length !== 1 ? 's' : ''}`
+                                                    : `Cobertura total: ~${totalBranchesInSelectedZones} agencias en ${formData.zonas_asignadas.length} zona${formData.zonas_asignadas.length !== 1 ? 's' : ''}`
                                                 }
                                             </span>
                                         </div>
@@ -592,7 +592,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                             <button
                                                 type="button"
                                                 className={styles.clearBranchesBtn}
-                                                onClick={() => setFormData(prev => ({ ...prev, agenciasAsignadas: [] }))}
+                                                onClick={() => setFormData(prev => ({ ...prev, agencias_asignadas: [] }))}
                                             >
                                                 ✕ Limpiar selección (cobertura total)
                                             </button>
@@ -615,7 +615,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                         <div className={styles.loadingBranches}>Cargando agencias...</div>
                                     ) : (
                                         <div className={styles.zoneAccordionList}>
-                                            {formData.zonas.map(zoneId => {
+                                            {formData.zonas_asignadas.map(zoneId => {
                                                 const zoneInfo = ZONES.find(z => z.id === zoneId);
                                                 const zoneBranches = getBranchesForZone(zoneId);
                                                 const selectedInZone = getSelectedBranchesForZone(zoneId);
@@ -664,22 +664,22 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                                         className={styles.bulkBtn}
                                                                         onClick={() => {
                                                                             const branchIds = zoneBranches.map((b: any) => String(b.id));
-                                                                            const allSelected = branchIds.every((id: string) => formData.agenciasAsignadas.some(aId => String(aId) === id));
+                                                                            const allSelected = branchIds.every((id: string) => formData.agencias_asignadas.some((aId: any) => String(aId) === id));
                                                                             if (allSelected) {
                                                                                 setFormData(prev => ({
                                                                                     ...prev,
-                                                                                    agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchIds.includes(String(id)))
+                                                                                    agencias_asignadas: prev.agencias_asignadas.filter(id => !branchIds.includes(String(id)))
                                                                                 }));
                                                                             } else {
                                                                                 setFormData(prev => ({
                                                                                     ...prev,
-                                                                                    agenciasAsignadas: [...new Set([...prev.agenciasAsignadas.map(String), ...branchIds])]
+                                                                                    agencias_asignadas: [...new Set([...prev.agencias_asignadas.map(String), ...branchIds])]
                                                                                 }));
                                                                             }
                                                                         }}
                                                                         style={{ color: zoneInfo?.color, borderColor: `${zoneInfo?.color}40` }}
                                                                     >
-                                                                        {zoneBranches.every((b: any) => formData.agenciasAsignadas.some(id => String(id) === String(b.id)))
+                                                                        {zoneBranches.every((b: any) => formData.agencias_asignadas.some((id: any) => String(id) === String(b.id)))
                                                                             ? '☑ Deseleccionar todas'
                                                                             : '☐ Seleccionar todas'
                                                                         }
@@ -691,7 +691,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                                 )}
 
                                                                 {zoneBranches.map((branch: any) => {
-                                                                    const isSelected = formData.agenciasAsignadas.some(id => String(id) === String(branch.id));
+                                                                    const isSelected = formData.agencias_asignadas.some((id: any) => String(id) === String(branch.id));
                                                                     return (
                                                                         <div
                                                                             key={branch.id}
@@ -760,7 +760,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                         <div className={styles.bankDetailColumn}>
                                                             <div className={styles.detailItemMini}>
                                                                 <MapPin size={12} />
-                                                                <span>{formData.zonas.join(', ') || 'Sin zona'}</span>
+                                                                <span>{formData.zonas_asignadas.join(', ') || 'Sin zona'}</span>
                                                             </div>
                                                             <div className={styles.detailItemMini}>
                                                                 <Phone size={12} />
