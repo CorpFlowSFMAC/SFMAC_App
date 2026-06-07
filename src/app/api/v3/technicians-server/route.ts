@@ -113,6 +113,20 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: true, branches });
         }
 
+        if (action === 'get_all_assignments') {
+            const client = getClient();
+            if (!client) throw new Error('Supabase server client is not configured');
+
+            // Fetch ALL technician branches, bypassing RLS
+            const { data, error } = await client
+                .from('technician_branches')
+                .select('technician_id, branch_id');
+
+            if (error) throw error;
+            
+            return NextResponse.json({ success: true, data });
+        }
+
         return NextResponse.json({ success: false, error: 'Acción no reconocida' }, { status: 400 });
 
     } catch (err: any) {

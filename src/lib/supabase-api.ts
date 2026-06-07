@@ -303,11 +303,32 @@ export const techniciansAPI = {
     async getAll() {
         const { data, error } = await supabase
             .from('technicians')
-            .select('*, technician_branches(branch_id)')
+            .select('*')
             .order('name');
 
         if (error) throw error;
-        return data;
+
+        // Fetch all branch assignments securely bypassing RLS
+        let allAssignments: { technician_id: string, branch_id: string }[] = [];
+        try {
+            const response = await fetch('/api/v3/technicians-server?action=get_all_assignments');
+            if (response.ok) {
+                const resData = await response.json();
+                if (resData.success) {
+                    allAssignments = resData.data || [];
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch all assignments:', err);
+        }
+
+        // Attach assignments to each technician
+        return data?.map(tech => ({
+            ...tech,
+            technician_branches: allAssignments
+                .filter(a => String(a.technician_id) === String(tech.id))
+                .map(a => ({ branch_id: a.branch_id }))
+        }));
     },
 
     async getById(id: string) {
