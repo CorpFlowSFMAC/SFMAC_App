@@ -296,102 +296,32 @@ export const techniciansAPI = {
         return data || [];
     },
 
-    // Obtiene técnicos que tienen asignada una agencia específica (vía technician_branches)
-    async getTechniciansForBranch(branchId: string) {
-        const { data, error } = await supabase
-            .from('technician_branches')
-            .select('technician_id, technicians(*)')
-            .eq('branch_id', branchId);
-        if (error) {
-            console.warn('[getTechniciansForBranch] Error:', error.message);
-            return [];
-        }
-        return (data || []).map((r: any) => r.technicians).filter(Boolean);
-    },
-
     // Obtiene las agencias asignadas a un técnico
     async getAssignedBranches(technicianId: string) {
-        // 1. Intentar desde tabla intermedia technician_branches
         const { data, error } = await supabase
             .from('technician_branches')
             .select('branch_id, branch_offices(id, name, zone, address, departamento)')
             .eq('technician_id', technicianId);
-        
-        if (!error && data && data.length > 0) {
-            return (data || []).map((r: any) => r.branch_offices);
-        }
-        
-        // 2. FALLBACK: Leer desde columna branch_ids del técnico
-        console.warn('[getAssignedBranches] technician_branches empty, trying branch_ids fallback');
-        const { data: techData, error: techErr } = await supabase
-            .from('technicians')
-            .select('branch_ids, branch_offices(id, name, zone, address, departamento)')
-            .eq('id', technicianId)
-            .single();
-        
-        if (techErr || !techData) {
-            console.error('[getAssignedBranches] No branch data found:', techErr?.message);
-            return [];
-        }
-        
-        // Si hay branch_ids, devolver las agencias completas con join
-        const branchIds = techData.branch_ids || [];
-        if (branchIds.length === 0) return [];
-        
-        const { data: branches, error: branchesErr } = await supabase
-            .from('branch_offices')
-            .select('id, name, zone, address, departamento')
-            .in('id', branchIds);
-        
-        if (branchesErr) {
-            console.error('[getAssignedBranches] Error fetching branches:', branchesErr);
-            return [];
-        }
-        
-        return branches || [];
+        if (error) throw error;
+        return (data || []).map((r: any) => r.branch_offices);
     },
 
-    // Sincroniza las agencias asignadas a un técnico (replace completo)
+    // Sincroniza las agencias asignadas a un técnico (vía server para bypass RLS)
     async syncBranchAssignments(technicianId: string, branchIds: string[]) {
-        try {
-            // 1. Intentar usar tabla intermedia technician_branches
-            // 1a. Borrar asignaciones existentes
-            const { error: delErr } = await supabase
-                .from('technician_branches')
-                .delete()
-                .eq('technician_id', technicianId);
-            if (delErr) {
-                console.warn('[syncBranchAssignments] Delete error (may be empty table):', delErr.message);
-            }
-
-            // 1b. Insertar nuevas asignaciones solo si hay IDs
-            if (branchIds.length > 0) {
-                const rows = branchIds.map(bid => ({ technician_id: technicianId, branch_id: bid }));
-                const { error: insErr } = await supabase
-                    .from('technician_branches')
-                    .insert(rows);
-                if (insErr) {
-                    console.error('[syncBranchAssignments] Insert error:', insErr.message);
-                    // No lanzar error, intentar fallback
-                } else {
-                    console.log('[syncBranchAssignments] Success via technician_branches:', branchIds.length, 'branches');
-                }
-            }
-
-            // 2. FALLBACK: También guardar en columna branch_ids del técnico
-            // Esto asegura que las asignaciones persistan aunque la tabla intermedia falle
-            const { error: updateErr } = await supabase
-                .from('technicians')
-                .update({ branch_ids: branchIds })
-                .eq('id', technicianId);
-            if (updateErr) {
-                console.warn('[syncBranchAssignments] Fallback update error:', updateErr.message);
-            } else {
-                console.log('[syncBranchAssignments] Fallback success: branch_ids updated in technicians');
-            }
-        } catch (err) {
-            console.error('[syncBranchAssignments] Full error:', err);
-            // No lanzar - las asignaciones se intentaron guardar de ambas formas
+        const response = await fetch('/api/v3/technicians-server?action=sync_branches', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ technician_id: technicianId, branch_ids: branchIds })
+        });
+        
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || 'Error al sincronizar agencias del técnico');
+        }
+        
+        const resData = await response.json();
+        if (!resData.success) {
+            throw new Error(resData.error || 'Fallo en la sincronización de agencias');
         }
     },
 
