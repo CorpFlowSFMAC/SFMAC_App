@@ -37,11 +37,14 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
         // 4. Filtro de microzona (cobertura de agencia)
         let matchesMicrozone = true;
         const branchIds = tech.technician_branches || tech.agencias_asignadas || [];
-        if (branchIds && branchIds.length > 0) {
-            const ticketBranchId = ticket.sede?.id || ticket.branch_id;
-            if (ticketBranchId) {
-                // El técnico tiene microzona restringida, debe incluir la agencia del ticket
+        const ticketBranchId = ticket.sede?.id || ticket.branch_id;
+        
+        if (ticketBranchId) {
+            // FILTRO ESTRICTO: El técnico debe tener esta agencia explícitamente asignada
+            if (branchIds && branchIds.length > 0) {
                 matchesMicrozone = branchIds.some((b: any) => String(b.branch_id || b) === String(ticketBranchId));
+            } else {
+                matchesMicrozone = false;
             }
         }
 
