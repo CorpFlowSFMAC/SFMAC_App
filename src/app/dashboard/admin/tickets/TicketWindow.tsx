@@ -1352,8 +1352,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const isInitialAssignment = ['nuevo', 'pendiente', 'borrador'].includes(ticketData.status_id);
         const newEstadoId = isInitialAssignment ? 'en_inspeccion' : ticketData.status_id;
         
-        // ✅ FIX: Asegurar que technician_id se actualiza correctamente
-        const newTechnicianId = assignmentData.tecnico?.id || null;
+        // ✅ FIX: El componente de asignación manda 'tecnicoAsignado', no 'tecnico'
+        const newTecnicoObj = assignmentData.tecnicoAsignado || assignmentData.tecnico || null;
+        const newTechnicianId = newTecnicoObj?.id || null;
 
         const dbUpdates: any = {
             technician_id: newTechnicianId,
@@ -1361,8 +1362,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             status_id: newEstadoId,
             metadata: {
                 ...ticketData.metadata,
-                tecnico: assignmentData.tecnico,
-                fechaAsignacion: assignmentData.fechaAsignacion,
+                tecnico: newTecnicoObj,
+                fechaAsignacion: assignmentData.fechaAsignacion || assignmentData.fechaReasignacion,
                 status_id: newEstadoId
             }
         };
@@ -1383,7 +1384,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // ✅ FIX: Actualizar tanto tecnico como technician_id correctamente
         setTicketData((prev: any) => ({
             ...prev,
-            tecnico: assignmentData.tecnico,
+            tecnico: newTecnicoObj,
             technician_id: newTechnicianId,
             status_id: newEstadoId
         }));
