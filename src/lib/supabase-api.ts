@@ -494,12 +494,24 @@ export const techniciansAPI = {
 
     // Obtiene las agencias asignadas a un técnico con info completa
     async getAssignedBranches(technicianId: string) {
-        const { data, error } = await supabase
-            .from('technician_branches')
-            .select('branch_id, branch_offices(id, name, zone, address, departamento, client_id, client:clients(id, name))')
-            .eq('technician_id', technicianId);
-        if (error) throw error;
-        return (data || []).map((r: any) => r.branch_offices);
+        try {
+            const response = await fetch(`/api/v3/technicians-server?action=get_assigned_branches&technician_id=${technicianId}`);
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || 'Server error on get_assigned_branches');
+            }
+            const data = await response.json();
+            return data.branches || [];
+        } catch (error) {
+            console.error('Error fetching assigned branches via server API:', error);
+            // Fallback en caso de que el endpoint falle (intentará por Supabase directo aunque RLS pueda bloquearlo)
+            const { data, error: fallbackError } = await supabase
+                .from('technician_branches')
+                .select('branch_id, branch_offices(id, name, zone, address, departamento, client_id, client:clients(id, name))')
+                .eq('technician_id', technicianId);
+            if (fallbackError) throw fallbackError;
+            return (data || []).map((r: any) => r.branch_offices).filter(Boolean);
+        }
     },
 
     /**

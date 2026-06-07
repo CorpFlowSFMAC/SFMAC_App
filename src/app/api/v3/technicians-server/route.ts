@@ -87,3 +87,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: err.message || 'Error desconocido' }, { status: 500 });
     }
 }
+
+export async function GET(request: NextRequest) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const action = searchParams.get('action');
+
+        if (action === 'get_assigned_branches') {
+            const client = getClient();
+            if (!client) throw new Error('Supabase server client is not configured');
+
+            const technicianId = searchParams.get('technician_id');
+            if (!technicianId) {
+                return NextResponse.json({ success: false, error: 'technician_id es requerido' }, { status: 400 });
+            }
+
+            const { data, error } = await client
+                .from('technician_branches')
+                .select('branch_id, branch_offices(id, name, zone, address, departamento, client_id, client:clients(id, name))')
+                .eq('technician_id', technicianId);
+
+            if (error) throw error;
+            
+            const branches = (data || []).map((r: any) => r.branch_offices).filter(Boolean);
+            return NextResponse.json({ success: true, branches });
+        }
+
+        return NextResponse.json({ success: false, error: 'Acción no reconocida' }, { status: 400 });
+
+    } catch (err: any) {
+        console.error('[Technicians Server API] GET Error:', err);
+        return NextResponse.json({ success: false, error: err.message || 'Error desconocido' }, { status: 500 });
+    }
+}
