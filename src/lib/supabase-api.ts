@@ -258,7 +258,7 @@ export const techniciansAPI = {
     async getAll() {
         const { data, error } = await supabase
             .from('technicians')
-            .select('*')
+            .select('*, technician_branches(branch_id)')
             .order('name');
 
         if (error) throw error;
@@ -268,7 +268,7 @@ export const techniciansAPI = {
     async getById(id: string) {
         const { data, error } = await supabase
             .from('technicians')
-            .select('*')
+            .select('*, technician_branches(branch_id)')
             .eq('id', id)
             .single();
 
@@ -279,7 +279,7 @@ export const techniciansAPI = {
     async getByStatus(status: string) {
         const { data, error } = await supabase
             .from('technicians')
-            .select('*')
+            .select('*, technician_branches(branch_id)')
             .eq('status', status)
             .order('name');
 
