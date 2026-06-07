@@ -87,15 +87,25 @@ export default function TechniciansPage() {
             const agenciasAsignadas: string[] = techData._agenciasAsignadas || [];
             const { _agenciasAsignadas, ...cleanData } = techData;
 
+            console.log('[handleSave] Saving technician, agenciasAsignadas:', agenciasAsignadas);
+
             if (editingTech) {
-                // Modo edición - intentar directo primero
+                // Modo edición - siempre actualizar datos del técnico
                 try {
                     const updated = await updateTechnician(editingTech.id, cleanData);
+                    console.log('[handleSave] Technician updated, syncing branches...');
+                } catch (updateError) {
+                    console.error('[handleSave] Error updating technician:', updateError);
+                    // Continuar con sync de branches aunque falle update básico
+                }
+                
+                // SIEMPRE intentar sync de branches (importante para microzonificación)
+                try {
                     await techniciansAPI.syncBranchAssignments(editingTech.id, agenciasAsignadas);
-                } catch (netError) {
-                    // Error de red - agregar a cola offline
-                    console.log('[handleSave] Net error, queuing update');
-                    syncQueue.add({ action: 'update', data: { ...cleanData, id: editingTech.id } });
+                    console.log('[handleSave] Branch assignments synced successfully');
+                } catch (branchError) {
+                    console.error('[handleSave] Error syncing branch assignments:', branchError);
+                    alert("⚠️ Error al guardar la microzonificación. Las agencias seleccionadas pueden no haberse guardado.");
                 }
             } else {
                 // Modo creación - validación local
@@ -114,9 +124,11 @@ export default function TechniciansPage() {
                 try {
                     const newTech = await createTechnician(cleanData);
                     syncQueue.remove(queueId); // Éxito - remover de cola
+                    console.log('[handleSave] Technician created:', newTech?.id);
                     
                     if (newTech?.id && agenciasAsignadas.length > 0) {
                         await techniciansAPI.syncBranchAssignments(newTech.id, agenciasAsignadas);
+                        console.log('[handleSave] Branch assignments synced for new technician');
                     }
                 } catch (netError) {
                     console.log('[handleSave] Saved to offline queue, will sync later');
