@@ -106,9 +106,9 @@ export default function TechniciansPage() {
                 try {
                     await techniciansAPI.syncBranchAssignments(editingTech.id, agenciasAsignadas);
                     console.log('[handleSave] Branch assignments synced successfully');
-                } catch (branchError) {
+                } catch (branchError: any) {
                     console.error('[handleSave] Error syncing branch assignments:', branchError);
-                    alert("⚠️ Error al guardar la microzonificación. Las agencias seleccionadas pueden no haberse guardado.");
+                    throw new Error("Error al guardar la microzonificación: " + (branchError.message || "Fallo en la base de datos"));
                 }
 
                 if (updateSuccess) {

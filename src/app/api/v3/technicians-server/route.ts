@@ -47,17 +47,21 @@ export async function POST(request: NextRequest) {
                 .delete()
                 .eq('technician_id', technician_id);
             
-            if (delErr) throw delErr;
+            if (delErr) {
+                return NextResponse.json({ error: delErr.message || 'Error al eliminar asignaciones' }, { status: 500 });
+            }
 
             // 2. Insertar nuevas asignaciones si existen
             if (branch_ids.length > 0) {
-                const rows = branch_ids.map(bid => ({ technician_id, branch_id: bid }));
+                const rows = branch_ids.map((bid: string) => ({ technician_id, branch_id: bid }));
                 const { error: insErr } = await client
                     .from('technician_branches')
                     // @ts-ignore
                     .insert(rows);
                 
-                if (insErr) throw insErr;
+                if (insErr) {
+                    return NextResponse.json({ error: insErr.message || 'Error al insertar asignaciones' }, { status: 500 });
+                }
             }
 
             return NextResponse.json({ success: true });

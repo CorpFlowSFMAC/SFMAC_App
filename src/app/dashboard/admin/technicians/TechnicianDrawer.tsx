@@ -332,7 +332,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             yape_number: formData.yape,
             plin_number: formData.plin,
             status: 'active',
-            _agenciasAsignadas: formData.agenciasAsignadas  // ← para post-save
+            _agenciasAsignadas: formData.agenciasAsignadas.filter(id => allBranches.some(b => b.id === id))  // ← Saneado contra base de datos real
         };
 
         onSave(supabaseData);
