@@ -679,7 +679,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                                         }}
                                                                         style={{ color: zoneInfo?.color, borderColor: `${zoneInfo?.color}40` }}
                                                                     >
-                                                                        {zoneBranches.every((b: any) => formData.agenciasAsignadas.includes(b.id))
+                                                                        {zoneBranches.every((b: any) => formData.agenciasAsignadas.some(id => String(id) === String(b.id)))
                                                                             ? '☑ Deseleccionar todas'
                                                                             : '☐ Seleccionar todas'
                                                                         }
@@ -691,7 +691,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                                 )}
 
                                                                 {zoneBranches.map((branch: any) => {
-                                                                    const isSelected = formData.agenciasAsignadas.includes(branch.id);
+                                                                    const isSelected = formData.agenciasAsignadas.some(id => String(id) === String(branch.id));
                                                                     return (
                                                                         <div
                                                                             key={branch.id}
