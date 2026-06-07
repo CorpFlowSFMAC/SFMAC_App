@@ -91,11 +91,14 @@ export default function TechniciansPage() {
 
             if (editingTech) {
                 // Modo edición - siempre actualizar datos del técnico
+                let updateSuccess = false;
                 try {
                     const updated = await updateTechnician(editingTech.id, cleanData);
                     console.log('[handleSave] Technician updated, syncing branches...');
-                } catch (updateError) {
+                    updateSuccess = true;
+                } catch (updateError: any) {
                     console.error('[handleSave] Error updating technician:', updateError);
+                    alert("❌ Error al actualizar datos básicos del técnico: " + (updateError.message || 'Error desconocido'));
                     // Continuar con sync de branches aunque falle update básico
                 }
                 
@@ -107,6 +110,11 @@ export default function TechniciansPage() {
                     console.error('[handleSave] Error syncing branch assignments:', branchError);
                     alert("⚠️ Error al guardar la microzonificación. Las agencias seleccionadas pueden no haberse guardado.");
                 }
+
+                if (updateSuccess) {
+                    alert("✅ Técnico modificado correctamente");
+                }
+                refreshTechnicians();
             } else {
                 // Modo creación - validación local
                 const docExists = technicians.some((t: any) =>

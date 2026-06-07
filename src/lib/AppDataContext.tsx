@@ -347,7 +347,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                         // puede llegar con metadata desactualizada durante race conditions.
                         // Usamos merge para preservar campos críticos del caché local.
                         queryClient.setQueryData(
-                            queryKeys.tickets.summary(),
+                            [...queryKeys.tickets.summary(), userEmail],
                             (old: any[] | undefined) =>
                                 old
                                     ? old.map((t) => {
@@ -777,7 +777,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             // insertamos el nuevo ticket directo en la cache. El canal realtime
             // (postgres_changes en `tickets`) sincroniza otras pestañas/usuarios.
             queryClient.setQueryData(
-                queryKeys.tickets.summary(),
+                [...queryKeys.tickets.summary(), userEmail],
                 (old: any[] | undefined) => (old ? [normalized, ...old] : [normalized])
             );
             return normalized;
@@ -792,7 +792,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
             // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()
             queryClient.setQueryData(
-                queryKeys.tickets.summary(),
+                [...queryKeys.tickets.summary(), userEmail],
                 (old: any[] | undefined) =>
                     old
                         ? old.map((t) => {
@@ -852,7 +852,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         async (id: string) => {
             await ticketsAPI.delete(id);
             queryClient.setQueryData(
-                queryKeys.tickets.summary(),
+                [...queryKeys.tickets.summary(), userEmail],
                 (old: any[] | undefined) =>
                     old ? old.filter((t) => t.id !== id) : old
             );

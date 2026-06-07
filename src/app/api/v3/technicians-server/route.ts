@@ -17,28 +17,17 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: false, error: 'id es requerido' }, { status: 400 });
             }
 
-            // Sanitizar campos que pueden no existir en la base de datos
-            const { assigned_zones, specialties, ...safeUpdates } = columnUpdates as any;
-
             const { data, error } = await client
                 .from('technicians')
                 // @ts-ignore
-                .update(safeUpdates as any)
+                .update(columnUpdates as any)
                 .eq('id', id)
                 .select()
                 .single();
 
             if (error) throw error;
 
-            // Re-inyectar las variables removidas para que el cache frontend las asimile sin perder información visual
-            const typedData = (data as any) || {};
-            const enrichedData = {
-                ...typedData,
-                assigned_zones: assigned_zones || typedData?.assigned_zones || [],
-                specialties: specialties || typedData?.specialties || []
-            };
-
-            return NextResponse.json({ success: true, data: enrichedData });
+            return NextResponse.json({ success: true, data });
         }
         
         if (action === 'sync_branches') {
