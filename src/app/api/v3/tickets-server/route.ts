@@ -3,6 +3,8 @@ import { getAllTicketsLite, getClient, getTicketsSummary, pingDatabase } from '@
 import { normalizeStateId } from '@/lib/ticketStates';
 import { stripFinancialMetadata } from '@/lib/financialMetadata';
 
+export const dynamic = 'force-dynamic';
+
 type TicketPatchRequest = {
     id?: string;
     metadataUpdates?: Record<string, unknown>;

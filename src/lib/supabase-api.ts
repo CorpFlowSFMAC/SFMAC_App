@@ -311,7 +311,7 @@ export const techniciansAPI = {
         // Fetch all branch assignments securely bypassing RLS
         let allAssignments: { technician_id: string, branch_id: string }[] = [];
         try {
-            const response = await fetch('/api/v3/technicians-server?action=get_all_assignments');
+            const response = await fetch('/api/v3/technicians-server?action=get_all_assignments', { cache: 'no-store' });
             if (response.ok) {
                 const resData = await response.json();
                 if (resData.success) {
@@ -516,7 +516,7 @@ export const techniciansAPI = {
     // Obtiene las agencias asignadas a un técnico con info completa
     async getAssignedBranches(technicianId: string) {
         try {
-            const response = await fetch(`/api/v3/technicians-server?action=get_assigned_branches&technician_id=${technicianId}`);
+            const response = await fetch(`/api/v3/technicians-server?action=get_assigned_branches&technician_id=${technicianId}`, { cache: 'no-store' });
             if (!response.ok) {
                 const err = await response.json().catch(() => ({}));
                 throw new Error(err.error || 'Server error on get_assigned_branches');
