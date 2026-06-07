@@ -296,6 +296,19 @@ export const techniciansAPI = {
         return data || [];
     },
 
+    // Obtiene técnicos que tienen asignada una agencia específica (vía technician_branches)
+    async getTechniciansForBranch(branchId: string) {
+        const { data, error } = await supabase
+            .from('technician_branches')
+            .select('technician_id, technicians(*)')
+            .eq('branch_id', branchId);
+        if (error) {
+            console.warn('[getTechniciansForBranch] Error:', error.message);
+            return [];
+        }
+        return (data || []).map((r: any) => r.technicians).filter(Boolean);
+    },
+
     // Obtiene las agencias asignadas a un técnico
     async getAssignedBranches(technicianId: string) {
         const { data, error } = await supabase
@@ -308,20 +321,33 @@ export const techniciansAPI = {
 
     // Sincroniza las agencias asignadas a un técnico (replace completo)
     async syncBranchAssignments(technicianId: string, branchIds: string[]) {
-        // 1. Borrar asignaciones existentes
-        const { error: delErr } = await supabase
-            .from('technician_branches')
-            .delete()
-            .eq('technician_id', technicianId);
-        if (delErr) throw delErr;
-
-        // 2. Insertar nuevas asignaciones
-        if (branchIds.length > 0) {
-            const rows = branchIds.map(bid => ({ technician_id: technicianId, branch_id: bid }));
-            const { error: insErr } = await supabase
+        try {
+            // 1. Borrar asignaciones existentes
+            const { error: delErr } = await supabase
                 .from('technician_branches')
-                .insert(rows);
-            if (insErr) throw insErr;
+                .delete()
+                .eq('technician_id', technicianId);
+            if (delErr) {
+                console.warn('[syncBranchAssignments] Delete error (may be empty table):', delErr.message);
+            }
+
+            // 2. Insertar nuevas asignaciones solo si hay IDs
+            if (branchIds.length > 0) {
+                const rows = branchIds.map(bid => ({ technician_id: technicianId, branch_id: bid }));
+                const { error: insErr } = await supabase
+                    .from('technician_branches')
+                    .insert(rows);
+                if (insErr) {
+                    console.error('[syncBranchAssignments] Insert error:', insErr);
+                    throw insErr;
+                }
+                console.log('[syncBranchAssignments] Success:', branchIds.length, 'branches assigned to technician', technicianId);
+            } else {
+                console.log('[syncBranchAssignments] No branches to assign, cleared all assignments');
+            }
+        } catch (err) {
+            console.error('[syncBranchAssignments] Full error:', err);
+            throw err;
         }
     },
 

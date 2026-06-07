@@ -25,7 +25,14 @@ export default function TechnicianDrawer({ isOpen, onClose, ticket, onAssign, on
     const branchId = ticket?.branch_id || ticket?.sede?.id || null;
 
     // Normalizar datos del ticket para el filtro
-    const ticketZone = normalizeZone(ticket?.sede?.zona || ticket?.sede?.zone || ticket?.branch_offices?.zone);
+    // Priorizar branch_offices.zone (del join de Supabase) sobre sede.zona
+    const ticketZone = normalizeZone(
+        ticket?.branch_offices?.zone || 
+        ticket?.sede?.zone || 
+        ticket?.sede?.zona ||
+        ticket?.branch_offices?.zonas?.codigo ||
+        'LIMA'
+    );
     const ticketZoneDisplay = getZoneFullName(ticketZone);
     const ticketBranchName = ticket?.sede?.nombre || ticket?.sede?.name || ticket?.branch_offices?.name || 'Agencia del ticket';
 
