@@ -659,8 +659,12 @@ export const techniciansAPI = {
     // Sincroniza las agencias asignadas a un técnico (vía server para bypass RLS)
     // Incluye validación de integridad referencial para evitar FK errors
     async syncBranchAssignments(technicianId: string, branchIds: string[]) {
+        console.log('[syncBranchAssignments] START - technicianId:', technicianId, 'branchIds:', branchIds);
+        
         // STEP 3: Validar integridad referencial - filtrar IDs que no existen
         const { validIds, invalidIds } = await branchesAPI.validateBranchIds(branchIds);
+        
+        console.log('[syncBranchAssignments] After validation - validIds:', validIds, 'invalidIds:', invalidIds);
         
         if (invalidIds.length > 0) {
             console.warn('[syncBranchAssignments] Filtering invalid branch IDs:', invalidIds);
@@ -672,18 +676,24 @@ export const techniciansAPI = {
             throw new Error(`Ninguna de las agencias seleccionadas existe en el catálogo. IDs inválidos: ${invalidIds.slice(0, 3).join(', ')}${invalidIds.length > 3 ? '...' : ''}`);
         }
         
+        const requestBody = { technician_id: technicianId, branch_ids: validIds };
+        console.log('[syncBranchAssignments] Making request to server:', requestBody);
+        
         const response = await fetch('/api/v3/technicians-server?action=sync_branches', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ technician_id: technicianId, branch_ids: validIds })
+            body: JSON.stringify(requestBody)
         });
+        
+        console.log('[syncBranchAssignments] Response status:', response.status);
         
         // Parse response body for error details
         let errData: { error?: string; success?: boolean } = {};
         try {
             errData = await response.json();
+            console.log('[syncBranchAssignments] Response body:', errData);
         } catch (e) {
-            // JSON parse failed, use generic message
+            console.error('[syncBranchAssignments] Failed to parse JSON response:', e);
         }
         
         // Explicitly check response status - throw detailed error to propagate to UI
@@ -697,6 +707,8 @@ export const techniciansAPI = {
             console.error('[syncBranchAssignments] Server error:', errData.error);
             throw new Error(errData.error || 'Fallo en la sincronización de agencias');
         }
+        
+        console.log('[syncBranchAssignments] SUCCESS - Branch assignments synced');
     },
 
     async create(technician: {

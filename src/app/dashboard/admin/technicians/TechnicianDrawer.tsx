@@ -310,6 +310,11 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
+        // DEBUG: Verificar estado de agencias antes del submit
+        console.log('[handleSubmit] DEBUG - allBranches count:', allBranches.length);
+        console.log('[handleSubmit] DEBUG - formData.agenciasAsignadas:', formData.agenciasAsignadas);
+        console.log('[handleSubmit] DEBUG - loadingBranches:', loadingBranches);
+
         // Transformar al formato Supabase
         const supabaseData = {
             name: `${formData.nombre} ${formData.apellido}`.trim(),
@@ -333,8 +338,17 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             yape_number: formData.yape,
             plin_number: formData.plin,
             status: 'active',
-            _agenciasAsignadas: formData.agenciasAsignadas.filter(id => allBranches.some(b => String(b.id) === String(id)))  // ← Saneado contra base de datos real
+            _agenciasAsignadas: formData.agenciasAsignadas.filter(id => {
+                // Solo filtrar si allBranches está cargado
+                if (allBranches.length === 0) {
+                    console.warn('[handleSubmit] allBranches empty - passing through IDs without filter');
+                    return true;
+                }
+                return allBranches.some(b => String(b.id) === String(id));
+            })
         };
+
+        console.log('[handleSubmit] DEBUG - supabaseData._agenciasAsignadas:', supabaseData._agenciasAsignadas);
 
         onSave(supabaseData);
     };

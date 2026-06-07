@@ -87,7 +87,10 @@ export default function TechniciansPage() {
             const agenciasAsignadas: string[] = techData._agenciasAsignadas || [];
             const { _agenciasAsignadas, ...cleanData } = techData;
 
-            console.log('[handleSave] Saving technician, agenciasAsignadas:', agenciasAsignadas);
+            console.log('[handleSave] Saving technician');
+            console.log('[handleSave] technician id:', editingTech?.id);
+            console.log('[handleSave] agenciasAsignadas:', agenciasAsignadas);
+            console.log('[handleSave] cleanData keys:', Object.keys(cleanData));
 
             if (editingTech) {
                 // Modo edición - siempre actualizar datos del técnico
@@ -104,6 +107,7 @@ export default function TechniciansPage() {
                 
                 // SIEMPRE intentar sync de branches (importante para microzonificación)
                 try {
+                    console.log('[handleSave] Calling syncBranchAssignments with:', editingTech.id, agenciasAsignadas);
                     await techniciansAPI.syncBranchAssignments(editingTech.id, agenciasAsignadas);
                     console.log('[handleSave] Branch assignments synced successfully');
                 } catch (branchError: any) {
@@ -135,10 +139,14 @@ export default function TechniciansPage() {
                     console.log('[handleSave] Technician created:', newTech?.id);
                     
                     if (newTech?.id && agenciasAsignadas.length > 0) {
+                        console.log('[handleSave] Syncing branch assignments for new tech:', newTech.id, agenciasAsignadas);
                         await techniciansAPI.syncBranchAssignments(newTech.id, agenciasAsignadas);
                         console.log('[handleSave] Branch assignments synced for new technician');
+                    } else if (newTech?.id && agenciasAsignadas.length === 0) {
+                        console.log('[handleSave] No branch assignments to sync (empty array)');
                     }
-                } catch (netError) {
+                } catch (netError: any) {
+                    console.error('[handleSave] Network/create error:', netError);
                     console.log('[handleSave] Saved to offline queue, will sync later');
                     // Mantener en cola para sync automático
                 }
@@ -149,9 +157,9 @@ export default function TechniciansPage() {
             
             setIsDrawerOpen(false);
             setEditingTech(null);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving technician:', error);
-            alert("❌ Error al guardar. Los datos se han guardado en cola para sincronizar cuando haya conexión.");
+            alert("❌ Error al guardar. Los datos se han guardado en cola para sincronizar cuando haya conexión.\n\nDetalle: " + (error.message || 'Error desconocido'));
         }
     };
 

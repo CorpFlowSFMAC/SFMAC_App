@@ -37,11 +37,14 @@ export async function POST(request: NextRequest) {
             const body = await request.json();
             const { technician_id, branch_ids } = body;
             
+            console.log('[sync_branches] Received request:', { technician_id, branch_ids, branchIdsCount: branch_ids?.length });
+            
             if (!technician_id || !Array.isArray(branch_ids)) {
                 return NextResponse.json({ success: false, error: 'technician_id y branch_ids (array) son requeridos' }, { status: 400 });
             }
 
             // 1. Borrar asignaciones existentes
+            console.log('[sync_branches] Deleting existing assignments for technician:', technician_id);
             const { error: delErr } = await client
                 .from('technician_branches')
                 .delete()
@@ -51,10 +54,14 @@ export async function POST(request: NextRequest) {
                 console.error('[sync_branches] Delete error:', delErr);
                 return NextResponse.json({ error: delErr.message || 'Error al eliminar asignaciones' }, { status: 500 });
             }
+            console.log('[sync_branches] Delete successful');
 
             // 2. Insertar nuevas asignaciones si existen
             if (branch_ids.length > 0) {
+                console.log('[sync_branches] Inserting', branch_ids.length, 'branch assignments');
                 const rows = branch_ids.map((bid: string) => ({ technician_id, branch_id: bid }));
+                console.log('[sync_branches] Insert rows:', rows);
+                
                 const { error: insErr } = await client
                     .from('technician_branches')
                     // @ts-ignore
@@ -64,8 +71,12 @@ export async function POST(request: NextRequest) {
                     console.error('[sync_branches] Insert error:', insErr);
                     return NextResponse.json({ error: insErr.message || 'Error al insertar asignaciones' }, { status: 500 });
                 }
+                console.log('[sync_branches] Insert successful');
+            } else {
+                console.log('[sync_branches] No branches to insert (empty array) - keeping only deleted state');
             }
 
+            console.log('[sync_branches] Returning success');
             return NextResponse.json({ success: true });
         }
         
