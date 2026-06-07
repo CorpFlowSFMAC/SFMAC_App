@@ -1352,8 +1352,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const isInitialAssignment = ['nuevo', 'pendiente', 'borrador'].includes(ticketData.status_id);
         const newEstadoId = isInitialAssignment ? 'en_inspeccion' : ticketData.status_id;
         
-        // ✅ FIX: El componente de asignación manda 'tecnicoAsignado', no 'tecnico'
-        const newTecnicoObj = assignmentData.tecnicoAsignado || assignmentData.tecnico || null;
+        // ✅ FIX: Contrato de datos estandarizado (ahora siempre es 'tecnico')
+        const newTecnicoObj = assignmentData.tecnico || null;
         const newTechnicianId = newTecnicoObj?.id || null;
 
         const dbUpdates: any = {
@@ -1372,7 +1372,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             if (onUpdate) {
                 await onUpdate(ticketData.id, dbUpdates);
             } else {
-                await ticketsAPI.update(ticketData.id, dbUpdates);
+                // ✅ FIX: Forzar mutación obligatoria a través del backend seguro (SERVICE ROLE bypass)
+                const { metadata, ...columnUpdates } = dbUpdates;
+                const response = await fetch('/api/v3/tickets-server?action=patch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: ticketData.id,
+                        columnUpdates,
+                        metadataUpdates: metadata
+                    })
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Error al actualizar en el servidor seguro');
+                }
             }
         } catch (err: any) {
             console.error('Error persisting assignment to Supabase:', err);
