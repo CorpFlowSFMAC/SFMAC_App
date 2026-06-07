@@ -215,27 +215,28 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             // Remove zone and related branch assignments
             const branchesInZone = allBranches
                 .filter(b => getBranchZoneCode(b) === normalizeZone(zoneId))
-                .map((b: any) => b.id);
+                .map((b: any) => String(b.id));
             setFormData(prev => ({
                 ...prev,
                 zonas: prev.zonas.filter(z => z !== zoneId),
-                agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchesInZone.includes(id))
+                agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchesInZone.includes(String(id)))
             }));
         } else {
             setFormData(prev => ({ ...prev, zonas: [...prev.zonas, zoneId] }));
         }
     };
 
-    const toggleBranch = (branchId: string) => {
-        if (formData.agenciasAsignadas.includes(branchId)) {
+    const toggleBranch = (branchId: string | number) => {
+        const idStr = String(branchId);
+        if (formData.agenciasAsignadas.some(id => String(id) === idStr)) {
             setFormData(prev => ({
                 ...prev,
-                agenciasAsignadas: prev.agenciasAsignadas.filter(id => id !== branchId)
+                agenciasAsignadas: prev.agenciasAsignadas.filter(id => String(id) !== idStr)
             }));
         } else {
             setFormData(prev => ({
                 ...prev,
-                agenciasAsignadas: [...prev.agenciasAsignadas, branchId]
+                agenciasAsignadas: [...prev.agenciasAsignadas, idStr]
             }));
         }
     };
@@ -260,7 +261,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
     const getSelectedBranchesForZone = (zoneId: string) => {
         return allBranches.filter(b =>
             getBranchZoneCode(b) === normalizeZone(zoneId) &&
-            formData.agenciasAsignadas.includes(b.id)
+            formData.agenciasAsignadas.some(id => String(id) === String(b.id))
         );
     };
 
@@ -332,7 +333,7 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             yape_number: formData.yape,
             plin_number: formData.plin,
             status: 'active',
-            _agenciasAsignadas: formData.agenciasAsignadas.filter(id => allBranches.some(b => b.id === id))  // ← Saneado contra base de datos real
+            _agenciasAsignadas: formData.agenciasAsignadas.filter(id => allBranches.some(b => String(b.id) === String(id)))  // ← Saneado contra base de datos real
         };
 
         onSave(supabaseData);
@@ -648,17 +649,17 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                                                                         type="button"
                                                                         className={styles.bulkBtn}
                                                                         onClick={() => {
-                                                                            const branchIds = zoneBranches.map((b: any) => b.id);
-                                                                            const allSelected = branchIds.every((id: string) => formData.agenciasAsignadas.includes(id));
+                                                                            const branchIds = zoneBranches.map((b: any) => String(b.id));
+                                                                            const allSelected = branchIds.every((id: string) => formData.agenciasAsignadas.some(aId => String(aId) === id));
                                                                             if (allSelected) {
                                                                                 setFormData(prev => ({
                                                                                     ...prev,
-                                                                                    agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchIds.includes(id))
+                                                                                    agenciasAsignadas: prev.agenciasAsignadas.filter(id => !branchIds.includes(String(id)))
                                                                                 }));
                                                                             } else {
                                                                                 setFormData(prev => ({
                                                                                     ...prev,
-                                                                                    agenciasAsignadas: [...new Set([...prev.agenciasAsignadas, ...branchIds])]
+                                                                                    agenciasAsignadas: [...new Set([...prev.agenciasAsignadas.map(String), ...branchIds])]
                                                                                 }));
                                                                             }
                                                                         }}
