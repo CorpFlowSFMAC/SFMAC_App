@@ -24,12 +24,13 @@ export async function POST(request: NextRequest) {
                 // @ts-ignore
                 .update(columnUpdates as any)
                 .eq('id', id)
-                .select()
-                .single();
+                .select();
 
             if (error) throw error;
 
-            return NextResponse.json({ success: true, data });
+            // Return first element or null (defensive - prevents coercion error)
+            const updatedRow = data && data.length > 0 ? data[0] : null;
+            return NextResponse.json({ success: true, data: updatedRow });
         }
         
         if (accion === 'sincronizar_agencias') {
