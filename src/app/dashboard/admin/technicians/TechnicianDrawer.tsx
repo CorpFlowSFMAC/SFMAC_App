@@ -310,8 +310,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
-        // Generate UUID upfront to ensure it's never undefined
-        const techId = crypto.randomUUID();
+        // Generate UUID for new technicians, use existing ID for edits
+        const techId = technician?.id || crypto.randomUUID();
 
         const supabaseData = {
             id: techId,
