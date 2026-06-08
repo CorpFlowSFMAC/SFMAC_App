@@ -317,17 +317,17 @@ function flattenTicketForPayments(t: any) {
         fechaAsignacion: meta.fechaAsignacion ?? null,
         costoPasaje: meta.costoPasaje ?? 0,
         tecnico: {
-            id: t.technician_id || t.technicians?.id || meta.tecnico?.id,
+            id: t.technician_id || t.technicians?.id,
             nombre: t.technicians?.name ||
                 (t.technicians?.first_name && t.technicians?.last_name
                     ? `${t.technicians.first_name} ${t.technicians.last_name}`.trim()
                     : t.technicians?.first_name || t.technicians?.last_name) ||
-                meta.tecnico?.nombre || 'Sin asignar',
-            banco: t.technicians?.bank_name || meta.tecnico?.banco || '---',
-            numeroCuenta: t.technicians?.account_number || meta.tecnico?.numeroCuenta || '---',
-            cci: t.technicians?.cci || meta.tecnico?.cci || '---',
-            yape: t.technicians?.yape_number || meta.tecnico?.yape,
-            plin: t.technicians?.plin_number || meta.tecnico?.plin,
+                'Sin asignar',
+            banco: t.technicians?.bank_name || '---',
+            numeroCuenta: t.technicians?.account_number || '---',
+            cci: t.technicians?.cci || '---',
+            yape: t.technicians?.yape_number,
+            plin: t.technicians?.plin_number,
         },
         cliente: { nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente' },
         sede: { nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede' },
@@ -661,13 +661,13 @@ export default function PaymentsPage() {
                 );
 
                 const techData = {
-                    id: t.technician_id || t.technicians?.id || meta.tecnico?.id,
-                    nombre: t.technicians?.name || meta.tecnico?.nombre || 'Sin asignar',
-                    banco: t.technicians?.bank_name || meta.tecnico?.banco || '---',
-                    numeroCuenta: t.technicians?.account_number || meta.tecnico?.numeroCuenta || '---',
-                    cci: t.technicians?.cci || meta.tecnico?.cci || '---',
-                    yape: t.technicians?.yape_number || meta.tecnico?.yape,
-                    plin: t.technicians?.plin_number || meta.tecnico?.plin
+                    id: t.technician_id || t.technicians?.id,
+                    nombre: t.technicians?.name || 'Sin asignar',
+                    banco: t.technicians?.bank_name || '---',
+                    numeroCuenta: t.technicians?.account_number || '---',
+                    cci: t.technicians?.cci || '---',
+                    yape: t.technicians?.yape_number,
+                    plin: t.technicians?.plin_number
                 };
 
                 const pendingItems: PaymentItem[] = [];
