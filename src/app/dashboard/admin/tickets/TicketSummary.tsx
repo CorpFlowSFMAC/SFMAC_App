@@ -134,11 +134,17 @@ interface TechnicianSchedulingBarProps {
 
 export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
     // Optimización: Priorizar siempre el objeto unido de la DB para evitar intermitencia
-    const tech = ticket.technicians || ticket.technician;
-    if (!ticket.technician_id && !tech && !ticket.technicianId) return null;
+    const tech = ticket.technicians || ticket.tecnico || ticket.metadata?.tecnico;
+    const hasTechId = ticket.technician_id || ticket.technicianId || ticket.tecnico_id;
+    const hasTech = !!(tech && (tech.id || tech.name || tech.first_name || tech.nombre)) || !!hasTechId;
 
-    const techName = tech?.name || (tech?.first_name ? `${tech.first_name} ${tech.last_name || ''}`.trim() : "Técnico Asignado");
-    const techPhone = tech?.phone || "---";
+    // Si no estamos al menos en estado de asignación, no mostrar
+    const isNew = ticket.status_id === 'nuevo' || ticket.estadoId === 'nuevo';
+    if (!hasTech && isNew) return null;
+
+    const techName = (tech?.name || tech?.nombre || (tech?.first_name ? `${tech.first_name} ${tech.last_name || ''}` : '')).trim() || (hasTechId ? 'Especialista' : '');
+    const showTechName = hasTech && !!techName && techName !== 'Especialista' && techName !== '[object Object]';
+    const techPhone = tech?.phone || tech?.telefono || "---";
     const hasScheduling = !!ticket.fechaVisita;
     const scheduleDate = hasScheduling ? new Date(ticket.fechaVisita) : null;
     const scheduleLabel = ticket.programacionLabel || "Visita Programada";
@@ -163,39 +169,50 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
         <div
             className={styles.infoBar}
             style={{
-                background: 'linear-gradient(to right, #F0FDF4, white)',
-                '--bar-accent-color': '#10B981',
+                background: hasTech ? 'linear-gradient(to right, #F0FDF4, white)' : 'linear-gradient(to right, #FFF7ED, white)',
+                '--bar-accent-color': hasTech ? '#10B981' : '#F97316',
                 marginTop: '-4px'
             } as any}
         >
             <div className={styles.titleSection}>
-                <div className={styles.titleIcon} style={{ background: '#10B981' }}>
+                <div className={styles.titleIcon} style={{ background: hasTech && showTechName ? '#10B981' : '#F97316' }}>
                     <User size={18} />
                 </div>
                 <div className={styles.titleText}>
-                    <h3 style={{ color: '#047857' }}>Especialista</h3>
-                    <span style={{ color: '#059669' }}>Confirmado</span>
+                    <h3 style={{ color: hasTech && showTechName ? '#047857' : '#9A3412' }}>Especialista</h3>
+                    <span style={{ color: hasTech && showTechName ? '#059669' : '#C2410C' }}>
+                        {hasTech && showTechName ? 'Confirmado' : 'Pendiente de Asignación'}
+                    </span>
                 </div>
             </div>
 
             <div className={styles.verticalDivider} />
 
-            <div className={styles.infoItem}>
+            <div className={styles.infoItem} style={{ flex: 1.5 }}>
                 <span className={styles.infoLabel}>Nombre</span>
-                <div className={styles.clienteCompact}>
-                    <div className={styles.clienteAvatar} style={{ background: '#10B981' }}>
-                        {techName.substring(0, 2).toUpperCase()}
+                {hasTech && showTechName ? (
+                    <div className={styles.clienteCompact}>
+                        <div className={styles.clienteAvatar} style={{ background: '#10B981' }}>
+                            {(techName || "E").substring(0, 2).toUpperCase()}
+                        </div>
+                        <span className={styles.infoValue} style={{ fontWeight: 700 }}>{techName}</span>
                     </div>
-                    <span className={styles.infoValue}>{techName}</span>
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F97316' }}>
+                        <AlertTriangle size={14} />
+                        <span style={{ fontSize: '11px', fontWeight: 800 }}>REQUIERE ASIGNACIÓN MANUAL</span>
+                    </div>
+                )}
+            </div>
+
+            {hasTech && showTechName && (
+                <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>Contacto</span>
+                    <span className={styles.infoValue}>📱 {techPhone}</span>
                 </div>
-            </div>
+            )}
 
-            <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Contacto</span>
-                <span className={styles.infoValue}>📱 {techPhone}</span>
-            </div>
-
-            {visitCost > 0 && (
+            {hasTech && showTechName && visitCost > 0 && (
                 <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Costo Visita</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -218,14 +235,20 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
                 <button
                     className={styles.reassignBtn}
                     onClick={onReassign}
-                    style={{ color: '#10B981', '--btn-color': '#10B981' } as any}
+                    style={{ 
+                        color: hasTech ? '#10B981' : '#C2410C', 
+                        '--btn-color': hasTech ? '#10B981' : '#F97316',
+                        background: hasTech ? '#F0FDF4' : '#FFF7ED',
+                        padding: '6px 12px',
+                        border: `1px solid ${hasTech ? '#A7F3D0' : '#FFEDD5'}`
+                    } as any}
                 >
-                    <RefreshCw size={12} />
-                    <span>Reasignar</span>
+                    {hasTech ? <RefreshCw size={12} /> : <UserPlus size={14} />}
+                    <span>{hasTech ? 'Reasignar' : 'Asignar Especialista'}</span>
                 </button>
             )}
 
-            {hasScheduling && (
+            {hasTech && showTechName && hasScheduling && (
                 <>
                     <div className={styles.verticalDivider} style={{ opacity: 0.5, borderStyle: 'dashed' }} />
 
