@@ -1771,3 +1771,121 @@ export const GestoraAssignmentBar = memo(function GestoraAssignmentBar({ ticket,
         </div>
     );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BARRA DE ESPECIALISTA - Muestra la fila de especialista en etapa 2 (asignado)
+// ═══════════════════════════════════════════════════════════════════════════════
+interface SpecialistCostBarProps {
+    ticket: any;
+    costos?: any[];
+}
+
+export const SpecialistCostBar = memo(function SpecialistCostBar({ ticket, costos }: SpecialistCostBarProps) {
+    // Buscar la fila de especialista en ticket_costs
+    const specialistCost = (costos || []).find((c: any) => 
+        c.concepto === 'Especialista' && c.categoria === 'Mano de Obra'
+    );
+    
+    // Si no hay fila de especialista, no mostrar nada
+    if (!specialistCost) return null;
+    
+    // Obtener datos del técnico
+    const tech = ticket.technicians || ticket.technician;
+    const techName = tech?.name || (tech?.first_name ? `${tech.first_name} ${tech.last_name || ''}`.trim() : 'Especialista');
+    
+    const st = (specialistCost.estado_pago || 'pendiente').toLowerCase();
+    const isPending = st === 'pendiente' || st === 'requiere_aprobacion' || st === 'requiere_aprobacion_admin';
+    
+    return (
+        <div
+            className={styles.infoBar}
+            style={{
+                background: 'linear-gradient(to right, #FEF3C7, white)',
+                '--bar-accent-color': '#F59E0B',
+                marginTop: '-4px'
+            } as any}
+        >
+            {/* Header */}
+            <div className={styles.titleSection}>
+                <div className={styles.titleIcon} style={{ background: '#F59E0B' }}>
+                    <User size={18} />
+                </div>
+                <div className={styles.titleText}>
+                    <h3 style={{ color: '#92400E' }}>Especialista Asignado</h3>
+                    <span style={{ color: '#B45309' }}>Fila de Costo Reservada</span>
+                </div>
+            </div>
+            
+            <div className={styles.verticalDivider} />
+            
+            {/* Técnico */}
+            <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Técnico</span>
+                <div className={styles.clienteCompact}>
+                    <div className={styles.clienteAvatar} style={{ background: '#F59E0B' }}>
+                        {techName.substring(0, 2).toUpperCase()}
+                    </div>
+                    <span className={styles.infoValue}>{techName}</span>
+                </div>
+            </div>
+            
+            {/* Categoría */}
+            <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Categoría</span>
+                <span style={{ 
+                    fontSize: '11px', fontWeight: 800,
+                    background: '#EDE9FE', color: '#5B21B6',
+                    padding: '3px 10px', borderRadius: '999px'
+                }}>
+                    Mano de Obra
+                </span>
+            </div>
+            
+            {/* Monto */}
+            <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Monto Reservado</span>
+                <div style={{ 
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    background: isPending ? '#FEF3C7' : '#D1FAE5',
+                    padding: '6px 14px', borderRadius: '10px',
+                    border: `1px solid ${isPending ? '#FDE68A' : '#A7F3D0'}`
+                }}>
+                    <span style={{ 
+                        fontSize: '16px', fontWeight: 950, 
+                        color: isPending ? '#92400E' : '#065F46' 
+                    }}>
+                        S/ {formatSoles(specialistCost.monto || 0)}
+                    </span>
+                    {isPending ? (
+                        <Clock size={14} color="#B45309" />
+                    ) : (
+                        <CheckCircle2 size={14} color="#059669" />
+                    )}
+                </div>
+            </div>
+            
+            {/* Estado */}
+            <div className={styles.infoItem}>
+                <span className={styles.infoLabel}>Estado</span>
+                {isPending ? (
+                    <span style={{ 
+                        fontSize: '10px', fontWeight: 800, 
+                        color: '#92400E', background: '#FEF3C7',
+                        padding: '3px 10px', borderRadius: '999px',
+                        border: '1px solid #FDE68A'
+                    }}>
+                        ⏳ PENDIENTE
+                    </span>
+                ) : (
+                    <span style={{ 
+                        fontSize: '10px', fontWeight: 800, 
+                        color: '#065F46', background: '#D1FAE5',
+                        padding: '3px 10px', borderRadius: '999px'
+                    }}>
+                        ✅ CONFIRMADO
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+});
