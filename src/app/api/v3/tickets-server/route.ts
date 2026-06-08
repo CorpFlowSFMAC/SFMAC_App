@@ -92,9 +92,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const accion = searchParams.get('action') || 'ping';
+        const accion = searchParams.get('accion') || 'ping';
         
-        if (action === 'ping') {
+        if (accion === 'ping') {
             const result = await pingDatabase();
             return NextResponse.json({
                 success: result,
