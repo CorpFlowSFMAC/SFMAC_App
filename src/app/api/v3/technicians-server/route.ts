@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
             const { error: delErr } = await client
                 .from('technician_branches')
                 .delete()
-                .eq('tecnico_id', tecnico_id);
+                .eq('technician_id', tecnico_id);
             
             if (delErr !== null) {
                 console.error('[sincronizar_agencias] Delete error:', delErr);
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
             // 2. Insertar nuevas asignaciones si existen
             if (agencias_asignadas.length > 0) {
                 console.log('[sincronizar_agencias] Inserting', agencias_asignadas.length, 'branch assignments');
-                const rows = agencias_asignadas.map((bid: string) => ({ tecnico_id, branch_id: bid }));
+                const rows = agencias_asignadas.map((bid: string) => ({ technician_id: tecnico_id, branch_id: bid }));
                 console.log('[sincronizar_agencias] Insert rows:', rows);
                 
                 const { error: insErr } = await client
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
             const { data, error } = await client
                 .from('technician_branches')
                 .select('branch_id, branch_offices(id, name, zone, address, departamento, client_id, client:clients(id, name))')
-                .eq('tecnico_id', technicianId);
+                .eq('technician_id', technicianId);
 
             if (error) throw error;
             
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
             // Fetch ALL technician branches, bypassing RLS
             const { data, error } = await client
                 .from('technician_branches')
-                .select('tecnico_id, branch_id');
+                .select('technician_id, branch_id');
 
             if (error) throw error;
             
