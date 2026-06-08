@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MapPin, User, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package, Truck, ShieldAlert } from "lucide-react";
+import { FileText, MapPin, User, UserPlus, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package, Truck, ShieldAlert } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { supabase } from "@/lib/supabase";
