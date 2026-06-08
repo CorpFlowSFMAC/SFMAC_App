@@ -134,7 +134,7 @@ interface TechnicianSchedulingBarProps {
 
 export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
     // Optimización: Priorizar siempre el objeto unido de la DB para evitar intermitencia
-    const tech = ticket.technicians || ticket.tecnico || ticket.metadata?.tecnico;
+    const tech = ticket.technicians || ticket.tecnico || ticket.technician || ticket.metadata?.tecnico || ticket.metadata?.technician;
     const hasTechId = ticket.technician_id || ticket.technicianId || ticket.tecnico_id;
     const hasTech = !!(tech && (tech.id || tech.name || tech.first_name || tech.nombre)) || !!hasTechId;
 
