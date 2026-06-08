@@ -789,16 +789,35 @@ export const techniciansAPI = {
             cleanTechnician.name = `${cleanTechnician.first_name || ''} ${cleanTechnician.last_name || ''}`.trim();
         }
 
+        // Filtrar campos que no existen en la tabla technicians para evitar PGRST204
+        const allowedFields = [
+            'id', 'name', 'first_name', 'last_name', 'document_type', 'document_number',
+            'phone', 'phone_secondary', 'email', 'address', 'zone', 'assigned_zones',
+            'specialties', 'photo', 'rating', 'bank_name', 'account_number', 'account_type',
+            'cci', 'yape_number', 'plin_number', 'status', 'created_at'
+        ];
+        const filteredTechnician: Record<string, any> = {};
+        for (const key of allowedFields) {
+            if (key in cleanTechnician) {
+                filteredTechnician[key] = (cleanTechnician as any)[key];
+            }
+        }
+        // Verificar que no haya campos extra no deseados
+        const extraFields = Object.keys(cleanTechnician).filter(k => !allowedFields.includes(k));
+        if (extraFields.length > 0) {
+            console.warn('[techniciansAPI.create] Campos extra detectados y removidos:', extraFields);
+        }
+
         // Log para debugging
         console.log('[techniciansAPI.create] Sending to supabase:', JSON.stringify({
-            id: cleanTechnician.id,
-            name: cleanTechnician.name,
-            document_number: cleanTechnician.document_number
+            id: filteredTechnician.id,
+            name: filteredTechnician.name,
+            document_number: filteredTechnician.document_number
         }, null, 2));
 
         const { data, error } = await supabase
             .from('technicians')
-            .insert(cleanTechnician)
+            .insert(filteredTechnician)
             .select()
             .single();
 
