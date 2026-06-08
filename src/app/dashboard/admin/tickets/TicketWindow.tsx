@@ -1089,7 +1089,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const technician_id = newTechnicianObj?.id || null;
         const dbUpdates: any = {
             technician_id: technician_id,
-            visit_cost: isInitialAssignment ? null : (ticketData.visit_cost || null),
             status_id: newEstadoId,
             metadata: {
                 ...ticketData.metadata,
@@ -1115,6 +1114,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 const result = await response.json();
                 if (!response.ok || !result.success) {
                     throw new Error(result.error || 'Error al actualizar en el servidor seguro');
+                }
+            }
+
+            // 🚀 CREAR FILA DE ESPECIALISTA AUTOMÁTICAMENTE al asignar técnico
+            if (technician_id) {
+                try {
+                    await ticketCostsAPI.create({
+                        ticket_id: ticketData.id,
+                        concepto: 'Especialista',
+                        categoria: 'Mano de Obra',
+                        specialist_id: technician_id,
+                        monto: 0,
+                        estado_pago: 'pendiente'
+                    });
+                    console.log('[handleAssignment] Fila de especialista creada para ticket:', ticketData.id);
+                } catch (costErr) {
+                    // No fallar la asignación si no se puede crear el costo
+                    console.error('[handleAssignment] Error creando fila de especialista:', costErr);
                 }
             }
         } catch (err: any) {
