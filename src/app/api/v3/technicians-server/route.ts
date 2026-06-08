@@ -37,12 +37,12 @@ export async function POST(request: NextRequest) {
             if (!client) throw new Error('Supabase server client is not configured');
 
             const body = await request.json();
-            const { tecnico_id, branch_ids } = body;
+            const { tecnico_id, agencias_asignadas } = body;
             
-            console.log('[sincronizar_agencias] Received request:', { tecnico_id, branch_ids, branchIdsCount: branch_ids?.length });
+            console.log('[sincronizar_agencias] Received request:', { tecnico_id, agencias_asignadas, branchIdsCount: agencias_asignadas?.length });
             
-            if (!tecnico_id || !Array.isArray(branch_ids)) {
-                return NextResponse.json({ success: false, error: 'tecnico_id y branch_ids (array) son requeridos' }, { status: 400 });
+            if (!tecnico_id || !Array.isArray(agencias_asignadas)) {
+                return NextResponse.json({ success: false, error: 'tecnico_id y agencias_asignadas (array) son requeridos' }, { status: 400 });
             }
 
             // 1. Borrar asignaciones existentes
@@ -59,9 +59,9 @@ export async function POST(request: NextRequest) {
             console.log('[sincronizar_agencias] Delete successful');
 
             // 2. Insertar nuevas asignaciones si existen
-            if (branch_ids.length > 0) {
-                console.log('[sincronizar_agencias] Inserting', branch_ids.length, 'branch assignments');
-                const rows = branch_ids.map((bid: string) => ({ tecnico_id, branch_id: bid }));
+            if (agencias_asignadas.length > 0) {
+                console.log('[sincronizar_agencias] Inserting', agencias_asignadas.length, 'branch assignments');
+                const rows = agencias_asignadas.map((bid: string) => ({ tecnico_id, branch_id: bid }));
                 console.log('[sincronizar_agencias] Insert rows:', rows);
                 
                 const { error: insErr } = await client

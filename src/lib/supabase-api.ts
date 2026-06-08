@@ -709,7 +709,7 @@ export const techniciansAPI = {
             throw new Error(`Ninguna de las agencias seleccionadas existe en el catálogo. IDs inválidos: ${invalidIds.slice(0, 3).join(', ')}${invalidIds.length > 3 ? '...' : ''}`);
         }
         
-        const requestBody = { technician_id: technicianId, branch_ids: validIds };
+        const requestBody = { tecnico_id: technicianId, agencias_asignadas: validIds };
         console.log('[syncBranchAssignments] Making request to server:', requestBody);
         
         const response = await fetch('/api/v3/technicians-server?accion=sincronizar_agencias', {
