@@ -337,6 +337,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                         queryClient.invalidateQueries({
                             queryKey: queryKeys.tickets.all,
                         });
+                        // También invalidar summary para usuarios con userEmail específico
+                        queryClient.invalidateQueries({
+                            queryKey: queryKeys.tickets.summary(),
+                        });
                     } else if (payload.eventType === "UPDATE") {
                         const pNew = payload.new as any;
                         const ticketId = pNew.id;
@@ -788,16 +792,19 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         async (data: any) => {
             const created = await ticketsAPI.create(data);
             const normalized = normalizeTicket(created);
-            // 🚀 OPTIMIZACIÓN: en lugar de invalidar (refetch HTTP de toda la lista),
-            // insertamos el nuevo ticket directo en la cache. El canal realtime
-            // (postgres_changes en `tickets`) sincroniza otras pestañas/usuarios.
+            // 🚀 OPTIMIZACIÓN: insertamos directo en cache + invalidamos para asegurar sync
+            // Invalidar tanto all como summary para cubrir todas las posibles query keys
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            
+            // También insertar directo para respuesta instantánea
             queryClient.setQueryData(
                 [...queryKeys.tickets.summary(), userEmail],
                 (old: any[] | undefined) => (old ? [normalized, ...old] : [normalized])
             );
             return normalized;
         },
-        [queryClient]
+        [queryClient, userEmail]
     );
 
     const updateTicket = useCallback(
