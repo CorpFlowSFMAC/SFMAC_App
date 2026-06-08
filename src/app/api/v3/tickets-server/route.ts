@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const accion = searchParams.get('action') || 'ping';
         
-        if (action === 'ping') {
+        if (accion === 'ping') {
             const result = await pingDatabase();
             return NextResponse.json({
                 success: result,
