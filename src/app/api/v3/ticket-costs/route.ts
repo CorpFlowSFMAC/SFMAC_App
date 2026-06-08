@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
         }
 
         const payload = await normalizeCostPayload(client, filteredPayload);
-        if (!payload.ticket_id || !payload.concepto || !payload.categoria || !payload.monto || !payload.estado_pago) {
+        if (!payload.ticket_id || !payload.concepto || !payload.categoria || payload.monto === undefined || payload.monto === null || !payload.estado_pago) {
             return NextResponse.json({ success: false, error: 'Datos incompletos para registrar el costo' }, { status: 400 });
         }
 

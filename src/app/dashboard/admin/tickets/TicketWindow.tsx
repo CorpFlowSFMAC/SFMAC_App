@@ -506,6 +506,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 const rawTicket = await ticketsAPI.getById(ticket.id);
                 if (!rawTicket) return;
                 const fullTicket = normalizeTicket(rawTicket);
+                if (fullTicket.labor_cost != null) setLaborCost(fullTicket.labor_cost.toString());
+                if (fullTicket.materials_cost != null) setMaterialsCost(fullTicket.materials_cost.toString());
                 let meta = fullTicket.metadata || {};
                 while (meta.metadata && typeof meta.metadata === 'object') {
                     meta = { ...meta, ...meta.metadata };
