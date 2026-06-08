@@ -121,18 +121,8 @@ export async function POST(request: NextRequest) {
             if (fetchError) throw fetchError;
 
             // PASO 2: Sanitizar y Mapear Defensivamente el 'columnUpdates'
+            // No se requiere mapeo: el frontend ya envía technician_id directamente
             const sanitizedUpdates: any = { ...columnUpdates };
-            
-            // Mapear tecnico_id (del frontend) al campo real de la base de datos (technician_id)
-            if (sanitizedUpdates.tecnico_id !== undefined) {
-                sanitizedUpdates.technician_id = sanitizedUpdates.tecnico_id;
-                delete sanitizedUpdates.tecnico_id;
-            }
-            
-            // Limpiar propiedades residuales
-            delete sanitizedUpdates.tecnico;
-            delete sanitizedUpdates.cliente;
-            delete sanitizedUpdates.gestora;
             delete sanitizedUpdates.sede;
 
             const { data, error } = await client

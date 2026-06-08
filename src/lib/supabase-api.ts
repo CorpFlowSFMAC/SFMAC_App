@@ -516,7 +516,7 @@ export const techniciansAPI = {
     // Obtiene las agencias asignadas a un técnico con info completa
     async getAssignedBranches(technicianId: string) {
         try {
-            const response = await fetch(`/api/v3/technicians-server?accion=get_assigned_branches&tecnico_id=${technicianId}`, { cache: 'no-store' });
+            const response = await fetch(`/api/v3/technicians-server?accion=get_assigned_branches&technician_id=${technicianId}`, { cache: 'no-store' });
             if (!response.ok) {
                 const err = await response.json().catch(() => ({}));
                 throw new Error(err.error || 'Server error on get_assigned_branches');
@@ -709,7 +709,7 @@ export const techniciansAPI = {
             throw new Error(`Ninguna de las agencias seleccionadas existe en el catálogo. IDs inválidos: ${invalidIds.slice(0, 3).join(', ')}${invalidIds.length > 3 ? '...' : ''}`);
         }
         
-        const requestBody = { tecnico_id: technicianId, agencias_asignadas: validIds };
+        const requestBody = { technician_id: technicianId, agencias_asignadas: validIds };
         console.log('[syncBranchAssignments] Making request to server:', requestBody);
         
         const response = await fetch('/api/v3/technicians-server?accion=sincronizar_agencias', {

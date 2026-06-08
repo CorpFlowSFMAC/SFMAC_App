@@ -1,17 +1,13 @@
 "use client";
-// Forced redeploy: v1.3 - Async Quote Flow, Removal of Obsolete Sync and State Hardening
-
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, normalizeTicket } from "@/lib/useQueryHooks";
-
 import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, TrendingUp } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
 import GestoraDrawer from "./GestoraDrawer";
-
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { calculateTicketFinances, toNum, generateTransactionToken, sanitizeTicketMetadata } from "@/lib/calculations";
@@ -22,16 +18,14 @@ import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
 import { ticketsCache } from "@/lib/tickets-cache";
 import styles from "./TicketWindow.module.css";
-
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
 const SANTANDER_ID = "419d87c8-65e1-434f-8253-d8a226ca5f62";
-
 interface TicketData {
     id: string;
     ticket_number?: number;
     client_id: string;
     branch_id?: string;
-    tecnico_id?: string | null;
+    technician_id?: string | null;
     status_id: string;
     description?: string;
     client_ticket_number?: string | null;
@@ -54,7 +48,7 @@ interface TicketData {
     sla_reactivation_date?: string;
     sede_reportada_cliente?: string | null;
     gestora_id?: string | null;
-    tecnico: any;
+    technician: any;
     gestora: any;
     cliente: any;
     sede: any;
@@ -62,7 +56,6 @@ interface TicketData {
     costos: any[];
     [key: string]: any;
 }
-
 interface TicketWindowProps {
     ticket: any;
     onClose: () => void;
@@ -70,32 +63,24 @@ interface TicketWindowProps {
     index?: number;
     children?: React.ReactNode;
 }
-
-// ── COMPONENTE OPTIMIZADO: CRONÓMETRO SLA AISLADO ──
-// Esto evita que TODO el TicketWindow (~4400 líneas) se re-renderice cada 1 segundo.
 const SLATimerHeader = memo(({ ticket }: { ticket: any }) => {
     const [now, setNow] = useState(new Date());
-
     useEffect(() => {
         if (ticket.pausadoSLA) return;
         const interval = setInterval(() => setNow(new Date()), 1000);
         return () => clearInterval(interval);
     }, [ticket.pausadoSLA]);
-
     const formatElapsed = () => {
         const start = new Date(ticket.fechaCreacion);
         const end = (ticket.pausadoSLA && ticket.fechaPausa)
             ? new Date(ticket.fechaPausa)
             : now;
-
         const diffMs = Math.max(0, end.getTime() - start.getTime());
         const hrs = Math.floor(diffMs / 3600000);
         const mins = Math.floor((diffMs % 3600000) / 60000);
         const secs = Math.floor((diffMs % 60000) / 1000);
-
         return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
-
     return (
         <div className={`${styles.slaTimerHeader} ${ticket.pausadoSLA ? styles.paused : ''}`}>
             <Clock size={14} />
@@ -104,16 +89,13 @@ const SLATimerHeader = memo(({ ticket }: { ticket: any }) => {
         </div>
     );
 });
-
 function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
     const [ticketData, setTicketData] = useState<any>(() => ({
         ...ticket,
         status_id: ticket.status_id || normalizeStateId(ticket.status_id || "nuevo")
     }));
-
     const isSantander = ticketData.client_id === SANTANDER_ID || (ticketData.client_ticket_number || "").startsWith("STD");
     const isBCP = ticketData.cliente?.nombre?.toUpperCase().includes("BCP") || ticketData.cliente?.name?.toUpperCase().includes("BCP");
-
     const [isMaximized, setIsMaximized] = useState(() => {
         if (typeof window !== 'undefined') {
             const ui = localStorage.getItem(`ticket_ui_${ticket.id}`);
@@ -121,7 +103,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
         return true;
     });
-
     const [isMinimized, setIsMinimized] = useState(() => {
         if (typeof window !== 'undefined') {
             const ui = localStorage.getItem(`ticket_ui_${ticket.id}`);
@@ -129,7 +110,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
         return false;
     });
-
     const [position, setPosition] = useState(() => {
         if (typeof window !== 'undefined') {
             const ui = localStorage.getItem(`ticket_ui_${ticket.id}`);
@@ -137,17 +117,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
         return { x: 100 + (index * 30), y: 50 + (index * 30) };
     });
-
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
     const [zIndex, setZIndex] = useState(1001 + (index || 0));
     const [showAssignmentDrawer, setShowAssignmentDrawer] = useState(false);
     const [showGestoraDrawer, setShowGestoraDrawer] = useState(false);
     const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
-
-    // ✅ FIX: Declarar queryClient aquí para que esté disponible en handleAssignment
     const queryClient = useQueryClient();
-
     useEffect(() => {
         if (typeof window !== 'undefined') {
             localStorage.setItem(`ticket_ui_${ticket.id}`, JSON.stringify({
@@ -157,9 +133,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             }));
         }
     }, [isMaximized, isMinimized, position, ticket.id]);
-
-    // (El useEffect de sync obsoleto ha sido eliminado en favor del V4 Realtime Sync)
-
     const [diagnosis, setDiagnosis] = useState("");
     const [laborCost, setLaborCost] = useState("");
     const [materialsCost, setMaterialsCost] = useState("");
@@ -175,7 +148,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [partidasCotización, setPartidasCotización] = useState<any[]>(() => {
         return ticket.partidas || ticket.metadata?.partidas || [];
     });
-
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
     const [isSendingQuote, setIsSendingQuote] = useState(false);
@@ -183,8 +155,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [porcentajeAdelanto, setPorcentajeAdelanto] = useState<number | null>(null);
     const [montoAdelantoManual, setMontoAdelantoManual] = useState<string>("");
     const quotationDraftRef = useRef<{ items: any[]; total: number } | null>(null);
-
-    // --- HARD DELETE & TRANSFER LOGIC ---
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [showLiquidationConfirm, setShowLiquidationConfirm] = useState(false);
@@ -202,17 +172,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         message: "",
         onConfirm: () => {}
     });
-
     const checkAndHardDelete = async () => {
         if (!ticketData?.id) return;
         setIsDeleting(true);
         try {
-            // 1. Verificar si hay gastos
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
             if (costs && costs.length > 0) {
                 const pendingCount = costs.filter((c: any) => c.estado_pago === 'pendiente').length;
                 const paidCount = costs.filter((c: any) => c.estado_pago === 'pagado').length;
-                
                 setShowDeleteModal(false);
                 setShowTransferModal(true);
                 showToast(
@@ -222,12 +189,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 );
                 return;
             }
-
-            // 2. Ejecutar Hard Delete
             if (!confirm(`¿FINALMENTE SEGURO? Esta acción es irreversible y eliminará el ticket ${ticketData.client_ticket_number || ticketData.id} de TODO el sistema (incluyendo fotos y chat).`)) {
                 return;
             }
-
             await ticketsAPI.delete(ticketData.id);
             showToast("Ticket Eliminado", "El registro ha sido borrado definitivamente.", "success");
             onClose();
@@ -238,7 +202,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsDeleting(false);
         }
     };
-
     const handleSearchTargetTicket = async (query: string) => {
         setTargetTicketSearch(query);
         if (query.length < 3) {
@@ -252,14 +215,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 .or(`client_ticket_number.ilike.%${query}%, description.ilike.%${query}%`)
                 .neq('id', ticketData.id)
                 .limit(5);
-
             if (error) throw error;
             setSearchResults(data || []);
         } catch (err) {
             console.error("Search error:", err);
         }
     };
-
     const executeTransferAndClear = async () => {
         if (!selectedTargetTicket) {
             showToast("Error", "Debe seleccionar un ticket de destino.", "error");
@@ -268,8 +229,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setIsTransferring(true);
         try {
             const transferResult: any = await ticketCostsAPI.transferAllToTicket(ticketData.id, selectedTargetTicket.id);
-
-            // Compatibilidad: transferAllToTicket pudo devolver array (costs) o un objeto { movedCosts, movedPayments }
             let movedCostsCount = 0;
             let movedPaymentsCount = 0;
             if (Array.isArray(transferResult)) {
@@ -278,15 +237,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 movedCostsCount = transferResult?.movedCosts?.length || 0;
                 movedPaymentsCount = transferResult?.movedPayments?.length || 0;
             }
-
             showToast(
                 "Gastos Trasladados",
                 `Se trasladaron ${movedCostsCount} costos y ${movedPaymentsCount} pagos al ticket ${selectedTargetTicket.client_ticket_number || selectedTargetTicket.id}.`,
                 "success"
             );
-            
-            // Ahora que está limpio, intentar el borrado automático? 
-            // Mejor dejar que el admin lo confirme de nuevo para evitar sorpresas.
             setShowTransferModal(false);
             setShowDeleteModal(true);
         } catch (err) {
@@ -296,8 +251,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsTransferring(false);
         }
     };
-
-    // --- REPORT UPDATE LOGIC ---
     const [showReportUpdateModal, setShowReportUpdateModal] = useState(false);
     const [isSavingReport, setIsSavingReport] = useState(false);
     const [reportForm, setReportForm] = useState({
@@ -305,7 +258,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         laborCost: "",
         materialsCost: ""
     });
-
     const handleOpenReportUpdate = () => {
         setReportForm({
             diagnosis: ticketData.diagnosis || "",
@@ -314,12 +266,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         });
         setShowReportUpdateModal(true);
     };
-
     const handleSaveReportUpdate = async () => {
         if (isSavingReport) return;
-
-        // ✅ BLOQUEO DE PRESUPUESTO POST-APROBACIÓN
-        // Estados que sellan el presupuesto: no se permite cambiar MO/Materiales
         const SEALED_STATES = ['cotizacion_aprobada', 'en_ejecucion', 'documentacion_enviada', 'por_liquidar', 'pago_realizado', 'ticket_cerrado'];
         const isSealedState = SEALED_STATES.includes(ticketData.status_id);
         const userRole = localStorage.getItem('userRole');
@@ -329,22 +277,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setShowReportUpdateModal(false);
             return;
         }
-
         setIsSavingReport(true);
         try {
             const oldMO = parseFloat(String(ticketData.labor_cost || "0"));
             const oldMAT = parseFloat(String(ticketData.materials_cost || "0"));
             const newMO = parseFloat(reportForm.laborCost || "0");
             const newMAT = parseFloat(reportForm.materialsCost || "0");
-
             const updatedMetadata = sanitizeTicketMetadata({
                 ...(ticketData.metadata || {}),
                 diagnosis: reportForm.diagnosis,
                 labor_cost: newMO,
                 materials_cost: newMAT
             });
-
-            // 1. Actualizar en Base de Datos (Columnas y Metadata para consistencia absoluta)
             const { error } = await supabase
                 .from('tickets')
                 .update({
@@ -354,10 +298,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     metadata: updatedMetadata
                 })
                 .eq('id', ticketData.id);
-
             if (error) throw error;
-
-            // 2. Auditoría Silenciosa
             await supabase.from('debug_logs').insert({
                 log_data: {
                     action: 'UPDATE_TECHNICAL_REPORT',
@@ -372,14 +313,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     timestamp: new Date().toISOString()
                 }
             });
-
-            // 3. Sincronizar TODOS los estados locales INMEDIATAMENTE
-            // Estos estados deben actualizarse ANTES de cualquier re-render del prop sync
             setDiagnosis(reportForm.diagnosis);
             setLaborCost(newMO.toString());
             setMaterialsCost(newMAT.toString());
-
-            // 4. Actualizar ticketData local con los nuevos valores (incluye columnas directas)
             setTicketData((prev: any) => ({
                 ...prev,
                 diagnosis: reportForm.diagnosis,
@@ -387,7 +323,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 materials_cost: newMAT,
                 metadata: updatedMetadata
             }));
-
             showToast("Reporte Actualizado", "Los cambios han sido guardados y los cálculos financieros sincronizados.", "success");
             setShowReportUpdateModal(false);
         } catch (err: any) {
@@ -397,43 +332,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSavingReport(false);
         }
     };
-
     const [userRole, setUserRole] = useState<string | null>(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('userRole');
         return null;
     });
-
     const isAdmin = userRole?.toLowerCase() === 'admin' || userRole?.toLowerCase() === 'superadmin';
-
     const [myGestoraId, setMyGestoraId] = useState<string | null>(null);
     const [myProfileId, setMyProfileId] = useState<string | null>(null);
     const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
-
     useEffect(() => {
         const fetchMe = async () => {
             const email = localStorage.getItem('userEmail');
             if (!email || typeof email !== 'string' || !email.includes('@')) return;
-
-            // Intentar obtener ID de gestora (para permisos operativas)
             const { data: gestoraData, error: errG } = await supabase.from('gestoras').select('id').eq('email', email.toLowerCase()).maybeSingle();
             if (errG) console.warn('[TicketWindow] Error gestoras:', errG.message);
             if (gestoraData?.id) setMyGestoraId(gestoraData.id);
-
-            // Intentar obtener ID de perfil (para registros de tesorería solicitado_por)
             const { data: profileData, error: errP } = await supabase.from('perfiles').select('id').eq('email', email.toLowerCase()).maybeSingle();
             if (errP) console.warn('[TicketWindow] Error perfiles:', errP.message);
             if (profileData?.id) setMyProfileId(profileData.id);
         };
         fetchMe();
     }, []);
-
     const [toast, setToast] = useState<{ visible: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({ visible: false, title: '', message: '', type: 'info' });
-
     const [ticketCosts, setTicketCosts] = useState<any[]>([]);
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // LÓGICA FINANCIERA CENTRALIZADA (calculateTicketFinances) - se recalcula con ticketCosts
-    // ─────────────────────────────────────────────────────────────────────────────
     const finances = useMemo(
         () => calculateTicketFinances(ticketData, ticketCosts),
         [ticketData, ticketCosts]  // ✅ Recalcular cuando cambien los costs
@@ -456,20 +377,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         balance: baseRescue,
         netIncome
     } = finances;
-
     const advanceRequestPending = pendingLaborItems.some((item: any) => {
         const text = `${item.categoria || ''} ${item.concepto || ''}`.toLowerCase();
         return text.includes('adelanto') || text.includes('rescate financiero');
     });
     const canProceedWithExecution = ticketData.status_id === "en_ejecucion" || unifiedPaymentsSum > 0;
-
     let availableRescue = baseRescue;
-    // 🔓 RESCATE FINANCIERO – DESBLOQUEO DESDE COTIZACIÓN ENVIADA (Estado 6 en adelante).
-    // Regla de negocio: la MO pactada con el técnico ya está definida internamente al enviar
-    // la cotización al cliente. El técnico no debe esperar a la aprobación bancaria del cliente
-    // para tener liquidez. Si pactedMO > 0, el saldo disponible se calcula sobre la MO interna
-    // menos los adelantos ya pagados, sin depender del saldo_tecnico del backend (que se
-    // estabiliza recién al aprobarse la cotización).
     const RESCUE_ELIGIBLE_STATES = new Set([
         'cotizacion_enviada',      // Estado 6 ← desbloqueo
         'cotizacion_aprobada',     // Estado 7
@@ -482,14 +395,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         'requiere_revision_admin',
     ]);
     if (pactedMO > 0 && RESCUE_ELIGIBLE_STATES.has(ticketData.status_id)) {
-        // 🔄 REACTIVIDAD: usar laborRequested (incluye pagado + pendiente)
         const computed = Math.max(0, pactedMO - finances.laborRequested);
-        // Tomamos el mínimo entre saldo del backend y el computado client-side
         availableRescue = (availableRescue > 0)
             ? Math.min(availableRescue, computed)
             : computed;
     }
-    // REFUERZO: Emergencias o estados activos sin pactado definido aún (para permitir solicitud base)
     if (pactedMO <= 0 && ['visita_realizada', 'en_cotizacion', 'cotizacion_enviada', 'cotizacion_aprobada', 'en_ejecucion'].includes(ticketData.status_id)) {
         if (availableRescue <= 0) availableRescue = 100;
     }
@@ -498,34 +408,25 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         (c.estado_pago || '').toLowerCase() === 'pagado'
     );
     const [loadingCosts, setLoadingCosts] = useState(false);
-
     const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
-    
-    // ⚡️ LOADING OVERLAY: Estado de bloqueo para sync con servidor
     const [isSaving, setIsSaving] = useState(false);
-    
     const showToast = (title: string, message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ visible: true, title, message, type });
         setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
     };
-
     const hasLoadedRef = useRef<string | null>(null);
-
     const loadCosts = useCallback(async () => {
         if (!ticketData?.id) return;
         setLoadingCosts(true);
         try {
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
             setTicketCosts(costs || []);
-            
-            // MOTOR V3: Recalcular finanzas localmente para garantizar coherencia instantánea
             try {
                 const rawTicket = await ticketsAPI.getById(ticketData.id);
                 if (rawTicket) {
                     const updatedTicket = normalizeTicket(rawTicket);
                     const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : (costs || []);
                     const v3Finances = calculateTicketFinances(updatedTicket, localCosts);
-
                     setTicketData((prev: TicketData) => ({
                         ...prev,
                         estadoId: updatedTicket.status_id,
@@ -536,7 +437,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         costoVisita: updatedTicket.visit_cost,
                         montoFinal: updatedTicket.total_quoted_amount,
                         numeroTicketCliente: updatedTicket.client_ticket_number,
-                        tecnico: updatedTicket.tecnico,
+                        technician: updatedTicket.technician,
                         gestora: updatedTicket.gestora,
                         cliente: updatedTicket.cliente || prev.cliente || null,
                         sede: updatedTicket.sede || prev.sede || null,
@@ -544,7 +445,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             ...prev.metadata,
                             ...(updatedTicket.metadata || {})
                         },
-                        // Sobrescribir con cálculos frescos del motor V3 (JS Fallback)
                         saldo_tecnico: v3Finances.netLaborBalance,
                         utilidad_neta: v3Finances.netProfit,
                         margen_real: v3Finances.profitMargin,
@@ -564,11 +464,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setLoadingCosts(false);
         }
     }, [ticketData.id, advanceRefreshKey]);
-
-    // Suscripción granular a COSTOS Y PAGOS (el ticket se actualiza vía props)
     useEffect(() => {
         if (!ticketData?.id) return;
-
         const channel = supabase
             .channel(`ticket_window_costs_${ticketData.id}`)
             .on(
@@ -596,25 +493,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             )
             .subscribe();
-
         return () => {
             supabase.removeChannel(channel);
         };
     }, [ticketData.id, loadCosts]);
-
-    // Carga inicial de detalles completos (no incluidos en el summary)
     useEffect(() => {
         if (!ticket?.id || hasLoadedRef.current === ticket.id) return;
         hasLoadedRef.current = ticket.id;
-
         const load = async () => {
             try {
                 loadCosts();
-                // Solo un fetch al abrir para traer campos pesados (partidas, evidencias)
                 const rawTicket = await ticketsAPI.getById(ticket.id);
                 if (!rawTicket) return;
                 const fullTicket = normalizeTicket(rawTicket);
-                
                 let meta = fullTicket.metadata || {};
                 while (meta.metadata && typeof meta.metadata === 'object') {
                     meta = { ...meta, ...meta.metadata };
@@ -629,13 +520,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
                     return (c.estado_pago || '').toLowerCase() === 'pagado' && text.includes('adelanto');
                 });
-
                 const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
                 const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
                     ? 'en_inspeccion'
                     : rawEstadoId;
-
-                    // Restaurar desde caché local o usar el más avanzado entre caché y servidor
                     const savedState = localStorage.getItem(`ticket_state_${ticket.id}`);
                     let cachedMetadata: any = {};
                     let cachedEstadoId: string | undefined;
@@ -643,27 +531,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         try {
                             const parsed = JSON.parse(savedState);
                             cachedEstadoId = parsed.status_id;
-                            // Para tickets activos, preservar el estado local cacheado para evitar regresiones
                             const isTriage = !fullTicket.status_id || ['nuevo', 'borrador', 'pendiente'].includes(fullTicket.status_id);
                             if (isTriage) {
                                 cachedMetadata = parsed;
                             } else {
-                                // Para tickets ya avanzados, usar metadata del caché pero no perder el estado más avanzado
                                 const { estadoId: _, status_id: __, ...safe } = parsed;
                                 cachedMetadata = safe;
                             }
                         } catch(e) {}
                     }
-
-                    // DETERMINAR EL ESTADO FINAL: Nunca retroceder
                     const serverStateOrder = TICKET_STATE_ORDER[corregidoEstadoId] ?? 0;
                     const cachedStateOrder = TICKET_STATE_ORDER[cachedEstadoId ?? ''] ?? 0;
-                    // GANA el más avanzado
                     const finalEstadoId = cachedStateOrder >= serverStateOrder 
                         ? (cachedEstadoId || corregidoEstadoId) 
                         : corregidoEstadoId;
                     const finalStatusId = finalEstadoId;
-
                     setTicketData((prev: TicketData) => {
                         const {
                             adelantoPagado,
@@ -679,7 +561,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             montoAdelanto: cachedMontoAdelanto,
                             fechaPagoAdelanto: cachedFechaPagoAdelanto,
                             AdelantoPagado: cachedUpperAdelantoPagado,
-                            // Excluir campos financieros del caché para que el servidor siempre mande
                             solicitudAdelanto: _cachedSolicitudAdelanto,
                             solicitudPago: _cachedSolicitudPago,
                             solicitudLiquidacion: _cachedSolicitudLiquidacion,
@@ -688,11 +569,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             pagoRechazado: _cachedPagoRechazado,
                             ...safeCachedMetadata
                         } = cachedMetadata;
-
-                        // Construcción explícita del estado para evitar variables huérfanas o duplicaciones en memoria
                         const merged: TicketData = {
                             ...prev,
-                            // Campos directos mapeados (se evita propagar los joins crudos de la base de datos)
                             id: fullTicket.id,
                             ticket_number: fullTicket.ticket_number,
                             client_ticket_number: fullTicket.client_ticket_number || safeMeta.client_ticket_number || safeCachedMetadata.client_ticket_number || prev.client_ticket_number,
@@ -703,25 +581,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             materials_cost: fullTicket.materials_cost,
                             visit_cost: fullTicket.visit_cost,
                             total_quoted_amount: fullTicket.total_quoted_amount,
-
-                            // Variables financieras
-                            saldo_tecnico: fullTicket.saldo_tecnico,
+                            saldo_tecnico: fullTicket.saldo_technician,
                             margen_real: fullTicket.margen_real,
                             utilidad_neta: fullTicket.utilidad_neta,
                             inversion_ejecutada: fullTicket.inversion_ejecutada,
                             total_costs_agg: fullTicket.total_costs_agg,
                             ingresos_reales: fullTicket.ingresos_reales,
                             monto_pactado_mo: fullTicket.monto_pactado_mo,
-
-                            // Relaciones limpias normalizadas
                             cliente: fullTicket.cliente || prev.cliente || null,
                             sede: fullTicket.sede || prev.sede || null,
-                            tecnico: fullTicket.tecnico,
+                            technician: fullTicket.technician,
                             gestora: fullTicket.gestora,
-
                             metadata: {
                                 ...safeMeta, ...safeCachedMetadata,
-                                // Campos financieros: SIEMPRE del servidor, nunca del caché local
                                 solicitudAdelanto: safeMeta.solicitudAdelanto ?? null,
                                 solicitudPago: safeMeta.solicitudPago ?? null,
                                 solicitudLiquidacion: safeMeta.solicitudLiquidacion ?? null,
@@ -737,7 +609,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             pagoRechazado: safeMeta.pagoRechazado ?? null,
                             solicitudesDeposito: safeMeta.solicitudesDeposito ?? null,
                         };
-                        // PRESERVACIÓN CRÍTICA: No dejar que el servidor borre lo que la gestora puso localmente si el servidor aún tiene 0/20
                         if (cachedMetadata.labor_cost > 0 && (merged.labor_cost || 0) <= 20) {
                             merged.labor_cost = cachedMetadata.labor_cost;
                         }
@@ -746,21 +617,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         }
                         return merged;
                     });
-
-                    // SYNC QUOTATION STATE
                     const finalPartidas = (meta.partidas && meta.partidas.length > 0) ? meta.partidas : (cachedMetadata.partidas || []);
                     if (finalPartidas.length > 0) {
                         setPartidasCotización(finalPartidas);
                         quotationDraftRef.current = null;
                     }
-                    
                     const finalMonto = parseFloat(meta.total_quoted_amount || cachedMetadata.total_quoted_amount || 0);
                     if (finalMonto > 0) setTotalQuotedAmount(finalMonto);
-
-                    // SYNC DOCUMENTATION STATE
                     if (meta.evidenciasEjecucion) setEvidenciasEjecucion(meta.evidenciasEjecucion);
                     if (meta.documentosChecklist) setDocumentosChecklist(meta.documentosChecklist);
-
                     setIsInitialLoadComplete(true);
                 } catch (err) {
                     console.error('Error fetching full ticket data:', err);
@@ -769,48 +634,28 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             };
         load();
     }, [ticket?.id]);
-
-    // Efecto de sincronización con el prop 'ticket' (viene del contexto global realtime)
     useEffect(() => {
         if (!ticket || !isInitialLoadComplete) return;
-        // 🔒 BLOQUEO DE TRANSICIÓN: Si hay un reajuste en curso, ignorar actualizaciones entrantes
         if (isTransitioning.current) return;
-        // 🔒 BLOQUEO DE REASIGNACIÓN: Si hay una reasignación en curso, ignorar para evitar parpadeo
         if (isReassigning.current) return;
-
         if (isProcessingAdvance.current) {
             return;
         }
-
-        // ✅ FIX: Si el prop tiene un técnico diferente al estado local, y el local ya fue actualizado
-        // por handleAssignment (el prop aún no se ha actualizado desde la DB), ignorar esta sync.
-        // Esto evita que el prop desactualizado sobrescriba el estado local correcto.
-        const propTechId = ticket.tecnico_id;
-        const localTechId = ticketData.tecnico?.id;
-        // Si el local tiene un técnico asignado (distinto de null/undefined) Y el prop tiene un técnico diferente,
-        // significa que el prop está desactualizado y el estado local es el correcto.
+        const propTechId = ticket.technician_id;
+        const localTechId = ticketData.technician?.id;
         if (localTechId && propTechId && propTechId !== localTechId) {
-            // El prop tiene un técnico diferente al local - esto significa que el prop está desactualizado
-            // y el estado local es el correcto (acaba de ser asignado). Ignorar para evitar parpadeo.
             return;
         }
-
-        // Solo actualizar si el estado, técnico o metadata importante cambió en el prop
-        // ★ INCLUIR cambios en costos financieros para evitar parpadeo post-guardado
         setTicketData((prev: any) => {
             const hasStatusChanged = ticket.status_id !== prev.status_id;
-            const hasTechChanged = ticket.tecnico_id !== prev.tecnico_id;
-            // ✅ FIX: Incluir detección de cambio en objeto tecnico (para casos de reasignación desde cache)
-            const hasTechObjectChanged = (ticket.technicians?.id || ticket.tecnico?.id) !== (prev.tecnico?.id);
+            const hasTechChanged = ticket.technician_id !== prev.technician_id;
+            const hasTechObjectChanged = (ticket.technicians?.id || ticket.technician?.id) !== (prev.technician?.id);
             const hasGestoraChanged = ticket.gestora_id !== prev.gestora_id;
             const hasMetaChanged = JSON.stringify(ticket.metadata) !== JSON.stringify(prev.metadata);
-            // Detectores de cambio financiero (evita parpadeo tras guardar reporte técnico)
             const hasLaborCostChanged = ticket.labor_cost !== prev.labor_cost;
             const hasMaterialsCostChanged = ticket.materials_cost !== prev.materials_cost;
             const hasDiagnosisChanged = ticket.diagnosis !== prev.diagnosis;
-
             if (!hasStatusChanged && !hasTechChanged && !hasTechObjectChanged && !hasGestoraChanged && !hasMetaChanged && !hasLaborCostChanged && !hasMaterialsCostChanged && !hasDiagnosisChanged) return prev;
-            
             let meta = ticket.metadata || {};
             const rawEstadoId = normalizeStateId(ticket.status_id || meta.status_id || 'nuevo');
             const visitConfirmed = (ticket.costos || []).some((c: any) => {
@@ -829,120 +674,77 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 AdelantoPagado,
                 ...safeMeta
             } = meta;
-            
             const PRE_INSPECTION_STATES = ['nuevo', 'tecnico_asignado', 'esperando_pago_visita'];
             const corregidoEstadoId = (visitConfirmed && PRE_INSPECTION_STATES.includes(rawEstadoId))
                 ? 'en_inspeccion'
                 : rawEstadoId;
-
-            // PREVENIR PARPADEO Y REGRESIONES: Comparar el avance del flujo
             const serverStatusOrder = TICKET_STATE_ORDER[corregidoEstadoId] || 0;
             const prevStatusOrder = TICKET_STATE_ORDER[prev.status_id] || 0;
-            // SIEMPRE gana el más avanzado (nunca retroceder de estado automáticamente)
-            // EXCEPCIÓN: Si hay una denegación de pago reciente, permitimos el retroceso para que la UI se sincronice
             const hasRejection = !!safeMeta.pagoRechazado;
             const shouldPreservePrevState = (prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current)
                                           || (prevStatusOrder < serverStatusOrder && isIntentionalRollback.current);
-
             const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada || safeMeta.modificacionAutorizada || prev.modificacionAutorizada);
-
             const finalSolicitud = safeMeta.solicitudAdelanto !== undefined ? safeMeta.solicitudAdelanto : (ticket.solicitudAdelanto ?? null);
-
-            // 🔒 PREVENIR REGRESIÓN: El estado nunca debe retroceder
-            // El estado más avanzado siempre gana
             const finalStatusId = shouldPreservePrevState ? prev.status_id : corregidoEstadoId;
-
             return {
                 ...prev,
-                // 🔒 CRÍTICO: El estado preservado va ANTES de ...ticket para que no sea sobrescrito
                 status_id: finalStatusId,
                 ...ticket,
-                // PREVENIR PARPADEO: Conservar valores financieros del backend si el prop no los tiene actualizados
                 saldo_tecnico: prev.saldo_tecnico !== undefined ? prev.saldo_tecnico : ticket.saldo_tecnico,
                 utilidad_neta: prev.utilidad_neta !== undefined ? prev.utilidad_neta : ticket.utilidad_neta,
                 margen_real: prev.margen_real !== undefined ? prev.margen_real : ticket.margen_real,
                 ingresos_reales: prev.ingresos_reales !== undefined ? prev.ingresos_reales : ticket.ingresos_reales,
                 monto_pactado_mo: prev.monto_pactado_mo !== undefined ? prev.monto_pactado_mo : ticket.monto_pactado_mo,
-                
-                // BLINDAJE DE EDICIÓN LOCAL: No permitir que el caché global borre lo que el usuario está escribiendo o cargó vía getById
                 partidas: prev.partidas || prev.metadata?.partidas || safeMeta.partidas,
                 total_quoted_amount: prev.total_quoted_amount || prev.metadata?.total_quoted_amount || safeMeta.total_quoted_amount,
-                // ★ BLINDAJE COSTOS FINANCIEROS: Preservar cambios del Reporte Técnico para evitar parpadeo
                 labor_cost: prev.labor_cost !== undefined ? prev.labor_cost : ticket.labor_cost,
                 materials_cost: prev.materials_cost !== undefined ? prev.materials_cost : ticket.materials_cost,
                 diagnosis: prev.diagnosis !== undefined ? prev.diagnosis : ticket.diagnosis,
                 evidenciasEjecucion: prev.evidenciasEjecucion || prev.metadata?.evidenciasEjecucion || safeMeta.evidenciasEjecucion,
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || safeMeta.documentosChecklist,
                 client_ticket_number: prev.client_ticket_number || ticket.client_ticket_number || safeMeta.client_ticket_number,
-                
-                // BLINDAJE DE TÉCNICO Y GESTORA:
-                // Si el ID del prop coincide con el ID que ya tenemos en el estado local (prev),
-                // preferimos el objeto local que puede tener datos más completos/frescos.
-                // IMPORTANTE: Si el prop está desactualizado (IDs diferentes), 
-                // el estado local YA fue actualizado por handleAssignment → retornarlo para evitar parpadeo
-                tecnico: (() => {
-                    const incomingTech = ticket.technicians || ticket.tecnico;
+                technician: (() => {
+                    const incomingTech = ticket.technicians || ticket.technician
                     const incomingTechId = incomingTech?.id;
-                    const localTechId = prev.tecnico?.id;
-                    const propTechId = ticket.tecnico_id;
-                    
-                    // Si el prop tiene el mismo técnico que el local (IDs coinciden), usar prop más fresco
+                    const localTechId = prev.technician?.id;
+                    const propTechId = ticket.technician_id;
                     if (incomingTechId && propTechId && incomingTechId === propTechId && incomingTechId === localTechId) {
                         return incomingTech;
                     }
-                    // Si el local tiene técnico y coincide con el prop ID, usar local (más completo)
-                    // Esto cubre el caso donde acabamos de asignar y el prop está desactualizado
                     if (localTechId && localTechId === propTechId) {
-                        return prev.tecnico;
+                        return prev.technician
                     }
-                    // Si el prop tiene un técnico diferente al local (reasignación desde otro lugar),
-                    // usar el prop más reciente
                     if (incomingTechId && incomingTechId !== localTechId) {
                         return incomingTech;
                     }
-                    // Fallback: preservar local o usar incoming
-                    return prev.tecnico || incomingTech;
+                    return prev.technician || incomingTech;
                 })(),
                 gestora: (() => {
                     const incomingGestora = ticket.gestoras || ticket.gestora || ticket.gestoraAsignado || safeMeta.gestora;
-                    // Si el prop está actualizado Y coincide con el estado local, usar prop
                     if (incomingGestora?.id === ticket.gestora_id && incomingGestora?.id === prev.gestora?.id) {
                         return incomingGestora;
                     }
-                    // Preservar estado local para evitar parpadeo
                     return prev.gestora || incomingGestora;
                 })(),
-                
                 metadata: {
-                    // 1. Empezamos con la metadata del servidor (la más fresca de la DB)
                     ...safeMeta,
-                    // 2. Preservamos SOLO los campos de edición local (User Input) que el usuario puede estar tipeando
-                    // Usamos ?? en lugar de || para permitir strings vacíos "" (borrado intencional)
                     diagnosis: (prev.diagnosis !== undefined) ? prev.diagnosis : (prev.metadata?.diagnosis ?? safeMeta.diagnosis),
-                    // ★ BLINDAJE COSTOS: Preservar cambios del Reporte Técnico en metadata
                     costoManoObra: (prev.labor_cost !== undefined) ? prev.labor_cost : (prev.metadata?.labor_cost ?? safeMeta.labor_cost),
                     costoMateriales: (prev.materials_cost !== undefined) ? prev.materials_cost : (prev.metadata?.materials_cost ?? safeMeta.materials_cost),
                     partidas: (prev.partidas !== undefined) ? prev.partidas : (prev.metadata?.partidas ?? safeMeta.partidas),
                     montoFinal: (prev.total_quoted_amount !== undefined) ? prev.total_quoted_amount : (prev.metadata?.total_quoted_amount ?? safeMeta.total_quoted_amount),
                     documentosChecklist: (prev.documentosChecklist !== undefined) ? prev.documentosChecklist : (prev.metadata?.documentosChecklist ?? safeMeta.documentosChecklist),
-                    // 3. Los campos de flujo financiero (pagoRechazado, solicitudes) SIEMPRE mandan los del servidor
-                    // para evitar el "parpadeo" donde el estado local viejo sobreescribe al servidor limpio.
                     pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
                     solicitudAdelanto: finalSolicitud,
                     solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago ?? prev.metadata?.solicitudPago ?? null),
                     solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion ?? prev.metadata?.solicitudLiquidacion ?? null),
                     solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
                 },
-
-                // Mapeo a nivel de raíz para consistencia
                 solicitudAdelanto: finalSolicitud,
                 solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago ?? prev.metadata?.solicitudPago ?? null),
                 solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion ?? prev.metadata?.solicitudLiquidacion ?? null),
                 solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
                 pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
-
-                // ⚠️ NOTA: estadoId y status_id ya fueron establecidos antes de ...ticket
-                // para evitar que ...ticket sobrescriba la preservación del estado más avanzado
                 modificacionAutorizada: finalModificacionAutorizada,
                 solicitudModificacion: ticket.solicitudModificacion || safeMeta.solicitudModificacion || prev.solicitudModificacion,
                 visitPaymentConfirmed: visitConfirmed,
@@ -950,7 +752,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             };
         });
     }, [ticket, isInitialLoadComplete]);
-
     const [gastos, setGastos] = useState<any[]>(ticketData.gastos || []);
     const [documentosChecklist, setDocumentosChecklist] = useState(() => {
         const meta = ticket.metadata || {};
@@ -964,23 +765,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     });
     const [evidenciasEjecucion, setEvidenciasEjecucion] = useState<any[]>(ticketData.evidenciasEjecucion || []);
     const [allTechnicians, setAllTechnicians] = useState<any[]>([]);
-
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isSyncing = useRef(false);
-    // Bloqueo durante transacciones de adelanto para evitar parpadeo por race condition
     const isProcessingAdvance = useRef(false);
     const isIntentionalRollback = useRef(false);
-    // 🔒 BLOQUEO DE TRANSICIÓN: Durante una regresión manual, ignorar TODOS los updates entrantes del WS
     const isTransitioning = useRef(false);
-    // 🔒 BLOQUEO DE REASIGNACIÓN: Durante reasignación de especialista, ignorar updates del prop para evitar parpadeo
     const isReassigning = useRef(false);
-
     const [showNegotiationModal, setShowNegotiationModal] = useState(false);
     const [negotiationNewCost, setNegotiationNewCost] = useState("");
     const fieldEvidenceRef = useRef<HTMLInputElement>(null);
     const [showExtraAdvanceInput, setShowExtraAdvanceInput] = useState(false);
     const [extraAdvanceAmount, setExtraAdvanceAmount] = useState("");
-
     const [showMaterialsModal, setShowMaterialsModal] = useState(false);
     const [materialsForm, setMaterialsForm] = useState({
         concepto: "",
@@ -992,32 +787,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         showDropdown: false,
     });
     const [isSavingMaterials, setIsSavingMaterials] = useState(false);
-    
     const handleOpenExpenseModal = (category: string = "Materiales", concepto: string = "") => {
         setMaterialsForm({
             ...materialsForm,
             categoria: category,
             concepto: concepto,
             monto: category === 'Viáticos / Movilidad' ? (ticketData.visit_cost || '').toString() : '',
-            specialist_id: ticketData.tecnico_id || '',
-            specialistName: ticketData.tecnico?.name || '',
-            searchQuery: ticketData.tecnico?.name || '',
+            specialist_id: ticketData.technician_id || '',
+            specialistName: ticketData.technician?.name || '',
+            searchQuery: ticketData.technician?.name || '',
             showDropdown: false
         });
         setShowMaterialsModal(true);
     };
-
     const [bcpQuotationFile, setBcpQuotationFile] = useState<any>(ticketData.archivoCotizaciónBCP || null);
     const bcpFileInputRef = useRef<HTMLInputElement>(null);
-
-
-
     const [triageSedeId, setTriageSedeId] = useState("");
     const [triageServiceType, setTriageServiceType] = useState("");
     const [triageDescription, setTriageDescription] = useState("");
     const [sedesMibanco, setSedesMibanco] = useState<any[]>([]);
     const [loadingSedes, setLoadingSedes] = useState(false);
-
     useEffect(() => {
         if (ticketData.status_id === 'borrador' && ticketData.client_id === MIBANCO_ID) {
             setLoadingSedes(true);
@@ -1028,48 +817,28 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 .finally(() => setLoadingSedes(false));
         }
     }, [ticketData.status_id, ticketData.client_id]);
-
-
-
     const windowRef = useRef<HTMLDivElement>(null);
-
     const lastSyncData = useRef<string>("");
-
-    // ── TOKENS DE TRANSACCIÓN (Idempotencia por UUID) ──────────────────────────
-    // Cada clic de solicitud genera un UUID único. El token activo en el ref
-    // es la única fuente de verdad para saber si hay una operación en curso.
-    // Se compara por igualdad EXACTA — nunca por monto aproximado.
     const advanceTransactionToken = useRef<string | null>(null);
     const liquidationTransactionToken = useRef<string | null>(null);
     const confirmAdvanceRef = useRef(false); // sigue siendo bool; solo para admin confirm
-
-    // ── ESTADO DE ENVÍO (UI blocking) ──────────────────────────────────────────
-    // Deshabilitan físicamente los botones desde el primer clic hasta
-    // que la operación completa o falla — sin importar el estado Realtime.
     const [isSubmittingAdvance, setIsSubmittingAdvance] = useState(false);
     const [isSubmittingLiquidation, setIsSubmittingLiquidation] = useState(false);
-
     const syncToSupabase = useCallback(async (dataOverride?: any, options?: { allowStateRollback?: boolean, manual?: boolean }) => {
         const dataToProcess = dataOverride || ticketData;
         if (!dataToProcess || !isInitialLoadComplete || isSyncing.current) return false;
-
-        // 🛡️ BLOQUEO CRÍTICO: No sincronizar si el usuario está editando activamente un monto
         const isEditingMonto = !!montoAdelantoManual || !!porcentajeAdelanto;
         if (isEditingMonto && !dataOverride) {
             return false;
         }
-
-
         const {
             isMaximized: _isMaximized, isMinimized: _isMinimized, position: _position, zIndex: _zIndex,
-            cliente: _cliente, sede: _sede, tecnico,
+            cliente: _cliente, sede: _sede, technician,
             clients: _clients, branch_offices: _branch_offices, technicians: _technicians, gestoras: _gestoras, gestora: _gestora,
             costos: _costos, pendingCosts: _pendingCosts, paidCosts: _paidCosts, exceedanceRequests: _exceedanceRequests, exceedanceRequestsCount: _exceedanceRequestsCount,
             metadata: _unusedMetadata,
             ...businessData
         } = dataToProcess;
-
-        // Limpiar businessData de cualquier campo relacional adicional que pudiera haber quedado
         const cleanedBusinessData = { ...businessData };
         delete cleanedBusinessData.clients;
         delete cleanedBusinessData.branch_offices;
@@ -1081,47 +850,28 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         delete cleanedBusinessData.paidCosts;
         delete cleanedBusinessData.exceedanceRequests;
         delete cleanedBusinessData.exceedanceRequestsCount;
-
         const sourceForPayments = cleanedBusinessData;
         const sourceMetadata = cleanedBusinessData;
-
         const cleanedClientTicketNumber = (() => {
             const val = businessData.client_ticket_number;
             if (!val || val.trim() === "") return null;
             return val.trim();
         })();
-
-        // ★ AUDITORÍA Y SEGURIDAD: Leer metadata actual del servidor antes de sincronizar
-        // Esto evita que si la ventana estuvo abierta mucho tiempo, sobreescriba pagos hechos por tesorería.
         const { data: serverTicket } = await supabase
             .from('tickets')
-            .select('metadata, status_id, tecnico_id, gestora_id')
+            .select('metadata, status_id, technician_id, gestora_id')
             .eq('id', ticketData.id)
             .single();
-
         const serverMeta = serverTicket?.metadata || {};
         const serverStatusId = serverTicket?.status_id;
-
         const localStateOrder = TICKET_STATE_ORDER[businessData.status_id] ?? 0;
         const serverStateOrder = TICKET_STATE_ORDER[serverStatusId] ?? 0;
-        
-        // 🔁 REGLA DE SINCRONIZACIÓN: 
-        // 2. Si el servidor tiene una denegación activa (pagoRechazado), el servidor MANDA (evita re-envíos automáticos).
-        // 3. Por defecto, el estado más avanzado gana.
-        // ★ ENHANCED: payment denegado activa limpieza de solicitudes
-        // FIX 2026-05-11: Si lo local ha limpiado el rechazo (pagoRechazado === null), la denegación ya no es 'activa' para el flujo local.
         const hasActiveRejection = !!serverMeta.pagoRechazado && businessData.pagoRechazado !== null;
-
-        // RESOLVER ESTADO FINAL: El más avanzado gana, excepto si hay denegación activa
         const resolvedStatusId = hasActiveRejection
             ? serverStatusId
             : options?.allowStateRollback
                 ? businessData.status_id
                 : (localStateOrder >= serverStateOrder ? businessData.status_id : serverStatusId);
-        
-        // BLINDAJE CRÍTICO V5: Preservar SOLICITUDES DE PAGO del gestor/admin
-        // Si local tiene una nueva solicitud (definida en businessData y no existente en servidor),
-        // SIEMPRE preservar la local. Esto evita que el sync borre peticiones de pago recientes.
         const localHasNewSolLiq = businessData.solicitudLiquidacion !== undefined 
             && businessData.solicitudLiquidacion !== null 
             && serverMeta.solicitudLiquidacion === undefined;
@@ -1131,8 +881,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const localHasNewSolAde = businessData.solicitudAdelanto !== undefined 
             && businessData.solicitudAdelanto !== null 
             && serverMeta.solicitudAdelanto === undefined;
-        
-        // Resolver valores de solicitudes - estas variables deben estar FUERA del objeto
         const resLiq = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolLiq)
             ? (localHasNewSolLiq ? businessData.solicitudLiquidacion : serverMeta.solicitudLiquidacion)
             : (businessData.solicitudLiquidacion !== undefined ? businessData.solicitudLiquidacion : (serverMeta.solicitudLiquidacion ?? null));
@@ -1142,14 +890,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         const resPago = (hasActiveRejection || options?.allowStateRollback === false || localHasNewSolPago)
             ? (localHasNewSolPago ? businessData.solicitudPago : serverMeta.solicitudPago)
             : (businessData.solicitudPago !== undefined ? businessData.solicitudPago : (serverMeta.solicitudPago ?? null));
-        
         const cleanServerMeta = { ...serverMeta };
         delete cleanServerMeta.clients;
         delete cleanServerMeta.cliente;
         delete cleanServerMeta.branch_offices;
         delete cleanServerMeta.sede;
         delete cleanServerMeta.technicians;
-        delete cleanServerMeta.tecnico;
+        delete cleanServerMeta.technician;
         delete cleanServerMeta.gestoras;
         delete cleanServerMeta.gestora;
         delete cleanServerMeta.costos;
@@ -1157,7 +904,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         delete cleanServerMeta.paidCosts;
         delete cleanServerMeta.exceedanceRequests;
         delete cleanServerMeta.exceedanceRequestsCount;
-
         const updates: any = {
             status_id: resolvedStatusId || businessData.status_id,
             description: businessData.description || businessData.descripcionProblema,
@@ -1167,7 +913,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             materials_cost: parseFloat(sourceForPayments?.materials_cost || 0),
             visit_cost: parseFloat(sourceForPayments?.visit_cost || 0),
             total_quoted_amount: parseFloat(sourceForPayments?.total_quoted_amount ?? sourceForPayments?.total_quoted_amount ?? totalQuotedAmount ?? 0),
-            tecnico_id: tecnico?.id || serverTicket?.tecnico_id || businessData.tecnico_id,
+            technician_id: technician?.id || serverTicket?.technician_id || businessData.technician_id,
             gestora_id: businessData?.gestora?.id || serverTicket?.gestora_id || businessData.gestora_id,
             execution_date: businessData.execution_date,
             metadata: {
@@ -1180,7 +926,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
                 estadoId: resolvedStatusId,
                 status_id: resolvedStatusId,
-                // Valores resueltos de solicitudes de pago (BLINDAJE V5)
                 solicitudLiquidacion: resLiq,
                 solicitudAdelanto: resAde,
                 solicitudPago: resPago,
@@ -1189,10 +934,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 metadata: undefined
             }
         };
-
         const currentDataStr = JSON.stringify(updates);
         if (currentDataStr === lastSyncData.current && !dataOverride) return false;
-
         isSyncing.current = true;
         let success = false;
         try {
@@ -1211,28 +954,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
         return success;
     }, [ticketData, onUpdate, evidenciasEjecucion, documentosChecklist, totalQuotedAmount, partidasCotización, isInitialLoadComplete]);
-
     const syncToSupabaseRef = useRef(syncToSupabase);
-
     useEffect(() => {
         syncToSupabaseRef.current = syncToSupabase;
     }, [syncToSupabase]);
-
-    // El sync automático de fondo ha sido ELIMINADO para evitar race conditions (V3 Refactoring)
-    // El sistema ahora confía en Realtime para actualizaciones entrantes y syncToSupabase para cambios locales.
-
-
     useEffect(() => {
         const handleStorageUpdate = (e: any) => {
             if (e.type === 'storage' && e.key !== `ticket_state_${ticket.id}` && e.key !== 'tickets') {
                 return;
             }
-
             const saved = localStorage.getItem(`ticket_state_${ticket.id}`);
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-
                     const {
                         adelantoPagado,
                         fechaPagoAdelanto,
@@ -1247,7 +981,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         montoFinal,
                         ...safeToRestore
                     } = parsed;
-
                     setTicketData((prev: any) => {
                         if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
                         return { ...prev, ...safeToRestore };
@@ -1257,7 +990,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             }
         };
-
         const handleReopen = (e: any) => {
             if (e.detail?.ticketId === ticket.id) {
                 setIsMaximized(true);
@@ -1265,22 +997,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 setZIndex(Date.now() % 10000000);
             }
         };
-
         window.addEventListener('storage', handleStorageUpdate);
         window.addEventListener('local-storage-update', handleStorageUpdate);
         window.addEventListener('ticket-reopen', handleReopen as EventListener);
-
         return () => {
             window.removeEventListener('storage', handleStorageUpdate);
             window.removeEventListener('local-storage-update', handleStorageUpdate);
             window.removeEventListener('ticket-reopen', handleReopen as EventListener);
         };
     }, [ticket.id]);
-
-    // ★ V4: REALTIME DIRECT SYNC - Recibir actualizaciones del servidor al instante
     useEffect(() => {
         if (!ticketData?.id) return;
-
         const channel = supabase
             .channel(`ticket_realtime_${ticketData.id}`)
             .on('postgres_changes',
@@ -1292,49 +1019,35 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 },
                 (payload) => {
                     const freshServerData = payload.new as any;
-
                     setTicketData((prev: any) => {
-                        // 🔒 BLOQUEO DE TRANSICIÓN: Si hay un reajuste en curso, no procesar este WS event
                         if (isTransitioning.current) return prev;
-                        // MERGE INTELIGENTE: Solo actualizar si hay cambios reales en campos clave
-                        // para evitar perder lo que el usuario está escribiendo en el momento.
                         const serverMeta = freshServerData.metadata || {};
                         const prevMeta = prev.metadata || {};
-                        
-                        // 🔒 PREVENIR REGRESIÓN DE ESTADO: No permitir retroceder a estados menos avanzados
                         const incomingStatus = freshServerData.status_id || 'nuevo';
                         const incomingOrder = TICKET_STATE_ORDER[incomingStatus] || 0;
                         const currentOrder = TICKET_STATE_ORDER[prev.status_id] || 0;
-                        
-                        // Si el servidor dice un estado MENOS avanzado que el actual, IGNORARLO
-                        // EXCEPCIÓN: Solo permitir si es un rechazo de pago (pagoRechazado)
                         const hasNewRejection = !!serverMeta.pagoRechazado;
                         if (incomingOrder < currentOrder && !hasNewRejection) {
                             console.warn(`[Realtime] Ignorando regresión de estado: ${incomingStatus} → ${prev.status_id}`);
                             return prev;
                         }
-
-                        // Campos que MANDA el servidor (Finanzas, Pagos, Estado)
                         const serverFields = {
                             status_id: incomingOrder >= currentOrder ? incomingStatus : prev.status_id,
                             estadoId: incomingOrder >= currentOrder ? normalizeStateId(incomingStatus) : prev.status_id,
-                            tecnico_id: freshServerData.tecnico_id,
+                            technician_id: freshServerData.technician_id,
                             gestora_id: freshServerData.gestora_id,
                             labor_cost: freshServerData.labor_cost,
                             materials_cost: freshServerData.materials_cost,
                             visit_cost: freshServerData.visit_cost,
                             total_quoted_amount: freshServerData.total_quoted_amount,
                         };
-
                         const mergedMeta = {
                             ...prevMeta,
                             ...serverMeta,
-                            // PRESERVAR campos locales activos de edición
                             diagnosis: prevMeta.diagnosis,
                             partidas: prevMeta.partidas,
                             montoFinal: prevMeta.total_quoted_amount,
                             documentosChecklist: prevMeta.documentosChecklist,
-                            // Campos financieros: el servidor SIEMPRE manda
                             pagoRechazado: serverMeta.pagoRechazado !== undefined ? serverMeta.pagoRechazado : prevMeta.pagoRechazado,
                             solicitudAdelanto: serverMeta.solicitudAdelanto !== undefined ? serverMeta.solicitudAdelanto : prevMeta.solicitudAdelanto,
                             solicitudPago: serverMeta.solicitudPago !== undefined ? serverMeta.solicitudPago : prevMeta.solicitudPago,
@@ -1345,12 +1058,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             visitPaymentConfirmed: serverMeta.visitPaymentConfirmed !== undefined ? serverMeta.visitPaymentConfirmed : prevMeta.visitPaymentConfirmed,
                             historialPagosTecnico: serverMeta.historialPagosTecnico !== undefined ? serverMeta.historialPagosTecnico : prevMeta.historialPagosTecnico,
                         };
-
                         return {
                             ...prev,
                             ...serverFields,
                             metadata: mergedMeta,
-                            // Propagar campos financieros a nivel raíz
                             solicitudAdelanto: mergedMeta.solicitudAdelanto,
                             solicitudPago: mergedMeta.solicitudPago,
                             solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
@@ -1365,44 +1076,32 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 if (status === 'SUBSCRIBED') setIsRealtimeConnected(true);
                 if (status === 'CLOSED' || status === 'CHANNEL_ERROR') setIsRealtimeConnected(false);
             });
-
         return () => {
             setIsRealtimeConnected(false);
             supabase.removeChannel(channel);
         };
     }, [ticketData?.id]);
-
-
     const handleAssignment = async (assignmentData: any) => {
-        // 🔒 BLOQUEO DE REASIGNACIÓN: Activar flag para evitar parpadeo en prop sync
         isReassigning.current = true;
-        
-        // Asignación inicial vs Reasignación: Si el estado actual ya no es nuevo/pendiente/borrador,
-        // mantenemos el estado actual del ticket intacto.
         const isInitialAssignment = ['nuevo', 'pendiente', 'borrador'].includes(ticketData.status_id);
         const newEstadoId = isInitialAssignment ? 'en_inspeccion' : ticketData.status_id;
-        
-        // ✅ FIX: Contrato de datos estandarizado (ahora siempre es 'tecnico')
-        const newTecnicoObj = assignmentData.tecnico || null;
-        const tecnico_id = newTecnicoObj?.id || null;
-
+        const newTechnicianObj = assignmentData.technician || null;
+        const technician_id = newTechnicianObj?.id || null;
         const dbUpdates: any = {
-            tecnico_id: tecnico_id,
+            technician_id: technician_id,
             visit_cost: isInitialAssignment ? null : (ticketData.visit_cost || null),
             status_id: newEstadoId,
             metadata: {
                 ...ticketData.metadata,
-                tecnico: newTecnicoObj,
+                technician: newTechnicianObj,
                 fechaAsignacion: assignmentData.fechaAsignacion || assignmentData.fechaReasignacion,
                 status_id: newEstadoId
             }
         };
-
         try {
             if (onUpdate) {
                 await onUpdate(ticketData.id, dbUpdates);
             } else {
-                // ✅ FIX: Forzar mutación obligatoria a través del backend seguro (SERVICE ROLE bypass)
                 const { metadata, ...columnUpdates } = dbUpdates;
                 const response = await fetch('/api/v3/tickets-server?accion=parchar_ticket', {
                     method: 'POST',
@@ -1413,7 +1112,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         metadataUpdates: metadata
                     })
                 });
-
                 const result = await response.json();
                 if (!response.ok || !result.success) {
                     throw new Error(result.error || 'Error al actualizar en el servidor seguro');
@@ -1425,37 +1123,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             isReassigning.current = false;
             return;
         }
-
-        // ✅ FIX: Actualizar tanto tecnico como tecnico_id correctamente
         setTicketData((prev: any) => ({
             ...prev,
-            tecnico: newTecnicoObj,
-            tecnico_id: tecnico_id,
+            technician: newTechnicianObj,
+            technician_id: technician_id,
             status_id: newEstadoId
         }));
         setShowAssignmentDrawer(false);
-        
-        // ✅ FIX: Forzar invalidación de cache para que el prop ticket se actualice
-        // Esto asegura que la ventana principal reciba el ticket actualizado desde la DB
         queryClient.invalidateQueries({ queryKey: ['tickets'] });
-        
-        // 🔓 Liberar el bloqueo después de un breve delay para que el prop se actualice
         setTimeout(() => {
             isReassigning.current = false;
         }, 500);
     };
-
     const handleDismissRejection = async () => {
         try {
-            // ✅ LIMPIEZA FORZADA: Limpiar en el servidor ANTES de permitir nueva edición
-            
-            // 1. Update local instantáneo
             setTicketData((prev: any) => ({
                 ...prev,
                 pagoRechazado: null
             }));
-            
-            // 2. Update persistente en Supabase (campo exacto)
             const { error } = await supabase
                 .from('tickets')
                 .update({ 
@@ -1467,50 +1152,39 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     }) 
                 })
                 .eq('id', ticketData.id);
-
             if (error) throw error;
-            
             showToast("Observación Archivada", "Ya puede generar una nueva solicitud.", "success");
         } catch (err) {
             console.error("Error dismiss rejection:", err);
             showToast("Error", "No se pudo archivar la observación.", "error");
         }
     };
-
     const handleProceedToAssignment = () => {
         setShowAssignmentDrawer(true);
     };
-
     const handleFieldEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const rawFiles = Array.from(e.target.files);
-            
             try {
-                // Compresión de imágenes
                 const compressedFiles = await Promise.all(
                     rawFiles.map(file => compressImage(file))
                 );
-
                 const uploadPromises = compressedFiles.map(async (file) => {
                     const fileExt = file.name.split('.').pop() || 'jpg';
                     const fileName = `${ticketData.id}_field_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-                    
                     const { data, error } = await supabase.storage
                         .from('evidencias')
                         .upload(fileName, file, {
                             contentType: file.type,
                             upsert: true
                         });
-
                     if (error) {
                         console.error('[Storage Field Evidence Upload Error]:', error.message);
                         throw error;
                     }
-
                     const { data: urlData } = supabase.storage
                         .from('evidencias')
                         .getPublicUrl(fileName);
-
                     return {
                         url: urlData.publicUrl,
                         name: file.name,
@@ -1518,7 +1192,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         fecha: new Date().toISOString()
                     };
                 });
-
                 const results = await Promise.all(uploadPromises);
                 setEvidenciasCampo(prev => [...prev, ...results]);
                 showToast("Éxito", "Evidencias de campo subidas correctamente.", "success");
@@ -1528,12 +1201,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             }
         }
     };
-
     const handleGestoraAssignment = async (gestora: any) => {
         try {
             const now = new Date().toISOString();
             const isAdmin = userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
-            
             const newLogEntry = {
                 tipo: 'REASIGNACION_MANUAL',
                 gestora_id: gestora.id,
@@ -1545,21 +1216,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     desde_nombre: ticketData.gestora?.name || ticketData.metadata?.gestora?.name || 'Sin asignar'
                 }
             };
-
             const existingLogs = ticketData.metadata?.asignaciónLog || [];
-            
             const metadataUpdates = {
                 gestora: gestora,
                 asignaciónLog: [...existingLogs, newLogEntry]
             };
-            
             const columnUpdates = {
                 gestora_id: gestora.id
             };
-            
-            // USAR parche seguro de metadata para no borrar pagos u otros campos
             await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates, columnUpdates);
-
             setTicketData((prev: any) => ({
                 ...prev,
                 gestora: gestora,
@@ -1570,28 +1235,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     asignaciónLog: [...existingLogs, newLogEntry]
                 }
             }));
-            
             showToast("Ticket Derivado", `El servicio ahora está a cargo de ${gestora.name}.`, "success");
         } catch (err) {
             console.error("Error assigned gestora:", err);
             showToast("Error", "No se pudo completar la derivación.", "error");
         }
     };
-
     const handleSendFieldReport = () => {
         if (!diagnosis) {
             showToast("Diagnóstico Requerido", "Por favor ingrese el diagnóstico técnico antes de enviar.", "error");
             return;
         }
-
         const mo = parseFloat(laborCost) || 0;
         const mat = modalidad === 'todo_costo' ? 0 : (parseFloat(materialsCost) || 0);
-        
         if (mo + mat <= 0) {
             showToast("Costo Requerido", "El monto total a cobrar (Mano de Obra + Materiales) debe ser mayor a cero para generar el reporte.", "error");
             return;
         }
-
         const reportData = {
             ...ticketData,
             diagnosis,
@@ -1602,15 +1262,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             status_id: "en_cotizacion",
             fechaReporteCampo: new Date().toISOString()
         };
-
         setTicketData(reportData);
         syncToSupabase(reportData);
     };
-
     const handleBcpFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
-
             const reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onload = () => {
@@ -1621,7 +1278,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     type: file.type,
                     fecha: new Date().toISOString()
                 });
-
                 setTicketData((prev: any) => ({
                     ...prev,
                     archivoCotizaciónBCP: {
@@ -1631,20 +1287,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         fecha: new Date().toISOString()
                     }
                 }));
-
                 showToast("Archivo Cargado", "Plantilla BCP adjuntada correctamente.", "success");
             };
             reader.onerror = error => console.error("Error reading file:", error);
         }
     };
-
     const handleSendQuote = async () => {
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
         const currentMontoTotal = currentDraft?.total ?? totalQuotedAmount;
-
         const editorTotal = currentPartidas.reduce((s: any, i: any) => s + (Number(i.total) || 0), 0);
-        
         if (isBCP) {
             if (!bcpQuotationFile) {
                 showToast("Archivo Faltante", "Debe adjuntar la plantilla Excel BCP antes de enviar.", "error");
@@ -1655,7 +1307,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 showToast("Partidas Vacías", "Debe ingresar el detalle y precio de las partidas en la cotización antes de enviarla.", "error");
                 return;
             }
-
             if (quotationEditorRef.current) {
                 try {
                     await quotationEditorRef.current.downloadPDF();
@@ -1664,8 +1315,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             }
         }
-
-
         setIsSendingQuote(true);
         try {
             const updated = {
@@ -1683,11 +1332,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 fechaPausa: new Date().toISOString(),
                 archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
             };
-
-            // Intentar sync con fallback directo a API si syncToSupabase retorna false
             let success = await syncToSupabase(updated);
-
-            // Fallback: si syncToSupabase retorna false, intentar actualización directa via onUpdate
             if (!success && onUpdate) {
                 try {
                     const directUpdates = {
@@ -1714,7 +1359,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     console.error("Error en fallback de sync:", fallbackErr);
                 }
             }
-
             if (success) {
                 setTicketData(updated);
                 showToast("Cotización Enviada", isBCP ? "Plantilla BCP registrada." : "Presupuesto formal enviado.", "success");
@@ -1728,7 +1372,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSendingQuote(false);
         }
     };
-
     const handleApproveQuote = async () => {
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
@@ -1743,7 +1386,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             modificacionAutorizada: false,
             costoAjustadoPostAprobación: false,
             omitirAjusteTécnico: false,
-            // BLINDAJE: Asegurar que el monto aprobado se preserve en esta transición
             montoFinal: currentMontoTotal,
             total_quoted_amount: currentMontoTotal,
             labor_cost: parseFloat(laborCost) || 0,
@@ -1765,35 +1407,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Error de Conexión", "No se pudo sincronizar la aprobación de la cotización con el servidor. Se realizó un rollback al estado anterior.", "error");
         }
     };
-
     const handleReadjustQuote = async () => {
-        // 🔒 ACTIVAR BLOQUEO DE TRANSICIÓN - silencia todos los WS updates mientras dure el proceso
         isTransitioning.current = true;
         isIntentionalRollback.current = true;
-
-        // 🚨 INVALIDAR CACHE ESPECÍFICO del ticket + cache global
         ticketsCache.remove(ticketData.id);
         ticketsCache.invalidate();
         try { localStorage.removeItem(`ticket_state_${ticketData.id}`); } catch(_) {}
-
         showToast("⏳ Sincronizando Reajuste", "Devolviendo cotización al modo edición...", "info");
-
         const readjust = {
             ...ticketData,
             status_id: "en_cotizacion",
             pausadoSLA: false,
             fechaReactivacion: new Date().toISOString(),
             modificacionAutorizada: true,
-            // 🧹 LIMPIEZA DE RASTRO DE ENVÍO
             fechaCotización: null,
             solicitudModificacion: false,
             pagoRechazado: null
         };
-
-        // 🚀 OPTIMISTIC UPDATE #1: Estado local del componente
         setTicketData(readjust);
-
-        // 🚀 OPTIMISTIC UPDATE #2: Cache de TanStack Query para que el padre no sobreescriba con datos viejos
         queryClient.setQueryData(
             queryKeys.tickets.summary(),
             (old: any[] | undefined) => old
@@ -1806,17 +1437,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             queryKeys.tickets.detail(ticketData.id),
             (old: any) => old ? { ...old, status_id: "en_cotizacion", metadata: { ...(old.metadata || {}), modificacionAutorizada: true } } : old
         );
-
-        // Sincronizar estados paralelos de la UI para que el editor se refresque
         if (readjust.metadata?.partidas) setPartidasCotización(readjust.metadata.partidas);
         if (readjust.metadata?.total_quoted_amount) setTotalQuotedAmount(readjust.metadata.total_quoted_amount);
         if (readjust.labor_cost) setLaborCost(readjust.labor_cost.toString());
         if (readjust.materials_cost) setMaterialsCost(readjust.materials_cost.toString());
-
         try {
-            // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
             setIsSaving(true);
-            // 🔁 Rollback intencional: cotizacion_enviada/aprobada → en_cotizacion
             const success = await syncToSupabase(readjust, { allowStateRollback: true, manual: true });
             if (success) {
                 showToast("✅ Reajuste Listo", "La cotización está abierta para edición.", "success");
@@ -1826,41 +1452,31 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         } catch (err) {
             showToast("Error", "No se pudo revertir la cotización. Intente nuevamente.", "error");
         } finally {
-            // Liberar bloqueos: WS + Rollback
             setIsSaving(false);
-            // ✅ BLOQUEO DE 3 SEGUNDOS PARA PREVENIR REGRESIONES DE ESTADO (STAGE 6 -> 5)
             setTimeout(() => {
                 isTransitioning.current = false;
                 isIntentionalRollback.current = false;
             }, 3000);
         }
     };
-
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [cancelForm, setCancelForm] = useState({ mobilityCost: '', reason: '' });
     const [isCancelling, setIsCancelling] = useState(false);
-
     const handleOpenCancel = () => {
         setCancelForm({ mobilityCost: '', reason: '' });
         setShowCancelModal(true);
     };
-
     const handleCancelQuote = async () => {
         const mobility = parseFloat(cancelForm.mobilityCost) || 0;
-        
-        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
         if (isSaving) {
             showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
             return;
         }
-        
         setIsCancelling(true);
         setIsSaving(true);
         try {
             const currentId = ticket.id || ticketData.id;
-            const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id;
-
-            // 1. Si hay costo de movilidad, registrarlo como gasto real
+            const technicianId = ticketData.technician?.id || ticketData.technician_id;
             if (mobility > 0 && technicianId) {
                 await ticketCostsAPI.create({
                     ticket_id: currentId,
@@ -1872,8 +1488,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     solicitado_por: myProfileId || undefined
                 });
             }
-
-            // 2. Anular el ticket (Ingreso = 0)
             const cancelled = {
                 ...ticketData,
                 status_id: "ticket_cancelado",
@@ -1885,10 +1499,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     gastoMovilidadAnulacion: mobility
                 }
             };
-
             setTicketData(cancelled);
             const success = await syncToSupabase(cancelled, { manual: true });
-            
             if (success) {
                 showToast("Ticket Anulado", mobility > 0 
                     ? `Servicio cancelado. Se registró un egreso de S/ ${mobility.toFixed(2)} por movilidad.`
@@ -1896,7 +1508,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             } else {
                 showToast("Error", "No se pudo sincronizar la anulación.", "error");
             }
-            
             setShowCancelModal(false);
         } catch (err) {
             console.error("Error cancelling ticket:", err);
@@ -1906,7 +1517,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSaving(false);
         }
     };
-
     const handleAuthorizeModification = async () => {
         const authorized = {
             ...ticketData,
@@ -1915,8 +1525,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         };
         setTicketData(authorized);
         setIsQuotationCollapsed(false);
-        
-        // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
         setIsSaving(true);
         try {
             const success = await syncToSupabase(authorized, { manual: true });
@@ -1932,15 +1540,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSaving(false);
         }
     };
-
     const handleRequestModification = async () => {
         const requested = {
             ...ticketData,
             solicitudModificacion: true
         };
         setTicketData(requested);
-        
-        // ⚡️ LOADING OVERLAY: Bloquear UI hasta confirmar con servidor
         setIsSaving(true);
         try {
             const success = await syncToSupabase(requested, { manual: true });
@@ -1956,19 +1561,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSaving(false);
         }
     };
-
     const handleProceedToExecution = () => {
         const updated = {
             ...ticketData,
             status_id: "en_ejecucion",
             fechaInicioEjecucion: new Date().toISOString(),
-            // BLINDAJE: Preservar datos financieros durante la transición
             montoFinal: totalQuotedAmount,
             partidas: partidasCotización
         };
         setTicketData(updated);
     };
-
     const handleAdjustTechnicianCost = () => {
         const currentMO = parseFloat(ticketData.labor_cost || 0);
         const currentMAT = parseFloat(ticketData.materials_cost || 0);
@@ -1976,13 +1578,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setNegotiationNewCost(currentTotal);
         setShowNegotiationModal(true);
     };
-
     const confirmNegotiatedCost = () => {
         if (negotiationNewCost && !isNaN(parseFloat(negotiationNewCost))) {
             const val = parseFloat(negotiationNewCost);
             const currentMO = parseFloat(ticketData.labor_cost || 0);
             const currentMAT = parseFloat(ticketData.materials_cost || 0);
-
             const updated = {
                 ...ticketData,
                 costoManoObra: val,
@@ -1997,12 +1597,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Monto Inválido", "Por favor ingrese un número válido para el costo.", "error");
         }
     };
-
     const handleConfirmAdvance = async () => {
-        // ✅ FIX 2026-04-27: Prevenir ejecución doble
         if (confirmAdvanceRef.current) return;
         confirmAdvanceRef.current = true;
-
         let amount = 0;
         const rawManual = parseFloat(montoAdelantoManual);
         if (montoAdelantoManual && !isNaN(rawManual)) {
@@ -2016,32 +1613,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 amount = ticketData.solicitudAdelanto.monto;
             }
         }
-
         if (isNaN(amount) || amount <= 0) {
             showToast("Monto Inválido", "El monto del adelanto debe ser mayor a cero. Seleccione un % o ingrese un monto manual.", "error");
             confirmAdvanceRef.current = false;
             return;
         }
-
         const totalCost = (parseFloat(ticketData.labor_cost || 0) + parseFloat(ticketData.materials_cost || 0));
         if (unifiedPaymentsSum + amount > totalCost + 0.01) {
             showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
             confirmAdvanceRef.current = false;
             return;
         }
-
-        const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id || ticket.tecnico_id || ticketData.specialist_id;
+        const technicianId = ticketData.technician?.id || ticketData.technician_id || ticket.technician_id || ticketData.specialist_id;
         const currentId = ticket.id || ticketData.id;
-
         if (!technicianId) {
             showToast("Técnico no Asignado", "No se encontró el ID del técnico para registrar el pago.", "error");
             confirmAdvanceRef.current = false;
             return;
         }
-
         const pendingRequest = ticketData.solicitudAdelanto;
         const isForMaterials = pendingRequest?.classification === 'materials' || advanceClassification === 'materials';
-
         if (isAdmin) {
             const matchingPendingCost = ticketCosts.find((cost: any) => {
                 const status = (cost.estado_pago || '').toUpperCase();
@@ -2052,26 +1643,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     : (text.includes('mano de obra') || text.includes('adelanto') || text.includes('rescate financiero'));
                 return status === 'PENDIENTE' && sameAmount && sameKind;
             });
-
             if (matchingPendingCost?.id) {
                 const newState = ticketData.status_id === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.status_id;
                 setIsConfirmingPayment(true);
                 isProcessingAdvance.current = true;
-                // ✅ FIX: Desactivar transición para bloquear realtime durante update
                 isTransitioning.current = true;
                 try {
                     await ticketCostsAPI.update(matchingPendingCost.id, {
                         estado_pago: 'pagado',
                         solicitado_por: myProfileId || undefined
                     });
-                    
-                    // ✅ Verificar respuesta antes de continuar
                     const patchResult = await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null }, { status_id: newState });
                     if (!patchResult) {
                         throw new Error('API rejected metadata patch');
                     }
-                    
-                    // ✅ SOLO actualizar UI local si el servidor respondió exitosamente
                     setTicketData((prev: any) => ({
                         ...prev,
                         estadoId: newState,
@@ -2084,7 +1669,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         },
                     }));
                     localStorage.removeItem(`ticket_state_${ticketData.id}`);
-                    // IMMEDIATE UI UPDATE: Force re-render before waiting for loadCosts
                     setTicketCosts((prev: any[]) => 
                         prev.map((c: any) => c.id === matchingPendingCost.id ? { ...c, estado_pago: 'pagado' } : c)
                     );
@@ -2095,7 +1679,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)}.`, "success");
                 } catch (err: any) {
                     console.error("Error confirming pending advance:", err);
-                    // ✅ Si hay error 400, no revertir UI automáticamente
                     const isBadRequest = err?.message?.includes('400') || err?.message?.includes('rejected') || err?.message?.includes('API rejected');
                     const message = err instanceof DuplicateTicketCostError
                         ? "Ya existe un pago confirmado con el mismo ticket, monto y concepto."
@@ -2104,32 +1687,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             : "No se pudo confirmar el adelanto pendiente.";
                     showToast("Error de Conexión", message, "error");
             isTransitioning.current = false;
-                    // ✅ En caso de error, revertir el flag de transición para permitir retry
                     isTransitioning.current = false;
                 } finally {
                     setIsConfirmingPayment(false);
                     confirmAdvanceRef.current = false;
-                    // ✅ Reactivar realtime después de 1.5s para permitir que el servidor procese
                     setTimeout(() => { isTransitioning.current = false; }, 1500);
                     setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
                 }
                 return;
             }
         }
-
         setIsConfirmingPayment(true);
         isProcessingAdvance.current = true;
-        // ✅ FIX: Desactivar realtime durante creación
         isTransitioning.current = true;
         try {
-            // ════════════════════════════════════════════════════════════
-            // REGLA FIJA V3: Ningún costo creado desde TicketWindow queda
-            // "pagado" automáticamente. Todo nace como "pendiente" y sólo
-            // Tesorería/Admin puede cambiarlo a pagado en el módulo de pagos.
-            // ════════════════════════════════════════════════════════════
             const category = isForMaterials ? "Materiales" : "Mano de Obra";
             const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto Operativo (MANO DE OBRA)";
-
             const createResult = await ticketCostsAPI.create({
                 ticket_id: currentId,
                 concepto: conceptPrefix,
@@ -2139,17 +1712,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estado_pago: "pendiente", // ← SIEMPRE pendiente; Tesorería aprueba
                 solicitado_por: myProfileId || undefined
             });
-            
             if (!createResult) {
                 throw new Error('API rejected cost creation');
             }
-
             const patchResult = await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null });
             if (!patchResult) {
                 throw new Error('API rejected metadata patch');
             }
-
-            // ✅ Solo actualizar UI si el servidor respondió exitosamente
             const updated = {
                 ...ticketData,
                 solicitudAdelanto: null,
@@ -2158,7 +1727,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     solicitudAdelanto: null,
                 },
             };
-
             setTicketData(updated);
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
             await loadCosts();
@@ -2180,10 +1748,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }
     };
     const handleRequestAdvance = async () => {
-        // Bloqueo de re-entrada: si ya hay una operación en curso, abortar.
-        // isSubmittingAdvance está sincronizado con el estado React visible en UI.
         if (isSubmittingAdvance) return;
-        // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita adelanto antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.status_id] || 0;
         if (currentStageOrder < 7) {
             setRiskAlert({
@@ -2192,29 +1757,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 message: "Esta cotización aún no ha sido aprobada por el cliente. Realizar una solicitud de adelanto en esta fase representa un riesgo para la rentabilidad de la empresa. ¿Desea proceder bajo su responsabilidad?",
                 onConfirm: () => {
                     setRiskAlert(prev => ({ ...prev, show: false }));
-                    // Re-ejecutar la lógica original tras confirmar
                     executeRequestAdvance();
                 }
             });
             return;
         }
-
         executeRequestAdvance();
     };
-
     const executeRequestAdvance = async () => {
-        // ── GENERAR TOKEN ÚNICO DE TRANSACCIÓN ────────────────────────────────────
-        // Cada clic genera un UUID nuevo. Antes de cualquier escritura a DB,
-        // el sistema verifica que el token del ref coincida con el token actual.
-        // Si no coincide (operación cancelada / race condition), abortar.
         const txToken = generateTransactionToken();
         advanceTransactionToken.current = txToken;
-
         setIsSubmittingAdvance(true);
-
         let amount = 0;
         let pctVal = 0;
-
         const rawManual = parseFloat(montoAdelantoManual);
         if (montoAdelantoManual && !isNaN(rawManual)) {
             amount = rawManual;
@@ -2225,24 +1780,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             amount = costRef * porcentajeAdelanto;
             pctVal = porcentajeAdelanto;
         }
-
         if (isNaN(amount) || amount <= 0) {
             showToast("Monto Inválido", "Por favor ingrese un monto válido mayor a cero.", "error");
             advanceTransactionToken.current = null;
             setIsSubmittingAdvance(false);
             return;
         }
-
-        const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id || ticket.tecnico_id || ticketData.specialist_id;
+        const technicianId = ticketData.technician?.id || ticketData.technician_id || ticket.technician_id || ticketData.specialist_id;
         const currentId = ticketData.id;
-
         if (!technicianId) {
             showToast("Técnico no Asignado", "Debe asignar un técnico antes de solicitar un adelanto.", "error");
             advanceTransactionToken.current = null;
             setIsSubmittingAdvance(false);
             return;
         }
-
         isProcessingAdvance.current = true;
         let advanceCreated = false;
         try {
@@ -2251,30 +1802,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const concepto = isForMaterials
                 ? "Adelanto Operativo (MATERIALES)"
                 : "Adelanto Operativo (MANO DE OBRA)";
-
-            // ── IDEMPOTENCIA POR TOKEN UUID ────────────────────────────────────────
-            // Verificar en DB si ya existe un ticket_cost con el mismo transaction_token
-            // (campo libre almacenado en concepto con sufijo del token para compatibilidad
-            //  sin migración de schema). La comparación es EXACTA — jamás por monto aprox.
             try {
                 const existingCosts = await ticketCostsAPI.getByTicket(currentId);
-
-                // Verificar si el token exacto ya fue procesado
                 const tokenAlreadyProcessed = (existingCosts || []).some(
                     (c: any) => c.transaction_token === txToken
                 );
-
                 if (tokenAlreadyProcessed) {
-                    // Esta transacción ya fue registrada — idempotente seguro
                     advanceCreated = true;
                     console.warn('[executeRequestAdvance] Token ya procesado:', txToken);
                 } else {
-                    // Verificar también si el token en ref fue reemplazado (click doble rápido)
                     if (advanceTransactionToken.current !== txToken) {
                         console.warn('[executeRequestAdvance] Token invalidado por operación más reciente. Abortando.');
                         return;
                     }
-
                     await ticketCostsAPI.create({
                         ticket_id: currentId,
                         concepto,
@@ -2297,11 +1837,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
                 console.warn('Continuando sin ticket_cost, usando solo metadata...');
             }
-
             const metadataUpdates = {
                 pagoRechazado: null,
                 riesgoFinanciero: (TICKET_STATE_ORDER[ticketData.status_id] || 0) < 7 ? true : ticketData.metadata?.riesgoFinanciero,
-                // Si no se creó ticket_cost, guardar solicitud en metadata para visibility
                 solicitudAdelanto: !advanceCreated ? {
                     monto: amount,
                     porcentaje: pctVal,
@@ -2310,7 +1848,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     concepto: concepto
                 } : null,
             };
-
             const updated = {
                 ...ticketData,
                 solicitudAdelanto: !advanceCreated ? metadataUpdates.solicitudAdelanto : null,
@@ -2320,17 +1857,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     ...metadataUpdates,
                 }
             };
-            
-            // 🔥 FORZAR UPDATE LOCAL PRIMERO
             setTicketData(updated);
-
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
-            
             try {
                 await ticketsAPI.patchMetadata(ticketData.id, metadataUpdates);
             } catch (metaErr: any) {
                 console.error("Error actualizando metadata:", metaErr);
-                // Si falla patchMetadata, intentar fallback con ticketsAPI.update
                 try {
                     await ticketsAPI.update(ticketData.id, {
                         metadata: updated.metadata
@@ -2339,12 +1871,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     console.error("Error en fallback update:", fallbackErr);
                 }
             }
-            
             await loadCosts();
-            
-            // ✅ FIX 2026-04-27: Esperar a que Supabase procese antes de limpiar estado
             await new Promise(resolve => setTimeout(resolve, 1200));
-            
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
             showToast("Solicitud Enviada", `Se ha solicitado el adelanto de S/ ${amount.toFixed(2)}.`, "success");
@@ -2353,70 +1881,42 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const message = err?.message || "No se pudo registrar la solicitud.";
             showToast("Error", message, "error");
         } finally {
-            // Limpiar token y estado UI — el botón vuelve a habilitarse
             advanceTransactionToken.current = null;
             setIsSubmittingAdvance(false);
             setTimeout(() => { isProcessingAdvance.current = false; }, 3000);
         }
     };
-
     const handleRequestFinalLiquidation = () => {
         setShowLiquidationConfirm(true);
     };
-
     const handleActualLiquidation = async () => {
-        // ── GENERAR TOKEN ÚNICO DE TRANSACCIÓN ────────────────────────────────────
-        // UUID generado en el momento exacto del clic del gestor.
-        // Es la única fuente de verdad para validar si esta liquidación
-        // ya fue registrada — sin comparar montos ni tolerancias.
         const txToken = generateTransactionToken();
         liquidationTransactionToken.current = txToken;
-
         setIsSavingNegotiation(true);
         setIsSubmittingLiquidation(true);
         setShowLiquidationConfirm(false);
-        // 🔒 ANTI-REGRESIÓN: Bloquear Realtime durante toda la operación de liquidación
         isTransitioning.current = true;
         try {
-            // 🚀 MOTOR V3: El saldo a liquidar es SIEMPRE el netLaborBalance (Pactado MO - Pagos MO)
             const amount = finances.netLaborBalance;
             const costRef = finances.pactedMO;
-
             if (amount <= 0 && costRef > 0 && finances.totalLaborConfirmed < costRef) {
                 console.warn("[Liquidación] Saldo 0 con deuda pactada. Revisar costos.");
             }
-
             const isExceeding = (finances.totalLaborConfirmed + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
-
-            // ✅ FIX: Usar ticketData.id (no ticket.id) para asegurar el ID correcto en ticket_costs
             const currentTicketId = ticketData.id;
-            const technicianId = ticketData.tecnico?.id || ticketData.tecnico_id || ticket.tecnico_id;
-
-            // ─── ÚNICO ORIGEN DE VERDAD: ticket_costs ───────────────────────
-            // La solicitud de liquidación solo se registra en ticket_costs.
-            // NO se usa solicitudLiquidacion en metadata para evitar que el módulo
-            // de Tesorería muestre dos ítems pendientes para el mismo pago.
-            // ────────────────────────────────────────────────────────────────
-            // ── IDEMPOTENCIA POR TOKEN UUID ────────────────────────────────────────
-            // Verificamos si el token exacto ya fue registrado en DB.
-            // REGLA: comparación estricta de string. Sin tolerancias de monto.
+            const technicianId = ticketData.technician?.id || ticketData.technician_id || ticket.technician_id;
             let costCreated = false;
             try {
                 if (amount > 0.01 && technicianId) {
-                    // Verificar que el token no fue reemplazado por un clic posterior
                     if (liquidationTransactionToken.current !== txToken) {
                         console.warn('[handleActualLiquidation] Token invalidado. Abortando para evitar duplicado.');
                         return;
                     }
-
                     const existingCosts = await ticketCostsAPI.getByTicket(currentTicketId);
-
-                    // Búsqueda exacta por token UUID — sin ninguna tolerancia de monto
                     const tokenAlreadyProcessed = (existingCosts || []).some(
                         (c: any) => c.transaction_token === txToken
                     );
-
                     if (tokenAlreadyProcessed) {
                         costCreated = true;
                         console.warn('[handleActualLiquidation] Token ya procesado (idempotente):', txToken);
@@ -2437,26 +1937,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             } catch (costErr) {
                 console.warn("[handleActualLiquidation] Error creando ticket_cost:", costErr);
-                // Si falla la creación del costo, no continuar para evitar estado inconsistente
                 throw costErr;
             }
-
-            // ✅ metadata NO almacena solicitudLiquidacion cuando el ticket_cost fue creado
-            // (evita ítem fantasma en el módulo de Tesorería).
-            // Si ticket_cost falló (amount=0 o sin técnico), sí guardar en metadata como fallback.
             const solicitudLiquidacionMeta = costCreated ? null : {
                 fecha: new Date().toISOString(),
                 monto: amount,
                 excedeTope: isExceeding
             };
-
             const finalMetadata = {
                 ...(ticketData.metadata || {}),
                 solicitudLiquidacion: solicitudLiquidacionMeta,
                 isAdminRevision: isExceeding,
                 estadoId: newState
             };
-
             const updated = {
                 ...ticketData,
                 estadoId: newState,
@@ -2465,12 +1958,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 solicitudLiquidacion: solicitudLiquidacionMeta,
                 metadata: finalMetadata
             };
-
             setTicketData(updated);
-
-            // 🚀 SYNC DIRECTO: No usar syncToSupabase aquí porque re-lee el servidor
-            // y puede resolver a un estado anterior durante la ventana de latencia.
-            // Escribir directamente con el estado correcto.
             try {
                 await ticketsAPI.update(currentTicketId, {
                     status_id: newState,
@@ -2478,21 +1966,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 });
             } catch (syncErr) {
                 console.error("[handleActualLiquidation] Error en update directo:", syncErr);
-                // Fallback via syncToSupabase con override
                 try {
                     await syncToSupabase(updated, { allowStateRollback: true });
                 } catch (fallbackErr) {
                     console.error("[handleActualLiquidation] Error en fallback syncToSupabase:", fallbackErr);
                 }
             }
-
-            // 🔄 RECARGA DE COSTOS para que Tesorería vea el nuevo ticket_cost
             try {
                 await loadCosts();
             } catch (loadErr) {
                 console.warn("[handleActualLiquidation] Error recargando costos:", loadErr);
             }
-
             showToast(
                 isExceeding ? "Revisión Requerida" : "Liquidación Solicitada",
                 isExceeding
@@ -2500,7 +1984,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     : "La solicitud ha sido enviada a la bandeja de pagos del administrador.",
                 isExceeding ? "info" : "success"
             );
-
         } catch (err) {
             console.error("Error in liquidation request:", err);
             showToast("Error", "No se pudo procesar la liquidación. Intente nuevamente.", "error");
@@ -2508,11 +1991,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSavingNegotiation(false);
             setIsSubmittingLiquidation(false);
             liquidationTransactionToken.current = null;
-            // 🔓 Liberar bloqueo Realtime después de que el servidor haya procesado
             setTimeout(() => { isTransitioning.current = false; }, 3000);
         }
     };
-
     const handleFinishExecution = () => {
         if (evidenciasEjecucion.length < 1) {
             showToast("Evidencia Mandataria", "Debe adjuntar al menos 1 foto de la ejecución del trabajo.", "error");
@@ -2526,27 +2007,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             evidenciasEjecucion: evidenciasEjecucion,
             evidenciasCampo: ticketData.evidenciasCampo || [],
             evidencias: ticketData.evidencias || [],
-            // BLINDAJE: Mantener el monto aprobado
             total_quoted_amount: totalQuotedAmount,
             partidas: partidasCotización
         };
         setTicketData(updated);
-        
-        // PERSISTENCIA INMEDIATA: Forzar el sync para evitar regresiones de estado al cerrar la ventana
         syncToSupabase(updated);
-        
         showToast("¡Ejecución Finalizada!", "Se ha generado el expediente del servicio correctamente.", "success");
     };
-
     const handleApproveBudgetExceed = () => {
         setShowExceedApprovalConfirm(true);
     };
-
     const handleActualExceedApproval = async () => {
         setIsSavingNegotiation(true);
         setShowExceedApprovalConfirm(false);
         try {
-            // 1. Preparar metadata correcta (Evitar bug de updated.metadata || updated)
             const newMetadata = {
                 ...(ticketData.metadata || {}),
                 excepcionPresupuestoAprobada: true,
@@ -2555,32 +2029,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 isAdminRevision: false,
                 is_frozen: false // Asegurar limpieza de bandera si existe
             };
-
             const updated = {
                 ...ticketData,
                 status_id: "por_liquidar",
                 metadata: newMetadata
             };
-
-            // 2. Actualización local inmediata para respuesta instantánea de la UI
             setTicketData(updated);
-
-            // 3. Persistencia en Servidor
             if (onUpdate) {
                 const result = await onUpdate(ticketData.id, { 
                     status_id: "por_liquidar",
                     metadata: newMetadata
                 });
-                
-                // 4. Sincronización final con el resultado del servidor y recarga de costos
                 if (result) {
                     setTicketData((prev: any) => ({ ...prev, ...result, status_id: "por_liquidar" }));
                 }
-                
-                // Forzar recarga de costos para asegurar que los cálculos financieros se actualicen
                 await loadCosts();
             }
-
             showToast("Excepción Aprobada", "El ticket ha sido liberado para liquidación final.", "success");
         } catch (err) {
             console.error("Error approving budget exceed:", err);
@@ -2589,29 +2053,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSavingNegotiation(false);
         }
     };
-
-
     const handleClasificarYActivar = async () => {
         const finalSedeId = triageSedeId || ticketData.branch_id;
         const codigoSedeExtraido = ticketData.metadata?.codigo_sede_extraido;
-
         if (!triageServiceType) {
             showToast("Campo requerido", "Por favor seleccione el tipo de servicio.", "error");
             return;
         }
-
         if (!finalSedeId) {
             showToast("Campo requerido", "Por favor vincule el ticket a una sede real.", "error");
             return;
         }
-
         try {
             if (finalSedeId && codigoSedeExtraido) {
                 await branchesAPI.update(finalSedeId, {
                     codigo_cliente: codigoSedeExtraido
                 });
             }
-
             const dbUpdates = {
                 branch_id: finalSedeId,
                 service_type: triageServiceType,
@@ -2623,16 +2081,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     fecha_triage: new Date().toISOString()
                 }
             };
-
             await ticketsAPI.update(ticketData.id, dbUpdates);
-
             const selectedSede = sedesMibanco.find(s => s.id === finalSedeId);
             const normalizedSede = selectedSede ? {
                 ...selectedSede,
                 nombre: selectedSede.name || selectedSede.nombre || "Sin Sede",
                 direccion: selectedSede.address || selectedSede.direccion || "Sin dirección"
             } : null;
-
             const localUpdates = {
                 ...dbUpdates,
                 status_id: 'nuevo',
@@ -2640,7 +2095,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 tipoServicio: triageServiceType,
                 sede: normalizedSede,
             };
-
             await onUpdate?.(ticketData.id, dbUpdates);
             setTicketData((prev: any) => ({ ...prev, ...localUpdates }));
             showToast("✅ Ticket Activado", "Ticket clasificado y enviado al flujo operativo como Nuevo.", "success");
@@ -2649,40 +2103,30 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Error al Clasificar", `Detalle: ${error?.message || 'Error desconocido'}`, "error");
         }
     };
-
-
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawFiles = e.target.files;
         if (!rawFiles || rawFiles.length === 0) return;
-
         const files = Array.from(rawFiles);
-        
         try {
-            // Compresión paralela
             const compressedFiles = await Promise.all(
                 files.map(file => compressImage(file))
             );
-
             const uploadPromises = compressedFiles.map(async (file) => {
                 const fileExt = file.name.split('.').pop() || 'jpg';
                 const fileName = `${ticketData.id}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-                
                 const { data, error } = await supabase.storage
                     .from('evidencias')
                     .upload(fileName, file, {
                         contentType: file.type,
                         upsert: true
                     });
-
                 if (error) {
                     console.error('[Storage Upload Error]:', error.message);
                     throw error;
                 }
-
                 const { data: urlData } = supabase.storage
                     .from('evidencias')
                     .getPublicUrl(fileName);
-
                 return {
                     url: urlData.publicUrl,
                     name: file.name,
@@ -2690,51 +2134,39 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     type: file.type
                 };
             });
-
             const uploadedEvidences = await Promise.all(uploadPromises);
-
             setEvidenciasEjecucion(prev => {
                 const updated = [...prev, ...uploadedEvidences];
                 setTicketData((current: any) => ({ ...current, evidenciasEjecucion: updated }));
                 return updated;
             });
-
             showToast("Éxito", "Evidencias subidas correctamente.", "success");
         } catch (err: any) {
             console.error("Error al procesar y subir evidencias:", err);
             alert("No se pudieron subir las evidencias: " + (err.message || err));
         }
-
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
-
     const handleDownloadTemplate = () => {
         const link = document.createElement('a');
         link.href = '/templates/PLANTILLA_COTIZACION.xlsx';
         link.download = 'PLANTILLA_COTIZACION_SINFIMAC.xlsx';
         link.click();
     };
-
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
         setIsMounted(true);
     }, []);
-
     const bringToFront = () => {
-        // Solo actualizar si no es ya el z-index más alto (estimado)
-        // para evitar re-renders innecesarios que causan parpadeo
         const currentMax = parseInt(localStorage.getItem('max_z_index') || '1000000');
         if (zIndex >= currentMax && zIndex > 1000000) return; 
-
         const nextZ = currentMax + 1;
         setZIndex(nextZ);
         localStorage.setItem('max_z_index', nextZ.toString());
     };
-
     const handleMouseDown = (e: React.MouseEvent) => {
         bringToFront();
         if (isMaximized) return;
-
         const rect = windowRef.current?.getBoundingClientRect();
         if (rect) {
             setDragOffset({
@@ -2744,7 +2176,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsDragging(true);
         }
     };
-
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             if (isDragging && !isMaximized) {
@@ -2754,33 +2185,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 });
             }
         };
-
         const handleMouseUp = () => {
             setIsDragging(false);
         };
-
         if (isDragging) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
         }
-
         return () => {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
     }, [isDragging, dragOffset, isMaximized]);
-
     const handleMinimize = () => {
         setIsMinimized(!isMinimized);
     };
-
     const handleMaximize = () => {
         const nextState = !isMaximized;
         setIsMaximized(nextState);
         setIsMinimized(false);
     };
-
-
     const handleDeleteCost = async (costId: string) => {
         if (!confirm("¿Está seguro de anular este registro de costo? Esta acción es irreversible pero mantendrá la trazabilidad.")) return;
         try {
@@ -2792,13 +2216,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Error", "No se pudo anular el registro.", "error");
         }
     };
-
     useEffect(() => {
         techniciansAPI.getAll()
             .then((data: any[]) => setAllTechnicians(data || []))
             .catch((e: any) => console.error("Error loading technicians:", e));
     }, []);
-
     const handleSubmitMaterialsRequest = async () => {
         if (!materialsForm.concepto.trim() || !materialsForm.monto) {
             showToast("Campos incompletos", "El concepto y el monto son obligatorios.", "error");
@@ -2808,7 +2230,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Técnico requerido", "Seleccione el técnico de la lista desplegable para esta solicitud.", "error");
             return;
         }
-        // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita gasto/compra antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.status_id] || 0;
         if (currentStageOrder < 7) {
             setRiskAlert({
@@ -2822,18 +2243,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             });
             return;
         }
-
         executeSubmitMaterials();
     };
-
     const executeSubmitMaterials = async () => {
         setIsSavingMaterials(true);
         try {
             const montoGasto = parseFloat(materialsForm.monto);
-            
-            // Si el nuevo gasto hace que el total de honorarios supere el pactado, escalar
             const excedePresupuesto = (unifiedPaymentsSum + montoGasto > techPactedTotal + 0.01);
-
             await ticketCostsAPI.create({
                 ticket_id: ticket.id,
                 monto: montoGasto,
@@ -2844,11 +2260,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 estado_pago: excedePresupuesto ? "REQUIERE_APROBACION_ADMIN" : "pendiente",
                 solicitado_por: myProfileId || undefined
             });
-
-            // ELIMINADO: No mover el ticket a "requiere_revision_admin" por una compra intermedia.
-            // Esto evita que el ticket pase prematuramente a la etapa de liquidación en la UI.
-            // El administrador gestionará la aprobación directamente desde el módulo de Tesorería.
-
             await loadCosts();
             setShowMaterialsModal(false);
             setMaterialsForm({ concepto: "", monto: "", categoria: "Materiales", specialist_id: "", specialistName: "", searchQuery: "", showDropdown: false });
@@ -2865,10 +2276,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSavingMaterials(false);
         }
     };
-
-
-
-
     const jobCostBase = finances.totalPactedDebt;
     const visitPayment = finances.operatingItems
         .filter((c: any) => `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase().includes('visita'))
@@ -2879,44 +2286,30 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const rentabilidadReal = grossMargin;
     const paymentsSummary = unifiedPaymentsSum;
     const costPercentage = 100 - pctReal;
-
     const isClientTicketFormatValid = useCallback((num?: string) => {
         if (!num || num.trim() === "") return false;
         if (num.startsWith('STD')) return /^STD\d{4}\.\d{2}$/.test(num);
         if (num.startsWith('#')) return true; 
         return /^MB\d{6}\.\d{2}$/.test(num);
     }, []);
-
     const capitalExposed = finances.totalExpenses;
-
     const handleCloseInternal = () => {
-        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
         if (isSaving) {
             showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
             return;
         }
-        
-        // Optimismo visual: Cerramos la interfaz inmediatamente
-        // y dejamos que la sincronización ocurra en segundo plano
-        // si no hay transiciones de estado críticas pendientes.
         syncToSupabase().catch(err => console.error("Sync error on close:", err));
-        
-        // Limpiar cache si el ticket ya está en estado final
         if (['ticket_cerrado', 'liquidado', 'cerrado'].includes(ticketData.status_id)) {
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
             localStorage.removeItem(`ticket_ui_${ticketData.id}`);
         }
-        
         onClose();
     };
-
     const handleCompleteClosure = async () => {
-        // ⚡️ BLOQUEO: No permitir cierre mientras hay operación pendiente
         if (isSaving) {
             showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
             return;
         }
-        
         setIsSaving(true);
         try {
             const updated = {
@@ -2925,14 +2318,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 status_id: "ticket_cerrado",
                 fechaCierre: new Date().toISOString()
             };
-            
-            // Limpiar cache proactivamente
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
             localStorage.removeItem(`ticket_ui_${ticketData.id}`);
-
             setTicketData(updated);
             const success = await syncToSupabase(updated, { manual: true });
-            
             if (success) {
                 showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
                 onClose();
@@ -2946,32 +2335,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSaving(false);
         }
     };
-
     const [showRescueModal, setShowRescueModal] = useState(false);
     const [isSavingRescue, setIsSavingRescue] = useState(false);
     const [rescueForm, setRescueForm] = useState({ monto: '', motivo: '' });
-
     const handleOpenRescue = () => {
         setRescueForm({ monto: '', motivo: '' });
         setShowRescueModal(true);
     };
-
     const handleSubmitRescueRequest = async () => {
         const montoNum = parseFloat(rescueForm.monto);
         if (isNaN(montoNum) || montoNum <= 0) {
             showToast("Monto Inválido", "Por favor ingrese un monto válido mayor a cero.", "error");
             return;
         }
-
         const isExceeding = montoNum > (availableRescue + 0.01);
-        
-        // REGLA: Si excede, el motivo es obligatorio
         if (isExceeding && !rescueForm.motivo.trim()) {
             showToast("Motivo Obligatorio", "Para solicitudes que exceden el saldo pactado, debe indicar el motivo detallado.", "error");
             return;
         }
-
-        // ✅ REGLA DE RIESGO FINANCIERO: Alerta si se solicita rescate antes de aprobación de cliente
         const currentStageOrder = TICKET_STATE_ORDER[ticketData.status_id] || 0;
         if (currentStageOrder < 7) {
             setRiskAlert({
@@ -2985,15 +2366,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             });
             return;
         }
-
         executeSubmitRescue(montoNum, isExceeding);
     };
-
     const executeSubmitRescue = async (montoNum: number, isExceeding: boolean) => {
         setIsSavingRescue(true);
         try {
             const estadoInicial = isExceeding ? 'REQUIERE_APROBACION_ADMIN' : 'pendiente';
-            
             await ticketCostsAPI.create({
                 ticket_id: ticketData.id,
                 monto: montoNum,
@@ -3004,23 +2382,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 motivo: rescueForm.motivo.trim(),
                 estado_pago: estadoInicial,
                 solicitado_por: myProfileId || undefined,
-                specialist_id: ticketData.tecnico_id,
+                specialist_id: ticketData.technician_id,
                 proveedor: 'Rescate Financiero'
             });
-
-            // También marcar el ticket principal si es riesgoso
             if ((TICKET_STATE_ORDER[ticketData.status_id] || 0) < 7) {
                 await supabase.from('tickets').update({
                     metadata: sanitizeTicketMetadata({ ...ticketData.metadata, riesgoFinanciero: true })
                 }).eq('id', ticketData.id);
             }
-
             if (isExceeding) {
                 showToast("Aprobación Requerida", "Esta solicitud excede el pactado. Se ha enviado al Administrador para su autorización.", "info");
             } else {
                 showToast("Solicitud Enviada", "El rescate financiero ha sido registrado y enviado a Tesorería.", "success");
             }
-            
             setShowRescueModal(false);
             loadCosts();
         } catch (err: any) {
@@ -3031,8 +2405,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             setIsSavingRescue(false);
         }
     };
-
-    // ✅ ADMINISTRACIÓN: Aprobación/Denegación de Rescate Financiero
     const handleApproveRescueAdmin = async (costId: string) => {
         try {
             await ticketCostsAPI.update(costId, { estado_pago: 'pendiente' });
@@ -3043,7 +2415,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Error", "No se pudo aprobar la solicitud.", "error");
         }
     };
-
     const handleRejectRescueAdmin = async (costId: string) => {
         if (!confirm("¿Está seguro de que desea DENEGAR esta solicitud de rescate?")) return;
         try {
@@ -3055,20 +2426,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Error", "No se pudo denegar la solicitud.", "error");
         }
     };
-
-    // --- CÁLCULOS PARA RESCATE FINANCIERO (FÓRMULA ESTRICTA) ---
-    // Regla: El rescate solo descuenta de la MO Pactada y los adelantos/rescates previos.
-    // Las "Compras" (Materiales/Logística) NO afectan este saldo.
     const totalPactadoTecnico = pactedMO;
     const totalAdelantadoAlTecnico = finances.totalLaborConfirmed + finances.totalLaborPending;
-    
-    // REFUERZO: Si no hay pactado definido aún pero el ticket está en ejecución, permitir un rescate base de S/ 100
-    // (Lógica movida arriba a la sección financiera centralizada)
-
     return (
         <>
             {isMaximized && !isMinimized && <div className={styles.overlay} style={{ zIndex: zIndex - 1 }} />}
-
             <div
                 ref={windowRef}
                 className={`${styles.window} ${!isMounted ? styles.windowMounting : ''} ${isMaximized ? styles.maximized : ''} ${isMinimized ? styles.minimized : ''}`}
@@ -3160,11 +2522,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                             </div>
                         )}
                     </div>
-
                     {!isMinimized && (
                         <SLATimerHeader ticket={ticketData} />
                     )}
-
                     <div className={styles.windowControls} onMouseDown={(e) => { e.stopPropagation(); bringToFront(); }} onClick={(e) => e.stopPropagation()}>
                         {!isMinimized && (
                             <>
@@ -3221,7 +2581,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </button>
                     </div>
                 </div>
-
                 {!isMinimized && (
                     <div className={styles.windowContent}>
                         <div className={styles.navigatorWrapper}>
@@ -3229,7 +2588,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 currentStateId={ticketData.status_id || "nuevo"}
                             />
                         </div>
-
                         <div className={styles.infoHistory}>
                             {useMemo(() => (
                                 <>
@@ -3240,13 +2598,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         color="#8B5CF6"
                                         gradient="linear-gradient(135deg, #F5F3FF, #EDE9FE)"
                                     />
-
                                     <GestoraAssignmentBar 
                                         ticket={ticketData}
                                         canAssign={userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN' || (myGestoraId === ticketData.gestora_id)}
                                         onAssign={() => setShowGestoraDrawer(true)}
                                     />
-
                                     <TechnicianSchedulingBar
                                         ticket={ticketData}
                                         onReassign={() => setShowAssignmentDrawer(true)}
@@ -3254,7 +2610,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             setTicketData({ ...ticketData, estadoId: 'en_inspeccion', status_id: 'en_inspeccion', execution_date: undefined });
                                         }}
                                     />
-
                                     <DiagnosisInfoBar 
                                         ticket={ticketData} 
                                         onEdit={isAdmin || (myGestoraId === ticketData.gestora_id) ? handleOpenReportUpdate : undefined}
@@ -3278,7 +2633,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 </>
                             ), [ticketData, ticketCosts, availableRescue, isQuotationCollapsed, userRole, myGestoraId, isAdmin])}
                         </div>
-
                         {/* REJECTION BANNER - MOVED ABOVE FOR VISIBILITY */}
                         {ticketData.pagoRechazado && (
                             <div className={styles.rejectionBanner}>
@@ -3297,9 +2651,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 <button onClick={handleDismissRejection} className={styles.dismissRejection}>Entendido</button>
                             </div>
                         )}
-
                         <div className={styles.operationalArea}>
-
                             {children || (
                                 <>
                                     {ticketData.status_id === "borrador" && (
@@ -3311,7 +2663,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     <p className={styles.triageSubtitle}>Clasificación y Validación de Ticket Automático</p>
                                                 </div>
                                             </div>
-
                                             <div className={styles.triageForm}>
                                                 <div className={styles.triageField}>
                                                     <label>✍️ Descripción del Problema (Editable):</label>
@@ -3324,21 +2675,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: '0.9rem', fontWeight: 500 }}
                                                     />
                                                 </div>
-
                                                 <div className={styles.triageField}>
                                                     <label>🏢 Sede Reportada por Banco:</label>
                                                     <div className={styles.readonlyValue}>
                                                         {ticketData.sede_reportada_cliente || ticketData.metadata?.codigo_sede_extraido || "No especificada"}
                                                     </div>
                                                 </div>
-
                                                 {!ticketData.branch_id && !triageSedeId && (
                                                     <div className={styles.triageAlert}>
                                                         <AlertTriangle size={16} />
                                                         <span>Sede no mapeada automáticamente. Seleccione manualmente para entrenar al sistema.</span>
                                                     </div>
                                                 )}
-
                                                 <div className={styles.triageField}>
                                                     <label>📍 Vincular a Sede Real:</label>
                                                     {ticketData.branch_id ? (
@@ -3367,7 +2715,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </select>
                                                     )}
                                                 </div>
-
                                                 <div className={styles.triageField}>
                                                     <label>⚙️ Tipo de Servicio (según catálogo de técnicos):</label>
                                                     <select
@@ -3383,7 +2730,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         ))}
                                                     </select>
                                                 </div>
-
                                                 <button
                                                     className={styles.triageActionBtn}
                                                     onClick={handleClasificarYActivar}
@@ -3395,7 +2741,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </div>
                                         </div>
                                     )}
-
                                     {ticketData.status_id === "nuevo" && (
                                         <div className={styles.stepActions}>
                                             <p className={styles.stepHint}>
@@ -3408,7 +2753,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </button>
                                         </div>
                                     )}
-
                                     {ticketData.status_id === "esperando_pago_visita" && !isVisitPaid && (
                                             <div className={styles.stepPlaceholder}>
                                                 <div className={styles.waitingForManager} style={{ padding: '40px', background: '#F8FAFC', borderRadius: '24px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
@@ -3427,7 +2771,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 </div>
                                             </div>
                                         )}
-
                                     {(ticketData.status_id === "en_inspeccion" || (ticketData.status_id === "esperando_pago_visita" && isVisitPaid)) && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.schedulingBox}>
@@ -3440,7 +2783,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </p>
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.scheduleOptions}>
                                                     <button
                                                         className={styles.scheduleOptionBtn}
@@ -3462,7 +2804,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             {new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long' })}
                                                         </span>
                                                     </button>
-
                                                     <button
                                                         className={styles.scheduleOptionBtn}
                                                         onClick={async () => {
@@ -3488,7 +2829,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </div>
                                         </div>
                                     )}
-
                                     {ticketData.status_id === "visita_realizada" && (
                                         <div className={styles.reportFormBox}>
                                             <div className={styles.reportHeader}>
@@ -3500,7 +2840,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     </div>
                                                 </div>
                                             </div>
-
                                             <div className={styles.diagnosisArea}>
                                                 <label className={styles.optimisticLabel}>Diagnóstico Técnico Final</label>
                                                 <textarea
@@ -3510,7 +2849,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     className={styles.formTextareaOptimistic}
                                                 />
                                             </div>
-
                                             <div className={styles.compactSettingsGrid}>
                                                 <div className={styles.settingsRow}>
                                                     <div className={styles.formGroupCompact}>
@@ -3532,7 +2870,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             </div>
                                                         </div>
                                                     </div>
-
                                                     <div className={styles.formGroupCompact}>
                                                         <label>Adjuntos</label>
                                                         <div className={styles.thumbnailsWrapper}>
@@ -3572,7 +2909,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.settingsRow}>
                                                     <div className={styles.formGroupCompact}>
                                                         <label>{modalidad === 'todo_costo' ? 'Monto Total Estimado' : 'Mano de Obra'}</label>
@@ -3587,7 +2923,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             />
                                                         </div>
                                                     </div>
-
                                                     {modalidad === 'desagregado' && (
                                                         <div className={styles.formGroupCompact}>
                                                             <label>Costo Materiales</label>
@@ -3605,7 +2940,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     )}
                                                 </div>
                                             </div>
-
                                             <div className={styles.formActionsOptimistic}>
                                                 <button
                                                     className={styles.sendReportBtnOptimistic}
@@ -3617,7 +2951,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </div>
                                         </div>
                                     )}
-
                                     {(ticketData.status_id === "en_cotizacion" || ["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.status_id)) && (
                                         <div className={`${styles.quotationBox} ${isQuotationCollapsed && ticketData.status_id !== "en_cotizacion" ? styles.collapsedQuotation : ''}`}>
                                             <div className={styles.quotationHeader} onClick={() => ticketData.status_id !== "en_cotizacion" && setIsQuotationCollapsed(!isQuotationCollapsed)}>
@@ -3639,7 +2972,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         }
                                                     </p>
                                                 </div>
-
                                                 {["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.status_id) && (
                                                     <div className={styles.headerRightActions}>
                                                         {!ticketData.modificacionAutorizada && (
@@ -3666,7 +2998,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     </div>
                                                 )}
                                             </div>
-
                                             {(!isQuotationCollapsed || ticketData.status_id === "en_cotizacion") && (
                                                 <div className={styles.quotationLayout}>
                                                     <div className={styles.quotationSidebar}>
@@ -3696,14 +3027,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         </div>
                                                                     </div>
                                                                 </div>
-
                                                                 <div className={styles.suggestedTotal}>
                                                                     <span>PRECIO OBJETIVO (55% MARGEN)</span>
                                                                     <div className={styles.suggestedValue}>
                                                                         S/ {formatSoles(round2(((round2(ticketData.labor_cost || 0) + round2(ticketData.materials_cost || 0)) || round2(ticketData.visit_cost || 0)) / 0.45))}
                                                                     </div>
                                                                 </div>
-
                                                                 <div className={styles.missingAmountCard}>
                                                                     <div className={styles.missingHeader}>
                                                                         <span>CUMPLIMIENTO DE META</span>
@@ -3715,7 +3044,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         {(() => {
                                                                             const totalCostoTécnico = (parseFloat(ticketData.labor_cost || 0) + parseFloat(ticketData.materials_cost || 0)) || parseFloat(ticketData.visit_cost || 0);
                                                                             const meta55 = totalCostoTécnico / 0.45;
-
                                                                             if (totalQuotedAmount < totalCostoTécnico) {
                                                                                 return (
                                                                                     <div className={styles.lossWarning}>
@@ -3728,7 +3056,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                                     </div>
                                                                                 );
                                                                             }
-
                                                                             if (totalQuotedAmount < meta55) {
                                                                                 return (
                                                                                     <>
@@ -3739,7 +3066,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                                     </>
                                                                                 );
                                                                             }
-
                                                                             return (
                                                                                 <div className={styles.goalReached}>
                                                                                     <CheckCircle size={14} />
@@ -3755,7 +3081,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                     💡 Ajuste los precios en el editor de la derecha para cubrir el costo técnico y alcanzar el margen operativo sugerido.
                                                                 </p>
                                                             )}
-
                                                             {["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.status_id) && !ticketData.modificacionAutorizada && (
                                                                 <div className={styles.authorizationSection}>
                                                                     <div className={styles.authLockIcon}>
@@ -3809,7 +3134,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         </p>
                                                                     </div>
                                                                 </div>
-
                                                                 {/* Zona de Carga / Visualización */}
                                                                 {!bcpQuotationFile ? (
                                                                     <div
@@ -3912,7 +3236,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                             />
                                                                         </div>
                                                                     </div>
-
                                                                     <div>
                                                                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
                                                                             <Percent size={14} color='#0284c7' /> IGV (18%) (S/)
@@ -3928,7 +3251,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                             />
                                                                         </div>
                                                                     </div>
-
                                                                     <div>
                                                                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '10px' }}>
                                                                             <DollarSign size={14} color='#0369a1' /> Total Cotizado (S/)
@@ -3945,7 +3267,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         </div>
                                                                     </div>
                                                                 </div>
-
                                                                 <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '12px', fontStyle: 'italic' }}>
                                                                     * El sistema calcula automáticamente el IGV (18%) y el Total basándose en el subtotal ingresado para garantizar la precisión.
                                                                 </p>
@@ -3958,7 +3279,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 />
                                                             </div>
                                                         ) : (
-                                                            // --- VISTA ESTÁNDAR (EDITOR PDF) ---
                                                             <OnlineQuotationEditor
                                                                 ref={quotationEditorRef}
                                                                 isLocked={["cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "pago_realizado", "ticket_cerrado"].includes(ticketData.status_id) && !ticketData.modificacionAutorizada}
@@ -3976,7 +3296,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 }}
                                                             />
                                                         )}
-
                                                         <div className={styles.finalActionsOptimistic}>
                                                             {ticketData.status_id === "en_cotizacion" ? (
                                                                 <button
@@ -4022,13 +3341,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             )}
                                         </div>
                                     )}
-
                                     {(ticketData.status_id === "cotizacion_enviada") && (
                                         <div className={styles.successWaitingCard}>
                                             <div className={styles.successIconWrapper}>
                                                 <CheckCircle size={48} />
                                             </div>
-
                                             <div>
                                                 <h2 className={styles.successTitle}>Cotización Enviada con Éxito</h2>
                                                 <p className={styles.successDescription}>
@@ -4036,7 +3353,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     El ticket permanecerá en pausa hasta recibir su confirmación.
                                                 </p>
                                             </div>
-
                                             <div className={styles.actionButtonGroup}>
                                                 <button
                                                     className={styles.primaryActionBtn}
@@ -4046,7 +3362,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     <ThumbsUp size={22} />
                                                     <span>EL CLIENTE APRUEBA COTIZACIÓN</span>
                                                 </button>
-
                                                 <button
                                                     className={styles.secondaryActionBtn}
                                                     onClick={handleReadjustQuote}
@@ -4056,7 +3371,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     {isSaving ? <Clock size={18} className={styles.spinner} /> : <RefreshCw size={18} />}
                                                     <span>{isSaving ? 'REAJUSTANDO...' : 'SOLICITA REAJUSTE / REPROGRAMAR'}</span>
                                                 </button>
-
                                                 <button
                                                     className={styles.secondaryActionBtn}
                                                     onClick={handleOpenCancel}
@@ -4068,7 +3382,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </div>
                                         </div>
                                     )}
-
                                     {["cotizacion_aprobada", "en_ejecucion"].includes(ticketData.status_id) && (
                                         <div 
                                             className={styles.stepActions}
@@ -4088,7 +3401,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 </p>
                                                             </div>
                                                         </div>
-
                                                         {/* SECCIÓN DE ADELANTO — ocultar si ya fue pagado */}
                                                         {(!canProceedWithExecution || !isAdmin) && !ticketData.adelantoPagado && (
                                                             <div className={styles.advanceRequestPremium}>
@@ -4107,7 +3419,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         </div>
                                                                     </div>
                                                                 </div>
-
                                                                 {!ticketData.solicitudAdelanto && !advanceRequestPending && (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
                                                                         <div className={styles.percentageSelectorPremium}>
@@ -4124,7 +3435,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                                 </button>
                                                                             ))}
                                                                         </div>
-
                                                                         <div className={styles.manualAmountContainer} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px' }}>
                                                                             <div style={{ flex: 1 }}>
                                                                                 <label className={styles.optimisticLabel} style={{ marginBottom: '8px', display: 'block', fontSize: '10px' }}>
@@ -4170,7 +3480,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         </div>
                                                                     </div>
                                                                 )}
-
                                                                 {isAdmin ? (
                                                                     <button
                                                                         className={styles.confirmAdvanceBtnPremium}
@@ -4194,7 +3503,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         </button>
                                                                     )
                                                                 )}
-
                                                                 {(ticketData.solicitudAdelanto || advanceRequestPending) && !isAdmin && (
                                                                     <div className={styles.waitingNoticePremium}>
                                                                         <Clock size={16} />
@@ -4205,7 +3513,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         )}
                                                     </div>
                                                 )}
-
                                                 {canProceedWithExecution && (
                                                     <div className={styles.executionGrid}>
                                                     <div className={styles.evidenceSection}>
@@ -4252,7 +3559,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             * Es obligatorio adjuntar al menos 1 evidencia para finalizar el trabajo.
                                                         </p>
                                                     </div>
-
                                                     <div className={styles.flowActionsSection}>
                                                         <button
                                                             className={styles.finishWorkBtn}
@@ -4262,9 +3568,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <CheckCircle size={20} />
                                                             <span>FINALIZAR TRABAJOS Y ENVIAR DOCUMENTACIÓN</span>
                                                         </button>
-
-                                                        
-
                                                         <p style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '10px', textAlign: 'center' }}>
                                                             La gestión financiera de este ticket se realiza exclusivamente en el panel inferior.
                                                         </p>
@@ -4274,7 +3577,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </div>
                                         </div>
                                     )}
-
                                     {ticketData.status_id === "documentacion_enviada" && (
                                         <div className={styles.checklistContainer} style={{ order: -1, marginBottom: '20px' }}>
                                             <div className={styles.checklistCard}>
@@ -4285,7 +3587,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         <p className={styles.checklistSubtitle}>Valide los documentos obligatorios para proceder a la liquidación</p>
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.checklistGrid}>
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.actaConformidad ? styles.checkItemActive : ''}`}
@@ -4303,7 +3604,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span>Sustento de recepciÃƒÂ³n del cliente</span>
                                                         </div>
                                                     </div>
-
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.ats ? styles.checkItemActive : ''}`}
                                                         onClick={() => {
@@ -4320,7 +3620,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span>Seguridad y Salud en el Trabajo</span>
                                                         </div>
                                                     </div>
-
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.declaracionJurada ? styles.checkItemActive : ''}`}
                                                         onClick={() => {
@@ -4337,7 +3636,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span>Conformidad administrativa</span>
                                                         </div>
                                                     </div>
-
                                                     <div
                                                         className={`${styles.checkItem} ${documentosChecklist.excelSeguridad ? styles.checkItemActive : ''}`}
                                                         onClick={() => {
@@ -4354,7 +3652,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span>Reporte de condiciones de seguridad</span>
                                                         </div>
                                                     </div>
-
                                                     {/* Nuevo Item: Número de Ticket del Cliente */}
                                                     <div
                                                         className={`${styles.checkItem} ${isClientTicketFormatValid(ticketData.client_ticket_number) ? styles.checkItemActive : styles.checkItemAlert}`}
@@ -4394,9 +3691,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 value={ticketData.client_ticket_number || ""}
                                                                 autoComplete="off"
                                                                 spellCheck={false}
-                                                                
-                                                                // Si el ticket ya venía con número asignado (desde props), bloquear edición
-                                                                // SANTANDER siempre es readOnly en esta fase
                                                                 disabled={(ticketData.status_id !== "documentacion_enviada" && !isAdmin) || isSantander}
                                                                 style={(ticketData.status_id !== "documentacion_enviada" && !isAdmin) || isSantander ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
@@ -4434,7 +3728,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
                                                     </div>
                                                 </div>
-
                                                 <button
                                                     className={styles.proceedToLiquidationBtn}
                                                     disabled={
@@ -4450,7 +3743,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         : <><span>PASAR A LIQUIDACIÓN FINAL</span><ArrowRight size={20} /></>
                                                     }
                                                 </button>
-
                                                 {(!isSantander && (!Object.values(documentosChecklist).every(v => v) || !ticketData.client_ticket_number)) && (
                                                     <p className={styles.checklistAlert}>
                                                         {isSantander 
@@ -4462,7 +3754,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </div>
                                         </div>
                                     )}
-
                                     {["por_liquidar", "ticket_cerrado", "requiere_revision_admin"].includes(ticketData.status_id) && (
                                         <div className={styles.liquidationContainerPremium}>
                                             {ticketData.status_id === "requiere_revision_admin" && (
@@ -4488,7 +3779,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    
                                             {isAdmin && (
                                                 <div style={{ display: 'flex', gap: '12px' }}>
                                                     <button 
@@ -4514,7 +3804,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             )}
                                                 </div>
                                             )}
-
                                             {ticketData.status_id === "por_liquidar" && (
                                                 <div className={styles.adminReviewAlert} style={{ 
                                                     background: '#F0F9FF', 
@@ -4562,7 +3851,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.financialAuditGrid}>
                                                     {/* Card 1: PRESUPUESTO APROBADO */}
                                                     <div className={styles.financeCard} style={{
@@ -4581,7 +3869,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span style={{ color: '#64748B', fontWeight: 600 }}>Ingreso total (Sin IGV)</span>
                                                         </div>
                                                     </div>
-
                                                     {/* Card 2: COSTO MANO DE OBRA */}
                                                     <div className={styles.financeCard} style={{
                                                         background: 'linear-gradient(135deg, #FFF7ED, #FFEDD5)',
@@ -4599,7 +3886,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span style={{ color: '#C2410C', fontWeight: 600 }}>Pago pactado al Técnico</span>
                                                         </div>
                                                     </div>
-
                                                     {/* Card 3: GASTOS OPERATIVOS */}
                                                     <div className={styles.financeCard} style={{
                                                         background: 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
@@ -4617,7 +3903,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <span style={{ color: '#991B1B', fontWeight: 600 }}>Materiales, viáticos, otros</span>
                                                         </div>
                                                     </div>
-
                                                     {/* Card 4: UTILIDAD DEL TICKET */}
                                                     <div className={styles.financeCard} style={{
                                                         background: grossMargin >= 0 ? 'linear-gradient(135deg, #ECFDF5, #D1FAE5)' : 'linear-gradient(135deg, #FEF2F2, #FEE2E2)',
@@ -4641,7 +3926,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.depositsSection}>
                                                     <div className={styles.depositsSectionHeader}>
                                                         <div className={styles.depositsSectionTitle}>
@@ -4653,7 +3937,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <strong>S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
                                                         </div>
                                                     </div>
-                                                    
                                                     <div className={styles.depositsListCompact}>
                                                         {laborItems.length > 0 ? laborItems.map((p: any, i: number) => (
                                                             <div key={`dep-${i}`} className={styles.depositRowCompact}>
@@ -4673,7 +3956,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         )}
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.paymentDestinationPanel}>
                                                     <div className={styles.destinationHeader}>
                                                         <CreditCard size={16} />
@@ -4684,38 +3966,37 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Tecnico</span>
                                                                 <span className={styles.destFieldValue}>
-                                                                    {ticketData.tecnico?.first_name || ticketData.tecnico?.first_name || ''} {ticketData.tecnico?.last_name || ticketData.tecnico?.last_name || ''}
-                                                                    {!(ticketData.tecnico?.first_name || ticketData.tecnico?.first_name) && !(ticketData.tecnico?.last_name || ticketData.tecnico?.last_name) && (ticketData.tecnico?.name || 'Sin Técnico')}
+                                                                    {ticketData.technician?.first_name || ticketData.technician?.first_name || ''} {ticketData.technician?.last_name || ticketData.technician?.last_name || ''}
+                                                                    {!(ticketData.technician?.first_name || ticketData.technician?.first_name) && !(ticketData.technician?.last_name || ticketData.technician?.last_name) && (ticketData.technician?.name || 'Sin Técnico')}
                                                                 </span>
                                                             </div>
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Banco</span>
-                                                                <span className={styles.destFieldValue}>{ticketData.tecnico?.bank_name || ticketData.tecnico?.bank_name || 'N/A'}</span>
+                                                                <span className={styles.destFieldValue}>{ticketData.technician?.bank_name || ticketData.technician?.bank_name || 'N/A'}</span>
                                                             </div>
                                                             <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                 <span className={styles.destFieldLabel}>Cuenta</span>
-                                                                <span className={styles.destFieldValueMono}>{ticketData.tecnico?.account_number || ticketData.tecnico?.account_number || '---'}</span>
+                                                                <span className={styles.destFieldValueMono}>{ticketData.technician?.account_number || ticketData.technician?.account_number || '---'}</span>
                                                             </div>
-                                                            {(ticketData.tecnico?.cci || ticketData.tecnico?.cci) && (
+                                                            {(ticketData.technician?.cci || ticketData.technician?.cci) && (
                                                                 <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                     <span className={styles.destFieldLabel}>CCI</span>
-                                                                    <span className={styles.destFieldValueMono}>{ticketData.tecnico?.cci || ticketData.tecnico?.cci}</span>
+                                                                    <span className={styles.destFieldValueMono}>{ticketData.technician?.cci || ticketData.technician?.cci}</span>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {(ticketData.tecnico?.yape_number || ticketData.tecnico?.yape_number_number || ticketData.tecnico?.plin_number || ticketData.tecnico?.plin_number_number) && (
+                                                        {(ticketData.technician?.yape_number || ticketData.technician?.yape_number_number || ticketData.technician?.plin_number || ticketData.technician?.plin_number_number) && (
                                                             <div className={styles.destinationWallets}>
-                                                                {(ticketData.tecnico?.yape_number || ticketData.tecnico?.yape_number_number) && (
-                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.tecnico?.yape_number || ticketData.tecnico?.yape_number_number}</span>
+                                                                {(ticketData.technician?.yape_number || ticketData.technician?.yape_number_number) && (
+                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.technician?.yape_number || ticketData.technician?.yape_number_number}</span>
                                                                 )}
-                                                                {(ticketData.tecnico?.plin_number || ticketData.tecnico?.plin_number_number) && (
-                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.tecnico?.plin_number || ticketData.tecnico?.plin_number_number}</span>
+                                                                {(ticketData.technician?.plin_number || ticketData.technician?.plin_number_number) && (
+                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.technician?.plin_number || ticketData.technician?.plin_number_number}</span>
                                                                 )}
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.finalSettledRow}>
                                                     <div className={styles.settledInfo}>
                                                         <CheckCircle size={18} />
@@ -4729,7 +4010,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         <span className={styles.settledValue}>{(techPactedTotal - unifiedPaymentsSum).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                                                     </div>
                                                 </div>
-
                                                 <div className={styles.closedFooterActions}>
                                                     <div className={styles.closedStatusBanner}>
                                                         <CheckCircle size={18} />
@@ -4741,8 +4021,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     </button>
                                                 </div>
                                             </div>
-
-
                                             {ticketData.status_id === "por_liquidar" && (
                                                 <div className={styles.waitingForManager} style={{ padding: '30px', background: '#F8FAFC', borderRadius: '20px', border: '1px solid #E2E8F0', marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                                                     <Clock size={28} color="#3B82F6" />
@@ -4772,7 +4050,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     )}
                                                 </div>
                                             )}
-
                                             {ticketData.status_id === "ticket_cerrado" && (
                                                 <div className={styles.closedFooterActions} style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
                                                     <div className={styles.closedStatusBanner} style={{ padding: '12px 24px', background: '#DCFCE7', color: '#166534', borderRadius: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -4790,7 +4067,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             )}
                                         </div>
                                     )}
-
                                     {["ticket_cancelado", "ticket_rechazado"].includes(ticketData.status_id || "") && (
                                         <div className={styles.cancelledViewPremium} style={{ 
                                             padding: '40px', 
@@ -4815,7 +4091,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     Si el técnico realizó un triaje o visita presencial, debe registrar el pago de movilidad aquí.
                                                 </p>
                                             </div>
-
                                             <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
                                                 <button 
                                                     onClick={() => handleOpenExpenseModal('Viáticos / Movilidad', `Pago por Movilidad / Triaje (Ticket ${ticketData.status_id === "ticket_cancelado" ? "Anulado" : "Rechazado"})`)}
@@ -4836,7 +4111,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     <Truck size={18} />
                                                     PAGAR MOVILIDAD / TRIAJE
                                                 </button>
-                                                
                                                 <button 
                                                     onClick={onClose}
                                                     style={{
@@ -4852,7 +4126,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                     CERRAR VENTANA
                                                 </button>
                                             </div>
-
                                             {ticketData.metadata?.motivoCancelacion && (
                                                 <div style={{ marginTop: '10px', padding: '12px', background: 'rgba(255,255,255,0.5)', borderRadius: '12px', fontSize: '0.85rem', color: '#881337', maxWidth: '400px' }}>
                                                     <strong>Motivo:</strong> {ticketData.metadata.motivoCancelacion}
@@ -4860,7 +4133,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             )}
                                         </div>
                                     )}
-
                                     {!["nuevo", "en_inspeccion", "esperando_pago_visita", "visita_realizada", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "ticket_cerrado", "ticket_cancelado", "ticket_rechazado"].includes(ticketData.status_id || "") && (
                                         <div className={styles.stepPlaceholder}>
                                             <div className={styles.statusBadge}>{ticketData.status_id?.replace('_', ' ')}</div>
@@ -4870,11 +4142,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                 </>
                             )}
                         </div>
-
                     </div>
                 )}
-
-
                 {/* Modal de NegociaciÃƒÂ³n de Costo */}
                 {showNegotiationModal && (
                     <div className={styles.modalOverlay}>
@@ -4891,7 +4160,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div className={styles.currentCostDisplay}>
                                     <span className={styles.currentCostLabel}>COSTO ACTUAL REGISTRADO</span>
@@ -4899,7 +4167,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         S/ {(parseFloat(ticketData.labor_cost || 0) + parseFloat(ticketData.materials_cost || 0)).toFixed(2)}
                                     </div>
                                 </div>
-
                                 <div className={styles.negoInputWrapper}>
                                     <label>Nuevo Costo Acordado (Mano de Obra + Materiales)</label>
                                     <div className={styles.negoInputGroup}>
@@ -4917,7 +4184,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </p>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowNegotiationModal(false)}>
                                     Cancelar
@@ -4930,7 +4196,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* Modal: Solicitud de Pago de Materiales */}
                 {showMaterialsModal && (
                     <div className={styles.modalOverlay}>
@@ -4947,7 +4212,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                     {/* Categoría */}
@@ -4967,7 +4231,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             <option value="Otros">📌 Otros Egresos</option>
                                         </select>
                                     </div>
-
                                     {/* Concepto */}
                                     <div className={styles.negoInputWrapper}>
                                         <label>Concepto / Referencia</label>
@@ -4979,7 +4242,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #E2E8F0', outline: 'none', background: 'white', color: '#1E293B', fontWeight: 500 }}
                                         />
                                     </div>
-
                                     {/* Monto */}
                                     <div className={styles.negoInputWrapper}>
                                         <label>Monto a Depositar</label>
@@ -4994,7 +4256,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             />
                                         </div>
                                     </div>
-
                                     {/* Buscador de Técnico */}
                                     <div className={styles.negoInputWrapper}>
                                         <label>Seleccionar Técnico (Base de Datos)</label>
@@ -5071,7 +4332,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </div>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowMaterialsModal(false)}>
                                     Cancelar
@@ -5089,7 +4349,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* Modal de Rescate Financiero */}
                 {showRescueModal && (
                     <div className={styles.modalOverlay}>
@@ -5106,10 +4365,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                    
                                     {/* Indicador de Saldo */}
                                     <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#92400E' }}>
@@ -5126,7 +4383,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             <span>S/ {availableRescue.toFixed(2)}</span>
                                         </div>
                                     </div>
-
                                     <div className={styles.negoInputWrapper}>
                                         <label>Monto a Solicitar</label>
                                         <div className={styles.negoInputGroup}>
@@ -5154,7 +4410,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             </div>
                                         )}
                                     </div>
-
                                     <div className={styles.negoInputWrapper}>
                                         <label>Motivo del Rescate {parseFloat(rescueForm.monto) > availableRescue ? <span style={{color: '#EF4444'}}>(OBLIGATORIO)</span> : '(Opcional)'}</label>
                                         <textarea
@@ -5174,7 +4429,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </div>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowRescueModal(false)}>
                                     Cancelar
@@ -5196,7 +4450,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* --- MODAL: ACTUALIZACIÓN DE REPORTE TÉCNICO --- */}
                 {showReportUpdateModal && (
                     <div className={styles.negotiationModal}>
@@ -5213,7 +4466,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                     <div className={styles.transferSearchContainer}>
@@ -5226,7 +4478,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             placeholder="Detalle técnico de lo encontrado en sede..."
                                         />
                                     </div>
-
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                                         <div className={styles.transferSearchContainer}>
                                             <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>🛠️ MANO DE OBRA (S/):</label>
@@ -5247,7 +4498,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             />
                                         </div>
                                     </div>
-
                                     <div className={styles.blockerNotice} style={{ background: '#F0FDFA', borderColor: '#CCFBF1' }}>
                                         <Sparkles className={styles.blockerIcon} size={20} color="#0D9488" />
                                         <div className={styles.blockerText}>
@@ -5257,7 +4507,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </div>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowReportUpdateModal(false)}>
                                     Cancelar
@@ -5290,7 +4539,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
                                     Usted está por eliminar el ticket <strong>{ticketData.client_ticket_number || ticketData.id}</strong>. 
@@ -5307,7 +4555,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </p>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowDeleteModal(false)}>
                                     Cancelar
@@ -5325,7 +4572,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* --- MODAL: TRASLADO DE GASTOS (Fallo de Deletión por Gastos) --- */}
                 {showTransferModal && (
                     <div className={styles.negotiationModal}>
@@ -5342,7 +4588,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div className={styles.blockerNotice}>
                                     <AlertTriangle className={styles.blockerIcon} size={24} />
@@ -5351,7 +4596,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         <p>No se puede eliminar un ticket que tiene gastos o adelantos pagados. Debe trasladar estos registros a un ticket activo para no perder la trazabilidad de Tesorería.</p>
                                     </div>
                                 </div>
-
                                 <div className={styles.transferSearchContainer}>
                                     <label style={{ fontSize: '12px', fontWeight: 800, color: '#334155' }}>BUSCAR TICKET DE DESTINO:</label>
                                     <input 
@@ -5361,7 +4605,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         value={targetTicketSearch}
                                         onChange={(e) => handleSearchTargetTicket(e.target.value)}
                                     />
-
                                     <div className={styles.transferResultsList}>
                                         {searchResults.map(res => (
                                             <div 
@@ -5379,7 +4622,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </div>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowTransferModal(false)}>
                                     Cancelar
@@ -5412,7 +4654,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* --- MODAL DE CONFIRMACIÓN: PASAR A LIQUIDACIÓN --- */}
                 {showLiquidationConfirm && (
                     <div className={styles.negotiationModal}>
@@ -5429,7 +4670,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
                                     Usted está por enviar el ticket <strong>{ticketData.client_ticket_number}</strong> a Tesorería para su liquidación financiera.
@@ -5445,7 +4685,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </ul>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowLiquidationConfirm(false)}>
                                     Cancelar
@@ -5463,7 +4702,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* --- MODAL DE CONFIRMACIÓN: APROBAR EXCEPCIÓN --- */}
                 {showExceedApprovalConfirm && (
                     <div className={styles.negotiationModal}>
@@ -5480,7 +4718,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div className={styles.blockerNotice} style={{ background: '#FEF2F2', borderColor: '#FEE2E2' }}>
                                     <AlertTriangle className={styles.blockerIcon} size={24} color="#EF4444" />
@@ -5490,7 +4727,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </div>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowExceedApprovalConfirm(false)}>
                                     Cancelar
@@ -5508,7 +4744,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* --- MODAL DE ANULACIÓN / CANCELACIÓN --- */}
                 {showCancelModal && (
                     <div className={styles.negotiationModal}>
@@ -5525,7 +4760,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                     <div className={styles.negoInputWrapper}>
@@ -5544,7 +4778,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                             * Se registrará como un egreso para la empresa, impactando negativamente la rentabilidad del ticket.
                                         </p>
                                     </div>
-
                                     <div className={styles.negoInputWrapper}>
                                         <label>Motivo de la Anulación</label>
                                         <textarea
@@ -5556,7 +4789,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </div>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions}>
                                 <button className={styles.negoCancelBtn} onClick={() => setShowCancelModal(false)}>
                                     Volver
@@ -5574,7 +4806,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 {/* --- MODAL DE ALERTA DE RIESGO (PROFESIONAL) --- */}
                 {riskAlert.show && (
                     <div className={styles.modalOverlay} style={{ zIndex: 20000 }}>
@@ -5591,7 +4822,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     <X size={20} />
                                 </button>
                             </div>
-
                             <div className={styles.negotiationModalContent}>
                                 <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
                                     <div style={{ background: '#FFF7ED', padding: '12px', borderRadius: '12px' }}>
@@ -5602,7 +4832,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                     </p>
                                 </div>
                             </div>
-
                             <div className={styles.negotiationModalActions} style={{ background: '#FFF7ED', borderTop: '1px solid #FFEDD5', padding: '20px' }}>
                                 <button className={styles.negoCancelBtn} onClick={() => setRiskAlert(prev => ({ ...prev, show: false }))} style={{ color: '#9A3412', fontWeight: 800, border: '1px solid #FED7AA' }}>
                                     CANCELAR OPERACIÓN
@@ -5619,7 +4848,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         </div>
                     </div>
                 )}
-
                 <TechnicianDrawer 
                     isOpen={showAssignmentDrawer}
                     onClose={() => setShowAssignmentDrawer(false)}
@@ -5627,16 +4855,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     onAssign={handleAssignment}
                     onShowToast={showToast}
                 />
-
                 <GestoraDrawer 
                     isOpen={showGestoraDrawer}
                     onClose={() => setShowGestoraDrawer(false)}
                     onAssign={handleGestoraAssignment}
                 />
-
             </div>
         </>
     );
 }
-
 export default memo(TicketWindow);

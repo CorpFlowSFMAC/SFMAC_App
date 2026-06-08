@@ -134,7 +134,7 @@ interface TechnicianSchedulingBarProps {
 
 export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
     // Optimización: Priorizar siempre el objeto unido de la DB para evitar intermitencia
-    const tech = ticket.technicians || ticket.tecnico;
+    const tech = ticket.technicians || ticket.technician;
     if (!ticket.technician_id && !tech && !ticket.technicianId) return null;
 
     const techName = tech?.name || (tech?.first_name ? `${tech.first_name} ${tech.last_name || ''}`.trim() : "Técnico Asignado");
@@ -475,8 +475,8 @@ export const QuoteAssistantBar = memo(function QuoteAssistantBar({ ticket }: { t
         ].filter(Boolean).join(' | ');
 
         // ── INFORMACIÓN DEL TÉCNICO ──
-        const tecnicoNombre = ticket.tecnico?.name || (ticket.tecnico?.first_name ? `${ticket.tecnico.first_name} ${ticket.tecnico.last_name || ''}`.trim() : 'Técnico Asignado');
-        const tecnicoCosto = costoMO; // labor_cost = costo del técnico
+        const technicianNombre = ticket.technician?.name || (ticket.technician?.first_name ? `${ticket.technician.first_name} ${ticket.technician.last_name || ''}`.trim() : 'Técnico Asignado');
+        const technicianCosto = costoMO; // labor_cost = costo del técnico
 
         try {
             const response = await fetch('/api/ai/gemini', {
@@ -489,8 +489,8 @@ export const QuoteAssistantBar = memo(function QuoteAssistantBar({ ticket }: { t
                     descripcion: ticket.descripcionProblema || '',
                     diagnostico: diagnosticoCompletoStr,
                     cliente: ticket.cliente?.nombre || 'Cliente Corporativo',
-                    tecnicoNombre,
-                    tecnicoCosto,
+                    technicianNombre,
+                    technicianCosto,
                     // Ubicación enriquecida
                     ciudad: ciudadRaw,
                     zona: ticket.sede?.zona || ticket.sede?.zone || ciudadRaw,

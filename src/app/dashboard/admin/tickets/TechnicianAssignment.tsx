@@ -13,7 +13,7 @@ interface TechnicianAssignmentProps {
 
 export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAssignmentProps) {
     const { technicians, loadingTechnicians: loading } = useAppData();
-    const [selectedTech, setSelectedTech] = useState<any>(ticket.tecnico || null);
+    const [selectedTech, setSelectedTech] = useState<any>(ticket.technician || null);
     const [showReassign, setShowReassign] = useState(false);
     const [motivoReasignacion, setMotivoReasignacion] = useState("");
 
@@ -67,7 +67,7 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
         }
 
         const assignmentData = {
-            tecnico: selectedTech,
+            technician: selectedTech,
             fechaAsignacion: new Date().toISOString(),
             estado: "En Inspección",
             estadoId: "visita_programada"
@@ -88,10 +88,10 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
         }
 
         const reassignmentData = {
-            tecnico: selectedTech,
+            technician: selectedTech,
             fechaReasignacion: new Date().toISOString(),
             motivoReasignacion: motivoReasignacion,
-            tecnicoAnterior: ticket.tecnico
+            technicianAnterior: ticket.technician
         };
 
         onAssign(reassignmentData);
@@ -130,7 +130,7 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
             </div>
 
             {/* Técnico Asignado Actual */}
-            {ticket.tecnico && !showReassign && (
+            {ticket.technician && !showReassign && (
                 <div className={styles.currentTech}>
                     <div className={styles.currentTechHeader}>
                         <CheckCircle2 size={20} color="#10B981" />
@@ -138,20 +138,20 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
                     </div>
                     <div className={styles.techCard}>
                         <div className={styles.techAvatar}>
-                            {(ticket.tecnico.photo || ticket.tecnico.foto) ? (
-                                <img src={ticket.tecnico.photo || ticket.tecnico.foto} alt={ticket.tecnico.name || ticket.tecnico.nombre} />
+                            {(ticket.technician.photo || ticket.technician.foto) ? (
+                                <img src={ticket.technician.photo || ticket.technician.foto} alt={ticket.technician.name || ticket.technician.nombre} />
                             ) : (
                                 <User size={32} />
                             )}
                         </div>
                         <div className={styles.techInfo}>
-                            <h4>{ticket.tecnico.name || `${ticket.tecnico.nombre} ${ticket.tecnico.apellido}`}</h4>
+                            <h4>{ticket.technician.name || `${ticket.technician.nombre} ${ticket.technician.apellido}`}</h4>
                             <div className={styles.techMeta}>
-                                <span>📱 {ticket.tecnico.phone || ticket.tecnico.celular}</span>
-                                <span>📍 {ticket.tecnico.zone || ticket.tecnico.zona}</span>
+                                <span>📱 {ticket.technician.phone || ticket.technician.celular}</span>
+                                <span>📍 {ticket.technician.zone || ticket.technician.zona}</span>
                             </div>
                             <div className={styles.techSkills}>
-                                {(ticket.tecnico.specialties || ticket.tecnico.especialidades)?.map((skill: string) => {
+                                {(ticket.technician.specialties || ticket.technician.especialidades)?.map((skill: string) => {
                                     const Icon = SKILL_ICONS[skill];
                                     return Icon ? <Icon key={skill} size={14} /> : null;
                                 })}
@@ -169,7 +169,7 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
             )}
 
             {/* Selector de Técnico (Asignación o Reasignación) */}
-            {(!ticket.tecnico || showReassign) && (
+            {(!ticket.technician || showReassign) && (
                 <>
                     {showReassign && (
                         <div className={styles.reassignAlert}>
@@ -261,7 +261,7 @@ export default function TechnicianAssignment({ ticket, onAssign }: TechnicianAss
                         className={styles.cancelBtn}
                         onClick={() => {
                             setShowReassign(false);
-                            setSelectedTech(ticket.tecnico);
+                            setSelectedTech(ticket.technician);
                             setMotivoReasignacion("");
                         }}
                     >
