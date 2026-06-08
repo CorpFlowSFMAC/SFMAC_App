@@ -1085,7 +1085,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         isReassigning.current = true;
         const isInitialAssignment = ['nuevo', 'pendiente', 'borrador'].includes(ticketData.status_id);
         const newEstadoId = isInitialAssignment ? 'en_inspeccion' : ticketData.status_id;
-        const newTechnicianObj = assignmentData.technician || null;
+        const newTechnicianObj = assignmentData.technician || assignmentData.tecnico || null;
         const technician_id = newTechnicianObj?.id || null;
         const dbUpdates: any = {
             technician_id: technician_id,
