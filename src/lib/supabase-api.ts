@@ -745,31 +745,31 @@ export const techniciansAPI = {
     },
 
     async create(technician: {
-        id?: string;
         name?: string;
-        nombre?: string;
-        apellido?: string;
-        tipoDoc?: string;
-        numeroDoc?: string;
-        celular?: string;
-        celular2?: string;
+        first_name?: string;
+        last_name?: string;
+        document_type?: string;
+        document_number?: string;
+        phone?: string;
         email?: string;
-        direccion?: string;
-        zonas_asignadas?: string[];
-        especialidades?: string[];
-        foto?: string;
-        calificacion?: number;
-        banco?: string;
-        tipoCuenta?: string;
-        numeroCuenta?: string;
+        zone?: string;
+        assigned_zones?: string[];
+        specialties?: string[];
+        photo?: string;
+        rating?: number;
+        bank_name?: string;
+        account_number?: string;
+        account_type?: string;
         cci?: string;
-        yape?: string;
-        plin?: string;
+        yape_number?: string;
+        plin_number?: string;
+        address?: string;
+        phone_secondary?: string;
         status?: string;
     }) {
         // Asegurar que name esté presente si no se proporciona
-        if (!technician.name && (technician.nombre || technician.apellido)) {
-            technician.name = `${technician.nombre || ''} ${technician.apellido || ''}`.trim();
+        if (!technician.name && (technician.first_name || technician.last_name)) {
+            technician.name = `${technician.first_name || ''} ${technician.last_name || ''}`.trim();
         }
 
         const { data, error } = await supabase
