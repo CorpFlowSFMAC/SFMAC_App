@@ -311,7 +311,7 @@ export const techniciansAPI = {
         // Fetch all branch assignments securely bypassing RLS
         let allAssignments: { technician_id: string, branch_id: string }[] = [];
         try {
-            const response = await fetch('/api/v3/technicians-server?action=get_all_assignments', { cache: 'no-store' });
+            const response = await fetch('/api/v3/technicians-server?accion=get_all_assignments', { cache: 'no-store' });
             if (response.ok) {
                 const resData = await response.json();
                 if (resData.success) {
@@ -516,7 +516,7 @@ export const techniciansAPI = {
     // Obtiene las agencias asignadas a un técnico con info completa
     async getAssignedBranches(technicianId: string) {
         try {
-            const response = await fetch(`/api/v3/technicians-server?action=get_assigned_branches&technician_id=${technicianId}`, { cache: 'no-store' });
+            const response = await fetch(`/api/v3/technicians-server?accion=get_assigned_branches&tecnico_id=${technicianId}`, { cache: 'no-store' });
             if (!response.ok) {
                 const err = await response.json().catch(() => ({}));
                 throw new Error(err.error || 'Server error on get_assigned_branches');
@@ -712,7 +712,7 @@ export const techniciansAPI = {
         const requestBody = { technician_id: technicianId, branch_ids: validIds };
         console.log('[syncBranchAssignments] Making request to server:', requestBody);
         
-        const response = await fetch('/api/v3/technicians-server?action=sync_branches', {
+        const response = await fetch('/api/v3/technicians-server?accion=sincronizar_agencias', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
@@ -810,7 +810,7 @@ export const techniciansAPI = {
             // Confiamos en que TechnicianDrawer envíe el name actualizado.
         }
 
-        const response = await fetch('/api/v3/technicians-server?action=patch', {
+        const response = await fetch('/api/v3/technicians-server?accion=patch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1148,7 +1148,7 @@ export const ticketsAPI = {
         // Removes undefined
         Object.keys(columnUpdates).forEach(key => (columnUpdates as any)[key] === undefined && delete (columnUpdates as any)[key]);
 
-        const response = await fetch('/api/v3/tickets-server?action=patch', {
+        const response = await fetch('/api/v3/tickets-server?accion=parchar_ticket', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1168,7 +1168,7 @@ export const ticketsAPI = {
     },
 
     async patchMetadata(id: string, metadataUpdates: Record<string, any>, columnUpdates: Record<string, any> = {}) {
-        const response = await fetch('/api/v3/tickets-server?action=patch', {
+        const response = await fetch('/api/v3/tickets-server?accion=parchar_ticket', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id, metadataUpdates, columnUpdates }),

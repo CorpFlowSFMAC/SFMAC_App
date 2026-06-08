@@ -218,11 +218,11 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
                 .map((b: any) => String(b.id));
             setFormData(prev => ({
                 ...prev,
-                zonas_asignadas: prev.zonas.filter(z => z !== zoneId),
+                zonas_asignadas: prev.zonas_asignadas.filter((z: string) => z !== zoneId),
                 agencias_asignadas: prev.agencias_asignadas.filter(id => !branchesInZone.includes(String(id)))
             }));
         } else {
-            setFormData(prev => ({ ...prev, zonas_asignadas: [...prev.zonas, zoneId] }));
+            setFormData(prev => ({ ...prev, zonas_asignadas: [...prev.zonas_asignadas, zoneId] }));
         }
     };
 
