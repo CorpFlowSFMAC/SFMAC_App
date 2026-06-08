@@ -95,22 +95,25 @@ export async function POST(request: NextRequest) {
         const accion = searchParams.get('action') || 'ping';
         
         if (accion === 'ping') {
+            console.log('[Tickets Server] Ping request received');
             const result = await pingDatabase();
             return NextResponse.json({
                 success: result,
-                action: 'ping',
+                accion: 'ping',
                 message: result ? 'Database activa' : 'Database no responde'
             });
         }
 
         if (accion === 'parchar_ticket') {
-            const client = getClient() as unknown as TicketServerClient | null;
-            if (!client) throw new Error('Supabase server client is not configured');
-
             const { id, metadataUpdates = {}, columnUpdates = {} } = await request.json() as TicketPatchRequest;
+            console.log('[Tickets Server] Parchar ticket request received, id:', id);
+            
             if (!id) {
                 return NextResponse.json({ success: false, error: 'id es requerido' }, { status: 400 });
             }
+            
+            const client = getClient() as unknown as TicketServerClient | null;
+            if (!client) throw new Error('Supabase server client is not configured');
 
             const { data: current, error: fetchError } = await client
                 .from('tickets')
@@ -144,9 +147,11 @@ export async function POST(request: NextRequest) {
         
     } catch (err: unknown) {
         console.error('[Tickets Server API] POST Error:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
         return NextResponse.json({
             success: false,
-            error: getErrorMessage(err)
+            error: errorMessage,
+            details: String(err)
         }, { status: 500 });
     }
 }
