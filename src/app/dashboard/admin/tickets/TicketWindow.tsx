@@ -145,6 +145,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     const [showGestoraDrawer, setShowGestoraDrawer] = useState(false);
     const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 
+    // ✅ FIX: Declarar queryClient aquí para que esté disponible en handleAssignment
+    const queryClient = useQueryClient();
+
     useEffect(() => {
         if (typeof window !== 'undefined') {
             localStorage.setItem(`ticket_ui_${ticket.id}`, JSON.stringify({
@@ -775,8 +778,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         // 🔒 BLOQUEO DE REASIGNACIÓN: Si hay una reasignación en curso, ignorar para evitar parpadeo
         if (isReassigning.current) return;
 
-
         if (isProcessingAdvance.current) {
+            return;
+        }
+
+        // ✅ FIX: Si el prop tiene un técnico diferente al estado local, y el local ya fue actualizado
+        // por handleAssignment (el prop aún no se ha actualizado desde la DB), ignorar esta sync.
+        // Esto evita que el prop desactualizado sobrescriba el estado local correcto.
+        const propTechId = ticket.tecnico_id;
+        const localTechId = ticketData.tecnico?.id;
+        // Si el local tiene un técnico asignado (distinto de null/undefined) Y el prop tiene un técnico diferente,
+        // significa que el prop está desactualizado y el estado local es el correcto.
+        if (localTechId && propTechId && propTechId !== localTechId) {
+            // El prop tiene un técnico diferente al local - esto significa que el prop está desactualizado
+            // y el estado local es el correcto (acaba de ser asignado). Ignorar para evitar parpadeo.
             return;
         }
 
@@ -785,6 +800,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setTicketData((prev: any) => {
             const hasStatusChanged = ticket.status_id !== prev.status_id;
             const hasTechChanged = ticket.tecnico_id !== prev.tecnico_id;
+            // ✅ FIX: Incluir detección de cambio en objeto tecnico (para casos de reasignación desde cache)
+            const hasTechObjectChanged = (ticket.technicians?.id || ticket.tecnico?.id) !== (prev.tecnico?.id);
             const hasGestoraChanged = ticket.gestora_id !== prev.gestora_id;
             const hasMetaChanged = JSON.stringify(ticket.metadata) !== JSON.stringify(prev.metadata);
             // Detectores de cambio financiero (evita parpadeo tras guardar reporte técnico)
@@ -792,7 +809,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             const hasMaterialsCostChanged = ticket.materials_cost !== prev.materials_cost;
             const hasDiagnosisChanged = ticket.diagnosis !== prev.diagnosis;
 
-            if (!hasStatusChanged && !hasTechChanged && !hasGestoraChanged && !hasMetaChanged && !hasLaborCostChanged && !hasMaterialsCostChanged && !hasDiagnosisChanged) return prev;
+            if (!hasStatusChanged && !hasTechChanged && !hasTechObjectChanged && !hasGestoraChanged && !hasMetaChanged && !hasLaborCostChanged && !hasMaterialsCostChanged && !hasDiagnosisChanged) return prev;
             
             let meta = ticket.metadata || {};
             const rawEstadoId = normalizeStateId(ticket.status_id || meta.status_id || 'nuevo');
@@ -865,12 +882,25 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 // el estado local YA fue actualizado por handleAssignment → retornarlo para evitar parpadeo
                 tecnico: (() => {
                     const incomingTech = ticket.technicians || ticket.tecnico;
-                    // Si el prop está actualizado Y coincide con el estado local, usar prop (más fresco)
-                    if (incomingTech?.id === ticket.tecnico_id && incomingTech?.id === prev.tecnico?.id) {
+                    const incomingTechId = incomingTech?.id;
+                    const localTechId = prev.tecnico?.id;
+                    const propTechId = ticket.tecnico_id;
+                    
+                    // Si el prop tiene el mismo técnico que el local (IDs coinciden), usar prop más fresco
+                    if (incomingTechId && propTechId && incomingTechId === propTechId && incomingTechId === localTechId) {
                         return incomingTech;
                     }
-                    // En cualquier otro caso, preservar el estado local para evitar parpadeo
-                    // Esto cubre: reasignación en curso, prop desactualizado, etc.
+                    // Si el local tiene técnico y coincide con el prop ID, usar local (más completo)
+                    // Esto cubre el caso donde acabamos de asignar y el prop está desactualizado
+                    if (localTechId && localTechId === propTechId) {
+                        return prev.tecnico;
+                    }
+                    // Si el prop tiene un técnico diferente al local (reasignación desde otro lugar),
+                    // usar el prop más reciente
+                    if (incomingTechId && incomingTechId !== localTechId) {
+                        return incomingTech;
+                    }
+                    // Fallback: preservar local o usar incoming
                     return prev.tecnico || incomingTech;
                 })(),
                 gestora: (() => {
@@ -1405,6 +1435,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         }));
         setShowAssignmentDrawer(false);
         
+        // ✅ FIX: Forzar invalidación de cache para que el prop ticket se actualice
+        // Esto asegura que la ventana principal reciba el ticket actualizado desde la DB
+        queryClient.invalidateQueries({ queryKey: ['tickets'] });
+        
         // 🔓 Liberar el bloqueo después de un breve delay para que el prop se actualice
         setTimeout(() => {
             isReassigning.current = false;
@@ -1731,8 +1765,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             showToast("Error de Conexión", "No se pudo sincronizar la aprobación de la cotización con el servidor. Se realizó un rollback al estado anterior.", "error");
         }
     };
-
-    const queryClient = useQueryClient();
 
     const handleReadjustQuote = async () => {
         // 🔒 ACTIVAR BLOQUEO DE TRANSICIÓN - silencia todos los WS updates mientras dure el proceso
