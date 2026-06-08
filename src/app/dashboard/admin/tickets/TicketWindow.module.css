@@ -4261,26 +4261,66 @@
 }
 
 .pctBtnPremium {
-    padding: 10px;
+    padding: 12px;
     background: #F8FAFC;
-    border: 1.5px solid #E2E8F0;
+    border: 2px solid #E2E8F0;
     border-radius: 12px;
-    color: #64748B;
-    font-weight: 700;
+    color: #475569;
+    font-weight: 800;
+    font-size: 1.1rem;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .pctBtnPremium:hover {
     background: #F1F5F9;
-    border-color: #CBD5E1;
+    border-color: #94A3B8;
+    color: #0F172A;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.pctBtnPremium:active {
+    transform: translateY(1px);
 }
 
 .pctActivePremium {
-    background: #ECFDF5;
-    border-color: #10B981;
-    color: #059669;
-    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
+    background: linear-gradient(135deg, #10B981, #059669);
+    border-color: #059669;
+    color: white;
+    box-shadow: 0 6px 15px rgba(16, 185, 129, 0.3);
+}
+
+.pctActivePremium:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: white;
+}
+
+.advanceInputPremium {
+    width: 100%;
+    height: 56px;
+    padding: 16px 16px 16px 45px;
+    border: 2.5px solid #E2E8F0;
+    border-radius: 14px;
+    background: #FFFFFF;
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #0F172A;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.advanceInputPremium:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), inset 0 2px 4px rgba(0,0,0,0.02);
+    background: #F8FAFC;
+}
+
+.advanceInputPremium::placeholder {
+    color: #94A3B8;
+    font-weight: 600;
 }
 
 .confirmAdvanceBtnPremium, .requestAdvanceBtnPremium {

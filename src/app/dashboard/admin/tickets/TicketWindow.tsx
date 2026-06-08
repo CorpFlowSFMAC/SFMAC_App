@@ -3499,8 +3499,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                                     <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 900, color: '#94A3B8' }}>S/</span>
                                                                                     <input
                                                                                         type="number"
-                                                                                        className={styles.formTextareaOptimistic}
-                                                                                        style={{ height: '48px', fontSize: '1.2rem', fontWeight: 900, textAlign: 'center', paddingLeft: '30px' }}
+                                                                                        className={styles.advanceInputPremium}
                                                                                         placeholder="0.00"
                                                                                         value={montoAdelantoManual}
                                                                                         onChange={(e) => {
