@@ -1621,12 +1621,18 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         confirmAdvanceRef.current = true;
         let amount = 0;
         const rawManual = parseFloat(montoAdelantoManual);
+        let costoReferencia = 0;
+        if (advanceClassification === 'materials') {
+            costoReferencia = parseFloat(ticketData.materials_cost || 0);
+        } else {
+            costoReferencia = finances.pactedMO > 0 ? finances.pactedMO : parseFloat(ticketData.labor_cost || 0);
+        }
+
         if (montoAdelantoManual && !isNaN(rawManual)) {
             amount = rawManual;
         } else {
             const pctReal = ticketData.solicitudAdelanto ? ticketData.solicitudAdelanto.porcentaje : porcentajeAdelanto;
             if (pctReal) {
-                const costoReferencia = (parseFloat(ticketData.labor_cost || 0) + parseFloat(ticketData.materials_cost || 0));
                 amount = costoReferencia * pctReal;
             } else if (ticketData.solicitudAdelanto?.monto) {
                 amount = ticketData.solicitudAdelanto.monto;
@@ -1637,9 +1643,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             confirmAdvanceRef.current = false;
             return;
         }
-        const totalCost = (parseFloat(ticketData.labor_cost || 0) + parseFloat(ticketData.materials_cost || 0));
-        if (unifiedPaymentsSum + amount > totalCost + 0.01) {
-            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el costo total pactado.`, "error");
+        const isForMaterialsFlag = ticketData.solicitudAdelanto?.classification === 'materials' || advanceClassification === 'materials';
+        const totalCostLimit = isForMaterialsFlag 
+            ? parseFloat(ticketData.materials_cost || 0) 
+            : (finances.pactedMO > 0 ? finances.pactedMO : parseFloat(ticketData.labor_cost || 0));
+        const currentSum = isForMaterialsFlag ? finances.operatingExpenses : unifiedPaymentsSum;
+
+        if (currentSum + amount > totalCostLimit + 0.01) {
+            showToast("Exceso de Pago", `El pago de S/ ${amount.toFixed(2)} excedería el límite permitido.`, "error");
             confirmAdvanceRef.current = false;
             return;
         }
@@ -1790,12 +1801,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         let amount = 0;
         let pctVal = 0;
         const rawManual = parseFloat(montoAdelantoManual);
+        let costRef = 0;
+        if (advanceClassification === 'materials') {
+            costRef = parseFloat(ticketData.materials_cost || 0);
+        } else {
+            costRef = finances.pactedMO > 0 ? finances.pactedMO : parseFloat(ticketData.labor_cost || 0);
+        }
+
         if (montoAdelantoManual && !isNaN(rawManual)) {
             amount = rawManual;
-            const costRef = (parseFloat(ticketData.labor_cost || 0) + parseFloat(ticketData.materials_cost || 0));
             pctVal = costRef > 0 ? amount / costRef : 0;
         } else if (porcentajeAdelanto) {
-            const costRef = (parseFloat(ticketData.labor_cost || 0) + parseFloat(ticketData.materials_cost || 0));
             amount = costRef * porcentajeAdelanto;
             pctVal = porcentajeAdelanto;
         }
