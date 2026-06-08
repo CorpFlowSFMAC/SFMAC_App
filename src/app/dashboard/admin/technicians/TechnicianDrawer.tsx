@@ -14,7 +14,7 @@ import { techniciansAPI, branchesAPI } from "@/lib/supabase-api";
 interface TechnicianDrawerProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (technician: any, agenciasAsignadas?: string[]) => void;
+    onSave: (technician: any, agenciasAsignadas?: string[], techId?: string) => void;
     technician?: any;
 }
 
@@ -310,8 +310,11 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
+        // Generate UUID upfront to ensure it's never undefined
+        const techId = crypto.randomUUID();
+
         const supabaseData = {
-            id: crypto.randomUUID(), // ID generado en cliente para evitar undefined
+            id: techId,
             name: `${formData.nombre} ${formData.apellido}`.trim(),
             first_name: formData.nombre,
             last_name: formData.apellido,
@@ -335,9 +338,17 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             status: 'active'
         };
 
-        console.log('[handleSubmit] DEBUG - agencias_asignadas:', formData.agencias_asignadas);
+        // Validate critical fields before sending
+        if (!techId || techId === 'undefined' || techId === 'null') {
+            console.error('[handleSubmit] FATAL: Invalid techId generated:', techId);
+            alert("❌ Error interno: No se pudo generar el ID del técnico. Por favor recargue la página.");
+            return;
+        }
 
-        onSave(supabaseData, formData.agencias_asignadas);
+        console.log('[handleSubmit] DEBUG - techId:', techId, 'agencias_asignadas:', formData.agencias_asignadas);
+
+        // Pass techId separately so page.tsx can use the same ID for branch sync
+        onSave(supabaseData, formData.agencias_asignadas, techId);
     };
 
     // ── Coverage stats ────────────────────────────────────────────────────

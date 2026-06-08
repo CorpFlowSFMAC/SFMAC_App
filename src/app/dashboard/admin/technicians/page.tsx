@@ -81,14 +81,26 @@ export default function TechniciansPage() {
         setIsDrawerOpen(true);
     };
 
-    const handleSave = async (techData: any, agenciasAsignadas: string[] = []) => {
+    const handleSave = async (techData: any, agenciasAsignadas: string[] = [], techId?: string) => {
         try {
             const cleanData = techData;
 
+            // Use the techId passed from drawer, fallback to editingTech.id or cleanData.id
+            const effectiveTechId = techId || editingTech?.id || cleanData?.id;
+
             console.log('[handleSave] Saving technician');
-            console.log('[handleSave] technician id:', editingTech?.id);
+            console.log('[handleSave] editingTech id:', editingTech?.id);
+            console.log('[handleSave] techId from drawer:', techId);
+            console.log('[handleSave] effectiveTechId:', effectiveTechId);
             console.log('[handleSave] agenciasAsignadas:', agenciasAsignadas);
             console.log('[handleSave] cleanData keys:', Object.keys(cleanData));
+
+            // Validate effectiveTechId before any API call
+            if (!effectiveTechId || effectiveTechId === 'undefined' || effectiveTechId === 'null') {
+                console.error('[handleSave] FATAL: No valid technician ID available');
+                alert("❌ Error interno: ID del técnico no disponible. Por favor recargue e intente de nuevo.");
+                return;
+            }
 
             if (editingTech) {
                 // Modo edición - siempre actualizar datos del técnico
@@ -127,20 +139,33 @@ export default function TechniciansPage() {
                     return;
                 }
                 
+                // Use the techId from drawer for all operations
+                const finalTechId = techId || cleanData?.id;
+                
+                if (!finalTechId || finalTechId === 'undefined') {
+                    console.error('[handleSave] FATAL: No techId for create operation');
+                    alert("❌ Error interno: No se pudo generar el ID del técnico.");
+                    return;
+                }
+
                 // AGREGAR A COLA FIRST (Offline-First)
                 const queueId = syncQueue.add({ action: 'create', data: cleanData });
                 
                 // Intentar sync inmediato
                 try {
+                    // Pass the techId to ensure we use the same ID for branch sync
                     const newTech = await createTechnician(cleanData);
                     syncQueue.remove(queueId); // Éxito - remover de cola
-                    console.log('[handleSave] Technician created:', newTech?.id);
+                    console.log('[handleSave] Technician created with ID:', newTech?.id || finalTechId);
                     
-                    if (newTech?.id && agenciasAsignadas.length > 0) {
-                        console.log('[handleSave] Syncing branch assignments for new tech:', newTech.id, agenciasAsignadas);
-                        await techniciansAPI.syncBranchAssignments(newTech.id, agenciasAsignadas);
+                    // Use finalTechId for branch sync since that's what we sent to create
+                    const branchSyncId = newTech?.id || finalTechId;
+                    
+                    if (branchSyncId && agenciasAsignadas.length > 0) {
+                        console.log('[handleSave] Syncing branch assignments for new tech:', branchSyncId, agenciasAsignadas);
+                        await techniciansAPI.syncBranchAssignments(branchSyncId, agenciasAsignadas);
                         console.log('[handleSave] Branch assignments synced for new technician');
-                    } else if (newTech?.id && agenciasAsignadas.length === 0) {
+                    } else if (branchSyncId && agenciasAsignadas.length === 0) {
                         console.log('[handleSave] No branch assignments to sync (empty array)');
                     }
                 } catch (netError: any) {
