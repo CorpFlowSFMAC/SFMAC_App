@@ -745,6 +745,7 @@ export const techniciansAPI = {
     },
 
     async create(technician: {
+        id?: string;
         name?: string;
         first_name?: string;
         last_name?: string;
@@ -767,18 +768,46 @@ export const techniciansAPI = {
         phone_secondary?: string;
         status?: string;
     }) {
-        // Asegurar que name esté presente si no se proporciona
-        if (!technician.name && (technician.first_name || technician.last_name)) {
-            technician.name = `${technician.first_name || ''} ${technician.last_name || ''}`.trim();
+        // Validate required fields before sending
+        if (!technician) {
+            throw new Error('[techniciansAPI.create] technician data is required');
         }
+        
+        if (!technician.id) {
+            throw new Error('[techniciansAPI.create] technician.id is required but was undefined');
+        }
+
+        // Validate it's a proper UUID format (basic check)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(technician.id)) {
+            throw new Error(`[techniciansAPI.create] Invalid technician.id format: ${technician.id}`);
+        }
+
+        // Asegurar que name esté presente si no se proporciona
+        const cleanTechnician = { ...technician };
+        if (!cleanTechnician.name && (cleanTechnician.first_name || cleanTechnician.last_name)) {
+            cleanTechnician.name = `${cleanTechnician.first_name || ''} ${cleanTechnician.last_name || ''}`.trim();
+        }
+
+        // Log para debugging
+        console.log('[techniciansAPI.create] Sending to supabase:', JSON.stringify({
+            id: cleanTechnician.id,
+            name: cleanTechnician.name,
+            document_number: cleanTechnician.document_number
+        }, null, 2));
 
         const { data, error } = await supabase
             .from('technicians')
-            .insert(technician)
+            .insert(cleanTechnician)
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('[techniciansAPI.create] Supabase error:', error);
+            throw error;
+        }
+        
+        console.log('[techniciansAPI.create] Success, created:', data?.id);
         return data;
     },
 

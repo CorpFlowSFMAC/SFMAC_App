@@ -154,12 +154,16 @@ export default function TechniciansPage() {
                 // Intentar sync inmediato
                 try {
                     // Pass the techId to ensure we use the same ID for branch sync
+                    console.log('[handleSave] About to call createTechnician with:', { id: cleanData.id, name: cleanData.name, document_number: cleanData.document_number });
                     const newTech = await createTechnician(cleanData);
                     syncQueue.remove(queueId); // Éxito - remover de cola
-                    console.log('[handleSave] Technician created with ID:', newTech?.id || finalTechId);
+                    console.log('[handleSave] Technician created successfully, returned ID:', newTech?.id);
+                    console.log('[handleSave] Full response:', JSON.stringify(newTech, null, 2));
                     
                     // Use finalTechId for branch sync since that's what we sent to create
                     const branchSyncId = newTech?.id || finalTechId;
+                    
+                    console.log('[handleSave] Branch sync will use ID:', branchSyncId);
                     
                     if (branchSyncId && agenciasAsignadas.length > 0) {
                         console.log('[handleSave] Syncing branch assignments for new tech:', branchSyncId, agenciasAsignadas);
@@ -170,6 +174,8 @@ export default function TechniciansPage() {
                     }
                 } catch (netError: any) {
                     console.error('[handleSave] Network/create error:', netError);
+                    console.error('[handleSave] Error message:', netError.message);
+                    console.error('[handleSave] Error details:', JSON.stringify(netError, null, 2));
                     console.log('[handleSave] Saved to offline queue, will sync later');
                     // Mantener en cola para sync automático
                 }
