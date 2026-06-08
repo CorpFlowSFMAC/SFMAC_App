@@ -310,33 +310,28 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
-        // DEBUG: Verificar estado de agencias antes del submit
-        console.log('[handleSubmit] DEBUG - allBranches count:', allBranches.length);
-        console.log('[handleSubmit] DEBUG - formData.agencias_asignadas:', formData.agencias_asignadas);
-        console.log('[handleSubmit] DEBUG - loadingBranches:', loadingBranches);
-
-        // Transformar al formato Supabase
+        // DEBUG: Verificar estado de agencias antes
         const supabaseData = {
+            id: crypto.randomUUID(), // Prevenir ID huerfano inyectando UUID directamente
             name: `${formData.nombre} ${formData.apellido}`.trim(),
-            first_name: formData.nombre,
-            last_name: formData.apellido,
-            document_type: formData.tipoDoc,
-            document_number: formData.numeroDoc,
-            phone: formData.celular,
-            phone_secondary: formData.celular2,
+            nombre: formData.nombre,
+            apellido: formData.apellido,
+            tipoDoc: formData.tipoDoc,
+            numeroDoc: formData.numeroDoc,
+            celular: formData.celular,
+            celular2: formData.celular2,
             email: formData.email,
-            address: formData.direccion,
-            zone: formData.zonas_asignadas[0] || "LIMA",          // ← Legacy: primera zona
-            assigned_zones: formData.zonas_asignadas,              // ← Nuevo
-            specialties: formData.especialidades,
-            photo: formData.foto,
-            rating: technician?.rating || technician?.calificacion || 5,
-            bank_name: formData.banco,
-            account_type: formData.tipoCuenta,
-            account_number: formData.numeroCuenta,
+            direccion: formData.direccion,
+            zonas_asignadas: formData.zonas_asignadas,
+            especialidades: formData.especialidades,
+            foto: formData.foto,
+            calificacion: technician?.rating || technician?.calificacion || 5,
+            banco: formData.banco,
+            tipoCuenta: formData.tipoCuenta,
+            numeroCuenta: formData.numeroCuenta,
             cci: formData.cci,
-            yape_number: formData.yape,
-            plin_number: formData.plin,
+            yape: formData.yape,
+            plin: formData.plin,
             status: 'active',
             _agencias_asignadas: formData.agencias_asignadas.filter(id => {
                 // Solo filtrar si allBranches está cargado
