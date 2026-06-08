@@ -81,11 +81,9 @@ export default function TechniciansPage() {
         setIsDrawerOpen(true);
     };
 
-    const handleSave = async (techData: any) => {
+    const handleSave = async (techData: any, agenciasAsignadas: string[] = []) => {
         try {
-            // Extract branch assignments from the hidden field
-            const agenciasAsignadas: string[] = techData._agenciasAsignadas || [];
-            const { _agenciasAsignadas, ...cleanData } = techData;
+            const cleanData = techData;
 
             console.log('[handleSave] Saving technician');
             console.log('[handleSave] technician id:', editingTech?.id);

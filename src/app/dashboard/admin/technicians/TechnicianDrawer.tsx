@@ -14,7 +14,7 @@ import { techniciansAPI, branchesAPI } from "@/lib/supabase-api";
 interface TechnicianDrawerProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (technician: any) => void;
+    onSave: (technician: any, agenciasAsignadas?: string[]) => void;
     technician?: any;
 }
 
@@ -310,9 +310,8 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             return;
         }
 
-        // DEBUG: Verificar estado de agencias antes
         const supabaseData = {
-            id: crypto.randomUUID(), // Prevenir ID huerfano inyectando UUID directamente
+            id: crypto.randomUUID(), // ID generado en cliente para evitar undefined
             name: `${formData.nombre} ${formData.apellido}`.trim(),
             nombre: formData.nombre,
             apellido: formData.apellido,
@@ -332,20 +331,12 @@ export default function TechnicianDrawer({ isOpen, onClose, onSave, technician }
             cci: formData.cci,
             yape: formData.yape,
             plin: formData.plin,
-            status: 'active',
-            _agencias_asignadas: formData.agencias_asignadas.filter(id => {
-                // Solo filtrar si allBranches está cargado
-                if (allBranches.length === 0) {
-                    console.warn('[handleSubmit] allBranches empty - passing through IDs without filter');
-                    return true;
-                }
-                return allBranches.some(b => String(b.id) === String(id));
-            })
+            status: 'active'
         };
 
-        console.log('[handleSubmit] DEBUG - supabaseData._agencias_asignadas:', supabaseData._agencias_asignadas);
+        console.log('[handleSubmit] DEBUG - agencias_asignadas:', formData.agencias_asignadas);
 
-        onSave(supabaseData);
+        onSave(supabaseData, formData.agencias_asignadas);
     };
 
     // ── Coverage stats ────────────────────────────────────────────────────
