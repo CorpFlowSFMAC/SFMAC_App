@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const accion = searchParams.get('action');
         
-        if (action === 'patch') {
+        if (accion === 'patch') {
             const client = getClient();
             if (!client) throw new Error('Supabase server client is not configured');
 
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const accion = searchParams.get('action');
 
-        if (action === 'get_assigned_branches') {
+        if (accion === 'get_assigned_branches') {
             const client = getClient();
             if (!client) throw new Error('Supabase server client is not configured');
 
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: true, branches });
         }
 
-        if (action === 'get_all_assignments') {
+        if (accion === 'get_all_assignments') {
             const client = getClient();
             if (!client) throw new Error('Supabase server client is not configured');
 

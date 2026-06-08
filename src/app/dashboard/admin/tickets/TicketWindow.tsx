@@ -1404,6 +1404,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             } else {
                 // ✅ FIX: Forzar mutación obligatoria a través del backend seguro (SERVICE ROLE bypass)
                 const { metadata, ...columnUpdates } = dbUpdates;
+                
+                // ✅ DIAGNÓSTICO: Log del request
+                console.log('[TicketWindow] Intentando asignar técnico...');
+                console.log('[TicketWindow] URL:', '/api/v3/tickets-server?action=parchar_ticket');
+                console.log('[TicketWindow] Payload:', JSON.stringify({
+                    id: ticketData.id,
+                    columnUpdates,
+                    metadataUpdates: metadata
+                }));
+                
                 const response = await fetch('/api/v3/tickets-server?action=parchar_ticket', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1414,7 +1424,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     })
                 });
 
+                console.log('[TicketWindow] Response status:', response.status);
                 const result = await response.json();
+                console.log('[TicketWindow] Response:', JSON.stringify(result));
+                
                 if (!response.ok || !result.success) {
                     throw new Error(result.error || 'Error al actualizar en el servidor seguro');
                 }
