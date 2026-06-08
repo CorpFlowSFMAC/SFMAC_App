@@ -418,18 +418,18 @@ export function useClients(userEmail?: string | null, isAuthReady = true) {
 }
 
 // ─────────────────────────────────────────────
-// useTechnicians — Hook para técnicos (CACHÉ 24h)
+// useTechnicians — Hook para técnicos (CACHÉ 5 min + Realtime)
 // ─────────────────────────────────────────────
 export function useTechnicians(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
-        queryKey: [...queryKeys.technicians.all, userEmail],
+        queryKey: queryKeys.technicians.all,
         queryFn: async () => {
             const data = await techniciansAPI.getAll();
             return data || [];
         },
-        staleTime: 1000 * 60 * 60 * 24, // 24 horas - Técnicos son estables
-        gcTime: 1000 * 60 * 60 * 24, // Mantener en caché 24h
-        enabled: !!userEmail && isAuthReady,
+        staleTime: 1000 * 60 * 5, // 5 minutos - suficiente para caché, se sincroniza via realtime
+        gcTime: 1000 * 60 * 60, // Mantener en caché 1h
+        enabled: isAuthReady,
     });
 }
 
