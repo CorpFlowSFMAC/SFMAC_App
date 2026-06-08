@@ -1404,7 +1404,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             } else {
                 // ✅ FIX: Forzar mutación obligatoria a través del backend seguro (SERVICE ROLE bypass)
                 const { metadata, ...columnUpdates } = dbUpdates;
-                const response = await fetch('/api/v3/tickets-server?accion=parchar_ticket', {
+                const response = await fetch('/api/v3/tickets-server?action=parchar_ticket', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
