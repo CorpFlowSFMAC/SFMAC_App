@@ -3460,62 +3460,41 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 </div>
                                                                 {!ticketData.solicitudAdelanto && !advanceRequestPending && (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
-                                                                        <div className={styles.percentageSelectorPremium}>
-                                                                            {[0.4, 0.5, 0.6].map(p => (
-                                                                                <button
-                                                                                    key={p}
-                                                                                    className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p && !montoAdelantoManual ? styles.pctActivePremium : ''}`}
-                                                                                    onClick={() => {
-                                                                                        setPorcentajeAdelanto(p);
-                                                                                        setMontoAdelantoManual("");
-                                                                                    }}
-                                                                                >
-                                                                                    {(p * 100).toFixed(0)}%
-                                                                                </button>
-                                                                            ))}
-                                                                        </div>
-                                                                        <div className={styles.manualAmountContainer} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px' }}>
-                                                                            <div style={{ flex: 1 }}>
-                                                                                <label className={styles.optimisticLabel} style={{ marginBottom: '8px', display: 'block', fontSize: '10px' }}>
-                                                                                    {montoAdelantoManual ? 'MONTO PERSONALIZADO' : 'O INGRESE MONTO MANUAL'}
-                                                                                </label>
-                                                                                <div className={styles.modalityToggleOptimistic} style={{ marginBottom: '12px' }}>
-                                                                                    <div 
-                                                                                        className={`${styles.modalityItemOptimistic} ${advanceClassification === 'pocket' ? styles.modalityActiveTodoCosto : ''}`}
-                                                                                        onClick={() => setAdvanceClassification('pocket')}
-                                                                                    >
-                                                                                        <User size={14} />
-                                                                                        <span>Bolsillo Técnico</span>
-                                                                                    </div>
-                                                                                    <div 
-                                                                                        className={`${styles.modalityItemOptimistic} ${advanceClassification === 'materials' ? styles.modalityActiveDesagregado : ''}`}
-                                                                                        onClick={() => setAdvanceClassification('materials')}
-                                                                                    >
-                                                                                        <Package size={14} />
-                                                                                        <span>Materiales</span>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div style={{ position: 'relative' }}>
-                                                                                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 900, color: '#94A3B8' }}>S/</span>
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        className={styles.advanceInputPremium}
-                                                                                        placeholder="0.00"
-                                                                                        value={montoAdelantoManual}
-                                                                                        onChange={(e) => {
-                                                                                            setMontoAdelantoManual(e.target.value);
-                                                                                            setPorcentajeAdelanto(null);
-                                                                                        }}
-                                                                                        onKeyDown={(e) => {
-                                                                                            if (e.key === 'Enter') {
-                                                                                                if (isAdmin) handleConfirmAdvance();
-                                                                                                else handleRequestAdvance();
-                                                                                            }
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
+                                                                        <div className={styles.percentageSelectorPremium} style={{ display: 'flex', gap: '12px', alignItems: 'stretch' }}>
+                                                                          {[0.4, 0.5, 0.6].map(p => (
+                                                                              <button
+                                                                                  key={p}
+                                                                                  className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p && !montoAdelantoManual ? styles.pctActivePremium : ''}`}
+                                                                                  style={{ flex: 1 }}
+                                                                                  onClick={() => {
+                                                                                      setPorcentajeAdelanto(p);
+                                                                                      setMontoAdelantoManual("");
+                                                                                  }}
+                                                                              >
+                                                                                  {(p * 100).toFixed(0)}%
+                                                                              </button>
+                                                                          ))}
+                                                                          <div style={{ position: 'relative', flex: 1.5 }}>
+                                                                              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 900, color: '#94A3B8' }}>S/</span>
+                                                                              <input
+                                                                                  type="number"
+                                                                                  className={styles.advanceInputPremium}
+                                                                                  style={{ height: '100%', minHeight: '44px', padding: '10px 16px 10px 45px' }}
+                                                                                  placeholder="0.00"
+                                                                                  value={montoAdelantoManual}
+                                                                                  onChange={(e) => {
+                                                                                      setMontoAdelantoManual(e.target.value);
+                                                                                      setPorcentajeAdelanto(null);
+                                                                                  }}
+                                                                                  onKeyDown={(e) => {
+                                                                                      if (e.key === 'Enter') {
+                                                                                          if (isAdmin) handleConfirmAdvance();
+                                                                                          else handleRequestAdvance();
+                                                                                      }
+                                                                                  }}
+                                                                              />
+                                                                          </div>
+                                                                      </div>
                                                                     </div>
                                                                 )}
                                                                 {isAdmin ? (
