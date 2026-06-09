@@ -198,7 +198,12 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
                         <div className={styles.clienteAvatar} style={{ background: '#10B981' }}>
                             {(techName || "E").substring(0, 2).toUpperCase()}
                         </div>
-                        <span className={styles.infoValue} style={{ fontWeight: 700 }}>{techName}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span className={styles.infoValue} style={{ fontWeight: 700 }}>{techName}</span>
+                            <span style={{ fontSize: '10px', color: '#047857', fontWeight: 800 }}>
+                                🆔 DNI: {techDni !== "---" ? techDni : "No registrado"}
+                            </span>
+                        </div>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#F97316' }}>
@@ -215,12 +220,7 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
                 </div>
             )}
 
-            {hasTech && showTechName && techDni !== "---" && (
-                <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>DNI</span>
-                    <span className={styles.infoValue} style={{ fontWeight: 800 }}>🆔 {techDni}</span>
-                </div>
-            )}
+
 
             {hasTech && showTechName && visitCost > 0 && (
                 <div className={styles.infoItem}>
