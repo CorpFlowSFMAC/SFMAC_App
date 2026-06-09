@@ -196,7 +196,7 @@ export default function AdminLayout({
     const fullDisplayName = displayGestora;
     const displayName = getCleanDisplayName(fullDisplayName); // Usar nombre amigable
     const finalAvatarUrl = userAvatar || (isMounted && fullDisplayName && fullDisplayName !== 'Gestora' && fullDisplayName !== 'Administrador' ? `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=f97316&color=fff&bold=true` : null);
-    const dashboardHref = isAdmin ? "/dashboard/admin" : "/dashboard/gestor";
+    const dashboardHref = "/dashboard/admin";
 
     const motivationalPhrases = [
         "¡Hoy es un gran día para lograr metas!",
@@ -285,12 +285,10 @@ export default function AdminLayout({
                                 Inicio / Métricas
                             </Link>
 
-                            {isAdmin && (
-                                <Link href="/dashboard/admin/clients" prefetch={false} className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
-                                    <Users size={20} />
-                                    Gestión Clientes
-                                </Link>
-                            )}
+                            <Link href="/dashboard/admin/clients" prefetch={false} className={`${styles.navItem} ${pathname.includes('/clients') ? styles.navItemActive : ''}`}>
+                                <Users size={20} />
+                                <span className={styles.navText}>Gestión Clientes</span>
+                            </Link>
 
                             <Link href="/dashboard/admin/technicians" prefetch={false} className={`${styles.navItem} ${pathname.includes('/technicians') ? styles.navItemActive : ''}`}>
                                 <UserCog size={20} />
@@ -302,45 +300,35 @@ export default function AdminLayout({
                                 Sistema Tickets
                             </Link>
 
-                            {isAdmin && (
-                                <Link href="/dashboard/admin/payments" prefetch={false} className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
-                                    <DollarSign size={20} />
-                                    Pagos y Tesorería
-                                </Link>
-                            )}
+                            <Link href="/dashboard/admin/payments" prefetch={false} className={`${styles.navItem} ${pathname.includes('/payments') ? styles.navItemActive : ''}`}>
+                                <DollarSign size={20} />
+                                <span className={styles.navText}>Pagos y Tesorería</span>
+                            </Link>
 
                             <Link href="/dashboard/admin/reportes" prefetch={false} className={`${styles.navItem} ${pathname.includes('/reportes') ? styles.navItemActive : ''}`}>
                                 <BarChart3 size={20} />
                                 Reportes de Eficiencia
                             </Link>
 
-                            {isAdmin && (
-                                <Link href="/dashboard/admin/routing" prefetch={false} className={`${styles.navItem} ${pathname.includes('/routing') ? styles.navItemActive : ''}`}>
-                                    <Route size={20} />
-                                    Enrutamiento
-                                </Link>
-                            )}
+                            <Link href="/dashboard/admin/routing" prefetch={false} className={`${styles.navItem} ${pathname.includes('/routing') ? styles.navItemActive : ''}`}>
+                                <Route size={20} />
+                                <span className={styles.navText}>Enrutamiento AI</span>
+                            </Link>
 
-                            {isAdmin && (
-                                <Link href="/dashboard/admin/asistencia" prefetch={false} className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
-                                    <Clock size={20} />
-                                    Asistencia y Planillas
-                                </Link>
-                            )}
+                            <Link href="/dashboard/admin/asistencia" prefetch={false} className={`${styles.navItem} ${pathname.includes('/asistencia') ? styles.navItemActive : ''}`}>
+                                <Clock size={20} />
+                                <span className={styles.navText}>Asistencia Personal</span>
+                            </Link>
 
-                            {isAdmin && (
-                                <Link href="/dashboard/admin/closing" prefetch={false} className={`${styles.navItem} ${pathname.includes('/closing') ? styles.navItemActive : ''}`}>
-                                    <Calculator size={20} />
-                                    Cierre de Mes
-                                </Link>
-                            )}
+                            <Link href="/dashboard/admin/closing" prefetch={false} className={`${styles.navItem} ${pathname.includes('/closing') ? styles.navItemActive : ''}`}>
+                                <Calculator size={20} />
+                                <span className={styles.navText}>Cierre del Mes</span>
+                            </Link>
 
-                            {isAdmin && (
-                                <Link href="/dashboard/admin/usuarios" prefetch={false} className={`${styles.navItem} ${pathname.includes('/usuarios') ? styles.navItemActive : ''}`}>
-                                    <Shield size={20} />
-                                    Usuarios y Accesos
-                                </Link>
-                            )}
+                            <Link href="/dashboard/admin/usuarios" prefetch={false} className={`${styles.navItem} ${pathname.includes('/usuarios') ? styles.navItemActive : ''}`}>
+                                <Shield size={20} />
+                                <span className={styles.navText}>Usuarios RBAC</span>
+                            </Link>
                         </nav>
 
                         <div style={{ marginTop: "auto" }}>
@@ -377,15 +365,13 @@ export default function AdminLayout({
                             <Ticket size={22} />
                             <span>Tickets</span>
                         </Link>
-                        {isAdmin && (
-                            <Link
-                                href="/dashboard/admin/payments"
-                                className={`${styles.bottomNavItem} ${pathname.includes('/payments') || pathname.includes('/tesoreria') ? styles.bottomNavItemActive : ''}`}
-                            >
-                                <DollarSign size={22} />
-                                <span>Tesorería</span>
-                            </Link>
-                        )}
+                        <Link
+                            href="/dashboard/admin/payments"
+                            className={`${styles.bottomNavItem} ${pathname.includes('/payments') || pathname.includes('/tesoreria') ? styles.bottomNavItemActive : ''}`}
+                        >
+                            <DollarSign size={22} />
+                            <span>Tesorería</span>
+                        </Link>
                         <Link
                             href="/dashboard/admin/reportes"
                             className={`${styles.bottomNavItem} ${pathname.includes('/reportes') ? styles.bottomNavItemActive : ''}`}
