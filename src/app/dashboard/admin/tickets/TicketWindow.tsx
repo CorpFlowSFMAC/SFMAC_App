@@ -1021,6 +1021,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 },
                 (payload) => {
                     const freshServerData = payload.new as any;
+                    loadCosts(); // Forzar recarga de costos cuando el ticket se actualiza
                     setTicketData((prev: any) => {
                         if (isTransitioning.current) return prev;
                         const serverMeta = freshServerData.metadata || {};
@@ -2313,7 +2314,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         if (!num || num.trim() === "") return false;
         if (num.startsWith('STD')) return /^STD\d{4}\.\d{2}$/.test(num);
         if (num.startsWith('#')) return true; 
-        return /^MB\d{6}\.\d{2}$/.test(num);
+        return /^MB[A-Z0-9]{6}\.\d{2}$/.test(num);
     }, []);
     const capitalExposed = finances.totalExpenses;
     const handleCloseInternal = () => {
@@ -3448,12 +3449,23 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 </div>
                                                                 {!ticketData.solicitudAdelanto && !advanceRequestPending && (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
-                                                                        <div className={styles.percentageSelectorPremium} style={{ display: 'flex', gap: '12px', alignItems: 'stretch' }}>
+                                                                        <div className={styles.percentageSelectorPremium} style={{ display: 'flex', flexWrap: 'nowrap', gap: '12px', alignItems: 'stretch' }}>
                                                                           {[0.4, 0.5, 0.6].map(p => (
                                                                               <button
                                                                                   key={p}
                                                                                   className={`${styles.pctBtnPremium} ${porcentajeAdelanto === p && !montoAdelantoManual ? styles.pctActivePremium : ''}`}
-                                                                                  style={{ flex: 1 }}
+                                                                                  style={{ 
+                                                                                      flex: 1,
+                                                                                      background: porcentajeAdelanto === p && !montoAdelantoManual ? 'linear-gradient(135deg, #1D4ED8, #2563EB)' : '#F1F5F9',
+                                                                                      color: porcentajeAdelanto === p && !montoAdelantoManual ? 'white' : '#334155',
+                                                                                      border: porcentajeAdelanto === p && !montoAdelantoManual ? 'none' : '1px solid #CBD5E1',
+                                                                                      boxShadow: porcentajeAdelanto === p && !montoAdelantoManual ? '0 4px 6px -1px rgba(37, 99, 235, 0.3)' : 'none',
+                                                                                      fontWeight: 'bold',
+                                                                                      fontSize: '1rem',
+                                                                                      borderRadius: '8px',
+                                                                                      cursor: 'pointer',
+                                                                                      transition: 'all 0.2s ease'
+                                                                                  }}
                                                                                   onClick={() => {
                                                                                       setPorcentajeAdelanto(p);
                                                                                       setMontoAdelantoManual("");
@@ -3463,12 +3475,25 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                               </button>
                                                                           ))}
                                                                           <div style={{ position: 'relative', flex: 1.5 }}>
-                                                                              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 900, color: '#94A3B8' }}>S/</span>
+                                                                              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontWeight: 900, color: '#64748B' }}>S/</span>
                                                                               <input
                                                                                   type="number"
                                                                                   className={styles.advanceInputPremium}
-                                                                                  style={{ height: '100%', minHeight: '44px', padding: '10px 16px 10px 45px' }}
-                                                                                  placeholder="0.00"
+                                                                                  style={{ 
+                                                                                      height: '100%', 
+                                                                                      minHeight: '44px', 
+                                                                                      width: '100%',
+                                                                                      padding: '10px 16px 10px 45px',
+                                                                                      borderRadius: '8px',
+                                                                                      border: '2px solid #E2E8F0',
+                                                                                      fontSize: '1rem',
+                                                                                      fontWeight: 'bold',
+                                                                                      color: '#1E293B',
+                                                                                      outline: 'none',
+                                                                                      transition: 'border-color 0.2s',
+                                                                                      boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+                                                                                  }}
+                                                                                  placeholder="Monto"
                                                                                   value={montoAdelantoManual}
                                                                                   onChange={(e) => {
                                                                                       setMontoAdelantoManual(e.target.value);
@@ -3508,7 +3533,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                         </button>
                                                                     )
                                                                 )}
-                                                                {(ticketData.solicitudAdelanto || advanceRequestPending) && !isAdmin && (
+                                                                {(ticketData.solicitudAdelanto || advanceRequestPending) && !ticketData.adelantoPagado && !isAdmin && (
                                                                     <div className={styles.waitingNoticePremium}>
                                                                         <Clock size={16} />
                                                                         <span>Esperando confirmación de Tesorería...</span>
