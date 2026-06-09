@@ -150,9 +150,7 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
 
     const hasTech = !!(tech && (tech.id || tech.name || tech.first_name || tech.nombre)) || !!hasTechId;
 
-    // Si no estamos al menos en estado de asignación, no mostrar
     const isNew = ticket.status_id === 'nuevo' || ticket.estadoId === 'nuevo';
-    if (!hasTech && isNew) return null;
 
     const techName = (tech?.name || tech?.nombre || (tech?.first_name ? `${tech.first_name} ${tech.last_name || ''}` : '')).trim() || (hasTechId ? 'Especialista' : '');
     const showTechName = hasTech && !!techName && techName !== 'Especialista' && techName !== '[object Object]';
@@ -177,6 +175,9 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
         if (ref?.startsWith("data:image")) return ref;
         return ""; 
     };
+
+    // Si no estamos al menos en estado de asignación, no mostrar
+    if (!hasTech && isNew) return null;
 
     return (
         <div
