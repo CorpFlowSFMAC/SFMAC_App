@@ -3686,7 +3686,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 const year = new Date().getFullYear().toString().slice(-2);
-                                                                                setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: `MB000000.${year}` }));
+                                                                                setTicketData((prev: any) => ({ ...prev, client_ticket_number: `MB000000.${year}` }));
                                                                             }}
                                                                             style={{ fontSize: '0.6rem', background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '1px 4px', borderRadius: '4px', cursor: 'pointer' }}
                                                                         >
@@ -3712,7 +3712,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                                 style={(ticketData.status_id !== "documentacion_enviada" && !isAdmin) || isSantander ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#-]/g, '');
-                                                                    setTicketData((prev: any) => ({ ...prev, numeroTicketCliente: val }));
+                                                                    setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));
                                                                 }}
                                                                 onClick={(e) => e.stopPropagation()}
                                                                 readOnly={isSantander}
