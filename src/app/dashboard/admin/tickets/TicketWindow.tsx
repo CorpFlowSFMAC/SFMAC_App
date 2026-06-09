@@ -1731,6 +1731,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         isProcessingAdvance.current = true;
         isTransitioning.current = true;
         try {
+            const newState = ticketData.status_id === 'cotizacion_aprobada' ? 'en_ejecucion' : ticketData.status_id;
             const category = isForMaterials ? "Materiales" : "Mano de Obra";
             const conceptPrefix = isForMaterials ? "Adelanto Operativo (MATERIALES)" : "Adelanto Operativo (MANO DE OBRA)";
             const createResult = await ticketCostsAPI.create({
@@ -1739,18 +1740,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 categoria: category,
                 specialist_id: technicianId,
                 monto: amount,
-                estado_pago: "pendiente", // ← SIEMPRE pendiente; Tesorería aprueba
+                estado_pago: "pagado",
                 solicitado_por: myProfileId || undefined
             });
             if (!createResult) {
                 throw new Error('API rejected cost creation');
             }
-            const patchResult = await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null });
+            const patchResult = await ticketsAPI.patchMetadata(ticketData.id, { solicitudAdelanto: null }, { status_id: newState });
             if (!patchResult) {
                 throw new Error('API rejected metadata patch');
             }
             const updated = {
                 ...ticketData,
+                estadoId: newState,
+                status_id: newState,
+                adelantoPagado: !isForMaterials || ticketData.adelantoPagado,
                 solicitudAdelanto: null,
                 metadata: {
                     ...(ticketData.metadata || {}),
@@ -1762,7 +1766,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             await loadCosts();
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
-            showToast("Solicitud Enviada a Tesorería", `Adelanto de S/ ${amount.toFixed(2)} registrado como PENDIENTE. Tesorería debe aprobarlo.`, "info");
+            showToast("Depósito Confirmado", `Adelanto de S/ ${amount.toFixed(2)} registrado exitosamente.`, "success");
         } catch (err) {
             console.error("Error registering pending advance:", err);
             const message = err instanceof DuplicateTicketCostError
