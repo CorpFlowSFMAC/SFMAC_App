@@ -654,7 +654,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setTicketData((prev: any) => {
             const hasStatusChanged = ticket.status_id !== prev.status_id;
             const hasTechChanged = ticket.technician_id !== prev.technician_id;
-            const hasTechObjectChanged = (ticket.technicians?.id || ticket.technician?.id) !== (prev.technician?.id);
+            const hasTechObjectChanged = 
+                (ticket.technicians?.id || ticket.technician?.id || ticket.tecnico?.id || ticket.metadata?.tecnico?.id) !== (prev.technician?.id);
             const hasGestoraChanged = ticket.gestora_id !== prev.gestora_id;
             const hasMetaChanged = JSON.stringify(ticket.metadata) !== JSON.stringify(prev.metadata);
             const hasLaborCostChanged = ticket.labor_cost !== prev.labor_cost;
@@ -709,19 +710,38 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 documentosChecklist: prev.documentosChecklist || prev.metadata?.documentosChecklist || safeMeta.documentosChecklist,
                 client_ticket_number: prev.client_ticket_number || ticket.client_ticket_number || safeMeta.client_ticket_number,
                 technician: (() => {
-                    const incomingTech = ticket.technicians || ticket.technician
+                    // Fuentes posibles del técnico (en orden de prioridad):
+                    // 1. ticket.technicians - viene del JOIN de Supabase (datos frescos del servidor)
+                    // 2. ticket.technician - a veces usado como alias
+                    // 3. ticket.tecnico - creado por normalizeTicket (caché local)
+                    // 4. ticket.metadata.technician - backup en metadata
+                    // 5. ticket.metadata.tecnico - backup en metadata (español)
+                    const incomingTech = 
+                        ticket.technicians || 
+                        ticket.technician || 
+                        ticket.tecnico ||
+                        ticket.metadata?.technician ||
+                        ticket.metadata?.tecnico;
                     const incomingTechId = incomingTech?.id;
                     const localTechId = prev.technician?.id;
                     const propTechId = ticket.technician_id;
-                    if (incomingTechId && propTechId && incomingTechId === propTechId && incomingTechId === localTechId) {
-                        return incomingTech;
+                    
+                    // Si el ticket ya no tiene técnico (desasignado), limpiar
+                    if (!incomingTechId && !propTechId) {
+                        return null;
                     }
-                    if (localTechId && localTechId === propTechId) {
-                        return prev.technician
-                    }
+                    
+                    // Si el técnico cambió (reasignación), usar el NUEVO técnico del servidor
                     if (incomingTechId && incomingTechId !== localTechId) {
                         return incomingTech;
                     }
+                    
+                    // Si el técnico es el mismo, mantener el local (puede tener más datos cargados)
+                    if (localTechId && localTechId === propTechId && localTechId === incomingTechId) {
+                        return prev.technician;
+                    }
+                    
+                    // Fallback: usar el del servidor o el local
                     return prev.technician || incomingTech;
                 })(),
                 gestora: (() => {
@@ -1098,7 +1118,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
             status_id: newEstadoId,
             metadata: {
                 ...ticketData.metadata,
+                // Guardar en ambos formatos para compatibilidad con normalizeTicket (tecnico) y TicketSummary (technician)
                 technician: newTechnicianObj,
+                tecnico: newTechnicianObj,
                 fechaAsignacion: assignmentData.fechaAsignacion || assignmentData.fechaReasignacion,
                 status_id: newEstadoId
             }
