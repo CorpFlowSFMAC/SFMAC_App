@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { supabase } from "@/lib/supabase";
 import { round2, formatSoles } from "@/lib/formatters";
 import { calculateTicketFinances, extractIGV, toNum } from "@/lib/calculations";
+import { useTechnicians } from "@/lib/useQueryHooks";
 import styles from "./TicketSummary.module.css";
 
 interface InfoBarBaseProps {
@@ -133,9 +134,20 @@ interface TechnicianSchedulingBarProps {
 }
 
 export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ ticket, onReassign, onEditSchedule }: TechnicianSchedulingBarProps) {
+    const { data: allTechnicians } = useTechnicians();
+
     // Optimización: Priorizar siempre el objeto unido de la DB para evitar intermitencia
-    const tech = ticket.technicians || ticket.tecnico || ticket.technician || ticket.metadata?.tecnico || ticket.metadata?.technician;
-    const hasTechId = ticket.technician_id || ticket.technicianId || ticket.tecnico_id;
+    let tech = ticket.technicians || ticket.tecnico || ticket.technician || ticket.metadata?.tecnico || ticket.metadata?.technician;
+    const hasTechId = ticket.technician_id || ticket.technicianId || ticket.tecnico_id || tech?.id;
+    
+    // Enriquecer con datos completos de la base de datos (por si falta DNI o nombre completo)
+    if (hasTechId && allTechnicians && allTechnicians.length > 0) {
+        const fullTech = allTechnicians.find((t: any) => t.id === hasTechId);
+        if (fullTech) {
+            tech = { ...tech, ...fullTech };
+        }
+    }
+
     const hasTech = !!(tech && (tech.id || tech.name || tech.first_name || tech.nombre)) || !!hasTechId;
 
     // Si no estamos al menos en estado de asignación, no mostrar
