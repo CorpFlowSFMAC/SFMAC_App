@@ -1261,7 +1261,7 @@ export const ticketsAPI = {
     async updatePaymentSafe(ticketId: string, nuevoPago: any, additionalUpdates?: any) {
         const { data: ticket, error: fetchErr } = await supabase
             .from('tickets')
-            .select('metadata')
+            .select('status_id, metadata')
             .eq('id', ticketId)
             .single();
         if (fetchErr || !ticket) throw new Error("Ticket not found");
@@ -1272,12 +1272,24 @@ export const ticketsAPI = {
         const filtered = history.filter((p: any) => p.id !== nuevoPago.id);
         filtered.push(nuevoPago);
         
+        const isOperatingAdvance = String(nuevoPago.tipo || '').toLowerCase().includes('mano de obra') || 
+                                   String(nuevoPago.tipo || '').toLowerCase().includes('materiales') || 
+                                   String(nuevoPago.referencia || '').toLowerCase().includes('adelanto operativo');
+
         const newMeta = {
             ...meta,
             ...additionalUpdates?.metadataFields,
             historialPagosTecnico: filtered,
             montoAdelanto: filtered.reduce((s: number, p: any) => s + (p.monto || 0), 0)
         };
+
+        if (nuevoPago.estado === 'pagado' && isOperatingAdvance) {
+            newMeta.solicitudAdelanto = null; // Clear pending advance request
+            if (ticket.status_id === 'cotizacion_aprobada') {
+                if (!additionalUpdates) additionalUpdates = {};
+                additionalUpdates.status_id = 'en_ejecucion';
+            }
+        }
         
         const updates: any = { metadata: newMeta };
         if (additionalUpdates?.status_id) {
