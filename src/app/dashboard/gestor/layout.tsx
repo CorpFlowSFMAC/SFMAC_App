@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, BarChart3, Clock, FolderOpen, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, BarChart3, Clock, FolderOpen, FileText, Menu, X } from 'lucide-react';
 import styles from "@/app/dashboard/admin/admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
@@ -24,6 +24,7 @@ export default function GestorLayout({
     const [userAvatar, setUserAvatar] = useState<string | null>(null);
     const [gestoraNombre, setGestoraNombre] = useState<string | null>(null);
     const [sessionActiva, setSessionActiva] = useState(false);
+    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
     // Cargar datos del usuario desde cookies, localStorage y sesión de Supabase
     useEffect(() => {
@@ -178,8 +179,26 @@ export default function GestorLayout({
         <QueryProvider>
             <AppDataProvider>
                 <div className={styles.adminContainer}>
+                    {/* ── Overlay oscuro para cerrar sidebar en móvil ── */}
+                    {mobileSidebarOpen && (
+                        <div
+                            className={styles.mobileOverlay}
+                            onClick={() => setMobileSidebarOpen(false)}
+                            aria-hidden="true"
+                        />
+                    )}
+
+                    {/* ── Botón hamburguesa flotante (solo móvil) ── */}
+                    <button
+                        className={styles.hamburgerBtn}
+                        onClick={() => setMobileSidebarOpen(o => !o)}
+                        aria-label={mobileSidebarOpen ? 'Cerrar menú' : 'Abrir menú'}
+                    >
+                        {mobileSidebarOpen ? <X size={22} /> : <Menu size={22} />}
+                    </button>
+
                     {/* Sidebar */}
-                    <aside className={`${styles.sidebar} ${styles.sidebarMini}`}>
+                    <aside className={`${styles.sidebar} ${styles.sidebarMini} ${mobileSidebarOpen ? styles.sidebarMobileOpen : ''}`}>
                         <div className={styles.sidebarHeader}>
                             <Image
                                 src="/logo-final.png"
@@ -267,6 +286,39 @@ export default function GestorLayout({
                     <main className={styles.mainContent}>
                         {children}
                     </main>
+
+                    {/* ── Bottom Navigation Bar (solo móvil) ── */}
+                    <nav className={styles.mobileBottomNav} aria-label="Navegación principal móvil">
+                        <Link
+                            href={dashboardHref}
+                            className={`${styles.bottomNavItem} ${pathname === dashboardHref ? styles.bottomNavItemActive : ''}`}
+                        >
+                            <LayoutDashboard size={22} />
+                            <span>Inicio</span>
+                        </Link>
+                        <Link
+                            href="/dashboard/gestor/tickets"
+                            className={`${styles.bottomNavItem} ${pathname.includes('/tickets') ? styles.bottomNavItemActive : ''}`}
+                        >
+                            <Ticket size={22} />
+                            <span>Tickets</span>
+                        </Link>
+                        <Link
+                            href="/dashboard/gestor/reportes"
+                            className={`${styles.bottomNavItem} ${pathname.includes('/reportes') ? styles.bottomNavItemActive : ''}`}
+                        >
+                            <BarChart3 size={22} />
+                            <span>Reportes</span>
+                        </Link>
+                        <button
+                            className={styles.bottomNavItem}
+                            onClick={() => setMobileSidebarOpen(true)}
+                            aria-label="Más opciones"
+                        >
+                            <Menu size={22} />
+                            <span>Más</span>
+                        </button>
+                    </nav>
                 </div>
             </AppDataProvider>
         </QueryProvider>
