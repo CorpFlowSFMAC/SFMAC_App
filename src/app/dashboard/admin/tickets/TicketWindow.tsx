@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, TrendingUp } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
-import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar, SpecialistCostBar } from "./TicketSummary";
+import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
 import GestoraDrawer from "./GestoraDrawer";
 import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
@@ -2633,10 +2633,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                         onEditSchedule={() => {
                                             setTicketData({ ...ticketData, estadoId: 'en_inspeccion', status_id: 'en_inspeccion', execution_date: undefined });
                                         }}
-                                    />
-                                    <SpecialistCostBar
-                                        ticket={ticketData}
-                                        costos={ticketCosts}
                                     />
                                     <DiagnosisInfoBar 
                                         ticket={ticketData} 
