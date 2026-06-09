@@ -145,6 +145,7 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
     const techName = (tech?.name || tech?.nombre || (tech?.first_name ? `${tech.first_name} ${tech.last_name || ''}` : '')).trim() || (hasTechId ? 'Especialista' : '');
     const showTechName = hasTech && !!techName && techName !== 'Especialista' && techName !== '[object Object]';
     const techPhone = tech?.phone || tech?.telefono || "---";
+    const techDni = tech?.documento || tech?.dni || tech?.document_number || "---";
     const hasScheduling = !!ticket.fechaVisita;
     const scheduleDate = hasScheduling ? new Date(ticket.fechaVisita) : null;
     const scheduleLabel = ticket.programacionLabel || "Visita Programada";
@@ -169,9 +170,11 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
         <div
             className={styles.infoBar}
             style={{
-                background: hasTech ? 'linear-gradient(to right, #F0FDF4, white)' : 'linear-gradient(to right, #FFF7ED, white)',
-                '--bar-accent-color': hasTech ? '#10B981' : '#F97316',
-                marginTop: '-4px'
+                background: hasTech ? 'linear-gradient(to right, #D1FAE5, #F0FDF4)' : 'linear-gradient(to right, #FFF7ED, white)',
+                '--bar-accent-color': hasTech ? '#059669' : '#F97316',
+                marginTop: '-4px',
+                border: hasTech ? '1px solid #A7F3D0' : 'none',
+                boxShadow: hasTech ? '0 4px 12px rgba(16, 185, 129, 0.1)' : 'none'
             } as any}
         >
             <div className={styles.titleSection}>
@@ -209,6 +212,13 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
                 <div className={styles.infoItem}>
                     <span className={styles.infoLabel}>Contacto</span>
                     <span className={styles.infoValue}>📱 {techPhone}</span>
+                </div>
+            )}
+
+            {hasTech && showTechName && techDni !== "---" && (
+                <div className={styles.infoItem}>
+                    <span className={styles.infoLabel}>DNI</span>
+                    <span className={styles.infoValue} style={{ fontWeight: 800 }}>🆔 {techDni}</span>
                 </div>
             )}
 
