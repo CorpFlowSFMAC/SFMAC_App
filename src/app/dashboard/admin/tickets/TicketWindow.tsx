@@ -1119,23 +1119,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 }
             }
 
-            // 🚀 CREAR FILA DE ESPECIALISTA AUTOMÁTICAMENTE al asignar técnico
-            if (technician_id) {
-                try {
-                    await ticketCostsAPI.create({
-                        ticket_id: ticketData.id,
-                        concepto: 'Especialista',
-                        categoria: 'Mano de Obra',
-                        specialist_id: technician_id,
-                        monto: 0,
-                        estado_pago: 'pendiente'
-                    });
-                    console.log('[handleAssignment] Fila de especialista creada para ticket:', ticketData.id);
-                } catch (costErr) {
-                    // No fallar la asignación si no se puede crear el costo
-                    console.error('[handleAssignment] Error creando fila de especialista:', costErr);
-                }
-            }
+            // Fila de especialista automática eliminada para evitar duplicidad de peticiones (monto 0) en Tesorería.
         } catch (err: any) {
             console.error('Error persisting assignment to Supabase:', err);
             alert("❌ Error al asignar el técnico: " + (err.message || "Error en el servidor"));
