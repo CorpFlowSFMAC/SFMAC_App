@@ -447,7 +447,7 @@ export default function AdminDashboard() {
             hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48
         );
         const lucroReal = bloqueados48h.reduce((s, t) => {
-            const ingresos = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
+            const ingresos = parseFloat(t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
             const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
             const utilidadPerdida = Math.max(0, ingresos - costos);
             // Penalización SLA: +5% adicional por cada 24h extra sobre las 48h de bloqueo
@@ -465,7 +465,10 @@ export default function AdminDashboard() {
             "+48h": todosPendientes.filter((t: any) => hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48),
         };
 
-        const calcAmountNeto = (arr: any[]) => round2(arr.reduce((s: number, t: any) => s + (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18), 0));
+        const calcAmountNeto = (arr: any[]) => round2(arr.reduce((s: number, t: any) => {
+            const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+            return s + ingresoNeto;
+        }, 0));
 
         // Cuellos de botella detallados
         const espCot = pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.status_id || t.estadoId)));
@@ -1026,9 +1029,9 @@ export default function AdminDashboard() {
                         onClick={() => {
                             setModalTitle("Lucro Cesante: Tickets bloqueados >48h + Penalización SLA");
                             setModalTickets(tesoreria.bloqueados48hTickets.map(t => {
-                                const ingresos = parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18;
+                                const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
                                 const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
-                                const utilidadPerdida = Math.max(0, ingresos - costos);
+                                const utilidadPerdida = Math.max(0, ingresoNeto - costos);
                                 const horasBloqueo = hoursAgo(t.updated_at || t.createdAt || t.created_at || "");
                                 const diasExtra = Math.max(0, Math.floor((horasBloqueo - 48) / 24));
                                 const penalizacionSLA = utilidadPerdida * (diasExtra * 0.05);
@@ -1036,7 +1039,7 @@ export default function AdminDashboard() {
                                     ...t,
                                     servicio: t.service_type || t.tipo_servicio,
                                     cliente: t.clients?.name || t.clienteNombre || 'Cliente',
-                                    _ingresosProyectados: ingresos,
+                                    _ingresosProyectados: ingresoNeto,
                                     _costosProyectados: costos,
                                     _utilidadPendiente: utilidadPerdida + penalizacionSLA,
                                     _horasBloqueo: Math.floor(horasBloqueo),

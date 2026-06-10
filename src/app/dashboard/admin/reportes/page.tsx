@@ -336,8 +336,8 @@ export default function ReportesEficienciaPage() {
             
             // Montos Financieros - APLICANDO REGLA "NETO SIN IGV"
             if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
-                const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-                map[gid].facturacion += gross / 1.18;
+                const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+                map[gid].facturacion += ingresoNeto;
             }
             
             map[gid].inversion += (finances.totalLaborConfirmed + finances.totalOpConfirmed);
@@ -387,8 +387,8 @@ export default function ReportesEficienciaPage() {
             
             // Sincronización: Facturación NETA (Sin IGV)
             if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
-                const gross = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
-                map[cid].billing += gross / 1.18;
+                const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+                map[cid].billing += ingresoNeto;
             }
             
             const finances = calculateTicketFinances(t, []);

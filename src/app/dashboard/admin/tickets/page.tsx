@@ -925,12 +925,14 @@ function TicketRow({ ticket, onTicketClick }: any) {
 
     // REVENUE: Lo que fue facturado al cliente (montoFinal o total_quoted_amount)
     const ingresoFacturado = parseFloat(ticket.montoFinal || ticket.total_quoted_amount || 0);
+    // Usar ingresos_reales si está disponible, sino calcular de total_quoted_amount
+    const ingresoNeto = parseFloat(ticket.ingresos_reales || 0) || (ingresoFacturado / 1.18);
 
     const incomingCostsAgg = parseFloat(ticket.total_costs_agg || ticket.total_costs || 0);
     const costoDisplay = incomingCostsAgg > 0 ? incomingCostsAgg : 0;
 
     const isAtLoss = costoDisplay > 0 && costoDisplay > ingresoFacturado;
-    const utilidadNeta = ingresoFacturado / 1.18 - costoDisplay;
+    const utilidadNeta = ingresoNeto - costoDisplay;
 
     return (
         <tr className={styles.historyRow} onClick={onTicketClick}>
