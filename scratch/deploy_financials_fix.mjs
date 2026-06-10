@@ -1,16 +1,14 @@
+import { Client } from 'ssh2';
+
+const conn = new Client();
+
+const sql = `
 -- ========================================================
--- DEPLOYMENT SCRIPT: CORRECTED vw_ticket_financials VIEW
--- ========================================================
--- PROBLEM FIXED: 
---   - Backend was including PENDING costs in calculations
---   - Now only CONFIRMED payments are included (pagado, confirmado, etc.)
---   - Uses metadata.montoSubtotal (base sin IGV) for ingresos_reales
--- ========================================================
--- Applied: 2026-05-27
+-- FIX: Corregir vw_ticket_financials para usar ingresos_reales
+-- en lugar de montoSubtotal
 -- ========================================================
 
--- Fix 1: Replace vw_ticket_financials view
-DROP VIEW IF EXISTS vw_ticket_financials;
+DROP VIEW IF EXISTS vw_ticket_financials CASCADE;
 
 CREATE OR REPLACE VIEW vw_ticket_financials AS
 WITH costos_confirmados AS (
@@ -109,41 +107,59 @@ SELECT
 FROM tickets t
 LEFT JOIN costos_confirmados c ON c.ticket_id = t.id;
 
--- Fix 2: Update get_ticket_financials_detail RPC function (remove saldo_tecnico reference)
-DROP FUNCTION IF EXISTS public.get_ticket_financials_detail(uuid);
+-- Grant permissions
+GRANT SELECT ON public.vw_ticket_financials TO anon, authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION public.get_ticket_financials_detail(p_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    result jsonb;
-BEGIN
-    SELECT jsonb_build_object(
-        'utilidad_neta', COALESCE(vf.utilidad_neta, 0),
-        'margen_real', COALESCE(vf.margen_real, 0),
-        'ingresos_reales', COALESCE(vf.ingresos_reales, 0),
-        'total_costs_agg', COALESCE(vf.inversion_ejecutada, 0),
-        'monto_pactado_mo', COALESCE(vf.monto_pactado_mo, 0),
-        'gastos_flujo_a', COALESCE(vf.gastos_flujo_a, 0),
-        'adelantos_flujo_b', COALESCE(vf.adelantos_flujo_b, 0)
-    )::jsonb
-    INTO result
-    FROM vw_ticket_financials vf
-    WHERE vf.ticket_id = p_id;
+-- Recreate vw_tickets_strategic
+CREATE OR REPLACE VIEW public.vw_tickets_strategic AS
+SELECT 
+    t.*,
+    vf.utilidad_neta,
+    vf.margen_real,
+    vf.ingresos_reales,
+    vf.monto_pactado_mo,
+    vf.gastos_flujo_a,
+    vf.adelantos_flujo_b,
+    vf.inversion_ejecutada,
+    vf.inversion_ejecutada AS total_costs_agg,
+    CASE WHEN c.id IS NOT NULL THEN jsonb_build_object('id', c.id, 'name', c.name, 'ruc', c.ruc, 'color_aura', c.color_aura, 'logo', c.logo) ELSE NULL END AS clients,
+    CASE WHEN b.id IS NOT NULL THEN jsonb_build_object('id', b.id, 'name', b.name, 'address', b.address, 'zone', b.zone, 'departamento', b.departamento, 'provincia', b.provincia, 'distrito', b.distrito) ELSE NULL END AS branch_offices,
+    CASE WHEN tech.id IS NOT NULL THEN jsonb_build_object('id', tech.id, 'name', tech.name, 'first_name', tech.first_name, 'last_name', tech.last_name, 'bank_name', tech.bank_name, 'account_number', tech.account_number, 'cci', tech.cci, 'yape_number', tech.yape_number, 'plin_number', tech.plin_number, 'phone', tech.phone) ELSE NULL END AS technicians,
+    CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'email', g.email) ELSE NULL END AS gestoras,
+    CASE WHEN g.id IS NOT NULL THEN jsonb_build_object('id', g.id, 'name', g.name, 'email', g.email) ELSE NULL END AS gestora
+FROM public.tickets t
+LEFT JOIN public.vw_ticket_financials vf ON t.id = vf.ticket_id
+LEFT JOIN public.clients c ON t.client_id = c.id
+LEFT JOIN public.branch_offices b ON t.branch_id = b.id
+LEFT JOIN public.technicians tech ON t.technician_id = tech.id
+LEFT JOIN public.gestoras g ON t.gestora_id = g.id;
 
-    RETURN COALESCE(result, '{}'::jsonb);
-END;
-$function$;
+GRANT SELECT ON public.vw_tickets_strategic TO anon, authenticated, service_role;
 
--- ========================================================
--- VERIFICATION QUERIES
--- ========================================================
+-- Reload schema for PostgREST
+NOTIFY pgrst, 'reload schema';
+`;
 
--- Verify ticket MB007973.26:
--- SELECT * FROM vw_ticket_financials WHERE ticket_id = '18069355-5252-4c1a-88c6-22ca26ab58c5';
--- Expected: utilidad_neta = 1057.50, margen_real = 46.59
+// Escape for shell
+const escapedSql = sql.replace(/"/g, '\\"').replace(/`/g, '\\`');
+const cmd = `docker exec -i supabase-db psql -U postgres -d postgres -c "${escapedSql}"`;
 
--- Verify RPC function:
--- SELECT public.get_ticket_financials_detail('18069355-5252-4c1a-88c6-22ca26ab58c5'::uuid);
--- Expected: {"margen_real": 46.59, "utilidad_neta": 1057.50, ...}
+conn.on('ready', () => {
+  console.log('🔧 Desplegando corrección de vw_ticket_financials...');
+  conn.exec(cmd, (err, stream) => {
+    if (err) throw err;
+    stream.on('close', (code, signal) => {
+      console.log(`✅ Despliegue completado con código ${code}`);
+      conn.end();
+    }).on('data', (data) => {
+      console.log('STDOUT: ' + data.toString());
+    }).stderr.on('data', (data) => {
+      console.log('STDERR: ' + data.toString());
+    });
+  });
+}).connect({
+  host: '87.99.137.96',
+  port: 22,
+  username: 'root',
+  password: 'etNpxhE7dKAtRA3aTVEv_Secured'
+});
