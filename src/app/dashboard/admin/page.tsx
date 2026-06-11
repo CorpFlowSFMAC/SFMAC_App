@@ -365,10 +365,12 @@ export default function AdminDashboard() {
         tickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
             const sid = normalizeStateId(t.status_id || t.estadoId);
-            const val = parseFloat(t.ingresos_reales || 0);
+            // FUENTE DE VERDAD: ingresos_reales de la vista financiera
+            const val = parseFloat(t.ingresos_reales || t.metadata?.ingresos_reales || 0);
             
             if (isRolledOver(t)) {
-                arrastrados += ticketInversion(t);
+                // Para arrastrados también usamos ingresos_reales (base sin IGV)
+                arrastrados += val;
             } else {
                 if (sid === 'cotizacion_aprobada') aprobadas += val;
                 if (sid === 'en_ejecucion') enEjecucion += val;
@@ -395,8 +397,11 @@ export default function AdminDashboard() {
             const clientId = t.client_id || "otros";
             const clientColor = t.cliente?.color || t.clients?.color_aura || "#3B82F6";
             
-            // Regla de Negocio: Montos CON IGV liquidados
-            const billingAmount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? String(parseFloat(t.ingresos_reales ?? 0) * 1.18));
+            // FUENTE DE VERDAD: ingresos_reales de la vista (base sin IGV)
+            // Para facturación con IGV, multiplicamos por 1.18
+            const ingresosReales = parseFloat(t.ingresos_reales || t.metadata?.ingresos_reales || 0);
+            const billingAmount = ingresosReales > 0 ? round2(ingresosReales * 1.18) : 0;
+            
             if (billingAmount <= 0) return;
 
             if (!clientMap[clientId]) {
@@ -416,8 +421,13 @@ export default function AdminDashboard() {
 
         tickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
-            totalAdvances += parseFloat(t.adelantos_flujo_b || t.metadata?.adelantos_flujo_b || 0);
-            totalBudget += parseFloat(t.ingresos_reales || 0);
+            // FUENTE DE VERDAD: campos de la vista vw_tickets_strategic
+            // adelantos_flujo_b = MO/pagos al técnico confirmados
+            // ingresos_reales = presupuesto base sin IGV
+            const avances = parseFloat(t.adelantos_flujo_b || t.metadata?.adelantos_flujo_b || 0);
+            const presupuesto = parseFloat(t.ingresos_reales || t.metadata?.ingresos_reales || 0);
+            totalAdvances += avances;
+            totalBudget += presupuesto;
         });
 
         return {
@@ -433,12 +443,21 @@ export default function AdminDashboard() {
         // Pipeline: Cotizaciones en curso
         const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente", "visitado"];
         const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
+        // Pipeline usa ingresos_reales (base sin IGV de la vista)
+        const totalPipelineNeto = pipelineTickets.reduce((s, t) => {
+            const ingreso = parseFloat(t.ingresos_reales || t.metadata?.ingresos_reales || 0);
+            return s + ingreso;
+        }, 0);
 
         // Presupuestos Aprobados: En ejecución o por liquidar
+        // FUENTE DE VERDAD: ingresos_reales (base sin IGV) de la vista financiera
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const totalAprobados = approvedTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || t.montoFinal || 0), 0);
+        const totalAprobados = approvedTickets.reduce((s, t) => {
+            // Usar ingresos_reales de la vista (ya calculado correctamente)
+            const ingreso = parseFloat(t.ingresos_reales || t.metadata?.ingresos_reales || 0);
+            return s + ingreso;
+        }, 0);
 
         // Lucro Cesante: dinero que la empresa deja de percibir por
         // inoperatividad, retrasos técnicos o penalizaciones SLA en
@@ -447,7 +466,9 @@ export default function AdminDashboard() {
             hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48
         );
         const lucroReal = bloqueados48h.reduce((s, t) => {
-            const ingresos = parseFloat(t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+            // FUENTE DE VERDAD: ingresos_reales (base sin IGV) - NO usar total_quoted_amount
+            const ingresos = parseFloat(t.ingresos_reales || t.metadata?.ingresos_reales || 0);
+            // Los costos devengados (no confundir con total_costs_agg de la vista)
             const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
             const utilidadPerdida = Math.max(0, ingresos - costos);
             // Penalización SLA: +5% adicional por cada 24h extra sobre las 48h de bloqueo
@@ -465,8 +486,9 @@ export default function AdminDashboard() {
             "+48h": todosPendientes.filter((t: any) => hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48),
         };
 
+        // Calcular montos netos (base sin IGV) - FUENTE: ingresos_reales
         const calcAmountNeto = (arr: any[]) => round2(arr.reduce((s: number, t: any) => {
-            const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+            const ingresoNeto = parseFloat(t.ingresos_reales || t.metadata?.ingresos_reales || 0);
             return s + ingresoNeto;
         }, 0));
 
