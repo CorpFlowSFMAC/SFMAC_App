@@ -54,9 +54,35 @@ export default function DashboardGateway() {
                 if (authStatus === 'azure_logged_in' && userRole) {
                     console.log("[Dashboard Gateway] ✅ Autenticación válida");
                     
-                    if (userRole === 'admin') {
+                    // 🔄 SYNC PROFILE: Ensure user profile exists in DB
+                    try {
+                        console.log("[Dashboard Gateway] 🔄 Sincronizando perfil...");
+                        const syncRes = await fetch('/api/admin/sync-profile', {
+                            method: 'POST',
+                            credentials: 'include',
+                        });
+                        const syncData = await syncRes.json();
+                        console.log("[Dashboard Gateway] Sync result:", syncData);
+                        
+                        if (syncData.success && syncData.profile) {
+                            // Update cookie with correct role from DB
+                            const correctRole = syncData.profile.rol.toLowerCase();
+                            if (correctRole !== userRole) {
+                                document.cookie = `userRole=${correctRole}; path=/; max-age=86400; SameSite=Lax`;
+                                console.log("[Dashboard Gateway] ✅ Rol actualizado a:", correctRole);
+                            }
+                        }
+                    } catch (syncErr) {
+                        console.warn("[Dashboard Gateway] ⚠️ Sync falló:", syncErr);
+                        // Continue anyway - don't block login for sync errors
+                    }
+                    
+                    // Get final role from cookie (might have been updated)
+                    const finalRole = cookieObj['userRole'] || userRole;
+                    
+                    if (finalRole === 'admin') {
                         router.push('/dashboard/admin');
-                    } else if (userRole === 'gestora' || userRole === 'espectador') {
+                    } else if (finalRole === 'gestora' || finalRole === 'espectador') {
                         router.push('/dashboard/gestor');
                     } else {
                         router.push('/dashboard/sin-acceso');
