@@ -10,7 +10,8 @@ import {
     Clock, CheckCircle, XCircle, BarChart3, PieChart, Calendar,
     Download, Filter, User, DollarSign, ArrowUpRight, ArrowDownRight,
     Search, ChevronRight, Activity, Zap, ShieldAlert, Target, Save, 
-    Percent, Gavel, FileText, Info, RefreshCcw, Layers, Map, Settings
+    Percent, Gavel, FileText, Info, RefreshCcw, Layers, Map, Settings,
+    Wallet, Receipt, Timer
 } from "lucide-react";
 import styles from "./reportes.module.css";
 import { useAppData } from "@/lib/AppDataContext";
@@ -42,8 +43,8 @@ const GeneratedVsExpenseChart = ({ data }: { data: any[] }) => (
             <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                 <defs>
                     <linearGradient id="genGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#002A8F" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#001F6B" stopOpacity={1} />
+                        <stop offset="0%" stopColor="#0A1E5E" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#1E3A8A" stopOpacity={1} />
                     </linearGradient>
                     <linearGradient id="expGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#94A3B8" stopOpacity={0.8} />
@@ -65,8 +66,8 @@ const GeneratedVsExpenseChart = ({ data }: { data: any[] }) => (
                     tickFormatter={(val) => `S/ ${val.toLocaleString()}`}
                 />
                 <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem' }}
-                    cursor={{ fill: '#F8FAFC' }}
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem', fontFamily: 'Inter, sans-serif' }}
+                    cursor={{ fill: 'rgba(59,130,246,0.04)' }}
                     formatter={(value: any, name: any) => [
                         `S/ ${Math.round(value).toLocaleString()}`,
                         name
@@ -99,7 +100,7 @@ const NetProfitChart = ({ data }: { data: any[] }) => (
                     tickFormatter={(val) => `S/ ${val.toLocaleString()}`}
                 />
                 <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem' }}
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem', fontFamily: 'Inter, sans-serif' }}
                     formatter={(value: any) => [`S/ ${Math.round(value).toLocaleString()}`, "Utilidad Neta"]}
                 />
                 <Legend verticalAlign="top" align="right" iconType="circle" />
@@ -138,7 +139,7 @@ const FinancialScatterChart = ({ data }: { data: any[] }) => (
                     label={{ value: 'Inversión (S/)', angle: -90, position: 'insideLeft', fontSize: 11 }}
                 />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                <Scatter name="Clientes" data={data} fill="#002A8F">
+                <Scatter name="Clientes" data={data} fill="#0A1E5E">
                     {data.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.x > 0 ? '#10B981' : '#EF4444'} />
                     ))}
@@ -442,6 +443,12 @@ export default function ReportesEficienciaPage() {
         }
     };
 
+    // Computed KPI values
+    const totalFacturacion = profitabilityByClient.reduce((s,c) => s+c.billing, 0);
+    const totalCostos = profitabilityByClient.reduce((s,c) => s+c.costs, 0);
+    const totalUtilidad = profitabilityByClient.reduce((s,c) => s+c.profit, 0);
+    const avgTimeGlobal = Math.round(productivityByGestor.reduce((s,g) => s+g.avgTime, 0) / (productivityByGestor.length || 1));
+
     if (loadingTickets || loadingClients || loadingGestoras || loadingTargets) {
         return (
             <div className={styles.loadingContainer}>
@@ -456,15 +463,15 @@ export default function ReportesEficienciaPage() {
             {/* Header "Corporate Glass" */}
             <header className={styles.premiumHeader}>
                 <div className={styles.headerInfo}>
-                    <div className={styles.headerIconBox}><Layers size={24} /></div>
+                    <div className={styles.headerIconBox}><Layers size={22} /></div>
                     <div>
                         <h1 className={styles.hTitle}>Efficiency Intelligence</h1>
-                        <p className={styles.hSubtitle}>Periodo Actual: {currentMonthKey}</p>
+                        <p className={styles.hSubtitle}>Periodo: {currentMonthKey} — Vista Gerencial</p>
                     </div>
                 </div>
                 <div className={styles.headerControls}>
                     <div className={styles.gestoraFilterBox}>
-                        <User size={16} className={styles.filterIcon} />
+                        <User size={15} className={styles.filterIcon} />
                         <select 
                             value={selectedGestoraId}
                             onChange={(e) => setSelectedGestoraId(e.target.value)}
@@ -493,28 +500,26 @@ export default function ReportesEficienciaPage() {
                             Histórico
                         </button>
                     </div>
-                    <button className={styles.actionBtnPrimary}><Download size={18} /> Exportar Reporte</button>
+                    <button className={styles.actionBtnPrimary}><Download size={16} /> Exportar</button>
                 </div>
             </header>
 
-            {/* Dashboard Container starts directly after tabs to avoid redundancy */}
-
-            {/* Main Tabs UI */}
+            {/* ═══ PASO 1: BARRA DE PESTAÑAS OPERATIVA ═══ */}
             <nav className={styles.modernTabNav}>
                 <button className={selectedTab === 'productivity' ? styles.mTabActive : styles.mTab} onClick={() => setSelectedTab('productivity')}>
-                    <Layers size={18} /> Control Operativo
+                    <Layers size={16} /> Control Operativo
                 </button>
                 <button className={selectedTab === 'bonuses' ? styles.mTabActive : styles.mTab} onClick={() => setSelectedTab('bonuses')}>
-                    <Award size={18} /> Bonos Variables
+                    <Award size={16} /> Bonos Variables
                 </button>
                 <button className={selectedTab === 'profitability' ? styles.mTabActive : styles.mTab} onClick={() => setSelectedTab('profitability')}>
-                    <Map size={18} /> Rentabilidad & Scatter
+                    <Map size={16} /> Rentabilidad & Scatter
                 </button>
                 <button className={selectedTab === 'admin' ? styles.mTabActive : styles.mTab} onClick={() => setSelectedTab('admin')}>
-                    <Settings size={18} /> Configurar Metas
+                    <Settings size={16} /> Configurar Metas
                 </button>
                 <button className={selectedTab === 'risk' ? styles.mTabActive : styles.mTab} onClick={() => setSelectedTab('risk')}>
-                    <AlertTriangle size={18} /> Auditoría {alerts.length > 0 && <span className={styles.badgeCount}>{alerts.length}</span>}
+                    <AlertTriangle size={16} /> Auditoría {alerts.length > 0 && <span className={styles.badgeCount}>{alerts.length}</span>}
                 </button>
             </nav>
 
@@ -522,41 +527,70 @@ export default function ReportesEficienciaPage() {
                 
                 {selectedTab === 'productivity' && (
                     <div className={styles.productivityAnalyticsLayout}>
-                        {/* 💎 KPI Ribbon Minimalista */}
+                        {/* ═══ PASO 2: TARJETAS KPI CORREGIDAS ═══ */}
                         <div className={styles.kpiAnalyticalGrid}>
+                            {/* Tarjeta 1: FACTURACIÓN BRUTA */}
                             <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon}><DollarSign size={20} /></div>
+                                <div className={styles.kpiAIcon} style={{ background: '#EFF6FF', color: '#0A1E5E' }}>
+                                    <DollarSign size={22} />
+                                </div>
                                 <div className={styles.kpiAContent}>
-                                    <label>Facturación Neta</label>
-                                    <strong>S/ {Math.round(profitabilityByClient.reduce((s,c)=>s+c.billing, 0)).toLocaleString()}</strong>
+                                    <label>Facturación Bruta</label>
+                                    <strong>S/ {Math.round(totalFacturacion).toLocaleString()}</strong>
+                                    <div className={styles.kpiVariationUp}>
+                                        <ArrowUpRight size={12} /> Neto sin IGV
+                                    </div>
                                 </div>
                             </div>
+
+                            {/* Tarjeta 2: COSTO OPERATIVO */}
                             <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon} style={{ background: '#DCFCE7', color: '#15803D' }}><TrendingUp size={20} /></div>
+                                <div className={styles.kpiAIcon} style={{ background: '#FEF2F2', color: '#DC2626' }}>
+                                    <Receipt size={22} />
+                                </div>
                                 <div className={styles.kpiAContent}>
-                                    <label>Utilidad</label>
-                                    <strong>S/ {Math.round(profitabilityByClient.reduce((s,c)=>s+c.profit, 0)).toLocaleString()}</strong>
+                                    <label>Costo Operativo</label>
+                                    <strong>S/ {Math.round(totalCostos).toLocaleString()}</strong>
+                                    <div className={styles.kpiVariationDown}>
+                                        <ArrowDownRight size={12} /> Técnicos + Materiales
+                                    </div>
                                 </div>
                             </div>
+
+                            {/* Tarjeta 3: MARGEN DE UTILIDAD REAL */}
                             <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon} style={{ background: '#E0F2FE', color: '#002A8F' }}><Clock size={20} /></div>
+                                <div className={styles.kpiAIcon} style={{ background: '#ECFDF5', color: '#059669' }}>
+                                    <TrendingUp size={22} />
+                                </div>
+                                <div className={styles.kpiAContent}>
+                                    <label>Margen de Utilidad Real</label>
+                                    <strong style={{ color: totalUtilidad >= 0 ? '#059669' : '#DC2626' }}>
+                                        S/ {Math.round(totalUtilidad).toLocaleString()}
+                                    </strong>
+                                    <div className={totalUtilidad >= 0 ? styles.kpiVariationUp : styles.kpiVariationDown}>
+                                        {totalUtilidad >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                                        {totalFacturacion > 0 ? `${Math.round((totalUtilidad / totalFacturacion) * 100)}% margen` : '—'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Tarjeta 4: TIEMPO PROMEDIO GLOBAL */}
+                            <div className={styles.kpiAnalyticalCard}>
+                                <div className={styles.kpiAIcon} style={{ background: '#FFFBEB', color: '#B45309' }}>
+                                    <Timer size={22} />
+                                </div>
                                 <div className={styles.kpiAContent}>
                                     <label>Tiempo Promedio Global</label>
-                                    <strong>{Math.round(productivityByGestor.reduce((s,g)=>s+g.avgTime,0)/ (productivityByGestor.length||1))}h</strong>
-                                </div>
-                            </div>
-                            <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon} style={{ background: '#FEF3C7', color: '#B45309' }}><ShieldAlert size={20} /></div>
-                                <div className={styles.kpiAContent}>
-                                    <label>Efectividad SLA</label>
-                                    <strong className={productivityByGestor.some(g=>g.ratioVencidos > 10) ? styles.textDanger : ""}>
-                                        {Math.round(100 - (productivityByGestor.reduce((s,g)=>s+g.ratioVencidos,0)/ (productivityByGestor.length||1)))}%
-                                    </strong>
+                                    <strong>{avgTimeGlobal}h</strong>
+                                    <div className={avgTimeGlobal <= 48 ? styles.kpiVariationUp : styles.kpiVariationDown}>
+                                        {avgTimeGlobal <= 48 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                                        {avgTimeGlobal <= 48 ? 'Dentro del SLA' : 'Revisar SLA'}
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 👥 Gestoras Quick View Grid - DINÁMICO */}
+                        {/* ═══ PASO 3: RENDIMIENTO INDIVIDUAL DE GESTORAS ═══ */}
                         <div className={styles.gestorasOverviewSection}>
                             <div className={styles.sectionHeaderExt}>
                                 <h3>Rendimiento Individual de Gestoras</h3>
@@ -589,14 +623,16 @@ export default function ReportesEficienciaPage() {
                                                 <strong>S/ {Math.round(g.facturacion).toLocaleString()}</strong>
                                             </div>
                                             <div className={styles.miniKpi}>
-                                                <label>SLA</label>
-                                                <strong style={{ color: (100 - g.ratioVencidos) > 90 ? '#10B981' : '#EF4444' }}>
-                                                    {Math.round(100 - g.ratioVencidos)}%
+                                                <label>Velocidad</label>
+                                                <strong style={{ color: g.avgTime <= 48 ? '#10B981' : g.avgTime <= 72 ? '#F59E0B' : '#EF4444' }}>
+                                                    {Math.round(g.avgTime)}h
                                                 </strong>
                                             </div>
                                             <div className={styles.miniKpi}>
-                                                <label>Promedio</label>
-                                                <strong>{Math.round(g.avgTime)}h</strong>
+                                                <label>Utilidad</label>
+                                                <strong style={{ color: g.rentabilidad >= 0 ? '#10B981' : '#EF4444' }}>
+                                                    S/ {Math.round(g.rentabilidad).toLocaleString()}
+                                                </strong>
                                             </div>
                                         </div>
                                     </div>
@@ -651,7 +687,7 @@ export default function ReportesEficienciaPage() {
                                                 Utilidad (S/) {sortConfig.key === 'rentabilidad' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                             </th>
                                             <th onClick={() => handleSort('avgTime')} className={styles.sortableHeader}>
-                                                Tiempo Prom. {sortConfig.key === 'avgTime' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                                Velocidad {sortConfig.key === 'avgTime' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                             </th>
                                             <th onClick={() => handleSort('ratioVencidos')} className={styles.sortableHeader}>
                                                 % SLA {sortConfig.key === 'ratioVencidos' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
@@ -662,7 +698,7 @@ export default function ReportesEficienciaPage() {
                                         {productivityByGestor.map((g, i) => (
                                             <tr key={i} className={styles.clickableAnalyticalRow} onClick={() => setSelectedGestoraId(g.id)}>
                                                 <td className={styles.managerAnalyticalCell}>
-                                                    <div className={styles.avatarMini} style={{ background: '#002A8F', color: 'white' }}>{g.nombre.charAt(0)}</div>
+                                                    <div className={styles.avatarMini}>{g.nombre.charAt(0)}</div>
                                                     <strong>{g.nombre}</strong>
                                                 </td>
                                                 <td>{g.totalTickets}</td>
@@ -731,8 +767,10 @@ export default function ReportesEficienciaPage() {
                         <div className={styles.mainGrid}>
                             <div className={styles.elegantCard}>
                                 <div className={styles.cardHeaderExt}>
-                                    <h3>Análisis de Dispersión</h3>
-                                    <p>Rentabilidad Neta vs Inversión en Especialistas</p>
+                                    <div>
+                                        <h3>Análisis de Dispersión</h3>
+                                        <p>Rentabilidad Neta vs Inversión en Especialistas</p>
+                                    </div>
                                 </div>
                                 <FinancialScatterChart data={profitabilityByClient.map(c => ({
                                     x: c.profit,
@@ -799,8 +837,10 @@ export default function ReportesEficienciaPage() {
                 {selectedTab === 'admin' && (
                     <div className={styles.fullStatsTableCard}>
                         <div className={styles.cardHeaderExt}>
-                            <h3>Configuración Central de Metas Mensuales</h3>
-                            <p>Periodo de evaluación: {currentMonthKey}</p>
+                            <div>
+                                <h3>Configuración Central de Metas Mensuales</h3>
+                                <p>Periodo de evaluación: {currentMonthKey}</p>
+                            </div>
                         </div>
                         <table className={styles.premiumTable}>
                             <thead>
@@ -819,7 +859,7 @@ export default function ReportesEficienciaPage() {
                                             <div className={styles.avatarMini}>{g.nombre.charAt(0)}</div>
                                             <div>
                                                 <strong>{g.nombre}</strong>
-                                                <small style={{display:'block', color:'#94A3B8'}}>{g.id.substring(0,8)}</small>
+                                                <small style={{display:'block', color:'#94A3B8', fontSize:'0.75rem'}}>{g.id.substring(0,8)}</small>
                                             </div>
                                         </td>
                                         <td>S/ {g.costoLaboral}</td>
@@ -869,7 +909,7 @@ export default function ReportesEficienciaPage() {
                                 {alerts.map((a, i) => (
                                     <div key={i} className={a.severity === 'critical' ? styles.alertCardCritical : styles.alertCardWarningExt}>
                                         <div className={styles.alertIconExt}>
-                                            {a.severity === 'critical' ? <ShieldAlert size={32} /> : <AlertTriangle size={32} />}
+                                            {a.severity === 'critical' ? <ShieldAlert size={28} /> : <AlertTriangle size={28} />}
                                         </div>
                                         <div className={styles.alertContentExt}>
                                             <h4>{a.type}</h4>
