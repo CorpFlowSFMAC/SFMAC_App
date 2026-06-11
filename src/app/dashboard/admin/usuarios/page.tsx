@@ -78,10 +78,10 @@ function timeAgo(dateString: string): string {
 }
 
 // ── Helper: get auth token for API calls ─────────────────────────────────────
-async function getAuthToken(): Promise<string> {
+// Returns token if available (Supabase Auth), null otherwise (Azure AD - uses cookies)
+async function getAuthToken(): Promise<string | null> {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("No hay sesión activa.");
-    return session.access_token;
+    return session?.access_token || null;
 }
 
 export default function UsuariosPage() {
@@ -100,6 +100,43 @@ export default function UsuariosPage() {
     // ── Delete Confirmation State ──
     const [deleteTarget, setDeleteTarget] = useState<Perfil | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // ── Quick Admin Modal State ──
+    const [showQuickAdminModal, setShowQuickAdminModal] = useState(false);
+    const [quickAdminEmail, setQuickAdminEmail] = useState("");
+    const [quickAdminNombre, setQuickAdminNombre] = useState("");
+    const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
+
+    // ── Quick Admin Handler ──
+    const handleQuickAdmin = async () => {
+        if (!quickAdminEmail || !quickAdminEmail.includes("@")) {
+            showToast("Por favor ingresa un email válido.", "error");
+            return;
+        }
+        setIsCreatingAdmin(true);
+        try {
+            const res = await fetch("/api/admin/set-admin", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: 'include',
+                body: JSON.stringify({
+                    email: quickAdminEmail.trim().toLowerCase(),
+                    nombre_completo: quickAdminNombre.trim() || null,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Error al crear admin.");
+            showToast(`${quickAdminEmail} establecido como ADMIN.`, "success");
+            setShowQuickAdminModal(false);
+            setQuickAdminEmail("");
+            setQuickAdminNombre("");
+            queryClient.invalidateQueries({ queryKey: ["perfiles"] });
+        } catch (err: any) {
+            showToast(err.message || "Error al crear admin.", "error");
+        } finally {
+            setIsCreatingAdmin(false);
+        }
+    };
 
     // ── Fetch Profiles ──
     const { data: perfiles = [], isLoading } = useQuery<Perfil[]>({
@@ -264,14 +301,25 @@ export default function UsuariosPage() {
                 </div>
                 {/* Invite Button — visible only for ADMIN */}
                 {isAdmin && (
-                    <button
-                        className={styles.inviteButton}
-                        onClick={() => setShowInviteModal(true)}
-                        id="btn-invite-new-user"
-                    >
-                        <UserPlus size={16} />
-                        Invitar Usuario
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                            className={styles.inviteButton}
+                            onClick={() => setShowQuickAdminModal(true)}
+                            id="btn-quick-admin"
+                            style={{ background: '#8B5CF6' }}
+                        >
+                            <Shield size={16} />
+                            Crear Admin
+                        </button>
+                        <button
+                            className={styles.inviteButton}
+                            onClick={() => setShowInviteModal(true)}
+                            id="btn-invite-new-user"
+                        >
+                            <UserPlus size={16} />
+                            Invitar Usuario
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -549,6 +597,92 @@ export default function UsuariosPage() {
                                     <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Enviando...</>
                                 ) : (
                                     <><Mail size={15} />Enviar Invitación</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── QUICK ADMIN MODAL ─────────────────────────────────────────────── */}
+            {showQuickAdminModal && (
+                <div className={styles.modalOverlay} onClick={() => !isCreatingAdmin && setShowQuickAdminModal(false)}>
+                    <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.modalHeader}>
+                            <div className={styles.modalHeaderLeft}>
+                                <div className={styles.modalIcon} style={{ background: "rgba(139, 92, 246, 0.15)", color: "#8B5CF6" }}>
+                                    <Shield size={20} />
+                                </div>
+                                <div>
+                                    <h2 className={styles.modalTitle}>Crear Usuario Admin</h2>
+                                    <p className={styles.modalSubtitle}>
+                                        Agregar usuario directamente como Administrador
+                                    </p>
+                                </div>
+                            </div>
+                            <button className={styles.modalClose} onClick={() => !isCreatingAdmin && setShowQuickAdminModal(false)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className={styles.modalBody}>
+                            <div className={styles.formField}>
+                                <label className={styles.formLabel}>
+                                    <Mail size={14} />
+                                    Email <span style={{ color: "#F87171" }}>*</span>
+                                </label>
+                                <input
+                                    id="quick-admin-email"
+                                    type="email"
+                                    className={styles.formInput}
+                                    placeholder="usuario@ejemplo.com"
+                                    value={quickAdminEmail}
+                                    onChange={(e) => setQuickAdminEmail(e.target.value)}
+                                    disabled={isCreatingAdmin}
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className={styles.formField}>
+                                <label className={styles.formLabel}>
+                                    <Users size={14} />
+                                    Nombre completo (opcional)
+                                </label>
+                                <input
+                                    id="quick-admin-nombre"
+                                    type="text"
+                                    className={styles.formInput}
+                                    placeholder="Nombre Apellido"
+                                    value={quickAdminNombre}
+                                    onChange={(e) => setQuickAdminNombre(e.target.value)}
+                                    disabled={isCreatingAdmin}
+                                />
+                            </div>
+
+                            <p style={{ fontSize: "0.85rem", color: "#6B7280", marginTop: "0.5rem" }}>
+                                El usuario será creado directamente con rol ADMIN sin enviar invitación por email.
+                            </p>
+                        </div>
+
+                        <div className={styles.modalFooter}>
+                            <button
+                                className={styles.modalCancelBtn}
+                                onClick={() => !isCreatingAdmin && setShowQuickAdminModal(false)}
+                                disabled={isCreatingAdmin}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                id="btn-confirm-quick-admin"
+                                className={styles.modalConfirmBtn}
+                                onClick={handleQuickAdmin}
+                                disabled={isCreatingAdmin || !quickAdminEmail}
+                                style={{ background: "#8B5CF6" }}
+                            >
+                                {isCreatingAdmin ? (
+                                    <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Creando...</>
+                                ) : (
+                                    <><Shield size={15} />Crear como Admin</>
                                 )}
                             </button>
                         </div>
