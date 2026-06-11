@@ -42,16 +42,41 @@ export async function POST(req: NextRequest) {
         const supabase = getAdminClient();
         const normalizedEmail = email.toLowerCase().trim();
 
-        // Upsert user as ADMIN
-        const { data, error } = await supabase
+        // First try to update existing user
+        const { data: existingUser, error: selectError } = await supabase
             .from('perfiles')
-            .upsert({
-                email: normalizedEmail,
-                nombre_completo: nombre_completo || null,
-                rol: 'ADMIN',
-            }, { onConflict: 'email' })
-            .select()
+            .select('*')
+            .eq('email', normalizedEmail)
             .single();
+
+        let data, error;
+        if (existingUser) {
+            // Update existing user to ADMIN
+            const result = await supabase
+                .from('perfiles')
+                .update({ 
+                    rol: 'ADMIN',
+                    nombre_completo: nombre_completo || existingUser.nombre_completo,
+                })
+                .eq('email', normalizedEmail)
+                .select()
+                .single();
+            data = result.data;
+            error = result.error;
+        } else {
+            // Insert new user as ADMIN
+            const result = await supabase
+                .from('perfiles')
+                .insert({
+                    email: normalizedEmail,
+                    nombre_completo: nombre_completo || null,
+                    rol: 'ADMIN',
+                })
+                .select()
+                .single();
+            data = result.data;
+            error = result.error;
+        }
 
         if (error) throw error;
 
