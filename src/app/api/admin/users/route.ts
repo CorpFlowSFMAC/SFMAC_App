@@ -21,26 +21,48 @@ function getAdminClient() {
 }
 
 // ── Auth Guard: Verify caller is an authenticated ADMIN ───────────────────────
-async function verifyAdmin(req: NextRequest): Promise<{ authorized: boolean; message?: string }> {
+async function verifyAdmin(req: NextRequest): Promise<{ authorized: boolean; message?: string; userEmail?: string }> {
     const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-        return { authorized: false, message: 'No autorizado: token faltante.' };
-    }
-    const token = authHeader.split(' ')[1];
     const supabase = getAdminClient();
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) {
-        return { authorized: false, message: 'No autorizado: sesión inválida.' };
+
+    // Method 1: Token Bearer (Supabase Auth session)
+    if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        if (error || !user) {
+            return { authorized: false, message: 'No autorizado: sesión inválida.' };
+        }
+        const { data: perfil } = await supabase
+            .from('perfiles')
+            .select('rol')
+            .eq('id', user.id)
+            .single();
+        if (!perfil || perfil.rol !== 'ADMIN') {
+            return { authorized: false, message: 'Prohibido: se requiere rol ADMIN.' };
+        }
+        return { authorized: true, userEmail: user.email };
     }
-    const { data: perfil } = await supabase
-        .from('perfiles')
-        .select('rol')
-        .eq('id', user.id)
-        .single();
-    if (!perfil || perfil.rol !== 'ADMIN') {
-        return { authorized: false, message: 'Prohibido: se requiere rol ADMIN.' };
+
+    // Method 2: Cookies (Azure AD login - no Supabase session)
+    // Azure AD sets cookies: userRole, userEmail, auth_status
+    const cookies = req.cookies.getAll();
+    const userRoleCookie = cookies.find(c => c.name === 'userRole');
+    const userEmailCookie = cookies.find(c => c.name === 'userEmail');
+    const authStatusCookie = cookies.find(c => c.name === 'auth_status');
+
+    if (userRoleCookie?.value === 'admin' && userEmailCookie?.value && authStatusCookie?.value === 'azure_logged_in') {
+        // Verify admin status from database using email from cookie
+        const { data: perfil } = await supabase
+            .from('perfiles')
+            .select('rol')
+            .eq('email', userEmailCookie.value.toLowerCase())
+            .single();
+        if (perfil?.rol === 'ADMIN') {
+            return { authorized: true, userEmail: userEmailCookie.value };
+        }
     }
-    return { authorized: true };
+
+    return { authorized: false, message: 'No autorizado: token faltante.' };
 }
 
 // ── POST /api/admin/users → Invite new user by email ─────────────────────────

@@ -24,12 +24,17 @@ async function getAuthToken(): Promise<string | null> {
 export const perfilesAPI = {
     /**
      * Get all profiles (for Admin panel)
+     * Works with both Supabase Auth sessions and Azure AD cookie-based auth
      */
     async getAll(): Promise<Perfil[]> {
         const token = await getAuthToken();
-        if (!token) throw new Error('No autorizado');
-        const res = await fetch('/api/admin/users', {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch('/api/admin/users', { 
+            headers,
+            credentials: 'include'  // Send cookies for Azure AD auth
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Error al obtener usuarios');
@@ -71,13 +76,18 @@ export const perfilesAPI = {
 
     /**
      * Get the current user's profile securely via backend bypass RLS
+     * Works with both Supabase Auth sessions and Azure AD cookie-based auth
      */
     async getCurrentProfile(): Promise<Perfil | null> {
         const token = await getAuthToken();
-        if (!token) return null;
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
         try {
-            const res = await fetch('/api/profile', {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const res = await fetch('/api/profile', { 
+                headers,
+                credentials: 'include'  // Send cookies for Azure AD auth
             });
             if (!res.ok) return null;
             const json = await res.json();
@@ -89,16 +99,20 @@ export const perfilesAPI = {
 
     /**
      * Update a user's role (Admin only)
+     * Works with both Supabase Auth sessions and Azure AD cookie-based auth
      */
     async updateRole(userId: string, newRole: UserRole): Promise<Perfil> {
         const token = await getAuthToken();
-        if (!token) throw new Error('No autorizado');
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
         const res = await fetch('/api/admin/users', {
             method: 'PATCH',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}` 
-            },
+            headers,
+            credentials: 'include',  // Send cookies for Azure AD auth
             body: JSON.stringify({ userId, newRole })
         });
         const json = await res.json();
