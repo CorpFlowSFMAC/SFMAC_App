@@ -15,21 +15,29 @@ export interface Perfil {
     updated_at: string;
 }
 
+// Helper to get token for API calls
+async function getAuthToken(): Promise<string | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+}
+
 export const perfilesAPI = {
     /**
      * Get all profiles (for Admin panel)
      */
     async getAll(): Promise<Perfil[]> {
-        const { data, error } = await supabase
-            .from('perfiles')
-            .select('*')
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        return (data || []) as Perfil[];
+        const token = await getAuthToken();
+        if (!token) throw new Error('No autorizado');
+        const res = await fetch('/api/admin/users', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Error al obtener usuarios');
+        return json.perfiles || [];
     },
 
     /**
-     * Get a single profile by auth user id
+     * Get a single profile by auth user id (fallback to direct DB, mostly not needed now)
      */
     async getById(userId: string): Promise<Perfil | null> {
         const { data, error } = await supabase
@@ -46,7 +54,6 @@ export const perfilesAPI = {
 
     /**
      * Get a profile by email (for Azure AD authentication)
-     * Usa mapeo universal: .toLowerCase().trim() para evitar errores de coincidencia
      */
     async getByEmail(email: string): Promise<Perfil | null> {
         const normalizedEmail = email.toLowerCase().trim();
@@ -63,32 +70,47 @@ export const perfilesAPI = {
     },
 
     /**
-     * Get the current user's profile
+     * Get the current user's profile securely via backend bypass RLS
      */
     async getCurrentProfile(): Promise<Perfil | null> {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return null;
-        return this.getById(user.id);
+        const token = await getAuthToken();
+        if (!token) return null;
+        try {
+            const res = await fetch('/api/profile', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) return null;
+            const json = await res.json();
+            return json.profile || null;
+        } catch {
+            return null;
+        }
     },
 
     /**
      * Update a user's role (Admin only)
      */
     async updateRole(userId: string, newRole: UserRole): Promise<Perfil> {
-        const { data, error } = await supabase
-            .from('perfiles')
-            .update({ rol: newRole })
-            .eq('id', userId)
-            .select()
-            .single();
-        if (error) throw error;
-        return data as Perfil;
+        const token = await getAuthToken();
+        if (!token) throw new Error('No autorizado');
+        const res = await fetch('/api/admin/users', {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ userId, newRole })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Error al actualizar rol');
+        return json.profile as Perfil;
     },
 
     /**
      * Get all profiles with role GESTORA (for routing assignments)
      */
     async getGestoras(): Promise<Perfil[]> {
+        // Direct DB read (might fail if strict RLS, but if it works it works)
         const { data, error } = await supabase
             .from('perfiles')
             .select('*')

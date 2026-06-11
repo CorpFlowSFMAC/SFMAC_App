@@ -136,3 +136,58 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: err.message || 'Error interno del servidor.' }, { status: 500 });
     }
 }
+
+// ── GET /api/admin/users → Bypasses RLS to return all users ───────────────────
+export async function GET(req: NextRequest) {
+    try {
+        const auth = await verifyAdmin(req);
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.message }, { status: 403 });
+        }
+
+        const supabase = getAdminClient();
+        const { data, error } = await supabase
+            .from('perfiles')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        
+        return NextResponse.json({ success: true, perfiles: data });
+    } catch (err: any) {
+        console.error('[ADMIN USERS API] GET Error:', err);
+        return NextResponse.json({ error: err.message || 'Error interno del servidor.' }, { status: 500 });
+    }
+}
+
+// ── PATCH /api/admin/users → Update user role ────────────────────────────────
+export async function PATCH(req: NextRequest) {
+    try {
+        const auth = await verifyAdmin(req);
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.message }, { status: 403 });
+        }
+
+        const body = await req.json();
+        const { userId, newRole } = body;
+
+        if (!userId || !newRole) {
+            return NextResponse.json({ error: 'userId y newRole son requeridos.' }, { status: 400 });
+        }
+
+        const supabase = getAdminClient();
+        const { data, error } = await supabase
+            .from('perfiles')
+            .update({ rol: newRole })
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return NextResponse.json({ success: true, profile: data });
+    } catch (err: any) {
+        console.error('[ADMIN USERS API] PATCH Error:', err);
+        return NextResponse.json({ error: err.message || 'Error interno del servidor.' }, { status: 500 });
+    }
+}

@@ -1,50 +1,47 @@
-/**
- * API: Get User Profile - Busca perfil de usuario via Service Role
- * Evita RLS buscando desde el servidor
- */
 import { NextRequest, NextResponse } from 'next/server';
-import { getProfileByEmail } from '@/lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
+import { getSupabaseUrl, getSupabaseServiceKey } from '@/lib/supabase-config';
 
-interface PerfilDB {
-    id: string;
-    email: string;
-    nombre_completo: string | null;
-    rol: string;
+function getAdminClient() {
+    const url = getSupabaseUrl();
+    const serviceKey = getSupabaseServiceKey();
+    if (!serviceKey) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY no está configurada en el servidor.');
+    }
+    return createClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
 }
 
-export async function GET(request: NextRequest) {
-    const searchParams = request.nextUrl.searchParams;
-    const email = searchParams.get('email');
-
-    if (!email) {
-        return NextResponse.json({ error: 'Email requerido' }, { status: 400 });
-    }
-
+// ── GET /api/profile → Returns the current user's profile, bypassing RLS ─────
+export async function GET(req: NextRequest) {
     try {
-        const normalizedEmail = email.toLowerCase().trim();
+        const authHeader = req.headers.get('authorization');
+        if (!authHeader?.startsWith('Bearer ')) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        }
+        const token = authHeader.split(' ')[1];
         
-        const perfil = await getProfileByEmail(normalizedEmail) as PerfilDB | null;
-
-        if (!perfil) {
-            console.log('[API Profile] No encontrado:', normalizedEmail);
-            return NextResponse.json({ 
-                found: false, 
-                email: normalizedEmail,
-                error: 'Perfil no existe en la base de datos'
-            });
+        const supabase = getAdminClient();
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        
+        if (error || !user) {
+            return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
         }
 
-        return NextResponse.json({
-            found: true,
-            perfil: {
-                id: perfil.id,
-                email: perfil.email,
-                nombre_completo: perfil.nombre_completo,
-                rol: perfil.rol
-            }
-        });
+        const { data: perfil, error: perfilError } = await supabase
+            .from('perfiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        if (perfilError) {
+            return NextResponse.json({ error: 'Perfil no encontrado', profile: null });
+        }
+
+        return NextResponse.json({ success: true, profile: perfil });
     } catch (err: any) {
-        console.error('[API Profile] Error:', err);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        console.error('[PROFILE API] GET Error:', err);
+        return NextResponse.json({ error: err.message || 'Error interno del servidor.' }, { status: 500 });
     }
 }
