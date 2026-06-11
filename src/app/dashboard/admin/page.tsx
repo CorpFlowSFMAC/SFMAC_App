@@ -1354,7 +1354,7 @@ export default function AdminDashboard() {
                                         const csvData = modalTickets.map((t: any) => {
                                             return {
                                                 'N° Ticket': t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A'),
-                                                'Cliente': t.cliente || t.clients?.name || t.client_name || t.clienteNombre || '',
+                                                'Cliente': t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || '',
                                                 'Servicio': t.servicio || t.service_type || t.tipo_servicio || '',
                                                 'Monto (S/)': t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0,
                                                 'Fecha': t._fecha || t.created_at || t.createdAt || t.updated_at || '',
@@ -1402,7 +1402,7 @@ export default function AdminDashboard() {
                                 <tbody>
                                     {modalTickets.map((t: any, idx: number) => {
                                         const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
-                                        const clientName = t.cliente || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
                                         const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
                                         const fecha = t._fecha || t.created_at || t.createdAt || t.updated_at || '';
                                         const monto = t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0;
