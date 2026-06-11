@@ -174,12 +174,16 @@ export default function UsuariosPage() {
         setIsInviting(true);
         try {
             const token = await getAuthToken();
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+            }
             const res = await fetch("/api/admin/users", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                },
+                headers,
+                credentials: 'include',  // Send cookies for Azure AD auth
                 body: JSON.stringify({
                     email: inviteEmail.trim().toLowerCase(),
                     nombre_completo: inviteNombre.trim() || null,
@@ -207,12 +211,16 @@ export default function UsuariosPage() {
         setIsDeleting(true);
         try {
             const token = await getAuthToken();
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+            }
             const res = await fetch("/api/admin/users", {
                 method: "DELETE",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                },
+                headers,
+                credentials: 'include',  // Send cookies for Azure AD auth
                 body: JSON.stringify({ userId: deleteTarget.id }),
             });
             const data = await res.json();
