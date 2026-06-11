@@ -3,10 +3,11 @@
 import React, { useState, useMemo } from "react";
 import {
     Shield, Users, Search, Loader2, CheckCircle2, XCircle,
-    UserCheck, Clock, Eye, ShieldOff, Info
+    UserCheck, Clock, Eye, ShieldOff, Info, UserPlus, Trash2, X, Mail
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { perfilesAPI, type Perfil, type UserRole } from "@/lib/profiles-api";
+import { supabase } from "@/lib/supabase";
 import styles from "./usuarios.module.css";
 
 interface Toast {
@@ -76,11 +77,29 @@ function timeAgo(dateString: string): string {
     return `Hace ${Math.floor(diffDays / 30)} meses`;
 }
 
+// ── Helper: get auth token for API calls ─────────────────────────────────────
+async function getAuthToken(): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error("No hay sesión activa.");
+    return session.access_token;
+}
+
 export default function UsuariosPage() {
     const queryClient = useQueryClient();
     const [toast, setToast] = useState<Toast | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterRole, setFilterRole] = useState<string>("");
+
+    // ── Invite Modal State ──
+    const [showInviteModal, setShowInviteModal] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState("");
+    const [inviteNombre, setInviteNombre] = useState("");
+    const [inviteRol, setInviteRol] = useState<UserRole>("SIN_ACCESO");
+    const [isInviting, setIsInviting] = useState(false);
+
+    // ── Delete Confirmation State ──
+    const [deleteTarget, setDeleteTarget] = useState<Perfil | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // ── Fetch Profiles ──
     const { data: perfiles = [], isLoading } = useQuery<Perfil[]>({
@@ -88,29 +107,29 @@ export default function UsuariosPage() {
         queryFn: () => perfilesAPI.getAll(),
     });
 
+    // ── Current user profile (check if ADMIN) ──
+    const { data: currentPerfil } = useQuery<Perfil | null>({
+        queryKey: ["currentPerfil"],
+        queryFn: () => perfilesAPI.getCurrentProfile(),
+    });
+    const isAdmin = currentPerfil?.rol === "ADMIN";
+
     // ── Mutation: Update Role ──
     const updateRoleMutation = useMutation({
         mutationFn: ({ userId, newRole }: { userId: string; newRole: UserRole }) =>
             perfilesAPI.updateRole(userId, newRole),
-        // Optimistic update
         onMutate: async ({ userId, newRole }) => {
             await queryClient.cancelQueries({ queryKey: ["perfiles"] });
             const previousPerfiles = queryClient.getQueryData<Perfil[]>(["perfiles"]);
-
             queryClient.setQueryData<Perfil[]>(["perfiles"], (old) =>
-                old?.map((p) =>
-                    p.id === userId ? { ...p, rol: newRole } : p
-                ) || []
+                old?.map((p) => p.id === userId ? { ...p, rol: newRole } : p) || []
             );
-
             return { previousPerfiles };
         },
         onSuccess: (_, { newRole }) => {
-            const roleName = ROLE_CONFIG[newRole].label;
-            showToast(`Rol de usuario actualizado exitosamente a "${roleName}"`, "success");
+            showToast(`Rol actualizado a "${ROLE_CONFIG[newRole].label}"`, "success");
         },
         onError: (error: any, _, context) => {
-            // Rollback on error
             if (context?.previousPerfiles) {
                 queryClient.setQueryData(["perfiles"], context.previousPerfiles);
             }
@@ -146,6 +165,68 @@ export default function UsuariosPage() {
         sinAcceso: perfiles.filter((p) => p.rol === "SIN_ACCESO").length,
     }), [perfiles]);
 
+    // ── Invite Handler ──
+    const handleInvite = async () => {
+        if (!inviteEmail || !inviteEmail.includes("@")) {
+            showToast("Por favor ingresa un email válido.", "error");
+            return;
+        }
+        setIsInviting(true);
+        try {
+            const token = await getAuthToken();
+            const res = await fetch("/api/admin/users", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    email: inviteEmail.trim().toLowerCase(),
+                    nombre_completo: inviteNombre.trim() || null,
+                    rol: inviteRol,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Error al invitar usuario.");
+            showToast(`Invitación enviada a ${inviteEmail}`, "success");
+            setShowInviteModal(false);
+            setInviteEmail("");
+            setInviteNombre("");
+            setInviteRol("SIN_ACCESO");
+            queryClient.invalidateQueries({ queryKey: ["perfiles"] });
+        } catch (err: any) {
+            showToast(err.message || "Error al enviar la invitación.", "error");
+        } finally {
+            setIsInviting(false);
+        }
+    };
+
+    // ── Delete Handler ──
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        try {
+            const token = await getAuthToken();
+            const res = await fetch("/api/admin/users", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+                body: JSON.stringify({ userId: deleteTarget.id }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Error al eliminar usuario.");
+            showToast(`Usuario ${deleteTarget.email} eliminado correctamente.`, "success");
+            setDeleteTarget(null);
+            queryClient.invalidateQueries({ queryKey: ["perfiles"] });
+        } catch (err: any) {
+            showToast(err.message || "Error al eliminar el usuario.", "error");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     // ── Loading State ──
     if (isLoading) {
         return (
@@ -173,6 +254,17 @@ export default function UsuariosPage() {
                         </p>
                     </div>
                 </div>
+                {/* Invite Button — visible only for ADMIN */}
+                {isAdmin && (
+                    <button
+                        className={styles.inviteButton}
+                        onClick={() => setShowInviteModal(true)}
+                        id="btn-invite-new-user"
+                    >
+                        <UserPlus size={16} />
+                        Invitar Usuario
+                    </button>
+                )}
             </div>
 
             {/* Stats */}
@@ -264,6 +356,7 @@ export default function UsuariosPage() {
                                 <th>Fecha de Registro</th>
                                 <th>Estado</th>
                                 <th>Rol</th>
+                                {isAdmin && <th style={{ textAlign: "center" }}>Acciones</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -325,7 +418,7 @@ export default function UsuariosPage() {
                                                         newRole: e.target.value as UserRole,
                                                     })
                                                 }
-                                                disabled={isSaving}
+                                                disabled={isSaving || !isAdmin}
                                             >
                                                 <option value="ADMIN">🛡️ Administrador</option>
                                                 <option value="GESTORA">✅ Gestor(a) Operativo(a)</option>
@@ -333,6 +426,20 @@ export default function UsuariosPage() {
                                                 <option value="SIN_ACCESO">⏳ Sin acceso</option>
                                             </select>
                                         </td>
+
+                                        {/* Delete — ADMIN only */}
+                                        {isAdmin && (
+                                            <td style={{ textAlign: "center" }}>
+                                                <button
+                                                    className={styles.deleteButton}
+                                                    onClick={() => setDeleteTarget(perfil)}
+                                                    title={`Eliminar ${perfil.email}`}
+                                                    id={`btn-delete-user-${perfil.id}`}
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}
@@ -340,6 +447,170 @@ export default function UsuariosPage() {
                     </table>
                 )}
             </div>
+
+            {/* ── INVITE MODAL ────────────────────────────────────────────────── */}
+            {showInviteModal && (
+                <div className={styles.modalOverlay} onClick={() => !isInviting && setShowInviteModal(false)}>
+                    <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.modalHeader}>
+                            <div className={styles.modalHeaderLeft}>
+                                <div className={styles.modalIcon}>
+                                    <UserPlus size={20} />
+                                </div>
+                                <div>
+                                    <h2 className={styles.modalTitle}>Invitar Nuevo Usuario</h2>
+                                    <p className={styles.modalSubtitle}>
+                                        Se enviará un email de invitación al correo indicado
+                                    </p>
+                                </div>
+                            </div>
+                            <button className={styles.modalClose} onClick={() => !isInviting && setShowInviteModal(false)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className={styles.modalBody}>
+                            <div className={styles.formField}>
+                                <label className={styles.formLabel}>
+                                    <Mail size={14} />
+                                    Email corporativo <span style={{ color: "#F87171" }}>*</span>
+                                </label>
+                                <input
+                                    id="invite-email-input"
+                                    type="email"
+                                    className={styles.formInput}
+                                    placeholder="usuario@sinfimac.pe"
+                                    value={inviteEmail}
+                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                    disabled={isInviting}
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className={styles.formField}>
+                                <label className={styles.formLabel}>
+                                    <Users size={14} />
+                                    Nombre completo (opcional)
+                                </label>
+                                <input
+                                    id="invite-nombre-input"
+                                    type="text"
+                                    className={styles.formInput}
+                                    placeholder="Nombre Apellido"
+                                    value={inviteNombre}
+                                    onChange={(e) => setInviteNombre(e.target.value)}
+                                    disabled={isInviting}
+                                />
+                            </div>
+
+                            <div className={styles.formField}>
+                                <label className={styles.formLabel}>
+                                    <Shield size={14} />
+                                    Rol inicial
+                                </label>
+                                <select
+                                    id="invite-rol-select"
+                                    className={styles.formSelect}
+                                    value={inviteRol}
+                                    onChange={(e) => setInviteRol(e.target.value as UserRole)}
+                                    disabled={isInviting}
+                                >
+                                    <option value="SIN_ACCESO">⏳ Sin acceso (pendiente)</option>
+                                    <option value="ESPECTADOR">👁️ Espectador</option>
+                                    <option value="GESTORA">✅ Gestor(a) Operativo(a)</option>
+                                    <option value="ADMIN">🛡️ Administrador</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className={styles.modalFooter}>
+                            <button
+                                className={styles.modalCancelBtn}
+                                onClick={() => !isInviting && setShowInviteModal(false)}
+                                disabled={isInviting}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                id="btn-confirm-invite"
+                                className={styles.modalConfirmBtn}
+                                onClick={handleInvite}
+                                disabled={isInviting || !inviteEmail}
+                            >
+                                {isInviting ? (
+                                    <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Enviando...</>
+                                ) : (
+                                    <><Mail size={15} />Enviar Invitación</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── DELETE CONFIRMATION MODAL ────────────────────────────────────── */}
+            {deleteTarget && (
+                <div className={styles.modalOverlay} onClick={() => !isDeleting && setDeleteTarget(null)}>
+                    <div className={styles.modal} onClick={(e) => e.stopPropagation()} style={{ maxWidth: "440px" }}>
+                        <div className={styles.modalHeader}>
+                            <div className={styles.modalHeaderLeft}>
+                                <div className={styles.modalIcon} style={{ background: "rgba(239,68,68,0.15)", color: "#F87171" }}>
+                                    <Trash2 size={20} />
+                                </div>
+                                <div>
+                                    <h2 className={styles.modalTitle}>Confirmar Eliminación</h2>
+                                    <p className={styles.modalSubtitle}>Esta acción no se puede deshacer</p>
+                                </div>
+                            </div>
+                            <button className={styles.modalClose} onClick={() => !isDeleting && setDeleteTarget(null)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className={styles.modalBody}>
+                            <div className={styles.deleteConfirmInfo}>
+                                <div className={`${styles.userAvatar} ${ROLE_CONFIG[deleteTarget.rol].avatarClass}`} style={{ width: 48, height: 48, fontSize: "1.1rem" }}>
+                                    {getInitials(deleteTarget.nombre_completo, deleteTarget.email)}
+                                </div>
+                                <div>
+                                    <p className={styles.userName} style={{ fontSize: "1rem" }}>
+                                        {deleteTarget.nombre_completo || deleteTarget.email.split("@")[0]}
+                                    </p>
+                                    <p className={styles.userEmail} style={{ fontSize: "0.85rem" }}>
+                                        {deleteTarget.email}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className={styles.deleteWarning}>
+                                Se eliminará permanentemente el acceso de este usuario al sistema.
+                                Los datos de tickets y operaciones asociados se mantendrán en los registros históricos.
+                            </p>
+                        </div>
+
+                        <div className={styles.modalFooter}>
+                            <button
+                                className={styles.modalCancelBtn}
+                                onClick={() => !isDeleting && setDeleteTarget(null)}
+                                disabled={isDeleting}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                id="btn-confirm-delete"
+                                className={styles.modalDeleteBtn}
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? (
+                                    <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Eliminando...</>
+                                ) : (
+                                    <><Trash2 size={15} />Sí, eliminar usuario</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Toast */}
             {toast && (
