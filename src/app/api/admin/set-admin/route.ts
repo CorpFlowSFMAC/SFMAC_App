@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseUrl, getSupabaseServiceKey } from '@/lib/supabase-config';
+import { randomUUID } from 'crypto';
 
 function getAdminClient() {
     const url = getSupabaseUrl();
@@ -64,10 +65,11 @@ export async function POST(req: NextRequest) {
             data = result.data;
             error = result.error;
         } else {
-            // Insert new user as ADMIN
+            // Insert new user as ADMIN with generated UUID
             const result = await supabase
                 .from('perfiles')
                 .insert({
+                    id: randomUUID(),
                     email: normalizedEmail,
                     nombre_completo: nombre_completo || null,
                     rol: 'ADMIN',
