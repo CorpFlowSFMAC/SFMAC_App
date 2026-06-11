@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getSupabaseAnonKey, getSupabaseAuthKey, getSupabaseUrl } from '@/lib/supabase-config';
+import { getSupabaseAnonKey, getSupabaseAuthKey, getSupabaseUrl, getSupabaseServiceKey } from '@/lib/supabase-config';
 
 // URLs de Supabase
 const SUPABASE_URL = getSupabaseUrl();
@@ -17,12 +17,25 @@ const SERVICE_KEY = getSupabaseAuthKey();
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 // Admin especial - estos emails SIEMPRE serán admin
-const ADMIN_EMAILS = ['acubas@sinfimac.pe', 'admin@sinfimac.pe'];
+const ADMIN_EMAILS = ['acubas@sinfimac.pe', 'admin@sinfimac.pe', 'pjsr71081@gmail.com'];
+
+// Función helper para obtener cliente con service role (bypasses RLS)
+function getServiceClient() {
+    const url = getSupabaseUrl();
+    const serviceKey = getSupabaseServiceKey();
+    if (!serviceKey) {
+        console.warn('[CB] ⚠️ SUPABASE_SERVICE_ROLE_KEY no está configurada, usando ANON key');
+        return createClient(url, getSupabaseAnonKey());
+    }
+    return createClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
+}
 
 console.log('[CB] 🔑 Keys:', { 
-    url: !!SUPABASE_URL, 
-    serviceKey: !!SERVICE_KEY, 
-    anonKey: !!SUPABASE_ANON_KEY 
+    url: !!getSupabaseUrl(), 
+    serviceKey: !!getSupabaseServiceKey(), 
+    anonKey: !!getSupabaseAnonKey() 
 });
 
 export async function GET(request: NextRequest) {
@@ -107,11 +120,13 @@ export async function GET(request: NextRequest) {
             return NextResponse.redirect(new URL('/login?error=no_email', request.url));
         }
         
-        // 3. Buscar perfil en DB
+        // 3. Buscar perfil en DB (usar service client para bypass RLS)
         let rol = null;
         let perfilExiste = false;
         
-        const { data: perfil } = await supabase
+        const serviceClient = getServiceClient();
+        
+        const { data: perfil } = await serviceClient
             .from('perfiles')
             .select('rol')
             .eq('email', userEmail)
@@ -131,8 +146,8 @@ export async function GET(request: NextRequest) {
             const esAdmin = ADMIN_EMAILS.includes(userEmail);
             rol = esAdmin ? 'ADMIN' : 'GESTORA';
             
-            // Crear perfil
-            const { error: insertError } = await supabase
+            // Crear perfil usando service client (bypasses RLS)
+            const { error: insertError } = await serviceClient
                 .from('perfiles')
                 .insert({
                     email: userEmail,
@@ -151,10 +166,10 @@ export async function GET(request: NextRequest) {
         // 5. Determinar rol final
         userRole = (rol || 'sin_acceso').toLowerCase();
         
-        // FORZAR admin para acubas
+        // FORZAR admin para ADMIN_EMAILS
         if (ADMIN_EMAILS.includes(userEmail)) {
-            // Actualizar a admin en DB
-            await supabase
+            // Actualizar a admin en DB usando service client
+            await serviceClient
                 .from('perfiles')
                 .update({ rol: 'ADMIN' })
                 .eq('email', userEmail);
