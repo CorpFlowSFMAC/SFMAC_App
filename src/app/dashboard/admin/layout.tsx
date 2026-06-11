@@ -28,7 +28,7 @@ export default function AdminLayout({
         } catch (e) {
             console.error('Logout error:', e);
         }
-        await supabase.auth.signOut({ scope: 'global' });
+        await supabase.auth.signOut({ scope: 'local' });
         document.cookie = "userRole=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
         document.cookie = "auth_status=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
         document.cookie = "azure_code=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
