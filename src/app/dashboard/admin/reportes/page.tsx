@@ -443,11 +443,19 @@ export default function ReportesEficienciaPage() {
         }
     };
 
-    // Computed KPI values
-    const totalFacturacion = profitabilityByClient.reduce((s,c) => s+c.billing, 0);
-    const totalCostos = profitabilityByClient.reduce((s,c) => s+c.costs, 0);
-    const totalUtilidad = profitabilityByClient.reduce((s,c) => s+c.profit, 0);
-    const avgTimeGlobal = Math.round(productivityByGestor.reduce((s,g) => s+g.avgTime, 0) / (productivityByGestor.length || 1));
+    // Computed KPI values — sourced from productivityByGestor for full consistency
+    // (includes inversion + costoLaboral + activos, not just ticket-level costs)
+    const totalFacturacion = productivityByGestor.reduce((s, g) => s + g.facturacion, 0);
+    const totalInversion = productivityByGestor.reduce((s, g) => s + g.inversion, 0);
+    const totalCostoLaboral = productivityByGestor.reduce((s, g) => s + g.costoLaboral, 0);
+    const totalActivos = productivityByGestor.reduce((s, g) => s + g.activos, 0);
+    const totalCostos = totalInversion + totalCostoLaboral + totalActivos;
+    const totalUtilidad = totalFacturacion - totalCostos;
+    const marginPercent = totalFacturacion > 0 ? Math.round((totalUtilidad / totalFacturacion) * 100) : 0;
+    const avgTimeGlobal = Math.round(productivityByGestor.reduce((s, g) => s + g.avgTime, 0) / (productivityByGestor.length || 1));
+    const totalTicketsGlobal = productivityByGestor.reduce((s, g) => s + g.totalTickets, 0);
+    const totalCerradosGlobal = productivityByGestor.reduce((s, g) => s + g.cerrados, 0);
+    const slaEffectiveness = Math.round(100 - (productivityByGestor.reduce((s, g) => s + g.ratioVencidos, 0) / (productivityByGestor.length || 1)));
 
     if (loadingTickets || loadingClients || loadingGestoras || loadingTargets) {
         return (
@@ -527,67 +535,170 @@ export default function ReportesEficienciaPage() {
                 
                 {selectedTab === 'productivity' && (
                     <div className={styles.productivityAnalyticsLayout}>
-                        {/* ═══ PASO 2: TARJETAS KPI CORREGIDAS ═══ */}
-                        <div className={styles.kpiAnalyticalGrid}>
-                            {/* Tarjeta 1: FACTURACIÓN BRUTA */}
-                            <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon} style={{ background: '#EFF6FF', color: '#0A1E5E' }}>
-                                    <DollarSign size={22} />
+                        {/* ═══ PANEL EJECUTIVO DE KPIs — VISUAL RICO ═══ */}
+                        <div className={styles.kpiExecutivePanel}>
+
+                            {/* ── Tarjeta 1: FACTURACIÓN BRUTA (Hero Card) ── */}
+                            <div className={styles.kpiHeroCard}>
+                                <div className={styles.kpiHeroTop}>
+                                    <div className={styles.kpiHeroIconWrap} style={{ background: 'linear-gradient(135deg, #0A1E5E, #1E3A8A)' }}>
+                                        <DollarSign size={24} color="#fff" />
+                                    </div>
+                                    <div className={styles.kpiHeroLabel}>Facturación Bruta</div>
                                 </div>
-                                <div className={styles.kpiAContent}>
-                                    <label>Facturación Bruta</label>
-                                    <strong>S/ {Math.round(totalFacturacion).toLocaleString()}</strong>
-                                    <div className={styles.kpiVariationUp}>
-                                        <ArrowUpRight size={12} /> Neto sin IGV
+                                <div className={styles.kpiHeroValue}>S/ {Math.round(totalFacturacion).toLocaleString()}</div>
+                                <div className={styles.kpiHeroSub}>Ingreso neto sin IGV del período</div>
+                                {/* Visual: Distribución de tickets */}
+                                <div className={styles.kpiHeroBar}>
+                                    <div className={styles.kpiHeroBarLabels}>
+                                        <span>{totalCerradosGlobal} cerrados</span>
+                                        <span>{totalTicketsGlobal} total</span>
+                                    </div>
+                                    <div className={styles.kpiHeroBarTrack}>
+                                        <div className={styles.kpiHeroBarFill} style={{ width: `${totalTicketsGlobal > 0 ? (totalCerradosGlobal / totalTicketsGlobal) * 100 : 0}%` }} />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Tarjeta 2: COSTO OPERATIVO */}
-                            <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon} style={{ background: '#FEF2F2', color: '#DC2626' }}>
-                                    <Receipt size={22} />
+                            {/* ── Tarjeta 2: COSTO OPERATIVO (Desglose Visual) ── */}
+                            <div className={styles.kpiCostCard}>
+                                <div className={styles.kpiCostHeader}>
+                                    <div className={styles.kpiHeroIconWrap} style={{ background: 'linear-gradient(135deg, #DC2626, #F87171)' }}>
+                                        <Receipt size={24} color="#fff" />
+                                    </div>
+                                    <div>
+                                        <div className={styles.kpiCostLabel}>Costo Operativo Total</div>
+                                        <div className={styles.kpiCostValue}>S/ {Math.round(totalCostos).toLocaleString()}</div>
+                                    </div>
                                 </div>
-                                <div className={styles.kpiAContent}>
-                                    <label>Costo Operativo</label>
-                                    <strong>S/ {Math.round(totalCostos).toLocaleString()}</strong>
-                                    <div className={styles.kpiVariationDown}>
-                                        <ArrowDownRight size={12} /> Técnicos + Materiales
+                                {/* Desglose gráfico de costos */}
+                                <div className={styles.kpiCostBreakdown}>
+                                    <div className={styles.kpiCostRow}>
+                                        <div className={styles.kpiCostRowInfo}>
+                                            <span className={styles.kpiCostDot} style={{ background: '#EF4444' }} />
+                                            <span>Inversión en Tickets</span>
+                                        </div>
+                                        <strong>S/ {Math.round(totalInversion).toLocaleString()}</strong>
+                                    </div>
+                                    <div className={styles.kpiCostBarMini}>
+                                        <div style={{ width: `${totalCostos > 0 ? (totalInversion / totalCostos) * 100 : 0}%`, background: '#EF4444' }} />
+                                    </div>
+                                    <div className={styles.kpiCostRow}>
+                                        <div className={styles.kpiCostRowInfo}>
+                                            <span className={styles.kpiCostDot} style={{ background: '#F59E0B' }} />
+                                            <span>Costo Laboral</span>
+                                        </div>
+                                        <strong>S/ {Math.round(totalCostoLaboral).toLocaleString()}</strong>
+                                    </div>
+                                    <div className={styles.kpiCostBarMini}>
+                                        <div style={{ width: `${totalCostos > 0 ? (totalCostoLaboral / totalCostos) * 100 : 0}%`, background: '#F59E0B' }} />
+                                    </div>
+                                    <div className={styles.kpiCostRow}>
+                                        <div className={styles.kpiCostRowInfo}>
+                                            <span className={styles.kpiCostDot} style={{ background: '#94A3B8' }} />
+                                            <span>Activos Asignados</span>
+                                        </div>
+                                        <strong>S/ {Math.round(totalActivos).toLocaleString()}</strong>
+                                    </div>
+                                    <div className={styles.kpiCostBarMini}>
+                                        <div style={{ width: `${totalCostos > 0 ? (totalActivos / totalCostos) * 100 : 0}%`, background: '#94A3B8' }} />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Tarjeta 3: MARGEN DE UTILIDAD REAL */}
-                            <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon} style={{ background: '#ECFDF5', color: '#059669' }}>
-                                    <TrendingUp size={22} />
-                                </div>
-                                <div className={styles.kpiAContent}>
-                                    <label>Margen de Utilidad Real</label>
-                                    <strong style={{ color: totalUtilidad >= 0 ? '#059669' : '#DC2626' }}>
-                                        S/ {Math.round(totalUtilidad).toLocaleString()}
-                                    </strong>
-                                    <div className={totalUtilidad >= 0 ? styles.kpiVariationUp : styles.kpiVariationDown}>
-                                        {totalUtilidad >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                                        {totalFacturacion > 0 ? `${Math.round((totalUtilidad / totalFacturacion) * 100)}% margen` : '—'}
+                            {/* ── Tarjeta 3: MARGEN DE UTILIDAD REAL (Gauge Circular) ── */}
+                            <div className={styles.kpiGaugeCard}>
+                                <div className={styles.kpiGaugeHeader}>Margen de Utilidad Real</div>
+                                <div className={styles.kpiGaugeBody}>
+                                    {/* SVG Circular Gauge */}
+                                    <div className={styles.kpiGaugeRing}>
+                                        <svg viewBox="0 0 120 120" className={styles.kpiGaugeSvg}>
+                                            <circle cx="60" cy="60" r="52" fill="none" stroke="#F1F5F9" strokeWidth="10" />
+                                            <circle 
+                                                cx="60" cy="60" r="52" fill="none" 
+                                                stroke={totalUtilidad >= 0 ? '#10B981' : '#EF4444'}
+                                                strokeWidth="10" 
+                                                strokeLinecap="round"
+                                                strokeDasharray={`${Math.min(Math.abs(marginPercent), 100) * 3.267} 326.7`}
+                                                transform="rotate(-90 60 60)"
+                                                className={styles.kpiGaugeArc}
+                                            />
+                                        </svg>
+                                        <div className={styles.kpiGaugeCenterText}>
+                                            <span className={styles.kpiGaugePercent} style={{ color: totalUtilidad >= 0 ? '#059669' : '#DC2626' }}>
+                                                {marginPercent}%
+                                            </span>
+                                            <span className={styles.kpiGaugeSubtext}>margen</span>
+                                        </div>
+                                    </div>
+                                    <div className={styles.kpiGaugeDetails}>
+                                        <div className={styles.kpiGaugeDetailRow}>
+                                            <span>Utilidad Neta</span>
+                                            <strong style={{ color: totalUtilidad >= 0 ? '#059669' : '#DC2626' }}>
+                                                S/ {Math.round(totalUtilidad).toLocaleString()}
+                                            </strong>
+                                        </div>
+                                        <div className={styles.kpiGaugeDivider} />
+                                        <div className={styles.kpiGaugeDetailRow}>
+                                            <span>Facturación</span>
+                                            <strong>S/ {Math.round(totalFacturacion).toLocaleString()}</strong>
+                                        </div>
+                                        <div className={styles.kpiGaugeDetailRow}>
+                                            <span>(-) Costos</span>
+                                            <strong style={{ color: '#DC2626' }}>S/ {Math.round(totalCostos).toLocaleString()}</strong>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Tarjeta 4: TIEMPO PROMEDIO GLOBAL */}
-                            <div className={styles.kpiAnalyticalCard}>
-                                <div className={styles.kpiAIcon} style={{ background: '#FFFBEB', color: '#B45309' }}>
-                                    <Timer size={22} />
+                            {/* ── Tarjeta 4: TIEMPO & SLA (Doble Indicador) ── */}
+                            <div className={styles.kpiTimeCard}>
+                                <div className={styles.kpiTimeSection}>
+                                    <div className={styles.kpiTimeIcon}>
+                                        <Timer size={20} />
+                                    </div>
+                                    <div className={styles.kpiTimeInfo}>
+                                        <label>Tiempo Promedio</label>
+                                        <strong style={{ color: avgTimeGlobal <= 48 ? '#059669' : avgTimeGlobal <= 72 ? '#B45309' : '#DC2626' }}>
+                                            {avgTimeGlobal}h
+                                        </strong>
+                                    </div>
+                                    <div className={styles.kpiTimeBadge} style={{ 
+                                        background: avgTimeGlobal <= 48 ? '#ECFDF5' : avgTimeGlobal <= 72 ? '#FFFBEB' : '#FEF2F2',
+                                        color: avgTimeGlobal <= 48 ? '#059669' : avgTimeGlobal <= 72 ? '#B45309' : '#DC2626'
+                                    }}>
+                                        {avgTimeGlobal <= 48 ? 'Óptimo' : avgTimeGlobal <= 72 ? 'Alerta' : 'Crítico'}
+                                    </div>
                                 </div>
-                                <div className={styles.kpiAContent}>
-                                    <label>Tiempo Promedio Global</label>
-                                    <strong>{avgTimeGlobal}h</strong>
-                                    <div className={avgTimeGlobal <= 48 ? styles.kpiVariationUp : styles.kpiVariationDown}>
-                                        {avgTimeGlobal <= 48 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                                        {avgTimeGlobal <= 48 ? 'Dentro del SLA' : 'Revisar SLA'}
+                                <div className={styles.kpiTimeDivider} />
+                                <div className={styles.kpiTimeSection}>
+                                    <div className={styles.kpiTimeIcon} style={{ background: slaEffectiveness >= 90 ? '#ECFDF5' : '#FEF2F2', color: slaEffectiveness >= 90 ? '#059669' : '#DC2626' }}>
+                                        <ShieldAlert size={20} />
+                                    </div>
+                                    <div className={styles.kpiTimeInfo}>
+                                        <label>Efectividad SLA</label>
+                                        <strong style={{ color: slaEffectiveness >= 90 ? '#059669' : slaEffectiveness >= 70 ? '#B45309' : '#DC2626' }}>
+                                            {slaEffectiveness}%
+                                        </strong>
+                                    </div>
+                                </div>
+                                {/* Visual: SLA bar */}
+                                <div className={styles.kpiSlaVisualBar}>
+                                    <div className={styles.kpiSlaBarTrack}>
+                                        <div className={styles.kpiSlaBarFill} style={{ 
+                                            width: `${slaEffectiveness}%`,
+                                            background: slaEffectiveness >= 90 ? 'linear-gradient(90deg, #10B981, #34D399)' : slaEffectiveness >= 70 ? 'linear-gradient(90deg, #F59E0B, #FBBF24)' : 'linear-gradient(90deg, #EF4444, #F87171)'
+                                        }} />
+                                        <div className={styles.kpiSlaTarget} />
+                                    </div>
+                                    <div className={styles.kpiSlaLabels}>
+                                        <span>0%</span>
+                                        <span style={{ color: '#0A1E5E', fontWeight: 800 }}>Meta: 90%</span>
+                                        <span>100%</span>
                                     </div>
                                 </div>
                             </div>
+
                         </div>
 
                         {/* ═══ PASO 3: RENDIMIENTO INDIVIDUAL DE GESTORAS ═══ */}

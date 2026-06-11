@@ -287,7 +287,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   KPI CARDS — Analytical Grid (PASO 2)
+   KPI EXECUTIVE PANEL — Rich Visual Cards
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .productivityAnalyticsLayout {
@@ -296,110 +296,373 @@
     gap: 2.5rem;
 }
 
-.kpiAnalyticalGrid {
+.kpiExecutivePanel {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: 1fr 1fr 1fr 1fr;
     gap: 1.25rem;
 }
 
-.kpiAnalyticalCard {
+/* ── Shared Card Base ── */
+.kpiHeroCard, .kpiCostCard, .kpiGaugeCard, .kpiTimeCard {
     background: var(--ei-surface);
-    padding: 1.5rem;
-    border-radius: var(--ei-radius-lg);
+    border-radius: var(--ei-radius-xl);
     border: 1px solid var(--ei-border);
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
+    padding: 1.5rem;
     box-shadow: var(--ei-shadow-sm);
     transition: var(--ei-transition);
-    position: relative;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
-.kpiAnalyticalCard::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    border-radius: 3px 3px 0 0;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.kpiAnalyticalCard:nth-child(1)::after { background: var(--ei-primary); }
-.kpiAnalyticalCard:nth-child(2)::after { background: var(--ei-danger); }
-.kpiAnalyticalCard:nth-child(3)::after { background: var(--ei-success); }
-.kpiAnalyticalCard:nth-child(4)::after { background: var(--ei-warning); }
-
-.kpiAnalyticalCard:hover {
+.kpiHeroCard:hover, .kpiCostCard:hover, .kpiGaugeCard:hover, .kpiTimeCard:hover {
+    box-shadow: var(--ei-shadow-lg);
     transform: translateY(-3px);
-    box-shadow: var(--ei-shadow-md);
     border-color: transparent;
 }
 
-.kpiAnalyticalCard:hover::after {
-    opacity: 1;
+/* ── Card 1: Facturación Hero ── */
+.kpiHeroTop {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
 }
 
-.kpiAIcon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--ei-radius-md);
+.kpiHeroIconWrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--ei-info-bg);
-    color: var(--ei-info);
     flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-.kpiAContent {
-    flex: 1;
-    min-width: 0;
-}
-
-.kpiAContent label {
-    display: block;
-    font-size: 0.7rem;
+.kpiHeroLabel {
+    font-size: 0.72rem;
     font-weight: 700;
     color: var(--ei-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.06em;
+}
+
+.kpiHeroValue {
+    font-size: 1.65rem;
+    font-weight: 900;
+    color: var(--ei-text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 0.25rem;
+}
+
+.kpiHeroSub {
+    font-size: 0.72rem;
+    color: var(--ei-text-muted);
+    font-weight: 500;
+    margin-bottom: 1rem;
+}
+
+.kpiHeroBar {
+    margin-top: auto;
+}
+
+.kpiHeroBarLabels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--ei-text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+    letter-spacing: 0.03em;
+}
+
+.kpiHeroBarTrack {
+    height: 8px;
+    background: var(--ei-border-light);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.kpiHeroBarFill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--ei-primary), var(--ei-accent));
+    border-radius: 20px;
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.kpiHeroBarFill::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 16px;
+    height: 100%;
+    background: rgba(255,255,255,0.4);
+    border-radius: 20px;
+    filter: blur(3px);
+}
+
+/* ── Card 2: Cost Breakdown ── */
+.kpiCostHeader {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.kpiCostLabel {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ei-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.kpiCostValue {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: var(--ei-text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+}
+
+.kpiCostBreakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: auto;
+}
+
+.kpiCostRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.kpiCostRowInfo {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--ei-text-secondary);
+}
+
+.kpiCostRow strong {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--ei-text-primary);
+}
+
+.kpiCostDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.kpiCostBarMini {
+    height: 4px;
+    background: var(--ei-border-light);
+    border-radius: 20px;
+    overflow: hidden;
     margin-bottom: 0.35rem;
 }
 
-.kpiAContent strong {
-    font-size: 1.4rem;
+.kpiCostBarMini > div {
+    height: 100%;
+    border-radius: 20px;
+    transition: width 0.8s ease;
+}
+
+/* ── Card 3: Circular Gauge ── */
+.kpiGaugeHeader {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ei-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.75rem;
+}
+
+.kpiGaugeBody {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+}
+
+.kpiGaugeRing {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0;
+}
+
+.kpiGaugeSvg {
+    width: 100%;
+    height: 100%;
+}
+
+.kpiGaugeArc {
+    transition: stroke-dasharray 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpiGaugeCenterText {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.kpiGaugePercent {
+    font-size: 1.3rem;
     font-weight: 900;
-    color: var(--ei-text-primary);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
     line-height: 1;
 }
 
-/* Variation label below KPI value */
-.kpiVariation {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.7rem;
+.kpiGaugeSubtext {
+    font-size: 0.55rem;
     font-weight: 700;
-    margin-top: 0.4rem;
-    padding: 0.15rem 0.45rem;
+    color: var(--ei-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.1rem;
+}
+
+.kpiGaugeDetails {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.kpiGaugeDetailRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+}
+
+.kpiGaugeDetailRow span {
+    color: var(--ei-text-muted);
+    font-weight: 600;
+}
+
+.kpiGaugeDetailRow strong {
+    font-weight: 800;
+    font-size: 0.8rem;
+}
+
+.kpiGaugeDivider {
+    height: 1px;
+    background: var(--ei-border);
+    margin: 0.15rem 0;
+}
+
+/* ── Card 4: Time & SLA Dual Indicator ── */
+.kpiTimeCard {
+    gap: 0.5rem;
+}
+
+.kpiTimeSection {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.kpiTimeIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #FFFBEB;
+    color: #B45309;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.kpiTimeInfo {
+    flex: 1;
+}
+
+.kpiTimeInfo label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--ei-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.kpiTimeInfo strong {
+    font-size: 1.15rem;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+.kpiTimeBadge {
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 0.2rem 0.55rem;
     border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
 }
 
-.kpiVariationUp {
-    composes: kpiVariation;
-    background: var(--ei-success-bg);
-    color: var(--ei-success);
+.kpiTimeDivider {
+    height: 1px;
+    background: var(--ei-border);
+    margin: 0.15rem 0;
 }
 
-.kpiVariationDown {
-    composes: kpiVariation;
-    background: var(--ei-danger-bg);
-    color: var(--ei-danger);
+.kpiSlaVisualBar {
+    margin-top: auto;
+    padding-top: 0.25rem;
+}
+
+.kpiSlaBarTrack {
+    height: 8px;
+    background: var(--ei-border-light);
+    border-radius: 20px;
+    overflow: visible;
+    position: relative;
+}
+
+.kpiSlaBarFill {
+    height: 100%;
+    border-radius: 20px;
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpiSlaTarget {
+    position: absolute;
+    left: 90%;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: var(--ei-primary);
+    border-radius: 2px;
+}
+
+.kpiSlaLabels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.55rem;
+    font-weight: 600;
+    color: var(--ei-text-muted);
+    margin-top: 0.3rem;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1355,7 +1618,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 1400px) {
-    .kpiAnalyticalGrid {
+    .kpiExecutivePanel {
         grid-template-columns: repeat(2, 1fr);
     }
 }
@@ -1383,11 +1646,18 @@
         flex-wrap: wrap;
         width: 100%;
     }
-    .kpiAnalyticalGrid {
+    .kpiExecutivePanel {
         grid-template-columns: 1fr 1fr;
     }
     .gestorasGridPermanent {
         grid-template-columns: 1fr;
+    }
+    .kpiGaugeBody {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .kpiGaugeRing {
+        margin: 0 auto;
     }
 }
 
@@ -1395,7 +1665,7 @@
     .premiumContainer {
         padding: 0.75rem;
     }
-    .kpiAnalyticalGrid {
+    .kpiExecutivePanel {
         grid-template-columns: 1fr;
     }
     .modernTabNav {
