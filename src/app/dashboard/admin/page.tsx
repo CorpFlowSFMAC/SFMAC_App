@@ -433,12 +433,12 @@ export default function AdminDashboard() {
         // Pipeline: Cotizaciones en curso
         const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente", "visitado"];
         const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + parseFloat(t.ingresos_reales || 0), 0);
+        const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + (parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0);
 
         // Presupuestos Aprobados: En ejecución o por liquidar
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
         const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
-        const totalAprobados = approvedTickets.reduce((s, t) => s + parseFloat(t.total_quoted_amount || t.montoFinal || 0), 0);
+        const totalAprobados = approvedTickets.reduce((s, t) => s + (parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0);
 
         // Lucro Cesante: dinero que la empresa deja de percibir por
         // inoperatividad, retrasos técnicos o penalizaciones SLA en
@@ -990,7 +990,10 @@ export default function AdminDashboard() {
                     <div 
                         onClick={() => {
                             setModalTitle("Presupuestos Aprobados (Trabajos en curso)");
-                            setModalTickets([...tesoreria.approvedTickets]);
+                            setModalTickets(tesoreria.approvedTickets.map((t: any) => ({
+                                ...t,
+                                _monto: parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)
+                            })));
                             setShowListModal(true);
                         }}
                         style={{ padding: "0.5rem", margin: "-0.5rem -0.5rem 10px -0.5rem", borderRadius: "10px", cursor: "pointer", transition: "background 0.2s" }}
@@ -1008,7 +1011,10 @@ export default function AdminDashboard() {
                     <div 
                         onClick={() => {
                             setModalTitle("Pipeline Pendiente (Cotizaciones en curso)");
-                            setModalTickets([...tesoreria.pipelineTickets]);
+                            setModalTickets(tesoreria.pipelineTickets.map((t: any) => ({
+                                ...t,
+                                _monto: parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)
+                            })));
                             setShowListModal(true);
                         }}
                         style={{
@@ -1347,7 +1353,7 @@ export default function AdminDashboard() {
                                         // Exportar a Excel/CSV
                                         const csvData = modalTickets.map((t: any) => {
                                             return {
-                                                'N° Ticket': t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? t.id.substring(0, 8).toUpperCase() : 'N/A'),
+                                                'N° Ticket': t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A'),
                                                 'Cliente': t.cliente || t.clients?.name || t.client_name || t.clienteNombre || '',
                                                 'Servicio': t.servicio || t.service_type || t.tipo_servicio || '',
                                                 'Monto (S/)': t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0,
@@ -1395,7 +1401,7 @@ export default function AdminDashboard() {
                                 </thead>
                                 <tbody>
                                     {modalTickets.map((t: any, idx: number) => {
-                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? t.id.substring(0, 8).toUpperCase() : 'N/A');
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
                                         const clientName = t.cliente || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
                                         const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
                                         const fecha = t._fecha || t.created_at || t.createdAt || t.updated_at || '';
@@ -1518,7 +1524,7 @@ export default function AdminDashboard() {
                                                 >
                                                     <td style={{ padding: '14px 12px' }}>
                                                         <div style={{ fontWeight: 800, fontSize: '0.82rem', color: t._isRiesgo ? '#FCA5A5' : 'white', fontFamily: 'monospace' }}>
-                                                            {t.numeroTicketCliente || t.id.substring(0, 8).toUpperCase()}
+                                                            {t.numeroTicketCliente || String(t.id || '').substring(0, 8).toUpperCase()}
                                                         </div>
                                                         <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
                                                             {new Date(t.createdAt || t.created_at).toLocaleDateString('es-PE')}
