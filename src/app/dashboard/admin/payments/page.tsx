@@ -423,6 +423,7 @@ export default function PaymentsPage() {
         }
     };
 
+    const queryClient = useQueryClient();
     useEffect(() => { fetchPaymentTickets(); }, [fetchPaymentTickets]);
 
     // ⚡ FIX: En lugar de invalidar y refetchear en cada evento realtime (que causa loops),
@@ -471,7 +472,6 @@ export default function PaymentsPage() {
         };
     }, [queryClient]);
 
-    const queryClient = useQueryClient();
 
     // refresh: recarga bandeja local + invalida cache global de TanStack Query
     const refresh = React.useCallback(async (silent = true) => {
