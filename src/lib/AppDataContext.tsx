@@ -333,14 +333,31 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 { event: "*", schema: "public", table: "tickets" },
                 (payload) => {
                     if (payload.eventType === "INSERT") {
-                        // Inserción requiere fetch porque el summary es una vista con joins
-                        queryClient.invalidateQueries({
-                            queryKey: queryKeys.tickets.all,
-                        });
-                        // También invalidar summary para usuarios con userEmail específico
-                        queryClient.invalidateQueries({
-                            queryKey: queryKeys.tickets.summary(),
-                        });
+                        // ⚡ FIX: En lugar de invalidar queries (que causa re-fetch en cadena y potencial loop),
+                        // usamos setQueryData para añadir el ticket directamente al caché.
+                        // El summary view con joins se normaliza aquí para evitar inconsistencias.
+                        const newTicket = payload.new as any;
+                        if (newTicket?.id) {
+                            queryClient.setQueryData(
+                                [...queryKeys.tickets.summary(), userEmail],
+                                (old: any[] | undefined) => {
+                                    if (!old) return old;
+                                    const exists = old.some(t => t.id === newTicket.id);
+                                    if (exists) return old;
+                                    return [normalizeTicket(newTicket), ...old];
+                                }
+                            );
+                            // También actualizar el caché sin userEmail (summary global)
+                            queryClient.setQueryData(
+                                queryKeys.tickets.summary(),
+                                (old: any[] | undefined) => {
+                                    if (!old) return old;
+                                    const exists = old.some(t => t.id === newTicket.id);
+                                    if (exists) return old;
+                                    return [normalizeTicket(newTicket), ...old];
+                                }
+                            );
+                        }
                     } else if (payload.eventType === "UPDATE") {
                         const pNew = payload.new as any;
                         const ticketId = pNew.id;

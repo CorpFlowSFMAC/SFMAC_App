@@ -162,7 +162,9 @@ export default function AdminDashboard() {
     // Hydration guard
     useEffect(() => { setIsMounted(true); }, []);
 
-    // Auto-refresh polling every 15 seconds
+    // ⚡ FIX: Reducir polling de 15s a 60s para evitar saturación de red.
+    // Los cambios en tickets se sincronizan vía Realtime subscriptions (setQueryData),
+    // por lo que el polling es solo un backup para casos edge (desconexiones, etc.)
     useEffect(() => {
         if (!isMounted) return;
         const interval = setInterval(async () => {
@@ -172,7 +174,7 @@ export default function AdminDashboard() {
             } catch (e) {
                 // silent retry next cycle
             }
-        }, 15_000);
+        }, 60_000); // 60 segundos - suficientemente largo para no causar loops
         return () => clearInterval(interval);
     }, [isMounted, refreshTickets]);
     

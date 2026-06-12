@@ -175,6 +175,8 @@ export const queryKeys = {
         summary: () => [...queryKeys.tickets.all, "summary"] as const,
         detail: (id: string) => [...queryKeys.tickets.all, "detail", id] as const,
         payments: () => [...queryKeys.tickets.all, "payments"] as const,
+        strategicMetrics: (startDate: string, endDate: string) =>
+            ["strategic-metrics", startDate, endDate] as const,
     },
     clients: {
         all: ["clients"] as const,
@@ -203,11 +205,18 @@ export const queryKeys = {
 // ─────────────────────────────────────────────
 export function useStrategicMetrics(startDate: string, endDate: string) {
     return useQuery({
-        queryKey: [...queryKeys.tickets.all, "strategic-metrics", startDate, endDate],
+        // ⚡ FIX: Usar key INDEPENDIENTE para evitar que invalidateQueries de tickets
+        // invaliden también este query y creen el bucle infinito de re-fetch
+        queryKey: queryKeys.tickets.strategicMetrics(startDate, endDate),
         queryFn: async () => {
             return await ticketsAPI.getStrategicMetrics(startDate, endDate);
         },
-        staleTime: 1000 * 60, // 60s
+        staleTime: 1000 * 30, // 30s - Previene re-fetch spam en intervals cortos
+        gcTime: 1000 * 60 * 5, // 5 min - Mantener en memoria
+        // No refetchOnWindowFocus para evitar múltiples llamadas al cambiar tab
+        refetchOnWindowFocus: false,
+        // No refetchOnMount para evitar re-fetch al re-renderizar
+        refetchOnMount: false,
     });
 }
 

@@ -425,23 +425,51 @@ export default function PaymentsPage() {
 
     useEffect(() => { fetchPaymentTickets(); }, [fetchPaymentTickets]);
 
+    // ⚡ FIX: En lugar de invalidar y refetchear en cada evento realtime (que causa loops),
+    // usamos setQueryData para actualizar el estado local sin disparar peticiones de red.
+    // El bucle infinito entre ticket-costs y vw_tickets_strategic se rompe al evitar refetches
+    // cuando los datos aún están frescos.
     useEffect(() => {
         const channel = supabase
             .channel('payments:realtime_sync')
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'tickets' },
-                () => { debouncedFetch(); }
+                (payload) => {
+                    console.log('[Payments Realtime] Cambio en tickets:', payload.eventType);
+                    // Forzar actualización del estado local sin fetch
+                    setRawTickets(prev => {
+                        if (!prev) return prev;
+                        const newTicket = payload.new as any;
+                        const oldTicket = payload.old as any;
+
+                        if (payload.eventType === 'INSERT' && newTicket) {
+                            // Nuevo ticket - invalidar caché de payments para que se刷新 en próximo acceso
+                            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                            return prev;
+                        } else if (payload.eventType === 'UPDATE' && newTicket) {
+                            return prev.map(t => t.id === newTicket.id ? { ...t, ...newTicket } : t);
+                        } else if (payload.eventType === 'DELETE' && oldTicket) {
+                            return prev.filter(t => t.id !== oldTicket.id);
+                        }
+                        return prev;
+                    });
+                }
             )
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'ticket_costs' },
-                () => { debouncedFetch(); }
+                (payload) => {
+                    console.log('[Payments Realtime] Cambio en ticket_costs:', payload.eventType);
+                    // Invalidar SOLO la query de payments, no todas las queries de tickets
+                    // Esto evita el bucle infinito entre ticket-costs y strategic views
+                    queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                }
             )
             .subscribe();
         return () => { 
             if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
             supabase.removeChannel(channel); 
         };
-    }, [debouncedFetch]);
+    }, [queryClient]);
 
     const queryClient = useQueryClient();
 
