@@ -601,8 +601,33 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                         queryClient.invalidateQueries({
                             queryKey: queryKeys.tickets.detail(ticketId),
                         });
-                        queryClient.invalidateQueries({
-                            queryKey: queryKeys.tickets.summary()
+                        
+                        // Optimización SWR: Actualización dirigida del ticket en el listado maestro
+                        import("@/lib/supabase-api").then(({ ticketsAPI }) => {
+                            ticketsAPI.getById(ticketId).then(updatedTicket => {
+                                const normalized = normalizeTicket(updatedTicket);
+                                
+                                // Inyectar al query master
+                                queryClient.setQueryData(
+                                    queryKeys.tickets.summary(),
+                                    (old: any[] | undefined) => 
+                                        old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
+                                );
+                                
+                                // Inyectar al query localizado por usuario (si aplica)
+                                if (userEmail) {
+                                    queryClient.setQueryData(
+                                        [...queryKeys.tickets.summary(), userEmail],
+                                        (old: any[] | undefined) => 
+                                            old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
+                                    );
+                                }
+                            }).catch(err => {
+                                console.warn("Fallback: Refetching summary after error optimizing", err);
+                                queryClient.invalidateQueries({
+                                    queryKey: queryKeys.tickets.summary()
+                                });
+                            });
                         });
                     }
                     // Invalidar bandeja de pagos para sincronización inmediata admin ↔ gestor
@@ -625,8 +650,33 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                         queryClient.invalidateQueries({
                             queryKey: queryKeys.tickets.detail(ticketId),
                         });
-                        queryClient.invalidateQueries({
-                            queryKey: queryKeys.tickets.summary()
+                        
+                        // Optimización SWR: Actualización dirigida del ticket en el listado maestro
+                        import("@/lib/supabase-api").then(({ ticketsAPI }) => {
+                            ticketsAPI.getById(ticketId).then(updatedTicket => {
+                                const normalized = normalizeTicket(updatedTicket);
+                                
+                                // Inyectar al query master
+                                queryClient.setQueryData(
+                                    queryKeys.tickets.summary(),
+                                    (old: any[] | undefined) => 
+                                        old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
+                                );
+                                
+                                // Inyectar al query localizado por usuario (si aplica)
+                                if (userEmail) {
+                                    queryClient.setQueryData(
+                                        [...queryKeys.tickets.summary(), userEmail],
+                                        (old: any[] | undefined) => 
+                                            old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
+                                    );
+                                }
+                            }).catch(err => {
+                                console.warn("Fallback: Refetching summary after error optimizing", err);
+                                queryClient.invalidateQueries({
+                                    queryKey: queryKeys.tickets.summary()
+                                });
+                            });
                         });
                     }
                     queryClient.invalidateQueries({
