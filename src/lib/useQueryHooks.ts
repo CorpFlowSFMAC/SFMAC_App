@@ -562,9 +562,9 @@ export function useUpdateTicketStatus() {
             }
             console.error("[useUpdateTicketStatus] Error, rolled back:", _err);
         },
-        // ── RECONCILIACIÓN: siempre refetch desde DB para garantizar consistencia ──
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+        // ── RECONCILIACIÓN: actualizar sólo el ticket afectado ──
+        onSettled: (data, error, variables) => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.detail(variables.ticketId) });
         },
     });
 }
@@ -611,8 +611,8 @@ export function useUpdateTicket() {
                 );
             }
         },
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+        onSettled: (data, error, variables) => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.detail(variables.ticketId) });
         },
     });
 }
@@ -629,7 +629,9 @@ export function useCreateTicket() {
             return normalizeTicket(result);
         },
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            // Se asume que el WebSocket o el onMutate actualizarán el summary
+            // o se invalida solo el summary si es creación
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
         },
     });
 }
@@ -664,7 +666,7 @@ export function useDeleteTicket() {
             }
         },
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
         },
     });
 }

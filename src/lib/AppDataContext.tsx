@@ -598,34 +598,34 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 (payload) => {
                     const ticketId = (payload.new as any)?.ticket_id || (payload.old as any)?.ticket_id;
                     if (ticketId) {
-                        queryClient.invalidateQueries({
-                            queryKey: queryKeys.tickets.detail(ticketId),
-                        });
-                        
-                        // Optimización SWR: Actualización dirigida del ticket en el listado maestro
+                        // Optimización SWR con Deduplicación estricta
+                        // fetchQuery comparte la misma Promesa si se llama múltiples veces por eventos de WebSocket simultáneos
                         import("@/lib/supabase-api").then(({ ticketsAPI }) => {
-                            ticketsAPI.getById(ticketId).then(updatedTicket => {
-                                const normalized = normalizeTicket(updatedTicket);
-                                
-                                // Inyectar al query master
-                                queryClient.setQueryData(
-                                    queryKeys.tickets.summary(),
-                                    (old: any[] | undefined) => 
-                                        old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
-                                );
-                                
-                                // Inyectar al query localizado por usuario (si aplica)
-                                if (userEmail) {
+                            import("@/lib/useQueryHooks").then(({ normalizeTicket }) => {
+                                queryClient.fetchQuery({
+                                    queryKey: queryKeys.tickets.detail(ticketId),
+                                    queryFn: async () => {
+                                        const data = await ticketsAPI.getById(ticketId);
+                                        return normalizeTicket(data);
+                                    },
+                                    staleTime: 500, // Ventana de de-bounce de 500ms contra eventos repetitivos
+                                }).then(normalized => {
+                                    // Mutación atómica en memoria RAM sin disparar refetch general
                                     queryClient.setQueryData(
-                                        [...queryKeys.tickets.summary(), userEmail],
+                                        queryKeys.tickets.summary(),
                                         (old: any[] | undefined) => 
                                             old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
                                     );
-                                }
-                            }).catch(err => {
-                                console.warn("Fallback: Refetching summary after error optimizing", err);
-                                queryClient.invalidateQueries({
-                                    queryKey: queryKeys.tickets.summary()
+                                    
+                                    if (userEmail) {
+                                        queryClient.setQueryData(
+                                            [...queryKeys.tickets.summary(), userEmail],
+                                            (old: any[] | undefined) => 
+                                                old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
+                                        );
+                                    }
+                                }).catch(err => {
+                                    console.warn("Fallback: Error fetching deduplicated ticket data", err);
                                 });
                             });
                         });
@@ -647,34 +647,33 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 (payload) => {
                     const ticketId = (payload.new as any)?.ticket_id || (payload.old as any)?.ticket_id;
                     if (ticketId) {
-                        queryClient.invalidateQueries({
-                            queryKey: queryKeys.tickets.detail(ticketId),
-                        });
-                        
-                        // Optimización SWR: Actualización dirigida del ticket en el listado maestro
+                        // Optimización SWR con Deduplicación estricta
                         import("@/lib/supabase-api").then(({ ticketsAPI }) => {
-                            ticketsAPI.getById(ticketId).then(updatedTicket => {
-                                const normalized = normalizeTicket(updatedTicket);
-                                
-                                // Inyectar al query master
-                                queryClient.setQueryData(
-                                    queryKeys.tickets.summary(),
-                                    (old: any[] | undefined) => 
-                                        old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
-                                );
-                                
-                                // Inyectar al query localizado por usuario (si aplica)
-                                if (userEmail) {
+                            import("@/lib/useQueryHooks").then(({ normalizeTicket }) => {
+                                queryClient.fetchQuery({
+                                    queryKey: queryKeys.tickets.detail(ticketId),
+                                    queryFn: async () => {
+                                        const data = await ticketsAPI.getById(ticketId);
+                                        return normalizeTicket(data);
+                                    },
+                                    staleTime: 500, // Ventana de de-bounce de 500ms
+                                }).then(normalized => {
+                                    // Mutación atómica en memoria RAM
                                     queryClient.setQueryData(
-                                        [...queryKeys.tickets.summary(), userEmail],
+                                        queryKeys.tickets.summary(),
                                         (old: any[] | undefined) => 
                                             old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
                                     );
+                                    
+                                    if (userEmail) {
+                                        queryClient.setQueryData(
+                                            [...queryKeys.tickets.summary(), userEmail],
+                                            (old: any[] | undefined) => 
+                                                old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
+                                    );
                                 }
-                            }).catch(err => {
-                                console.warn("Fallback: Refetching summary after error optimizing", err);
-                                queryClient.invalidateQueries({
-                                    queryKey: queryKeys.tickets.summary()
+                                }).catch(err => {
+                                    console.warn("Fallback: Error fetching deduplicated ticket data", err);
                                 });
                             });
                         });
@@ -842,9 +841,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         async (data: any) => {
             const created = await ticketsAPI.create(data);
             const normalized = normalizeTicket(created);
-            // 🚀 OPTIMIZACIÓN: insertamos directo en cache + invalidamos para asegurar sync
-            // Invalidar tanto all como summary para cubrir todas las posibles query keys
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            // 🚀 OPTIMIZACIÓN: insertamos directo en cache + invalidamos summary para asegurar sync
             queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
             
             // También insertar directo para respuesta instantánea
