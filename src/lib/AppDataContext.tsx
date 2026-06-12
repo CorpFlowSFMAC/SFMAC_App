@@ -615,41 +615,39 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 (payload) => {
                     const ticketId = (payload.new as any)?.ticket_id || (payload.old as any)?.ticket_id;
                     if (ticketId) {
-                        // Optimización SWR con Deduplicación estricta
-                        // fetchQuery comparte la misma Promesa si se llama múltiples veces por eventos de WebSocket simultáneos
-                        import("@/lib/supabase-api").then(({ ticketsAPI }) => {
-                            import("@/lib/useQueryHooks").then(({ normalizeTicket }) => {
-                                queryClient.fetchQuery({
-                                    queryKey: queryKeys.tickets.detail(ticketId),
-                                    queryFn: async () => {
-                                        const data = await ticketsAPI.getById(ticketId);
-                                        return normalizeTicket(data);
-                                    },
-                                    staleTime: 500, // Ventana de de-bounce de 500ms contra eventos repetitivos
-                                }).then(normalized => {
-                                    // Mutación atómica en memoria RAM sin disparar refetch general
-                                    queryClient.setQueryData(
-                                        queryKeys.tickets.summary(),
-                                        (old: any[] | undefined) => 
-                                            old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
-                                    );
+                        // Abstracción de Red: Mutación 100% en RAM, cero peticiones al servidor (Previene fallos de Hetzner)
+                        const updateLocalCache = (old: any[] | undefined) => {
+                            if (!old) return old;
+                            return old.map(t => {
+                                if (t.id === ticketId) {
+                                    const currentCosts = Array.isArray(t.costos) ? [...t.costos] : [];
+                                    const payloadCost = payload.new as any;
                                     
-                                    if (userEmail) {
-                                        queryClient.setQueryData(
-                                            [...queryKeys.tickets.summary(), userEmail],
-                                            (old: any[] | undefined) => 
-                                                old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
-                                        );
+                                    if (payload.eventType === 'DELETE') {
+                                        return { ...t, costos: currentCosts.filter(c => c.id !== (payload.old as any).id) };
                                     }
-                                }).catch(err => {
-                                    console.warn("Fallback: Error fetching deduplicated ticket data", err);
-                                });
+                                    
+                                    const existingIdx = currentCosts.findIndex(c => c.id === payloadCost.id);
+                                    if (existingIdx >= 0) {
+                                        currentCosts[existingIdx] = { ...currentCosts[existingIdx], ...payloadCost };
+                                    } else if (payloadCost.id) {
+                                        currentCosts.push(payloadCost);
+                                    }
+                                    return { ...t, costos: currentCosts };
+                                }
+                                return t;
                             });
-                        });
+                        };
+                        
+                        queryClient.setQueryData(queryKeys.tickets.summary(), updateLocalCache);
+                        if (userEmail) {
+                            queryClient.setQueryData([...queryKeys.tickets.summary(), userEmail], updateLocalCache);
+                        }
                     }
-                    // Invalidar bandeja de pagos para sincronización inmediata admin ↔ gestor
+                    // Invalidar silenciosamente sin disparar GET masivos
                     queryClient.invalidateQueries({
-                        queryKey: queryKeys.tickets.payments()
+                        queryKey: queryKeys.tickets.payments(),
+                        refetchType: 'none'
                     });
                 }
             )
@@ -664,39 +662,39 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 (payload) => {
                     const ticketId = (payload.new as any)?.ticket_id || (payload.old as any)?.ticket_id;
                     if (ticketId) {
-                        // Optimización SWR con Deduplicación estricta
-                        import("@/lib/supabase-api").then(({ ticketsAPI }) => {
-                            import("@/lib/useQueryHooks").then(({ normalizeTicket }) => {
-                                queryClient.fetchQuery({
-                                    queryKey: queryKeys.tickets.detail(ticketId),
-                                    queryFn: async () => {
-                                        const data = await ticketsAPI.getById(ticketId);
-                                        return normalizeTicket(data);
-                                    },
-                                    staleTime: 500, // Ventana de de-bounce de 500ms
-                                }).then(normalized => {
-                                    // Mutación atómica en memoria RAM
-                                    queryClient.setQueryData(
-                                        queryKeys.tickets.summary(),
-                                        (old: any[] | undefined) => 
-                                            old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
-                                    );
+                        // Abstracción de Red: Mutación 100% en RAM, cero peticiones al servidor (Previene fallos de Hetzner)
+                        const updateLocalCache = (old: any[] | undefined) => {
+                            if (!old) return old;
+                            return old.map(t => {
+                                if (t.id === ticketId) {
+                                    const currentPayments = Array.isArray(t.pagos) ? [...t.pagos] : [];
+                                    const payloadPayment = payload.new as any;
                                     
-                                    if (userEmail) {
-                                        queryClient.setQueryData(
-                                            [...queryKeys.tickets.summary(), userEmail],
-                                            (old: any[] | undefined) => 
-                                                old ? old.map(t => t.id === ticketId ? { ...t, ...normalized } : t) : old
-                                    );
+                                    if (payload.eventType === 'DELETE') {
+                                        return { ...t, pagos: currentPayments.filter(p => p.id !== (payload.old as any).id) };
+                                    }
+                                    
+                                    const existingIdx = currentPayments.findIndex(p => p.id === payloadPayment.id);
+                                    if (existingIdx >= 0) {
+                                        currentPayments[existingIdx] = { ...currentPayments[existingIdx], ...payloadPayment };
+                                    } else if (payloadPayment.id) {
+                                        currentPayments.push(payloadPayment);
+                                    }
+                                    return { ...t, pagos: currentPayments };
                                 }
-                                }).catch(err => {
-                                    console.warn("Fallback: Error fetching deduplicated ticket data", err);
-                                });
+                                return t;
                             });
-                        });
+                        };
+                        
+                        queryClient.setQueryData(queryKeys.tickets.summary(), updateLocalCache);
+                        if (userEmail) {
+                            queryClient.setQueryData([...queryKeys.tickets.summary(), userEmail], updateLocalCache);
+                        }
                     }
+                    // Invalidar silenciosamente sin disparar GET masivos
                     queryClient.invalidateQueries({
-                        queryKey: queryKeys.tickets.payments()
+                        queryKey: queryKeys.tickets.payments(),
+                        refetchType: 'none'
                     });
                 }
             )
