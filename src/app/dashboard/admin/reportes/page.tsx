@@ -340,7 +340,6 @@ export default function ReportesEficienciaPage() {
                 const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
                 map[gid].facturacion += ingresoNeto;
             }
-            
             map[gid].inversion += (finances.totalLaborConfirmed + finances.totalOpConfirmed);
         });
 

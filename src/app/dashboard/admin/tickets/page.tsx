@@ -12,6 +12,7 @@ import { ticketsCache } from "@/lib/tickets-cache";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { prefetchTickets } from "@/lib/useQueryHooks";
+import { calculateTicketFinances } from "@/lib/calculations";
 
 
 // Hook para calcular tiempo transcurrido
@@ -928,8 +929,13 @@ function TicketRow({ ticket, onTicketClick }: any) {
     // Usar ingresos_reales si está disponible, sino calcular de total_quoted_amount
     const ingresoNeto = parseFloat(ticket.ingresos_reales || 0) || (ingresoFacturado / 1.18);
 
-    const incomingCostsAgg = parseFloat(ticket.total_costs_agg || ticket.total_costs || 0);
-    const costoDisplay = incomingCostsAgg > 0 ? incomingCostsAgg : 0;
+    // Usar motor financiero centralizado en lugar de depender solo de campos agregados
+    const costsArray = Array.isArray(ticket.costos) ? ticket.costos : [];
+    const finances = calculateTicketFinances(ticket, costsArray);
+    const incomingCostsAgg = parseFloat(ticket.total_costs_agg || ticket.total_costs || ticket.inversion_ejecutada || 0);
+    
+    // Tomamos el mayor entre el agregado que venga en metadata/vista y lo calculado en vivo
+    const costoDisplay = Math.max(finances.totalExpenses, incomingCostsAgg);
 
     const isAtLoss = costoDisplay > 0 && costoDisplay > ingresoFacturado;
     const utilidadNeta = ingresoNeto - costoDisplay;
