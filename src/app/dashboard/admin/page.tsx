@@ -2,7 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+
 import {
     DollarSign, TrendingUp, AlertTriangle, Users, CheckCircle2,
     Zap, ArrowRight, BarChart3, Target, Activity, Shield,
@@ -162,21 +163,35 @@ export default function AdminDashboard() {
     // Hydration guard
     useEffect(() => { setIsMounted(true); }, []);
 
-    // ⚡ FIX: Reducir polling de 15s a 60s para evitar saturación de red.
-    // Los cambios en tickets se sincronizan vía Realtime subscriptions (setQueryData),
-    // por lo que el polling es solo un backup para casos edge (desconexiones, etc.)
+    // ⚡ FIX (2026-06-13): Estabilizar la referencia de refreshTickets con useRef
+    // para cortar el bucle de invalidaciones cruzadas en el Dashboard Estratégico.
+    //
+    // DIAGNÓSTICO DE CAUSA RAÍZ:
+    //   refreshTickets() se recrea en cada render de AppDataContext.tsx.
+    //   Al incluirlo como dependencia del useEffect del intervalo, cada re-render
+    //   del contexto limpia y recrea el setInterval, disparando una llamada
+    //   prematura a refreshTickets() que invalida summary + payments, lo que
+    //   provoca GETs en cascada a vw_tickets_strategic y /api/v3/ticket-costs.
+    //
+    // SOLUCIÓN: useRef estable → el intervalo NO se recrea cuando cambia la referencia.
+    const refreshTicketsRef = useRef(refreshTickets);
+    useEffect(() => { refreshTicketsRef.current = refreshTickets; }, [refreshTickets]);
+
     useEffect(() => {
         if (!isMounted) return;
         const interval = setInterval(async () => {
             try {
-                await refreshTickets();
+                // Llamar vía ref estable: el intervalo no se recrea al cambiar la referencia
+                await refreshTicketsRef.current();
                 setLastRefresh(new Date());
             } catch (e) {
                 // silent retry next cycle
             }
-        }, 60_000); // 60 segundos - suficientemente largo para no causar loops
+        }, 60_000); // 60 segundos — backup solo para reconexiones/edge cases
         return () => clearInterval(interval);
-    }, [isMounted, refreshTickets]);
+    // ⚡ SOLO isMounted: el intervalo se crea UNA vez al montar y no se vuelve a crear.
+    // refreshTickets siempre se lee fresco desde refreshTicketsRef.current.
+    }, [isMounted]);
     
     // Proteger gestoras contra undefined
     const safeGestoras = Array.isArray(gestoras) ? gestoras : [];

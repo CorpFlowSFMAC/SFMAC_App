@@ -211,12 +211,16 @@ export function useStrategicMetrics(startDate: string, endDate: string) {
         queryFn: async () => {
             return await ticketsAPI.getStrategicMetrics(startDate, endDate);
         },
-        staleTime: 1000 * 30, // 30s - Previene re-fetch spam en intervals cortos
-        gcTime: 1000 * 60 * 5, // 5 min - Mantener en memoria
-        // No refetchOnWindowFocus para evitar múltiples llamadas al cambiar tab
-        refetchOnWindowFocus: false,
-        // No refetchOnMount para evitar re-fetch al re-renderizar
-        refetchOnMount: false,
+        // ⚡ PERF FIX (2026-06-13): Congelado a 5 minutos para eliminar el bucle
+        // intermitente en la sección RENTABILIDAD & ROI del Dashboard Estratégico.
+        // El feed en tiempo real lo gestionan los canales WebSocket de AppDataContext,
+        // no este query. 30s era demasiado agresivo y causaba GETs repetitivos a
+        // vw_tickets_strategic y /api/v3/ticket-costs bajo cualquier foco de ventana.
+        staleTime: 1000 * 60 * 5,  // 5 minutos — candado de rendimiento definitivo
+        gcTime: 1000 * 60 * 30,    // 30 min — mantener en memoria entre navegaciones
+        refetchOnWindowFocus: false,   // ❌ Desactivado: no re-fetch al cambiar pestaña
+        refetchOnMount: false,         // ❌ Desactivado: no re-fetch al re-renderizar
+        refetchOnReconnect: false,     // ❌ Desactivado: no re-fetch al recuperar red
     });
 }
 
@@ -368,8 +372,15 @@ export function useTickets(userEmail?: string | null, isAuthReady = true) {
                 return [];
             }
         },
-        staleTime: 1000 * 30, // 30s - V3: datos más reactivos para sincronización bancaria
-        gcTime: 1000 * 60 * 5, // 5 min
+        // ⚡ PERF FIX (2026-06-13): Elevado de 30s a 5 minutos para cortar el bucle
+        // de GETs repetitivos a vw_tickets_strategic y /api/v3/ticket-costs.
+        // Los cambios en tiempo real se propagan exclusivamente vía canales WebSocket
+        // de AppDataContext (setQueryData atómico), sin necesidad de re-fetches HTTP.
+        staleTime: 1000 * 60 * 5,  // 5 minutos — candado de rendimiento definitivo
+        gcTime: 1000 * 60 * 10,    // 10 min
+        refetchOnWindowFocus: false,  // ❌ Desactivado: WebSocket cubre los cambios
+        refetchOnMount: false,        // ❌ Desactivado: datos en caché son suficientes
+        refetchOnReconnect: true,     // ✅ Reactivar solo al perder y recuperar conexión
         retry: 2, // Reintentar hasta 2 veces en caso de errores de red
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
         enabled: !!userEmail && isAuthReady,

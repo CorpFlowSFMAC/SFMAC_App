@@ -54,8 +54,15 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
     }
 
     const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`, {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        // ⚡ PERF FIX (2026-06-13): Cambiado de cache:'no-store' a una caché HTTP corta.
+        // 'no-store' obligaba al navegador a hacer un GET de red en CADA llamada a
+        // getSummaryAll() / getForPayments(), incluso cuando TanStack Query ya tenía
+        // los datos en memoria. Con staleTime=5min en TanStack, esta caché HTTP de 30s
+        // actua como segunda defensa contra ráfagas de re-fetch durante re-renders.
+        cache: 'default',
+        headers: {
+            'Cache-Control': 'max-age=30, stale-while-revalidate=60',
+        }
     });
     const result = await response.json();
     if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos de tickets');
