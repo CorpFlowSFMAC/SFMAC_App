@@ -134,7 +134,7 @@ const isOperating = (item: any) => classifyItem(item) === "operating";
 export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     // ID del técnico principal (para resolver la relación en cada costo)
     const mainTechId: string =
-        ticket.technician_id ?? ticket.technicians?.id ?? ticket.metadata?.tecnico?.id ?? "";
+        ticket.technician_id ?? ticket.technicians?.id ?? ticket.tecnico?.id ?? ticket.metadata?.tecnico?.id ?? "";
 
     // Enriquecer cada costo con main_technician_id si no lo tiene
     const enriched = Array.isArray(costs)

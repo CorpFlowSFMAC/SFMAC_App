@@ -3971,11 +3971,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                         </div>
                                                         <div className={styles.depositsTotal}>
                                                             <span>Total Depositado:</span>
-                                                            <strong>S/ {unifiedPaymentsSum.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
+                                                            <strong>S/ {(unifiedPaymentsSum + operatingExpenses).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong>
                                                         </div>
                                                     </div>
                                                     <div className={styles.depositsListCompact}>
-                                                        {laborItems.length > 0 ? laborItems.map((p: any, i: number) => (
+                                                        {[...laborItems, ...operatingItems].length > 0 ? [...laborItems, ...operatingItems].sort((a, b) => new Date(b.fecha || b.created_at).getTime() - new Date(a.fecha || a.created_at).getTime()).map((p: any, i: number) => (
                                                             <div key={`dep-${i}`} className={styles.depositRowCompact}>
                                                                 <div className={styles.depositRowLeft}>
                                                                     <div className={styles.depositStatusDot} style={{ background: '#10B981' }} />
@@ -4003,32 +4003,31 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Tecnico</span>
                                                                 <span className={styles.destFieldValue}>
-                                                                    {ticketData.technician?.first_name || ticketData.technician?.first_name || ''} {ticketData.technician?.last_name || ticketData.technician?.last_name || ''}
-                                                                    {!(ticketData.technician?.first_name || ticketData.technician?.first_name) && !(ticketData.technician?.last_name || ticketData.technician?.last_name) && (ticketData.technician?.name || 'Sin Técnico')}
+                                                                    {(ticketData.tecnico || ticketData.technician)?.nombre || (ticketData.tecnico || ticketData.technician)?.name || 'Sin Técnico'}
                                                                 </span>
                                                             </div>
                                                             <div className={styles.destinationField}>
                                                                 <span className={styles.destFieldLabel}>Banco</span>
-                                                                <span className={styles.destFieldValue}>{ticketData.technician?.bank_name || ticketData.technician?.bank_name || 'N/A'}</span>
+                                                                <span className={styles.destFieldValue}>{(ticketData.tecnico || ticketData.technician)?.banco || (ticketData.tecnico || ticketData.technician)?.bank_name || 'N/A'}</span>
                                                             </div>
                                                             <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                 <span className={styles.destFieldLabel}>Cuenta</span>
-                                                                <span className={styles.destFieldValueMono}>{ticketData.technician?.account_number || ticketData.technician?.account_number || '---'}</span>
+                                                                <span className={styles.destFieldValueMono}>{(ticketData.tecnico || ticketData.technician)?.numeroCuenta || (ticketData.tecnico || ticketData.technician)?.account_number || '---'}</span>
                                                             </div>
-                                                            {(ticketData.technician?.cci || ticketData.technician?.cci) && (
+                                                            {((ticketData.tecnico || ticketData.technician)?.cci || (ticketData.tecnico || ticketData.technician)?.cci_number) && (
                                                                 <div className={styles.destinationField} style={{ flex: 2 }}>
                                                                     <span className={styles.destFieldLabel}>CCI</span>
-                                                                    <span className={styles.destFieldValueMono}>{ticketData.technician?.cci || ticketData.technician?.cci}</span>
+                                                                    <span className={styles.destFieldValueMono}>{(ticketData.tecnico || ticketData.technician)?.cci || (ticketData.tecnico || ticketData.technician)?.cci_number}</span>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {(ticketData.technician?.yape_number || ticketData.technician?.yape_number_number || ticketData.technician?.plin_number || ticketData.technician?.plin_number_number) && (
+                                                        {((ticketData.tecnico || ticketData.technician)?.yape || (ticketData.tecnico || ticketData.technician)?.yape_number || (ticketData.tecnico || ticketData.technician)?.plin || (ticketData.tecnico || ticketData.technician)?.plin_number) && (
                                                             <div className={styles.destinationWallets}>
-                                                                {(ticketData.technician?.yape_number || ticketData.technician?.yape_number_number) && (
-                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {ticketData.technician?.yape_number || ticketData.technician?.yape_number_number}</span>
+                                                                {((ticketData.tecnico || ticketData.technician)?.yape || (ticketData.tecnico || ticketData.technician)?.yape_number) && (
+                                                                    <span className={styles.walletChip} style={{ background: '#7C3AED' }}>YAPE: {(ticketData.tecnico || ticketData.technician)?.yape || (ticketData.tecnico || ticketData.technician)?.yape_number}</span>
                                                                 )}
-                                                                {(ticketData.technician?.plin_number || ticketData.technician?.plin_number_number) && (
-                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {ticketData.technician?.plin_number || ticketData.technician?.plin_number_number}</span>
+                                                                {((ticketData.tecnico || ticketData.technician)?.plin || (ticketData.tecnico || ticketData.technician)?.plin_number) && (
+                                                                    <span className={styles.walletChip} style={{ background: '#00D1FF' }}>PLIN: {(ticketData.tecnico || ticketData.technician)?.plin || (ticketData.tecnico || ticketData.technician)?.plin_number}</span>
                                                                 )}
                                                             </div>
                                                         )}
