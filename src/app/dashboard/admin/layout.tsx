@@ -353,6 +353,7 @@ export default function AdminLayout({
                     <nav className={styles.mobileBottomNav} aria-label="Navegación principal móvil">
                         <Link
                             href="/dashboard/admin"
+                            prefetch={false}
                             className={`${styles.bottomNavItem} ${pathname === '/dashboard/admin' ? styles.bottomNavItemActive : ''}`}
                         >
                             <LayoutDashboard size={22} />
@@ -360,6 +361,7 @@ export default function AdminLayout({
                         </Link>
                         <Link
                             href="/dashboard/admin/tickets"
+                            prefetch={false}
                             className={`${styles.bottomNavItem} ${pathname.includes('/tickets') ? styles.bottomNavItemActive : ''}`}
                         >
                             <Ticket size={22} />
@@ -367,6 +369,7 @@ export default function AdminLayout({
                         </Link>
                         <Link
                             href="/dashboard/admin/payments"
+                            prefetch={false}
                             className={`${styles.bottomNavItem} ${pathname.includes('/payments') || pathname.includes('/tesoreria') ? styles.bottomNavItemActive : ''}`}
                         >
                             <DollarSign size={22} />
@@ -374,6 +377,7 @@ export default function AdminLayout({
                         </Link>
                         <Link
                             href="/dashboard/admin/reportes"
+                            prefetch={false}
                             className={`${styles.bottomNavItem} ${pathname.includes('/reportes') ? styles.bottomNavItemActive : ''}`}
                         >
                             <BarChart3 size={22} />
