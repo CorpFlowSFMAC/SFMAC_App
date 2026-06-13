@@ -466,7 +466,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         } finally {
             setLoadingCosts(false);
         }
-    }, [ticketData.id, advanceRefreshKey]);
+    }, [ticketData.id]);
+    const loadCostsRef = useRef(loadCosts);
+    useEffect(() => { loadCostsRef.current = loadCosts; }, [loadCosts]);
     useEffect(() => {
         if (!ticketData?.id) return;
         const channel = supabase
@@ -480,7 +482,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     filter: `ticket_id=eq.${ticketData.id}`
                 },
                 () => {
-                    loadCosts();
+                    loadCostsRef.current();
                 }
             )
             .on(
@@ -492,14 +494,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     filter: `ticket_id=eq.${ticketData.id}`
                 },
                 () => {
-                    loadCosts();
+                    loadCostsRef.current();
                 }
             )
             .subscribe();
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [ticketData.id, loadCosts]);
+    }, [ticketData.id]);
     useEffect(() => {
         if (!ticket?.id || hasLoadedRef.current === ticket.id) return;
         hasLoadedRef.current = ticket.id;
@@ -1024,7 +1026,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                 },
                 (payload) => {
                     const freshServerData = payload.new as any;
-                    loadCosts(); // Forzar recarga de costos cuando el ticket se actualiza
+                    // ⚡ FIX: Usar la ref estable para no crear una closure sobre
+                    // una versión desactualizada de loadCosts (que habría cambiado
+                    // si advanceRefreshKey era una dependencia del useCallback).
+                    // El guard isTransitioning evita GETs dobles durante cambios de estado.
+                    if (!isTransitioning.current) {
+                        loadCostsRef.current();
+                    }
                     setTicketData((prev: any) => {
                         if (isTransitioning.current) return prev;
                         const serverMeta = freshServerData.metadata || {};
