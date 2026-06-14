@@ -688,14 +688,15 @@ export default function PaymentsPage() {
                     new Date(b.fecha || b.created_at || 0).getTime() - new Date(a.fecha || a.created_at || 0).getTime()
                 );
 
+                const techRaw = t.technicians || t.metadata?.tecnico || {};
                 const techData = {
-                    id: t.technician_id || t.technicians?.id,
-                    nombre: t.technicians?.name || 'Sin asignar',
-                    banco: t.technicians?.bank_name || '---',
-                    numeroCuenta: t.technicians?.account_number || '---',
-                    cci: t.technicians?.cci || '---',
-                    yape: t.technicians?.yape_number,
-                    plin: t.technicians?.plin_number
+                    id: t.technician_id || techRaw.id,
+                    nombre: techRaw.name || techRaw.nombre || 'Sin asignar',
+                    banco: techRaw.bank_name || techRaw.banco || '---',
+                    numeroCuenta: techRaw.account_number || techRaw.numeroCuenta || '---',
+                    cci: techRaw.cci || techRaw.cci_number || '---',
+                    yape: techRaw.yape_number || techRaw.yape || techRaw.phone || techRaw.celular,
+                    plin: techRaw.plin_number || techRaw.plin || techRaw.phone || techRaw.celular
                 };
 
                 const pendingItems: PaymentItem[] = [];
@@ -719,11 +720,11 @@ export default function PaymentsPage() {
                             isTableCost: true,
                             costId: c.id,
                             specialistName,
-                            specialistBanco: c.technicians?.bank_name,
-                            specialistCuenta: c.technicians?.account_number,
-                            specialistCCI: c.technicians?.cci,
-                            specialistYape: c.technicians?.yape_number,
-                            specialistPlin: c.technicians?.plin_number,
+                            specialistBanco: c.technicians?.bank_name || c.technicians?.banco,
+                            specialistCuenta: c.technicians?.account_number || c.technicians?.numeroCuenta,
+                            specialistCCI: c.technicians?.cci || c.technicians?.cci_number,
+                            specialistYape: c.technicians?.yape_number || c.technicians?.yape || c.technicians?.phone || c.technicians?.celular,
+                            specialistPlin: c.technicians?.plin_number || c.technicians?.plin || c.technicians?.phone || c.technicians?.celular,
                             categoria: c.categoria,
                         });
                     }
