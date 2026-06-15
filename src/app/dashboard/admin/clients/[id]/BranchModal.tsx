@@ -44,7 +44,7 @@ const DEPARTMENT_TO_ZONE: { [key: string]: string } = {
     "Madre de Dios": "SUR",
 
     // Centro
-    "Ancash": "CENTRO",
+    "Áncash": "CENTRO",
     "Huánuco": "CENTRO",
     "Pasco": "CENTRO",
     "Junín": "CENTRO",
