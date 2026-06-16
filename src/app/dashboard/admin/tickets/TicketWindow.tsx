@@ -2054,7 +2054,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
     };
     const handleActualExceedApproval = async () => {
         if (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) {
-            showToast("Error Crítico", "No se puede liberar el ticket para liquidación sin un número de ticket de MiBanco válido (Formato: MB000000.26).", "error");
+            showToast("Error de Control", "No se puede liberar el ticket sin un número válido de MiBanco (Formato: MB000000.26).", "error");
             setShowExceedApprovalConfirm(false);
             return;
         }
