@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import * as XLSX from "xlsx";
 import {
     Wallet, History, CheckCircle2, Clock, ArrowUpRight,
     DollarSign, CreditCard, ChevronDown, ChevronUp,
     Building2, User, Upload, Eye, X, Search, Filter,
     AlertCircle, Banknote, CalendarCheck, BarChart3, RefreshCw,
     Smartphone, Copy, ExternalLink, Camera, CheckCheck, AlertTriangle, ShieldAlert,
-    Package, Wrench, Receipt
+    Package, Wrench, Receipt, Download
 } from "lucide-react";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { ticketsAPI, ticketCostsAPI, paymentsAPI } from "@/lib/supabase-api";
@@ -1711,55 +1712,51 @@ export default function PaymentsPage() {
             matchesStatus = (!hasPendingItems || isTicketClosed) && (hasPaidItems || g.items.some(i => i.isReference));
         }
         
-        // ──────────────────────────────────────────────────────────────
-        // FILTRO POR TIPO DE SOLICITUD: Separar vistas en Tesorería
-        // ──────────────────────────────────────────────────────────────
-        let matchesTab = true;
-        if (activeTab !== 'TODOS') {
-            // Contar ítems por tipo de solicitud basado en el categoría del costo
-            const itemsByType = {
-                'GASTO_RESCATE': g.items.filter((i: any) => {
-                    if (i.isTableCost) {
-                        // Para costos de tabla, clasificar basándose en categoría
-                        const cat = (i.categoria || '').toLowerCase();
-                        return cat.includes('materiales') || cat.includes('viático') || cat.includes('movilidad') ||
-                               cat.includes('logística') || cat.includes('rescate') || cat.includes('envíos') || 
-                               cat.includes('compras') || cat.includes('insumo');
-                    }
-                    const label = `${i.concepto || ''} ${i.tipo || ''}`.toLowerCase();
-                    return label.includes('gasto') || label.includes('rescate') ||
-                           label.includes('materiales') || label.includes('viático');
-                }),
-                'ADELANTO': g.items.filter((i: any) => {
-                    if (i.isTableCost) {
-                        const cat = (i.categoria || '').toLowerCase();
-                        return cat.includes('adelanto') || cat.includes('mano de obra');
-                    }
-                    const label = `${i.concepto || ''} ${i.tipo || ''}`.toLowerCase();
-                    return label.includes('adelanto') || label.includes('refuerzo');
-                }),
-                'LIQUIDACION': g.items.filter((i: any) => {
-                    if (i.isTableCost) {
-                        const cat = (i.categoria || '').toLowerCase();
-                        return cat.includes('liquidación') || cat.includes('liquidacion') || 
-                               cat.includes('mano de obra') && (i.concepto || i.tipo || '').toLowerCase().includes('liquidación');
-                    }
-                    const label = `${i.concepto || ''} ${i.tipo || ''}`.toLowerCase();
-                    return label.includes('liquidación') || label.includes('liquidacion');
-                })
-            };
-            
-            const filteredItems = itemsByType[activeTab] || [];
-            matchesTab = filteredItems.length > 0;
-        }
-        
-        return matchesSearch && matchesStatus && matchesTab;
+        return matchesSearch && matchesStatus;
     });
 
 
 
     // Obtener todos los excedentes pendientes de todos los tickets
     const allExceedanceRequests = tickets.flatMap(t => (t.exceedanceRequests || []).map((r: any) => ({ ...r, ticket: t })));
+
+    const handleExportExcel = () => {
+        try {
+            const exportData = filteredGroups.flatMap(group => {
+                return group.items.map(item => ({
+                    'Ticket': group.ticketNum,
+                    'Sede': group.sede,
+                    'Cliente': group.cliente,
+                    'Técnico': group.tecnico?.nombre || '',
+                    'Banco': group.tecnico?.banco || '',
+                    'Cuenta': group.tecnico?.numeroCuenta || '',
+                    'Yape': group.tecnico?.yape || '',
+                    'Plin': group.tecnico?.plin || '',
+                    'Concepto': item.concepto || item.tipo,
+                    'Monto Solicitado': item.monto,
+                    'Estado': item.estado,
+                    'Pactado MO (Ticket)': group.montoPactado,
+                    'Pagado (Ticket)': group.montoAdelantado - group.gastosOperativos,
+                    'Gastos Oper. (Ticket)': group.gastosOperativos,
+                    'Utilidad (Ticket)': group.utilidad,
+                    'Saldo (Ticket)': group.saldoPendiente
+                }));
+            });
+
+            if (exportData.length === 0) {
+                alert("No hay datos para exportar.");
+                return;
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Pagos");
+            XLSX.writeFile(workbook, `Pagos_Tesoreria_${new Date().toISOString().split('T')[0]}.xlsx`);
+        } catch (error) {
+            console.error("Error exporting to excel", error);
+            alert("Error al exportar a Excel");
+        }
+    };
 
     return (
         <div className={styles.paymentsContainer}>
@@ -2027,48 +2024,28 @@ export default function PaymentsPage() {
                             ))}
                         </div>
                         
-                        {/* ──────────────────────────────────────────────────────────────
-                            TABS: Separación por tipo de solicitud (Gastos/Adelantos/Liquidaciones)
-                        ────────────────────────────────────────────────────────────── */}
-                        <div style={{ 
-                            display: 'flex', 
-                            gap: '8px', 
-                            padding: '4px', 
-                            background: '#F1F5F9', 
-                            borderRadius: '14px',
-                            overflowX: 'auto',
-                            whiteSpace: 'nowrap'
-                        }}>
-                            {(Object.keys(TAB_CONFIG) as TabTipoSolicitud[]).map(tabKey => {
-                                const tab = TAB_CONFIG[tabKey];
-                                const isActive = activeTab === tabKey;
-                                return (
-                                    <button 
-                                        key={tabKey} 
-                                        onClick={() => setActiveTab(tabKey)}
-                                        style={{
-                                            padding: '8px 14px', 
-                                            borderRadius: '10px', 
-                                            border: 'none', 
-                                            cursor: 'pointer',
-                                            fontWeight: 800, 
-                                            fontSize: '0.75rem', 
-                                            transition: 'all 0.2s',
-                                            background: isActive ? 'white' : 'transparent',
-                                            color: isActive ? tab.color : '#64748B',
-                                            boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            flexShrink: 0
-                                        }}
-                                    >
-                                        {tab.icon}
-                                        {tab.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <button 
+                            onClick={handleExportExcel}
+                            style={{ 
+                                padding: '8px 14px', 
+                                borderRadius: '10px', 
+                                border: 'none', 
+                                cursor: 'pointer',
+                                fontWeight: 800, 
+                                fontSize: '0.75rem', 
+                                transition: 'all 0.2s',
+                                background: '#10B981',
+                                color: 'white',
+                                boxShadow: '0 2px 8px rgba(16,185,129,0.2)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                flexShrink: 0
+                            }}
+                            title="Exportar registros a Excel"
+                        >
+                            <Download size={16} /> Exportar Excel
+                        </button>
                     </div>
                 </div>
 
@@ -2096,13 +2073,13 @@ export default function PaymentsPage() {
                             <p style={{ color: '#64748B', maxWidth: '340px', margin: '0 auto', fontSize: '0.9rem' }}>
                                 {searchTerm 
                                     ? `No se encontraron resultados para "${searchTerm}".`
-                                    : filter === 'todos' && activeTab === 'TODOS'
+                                    : filter === 'todos'
                                         ? 'Actualmente no hay solicitudes registradas.'
-                                        : `No se encontraron solicitudes de tipo "${activeTab === 'TODOS' ? 'todos' : TAB_CONFIG[activeTab]?.label || activeTab}".`}
+                                        : `No se encontraron solicitudes para el filtro seleccionado.`}
                             </p>
-                            {(searchTerm || filter !== 'todos' || activeTab !== 'TODOS') && (
+                            {(searchTerm || filter !== 'todos') && (
                                 <button 
-                                    onClick={() => { setSearchTerm(''); setFilter('todos'); setActiveTab('TODOS'); }}
+                                    onClick={() => { setSearchTerm(''); setFilter('todos'); }}
                                     style={{ marginTop: '20px', color: '#3B82F6', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}
                                 >
                                     Ver todos los registros
