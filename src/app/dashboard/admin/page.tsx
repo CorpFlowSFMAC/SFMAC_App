@@ -487,6 +487,11 @@ export default function AdminDashboard() {
             return s + ingresoNeto;
         }, 0));
 
+        const addMonto = (arr: any[]) => arr.map(t => ({
+            ...t,
+            _monto: parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)
+        }));
+
         // Cuellos de botella detallados
         const espCot = pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.status_id || t.estadoId)));
         const espApro = pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.status_id || t.estadoId)));
@@ -504,17 +509,17 @@ export default function AdminDashboard() {
             totalAprobados: round2(totalAprobados),
             lucro: round2(lucroReal),
             aging: [
-                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), tickets: [...aging["0-24h"]], color: "#10B981" },
-                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), tickets: [...aging["24-48h"]], color: "#F59E0B" },
-                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmountNeto(aging["+48h"]), tickets: [...aging["+48h"]], color: "#EF4444" },
+                { label: "0 – 24 horas", count: aging["0-24h"].length, amount: calcAmountNeto(aging["0-24h"]), tickets: addMonto(aging["0-24h"]), color: "#10B981" },
+                { label: "24 – 48 horas", count: aging["24-48h"].length, amount: calcAmountNeto(aging["24-48h"]), tickets: addMonto(aging["24-48h"]), color: "#F59E0B" },
+                { label: "+ 48 horas (alerta)", count: aging["+48h"].length, amount: calcAmountNeto(aging["+48h"]), tickets: addMonto(aging["+48h"]), color: "#EF4444" },
             ],
             bloqueados48: aging["+48h"].length,
             bottlenecks: [
-                { label: "Esperando Cotización", count: espCot.length, tickets: [...espCot], color: "#8B5CF6" },
-                { label: "Esperando Aprobación", count: espApro.length, tickets: [...espApro], color: "#3B82F6" },
-                { label: "Esperando Adelanto", count: espAde.length, tickets: [...espAde], color: "#F59E0B" },
-                { label: "En Ejecución", count: enEjec.length, tickets: [...enEjec], color: "#10B981" },
-                { label: "Pendiente Liquidar", count: penLiq.length, tickets: [...penLiq], color: "#64748B" },
+                { label: "Esperando Cotización", count: espCot.length, tickets: addMonto(espCot), color: "#8B5CF6" },
+                { label: "Esperando Aprobación", count: espApro.length, tickets: addMonto(espApro), color: "#3B82F6" },
+                { label: "Esperando Adelanto", count: espAde.length, tickets: addMonto(espAde), color: "#F59E0B" },
+                { label: "En Ejecución", count: enEjec.length, tickets: addMonto(enEjec), color: "#10B981" },
+                { label: "Pendiente Liquidar", count: penLiq.length, tickets: addMonto(penLiq), color: "#64748B" },
             ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
     }, [tickets]);
