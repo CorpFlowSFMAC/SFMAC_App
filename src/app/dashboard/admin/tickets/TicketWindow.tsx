@@ -2053,6 +2053,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
         setShowExceedApprovalConfirm(true);
     };
     const handleActualExceedApproval = async () => {
+        if (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) {
+            showToast("Error Crítico", "No se puede liberar el ticket para liquidación sin un número de ticket de MiBanco válido (Formato: MB000000.26).", "error");
+            setShowExceedApprovalConfirm(false);
+            return;
+        }
         setIsSavingNegotiation(true);
         setShowExceedApprovalConfirm(false);
         try {
@@ -3820,19 +3825,22 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                                                 <div style={{ display: 'flex', gap: '12px' }}>
                                                     <button 
                                                         onClick={handleApproveBudgetExceed}
+                                                        disabled={!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)}
                                                         style={{ 
-                                                            background: '#EF4444', 
+                                                            background: (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) ? '#9CA3AF' : '#EF4444', 
                                                             color: 'white', 
                                                             border: 'none', 
                                                             padding: '10px 20px', 
                                                             borderRadius: '10px', 
                                                             fontSize: '13px', 
                                                             fontWeight: 700,
-                                                            cursor: 'pointer',
+                                                            cursor: (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) ? 'not-allowed' : 'pointer',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: '8px'
+                                                            gap: '8px',
+                                                            opacity: (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) ? 0.7 : 1
                                                         }}
+                                                        title={(!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) ? "Debe ingresar un número de ticket válido" : ""}
                                                     >
                                                         <ThumbsUp size={16} />
                                                         APROBAR EXCEPCIÓN Y LIBERAR PAGO
