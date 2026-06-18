@@ -305,27 +305,56 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         let totalFacturacion = 0;
         let totalUtilidad = 0;
 
-        // Evaluamos TODOS los tickets del gestor, no solo los creados en el periodo (periodTickets),
-        // porque queremos depósitos hechos hoy (aunque el ticket sea viejo) y tickets cerrados hoy (aunque el ticket sea viejo).
+        // Evaluamos TODOS los tickets del gestor (ya pre-filtrados por gestora en el useMemo de arriba),
+        // no solo los creados en el periodo, porque queremos depósitos hechos hoy
+        // (aunque el ticket sea viejo) y tickets cerrados hoy (aunque el ticket sea viejo).
         tickets.forEach((t: any) => {
-            const finances = calculateTicketFinances(t, t.costos || []);
-            
-            // Inversión: Sumamos únicamente los costos (depósitos confirmados) cuya fecha cae dentro del rango
-            const confirmedCosts = [...finances.laborItems, ...finances.operatingItems];
-            confirmedCosts.forEach((c: any) => {
-                const cDate = c.fecha_pago || c.fecha || c.date || c.created_at || t.createdAt || t.created_at;
-                if (isInDateRange(cDate || now.toISOString())) {
-                    totalInversion += c.monto;
-                }
-            });
+            const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
 
-            // Facturación y Utilidad: Solo para tickets cerrados cuya FECHA DE CIERRE cae en el periodo
+            // ── INVERSIÓN EJECUTADA ──────────────────────────────────────────────
+            // Patrón Admin: cuando los costos relacionales están disponibles, usamos
+            // el motor V3 filtrando por fecha. Si el ticket llega sin costos embebidos
+            // (caso normal en listado), caemos al campo pre-calculado del ticket.
+            if (costs.length > 0) {
+                // Motor V3: iterar depósitos confirmados y filtrar por rango de fecha
+                const finances = calculateTicketFinances(t, costs);
+                const confirmedCosts = [...finances.laborItems, ...finances.operatingItems];
+                confirmedCosts.forEach((c: any) => {
+                    const cDate = c.fecha_pago || c.fecha || c.date || c.created_at || t.createdAt || t.created_at;
+                    if (isInDateRange(cDate || now.toISOString())) {
+                        totalInversion += c.monto;
+                    }
+                });
+            } else {
+                // Fallback a campos pre-calculados del ticket (vista SQL / metadata)
+                // Fuente de verdad: inversion_ejecutada > total_costs_agg > metadata.inversion_ejecutada
+                const invFallback =
+                    parseFloat(t.inversion_ejecutada ?? 0) ||
+                    parseFloat(t.total_costs_agg ?? 0) ||
+                    parseFloat(t.metadata?.inversion_ejecutada ?? 0) ||
+                    0;
+                // Solo sumamos si el depósito cae dentro del rango temporal del indicador
+                // (usamos la fecha de ejecución o creación del ticket como aproximación)
+                const refDate = t.execution_date || t.fechaFinEjecucion || t.updated_at || t.createdAt || t.created_at;
+                if (isInDateRange(refDate || now.toISOString())) {
+                    totalInversion += invFallback;
+                }
+            }
+
+            // ── FACTURACIÓN Y UTILIDAD ───────────────────────────────────────────
+            // Solo para tickets cerrados cuya FECHA DE CIERRE cae en el periodo
             const state = normalizeStateId(t.estadoId || t.status_id);
             if (state === "ticket_cerrado") {
                 const closureDate = t.fechaPagoFinal || t.closure_date || t.updated_at || t.createdAt || t.created_at;
                 if (isInDateRange(closureDate || now.toISOString())) {
-                    totalFacturacion += finances.netIncome;
-                    totalUtilidad += finances.realProfitability;
+                    if (costs.length > 0) {
+                        const finances = calculateTicketFinances(t, costs);
+                        totalFacturacion += finances.netIncome;
+                        totalUtilidad += finances.realProfitability;
+                    } else {
+                        totalFacturacion += parseFloat(t.ingresos_reales ?? t.total_quoted_amount ?? 0) || 0;
+                        totalUtilidad += parseFloat(t.rentabilidad ?? t.utilidad_neta ?? t.metadata?.utilidad_neta ?? 0) || 0;
+                    }
                 }
             }
         });
@@ -336,6 +365,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             utilidad: totalUtilidad
         };
     }, [tickets, isInDateRange, now]);
+
 
     // ── Month Utility Target Percent ──
     const utilityTargetPercent = useMemo(() => {
