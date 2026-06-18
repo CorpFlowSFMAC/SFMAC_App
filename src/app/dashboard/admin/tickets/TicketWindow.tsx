@@ -18,6 +18,7 @@ import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
 import { ticketsCache } from "@/lib/tickets-cache";
 import styles from "./TicketWindow.module.css";
+import VirtualSecretaryFab from "./VirtualSecretaryFab";
 const MIBANCO_ID = "b65727ed-94d3-46ef-ab7d-62621ec46acb";
 const SANTANDER_ID = "419d87c8-65e1-434f-8253-d8a226ca5f62";
 interface TicketData {
@@ -4904,6 +4905,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                     onClose={() => setShowGestoraDrawer(false)}
                     onAssign={handleGestoraAssignment}
                 />
+                {/* ── Secretario Virtual Flotante ─────────────────────────────── */}
+                {!isMinimized && (
+                    <VirtualSecretaryFab
+                        mibancoClientId={MIBANCO_ID}
+                        clientId={ticketData.client_id}
+                        clientTicketNumber={ticketData.client_ticket_number}
+                        isSantander={isSantander}
+                        onApplyTicketNumber={(val: string) => {
+                            setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));
+                            showToast("Ticket Registrado", `Se ha asignado el número de ticket: ${val}`, "success");
+                        }}
+                    />
+                )}
             </div>
         </>
     );
