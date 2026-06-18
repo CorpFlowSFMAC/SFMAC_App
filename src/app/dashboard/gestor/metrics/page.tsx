@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
     Plus, Search, CheckCircle2, Zap, MapPin, TrendingUp, TrendingDown, 
     Target, BarChart2, Activity, AlertTriangle, Flame, Timer, Trophy, 
-    Users, ChevronRight, Gauge, Star, Award, BarChart3, Wrench
+    Users, ChevronRight, Gauge, Star, Award, BarChart3, Wrench, ArrowRight, X
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import GestorTurnoWidget from "@/components/GestorTurnoWidget";
@@ -181,6 +181,11 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
     const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "technicians" | "reportes">(() => { return (tab as any) || "dashboard"; });
     const [mounted, setMounted] = useState(false);
+    
+    // Estados para el modal de drill-down de las tarjetas financieras
+    const [showListModal, setShowListModal] = useState(false);
+    const [modalTitle, setModalTitle] = useState("");
+    const [modalTickets, setModalTickets] = useState<any[]>([]);
 
     // Control de montaje para Recharts
     useEffect(() => {
@@ -304,6 +309,9 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         let totalInversion = 0;
         let totalFacturacion = 0;
         let totalUtilidad = 0;
+        const inversionItems: any[] = [];
+        const facturacionItems: any[] = [];
+        const utilidadItems: any[] = [];
 
         // Evaluamos TODOS los tickets del gestor (ya pre-filtrados por gestora en el useMemo de arriba),
         // no solo los creados en el periodo, porque queremos depósitos hechos hoy
@@ -319,12 +327,17 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                 // Motor V3: iterar depósitos confirmados y filtrar por rango de fecha
                 const finances = calculateTicketFinances(t, costs);
                 const confirmedCosts = [...finances.laborItems, ...finances.operatingItems];
+                let ticketInversionSum = 0;
                 confirmedCosts.forEach((c: any) => {
                     const cDate = c.fecha_pago || c.fecha || c.date || c.created_at || t.createdAt || t.created_at;
                     if (isInDateRange(cDate || now.toISOString())) {
                         totalInversion += c.monto;
+                        ticketInversionSum += c.monto;
                     }
                 });
+                if (ticketInversionSum > 0) {
+                    inversionItems.push({ ...t, _monto: ticketInversionSum });
+                }
             } else {
                 // Fallback a campos pre-calculados del ticket (vista SQL / metadata)
                 // Fuente de verdad: inversion_ejecutada > total_costs_agg > metadata.inversion_ejecutada
@@ -338,6 +351,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                 const refDate = t.execution_date || t.fechaFinEjecucion || t.updated_at || t.createdAt || t.created_at;
                 if (isInDateRange(refDate || now.toISOString())) {
                     totalInversion += invFallback;
+                    inversionItems.push({ ...t, _monto: invFallback });
                 }
             }
 
@@ -351,9 +365,15 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         const finances = calculateTicketFinances(t, costs);
                         totalFacturacion += finances.netIncome;
                         totalUtilidad += finances.realProfitability;
+                        facturacionItems.push({ ...t, _monto: finances.netIncome });
+                        utilidadItems.push({ ...t, _monto: finances.realProfitability });
                     } else {
-                        totalFacturacion += parseFloat(t.ingresos_reales ?? t.total_quoted_amount ?? 0) || 0;
-                        totalUtilidad += parseFloat(t.rentabilidad ?? t.utilidad_neta ?? t.metadata?.utilidad_neta ?? 0) || 0;
+                        const facFallback = parseFloat(t.ingresos_reales ?? t.total_quoted_amount ?? 0) || 0;
+                        const utiFallback = parseFloat(t.rentabilidad ?? t.utilidad_neta ?? t.metadata?.utilidad_neta ?? 0) || 0;
+                        totalFacturacion += facFallback;
+                        totalUtilidad += utiFallback;
+                        facturacionItems.push({ ...t, _monto: facFallback });
+                        utilidadItems.push({ ...t, _monto: utiFallback });
                     }
                 }
             }
@@ -362,7 +382,10 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         return {
             inversion: totalInversion,
             facturacion: totalFacturacion,
-            utilidad: totalUtilidad
+            utilidad: totalUtilidad,
+            inversionItems,
+            facturacionItems,
+            utilidadItems
         };
     }, [tickets, isInDateRange, now]);
 
@@ -705,11 +728,6 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                     }}>
                         {/* INVERSIÓN */}
                         <div style={{
-                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
-                            borderRadius: "16px",
-                            padding: "1.25rem 1.5rem",
-                            borderLeft: "6px solid #F59E0B", // Amber-500 Naranja Enérgico
-                            borderTop: "1px solid rgba(255,255,255,0.08)",
                             borderRight: "1px solid rgba(255,255,255,0.08)",
                             borderBottom: "1px solid rgba(255,255,255,0.08)",
                             boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
@@ -1450,6 +1468,153 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                 <div>Backlog:</div>
                                 <div style={{ fontWeight: 700, color: kpis.backlog.length > 3 ? "#EF4444" : "#10B981" }}>{kpis.backlog.length}</div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* ── MODAL DE LISTADO DE TICKETS (DRILL-DOWN) ── */}
+            {showListModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 10000, padding: '2rem'
+                }} onClick={() => setShowListModal(false)}>
+                    <div style={{
+                        background: '#0F0F1A', border: '1px solid rgba(255,255,255,0.1)',
+                        width: '100%', maxWidth: '900px', maxHeight: '85vh',
+                        borderRadius: '24px', display: 'flex', flexDirection: 'column',
+                        overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                        position: 'relative'
+                    }} onClick={e => e.stopPropagation()}>
+                        
+                        <div style={{ padding: '1.5rem 2rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Activity size={20} color="#8B5CF6" /> {modalTitle}
+                                </h3>
+                                <div style={{ display: 'flex', gap: '1.5rem', marginTop: '6px' }}>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>Total: {modalTickets.length} registros</p>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#10B981', fontWeight: 900 }}>
+                                        SUMA TOTAL: S/ {formatSoles(modalTickets.reduce((acc, t) => acc + (t._monto || 0), 0))}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowListModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                                <button
+                                    onClick={() => {
+                                        // Exportar a Excel/CSV
+                                        const csvData = modalTickets.map((t: any) => {
+                                            return {
+                                                'N° Ticket': t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A'),
+                                                'Cliente': t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || '',
+                                                'Servicio': t.servicio || t.service_type || t.tipo_servicio || '',
+                                                'Monto (S/)': t._monto || 0,
+                                                'Fecha': t._fecha || t.created_at || t.createdAt || t.updated_at || '',
+                                            };
+                                        });
+                                        
+                                        const headers = Object.keys(csvData[0] || {});
+                                        const csvRows = [
+                                            headers.join(';'),
+                                            ...csvData.map(row => headers.map(h => `"${(row as any)[h]}"`).join(';'))
+                                        ];
+                                        const csvContent = csvRows.join('\n');
+                                        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                                        const url = URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        const tipoExport = modalTitle.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30).toLowerCase() || 'reporte';
+                                        link.download = `${tipoExport}_${new Date().toISOString().split('T')[0]}.csv`;
+                                        link.click();
+                                        URL.revokeObjectURL(url);
+                                    }}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                        border: 'none', color: 'white', padding: '0.6rem 1.2rem',
+                                        borderRadius: '10px', cursor: 'pointer', fontSize: '0.75rem',
+                                        fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'}
+                                >
+                                    📊 Exportar CSV
+                                </button>
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Servicio</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto (S/)</th>
+                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {modalTickets.map((t: any, idx: number) => {
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
+                                        const fecha = t._fecha || t.created_at || t.createdAt || t.updated_at || '';
+                                        const monto = t._monto || 0;
+                                        
+                                        return (
+                                            <tr 
+                                                key={(t.id || idx) + '-' + idx} 
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                                                        {ticketNum}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                        {clientName}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <span style={{ 
+                                                        padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
+                                                        background: 'rgba(139,92,246,0.15)', 
+                                                        color: '#A78BFA', 
+                                                        border: '1px solid rgba(139,92,246,0.3)'
+                                                    }}>
+                                                        {servicio.toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.9rem' }}>
+                                                        S/ {formatSoles(monto)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '14px 10px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                        {fecha ? new Date(fecha).toLocaleDateString() : '-'}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {modalTickets.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                                                No hay registros para mostrar en esta métrica.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
