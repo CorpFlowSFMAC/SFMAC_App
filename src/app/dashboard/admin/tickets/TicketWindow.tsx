@@ -63,6 +63,7 @@ interface TicketWindowProps {
     onUpdate?: (id: string, updates: any) => Promise<any>;
     index?: number;
     children?: React.ReactNode;
+    gestoraMetrics?: import("./VirtualSecretaryFab").GestoraMetrics;
 }
 const SLATimerHeader = memo(({ ticket }: { ticket: any }) => {
     const [now, setNow] = useState(new Date());
@@ -90,7 +91,7 @@ const SLATimerHeader = memo(({ ticket }: { ticket: any }) => {
         </div>
     );
 });
-function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: TicketWindowProps) {
+function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraMetrics }: TicketWindowProps) {
     const [ticketData, setTicketData] = useState<any>(() => ({
         ...ticket,
         status_id: ticket.status_id || normalizeStateId(ticket.status_id || "nuevo")
@@ -4912,6 +4913,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children }: Ticket
                         clientId={ticketData.client_id}
                         clientTicketNumber={ticketData.client_ticket_number}
                         isSantander={isSantander}
+                        gestoraMetrics={gestoraMetrics}
+                        margenTicketActual={typeof pctReal === 'number' ? pctReal : undefined}
+                        moTicketActual={typeof techPactedTotal === 'number' && techPactedTotal > 0 ? techPactedTotal : undefined}
                         onApplyTicketNumber={(val: string) => {
                             setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));
                             showToast("Ticket Registrado", `Se ha asignado el número de ticket: ${val}`, "success");

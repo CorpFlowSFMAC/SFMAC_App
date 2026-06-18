@@ -263,6 +263,27 @@ export default function TicketsPage() {
         };
     }, [ticketsForMe, filterByView]);
 
+    // Métricas de productividad para el Secretario Virtual — pre-computadas, sin red
+    const gestoraMetrics = React.useMemo(() => {
+        const activos = ticketsForMe.filter(t => filterByView(t, "active"));
+        const cerrados = ticketsForMe.filter(t => filterByView(t, "closed"));
+        const margenesValidos = activos
+            .map(t => parseFloat(t.margen_real ?? t.metadata?.margen_real ?? NaN))
+            .filter(m => !isNaN(m) && m > 0);
+        const margenPromedio = margenesValidos.length > 0
+            ? margenesValidos.reduce((a, b) => a + b, 0) / margenesValidos.length
+            : undefined;
+        return {
+            totalTickets: ticketsForMe.length,
+            ticketsEnProceso: activos.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId))).length,
+            ticketsNuevos: activos.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId))).length,
+            ticketsRevision: activos.filter(t => normalizeStateId(t.estadoId) === "requiere_revision_admin").length,
+            ticketsCerrados: cerrados.length,
+            margenPromedio,
+            nombreGestora: activeGestora?.name || activeGestora?.nombre || undefined,
+        };
+    }, [ticketsForMe, filterByView, activeGestora]);
+
     // ── BÚSQUEDA GLOBAL (all states) vs vista filtrada ────────────────────────
     const isSearching = searchTerm.trim().length > 0;
 
@@ -735,6 +756,7 @@ export default function TicketsPage() {
                             ticket={freshTicket}
                             index={index}
                             onUpdate={updateTicket}
+                            gestoraMetrics={gestoraMetrics}
                             onClose={() => setOpenTickets(openTickets.filter(t => t.id !== ticket.id))}
                         />
                     );
