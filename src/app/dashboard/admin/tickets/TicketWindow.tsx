@@ -898,9 +898,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         })();
         const { data: serverTicket } = await supabase
             .from('tickets')
-            .select('metadata, status_id, technician_id, gestora_id')
+            .select('metadata, status_id, technician_id, gestora_id, updated_at')
             .eq('id', ticketData.id)
             .single();
+
+        // TIMESTAMPT GUARD: Prevents realtime listener from overwriting DB rollbacks
+        const serverTime = serverTicket?.updated_at ? new Date(serverTicket.updated_at).getTime() : 0;
+        const localTime = ticketData.updated_at ? new Date(ticketData.updated_at).getTime() : 0;
+        if (serverTime > localTime + 5000 && !options?.manual && !dataOverride) {
+            console.warn("Timestamp guard active: Server is newer than local state. Aborting silent sync to protect DB rollbacks.");
+            return false;
+        }
         const serverMeta = serverTicket?.metadata || {};
         const serverStatusId = serverTicket?.status_id;
         const localStateOrder = TICKET_STATE_ORDER[businessData.status_id] ?? 0;
