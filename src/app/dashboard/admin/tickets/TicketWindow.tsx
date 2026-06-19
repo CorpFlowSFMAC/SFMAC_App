@@ -3950,7 +3950,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                     <div className={styles.concludedHeaderStats}>
                                                         <div className={styles.statBadge}>
                                                             <span className={styles.statLabel}>Ticket</span>
-                                                            <span className={styles.statValue}>{ticketData.client_ticket_number || ticketData.id?.slice(0,8) || 'N/A'}</span>
+                                                            <span className={styles.statValue}>{ticketData.client_ticket_number || ticketData.numeroTicketCliente || 'PENDIENTE'}</span>
                                                         </div>
                                                         <div className={styles.statBadgeGreen}>
                                                             <span className={styles.statLabelGreen}>Liquidado</span>
