@@ -1975,6 +1975,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         setShowLiquidationConfirm(true);
     };
     const handleActualLiquidation = async () => {
+        // =====================================================================
+        // 🔐 RACE CONDITION GUARD: Disable button IMMEDIATELY to prevent double-clicks
+        // =====================================================================
+        if (isSubmittingLiquidation || isSavingNegotiation) {
+            console.warn('[handleActualLiquidation] Doble clic detectado. Abortando.');
+            return;
+        }
+        
         // ✅ CANDADO 2 (Server-side): segunda línea de defensa por si el modal se abrió por otro flujo.
         if (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) {
             showToast(
@@ -2045,6 +2053,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 isAdminRevision: isExceeding,
                 estadoId: newState
             };
+            
+            // =====================================================================
+            // 🔄 OPCIÓN C - REFACTORIZADO: Uso de syncToSupabase ATÓMICO
+            // =====================================================================
+            // En lugar de invocar ticketsAPI.update con payload parcial, Preparar
+            // el objeto de estado actualizado LOCALMENTE con el nuevo status_id
+            // y client_ticket_number, luego ejecutar syncToSupabase de forma
+            // atómica para garantizar que ambos campos viajen en un solo HTTP POST.
+            // =====================================================================
             const updated = {
                 ...ticketData,
                 estadoId: newState,
@@ -2053,20 +2070,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 solicitudLiquidacion: solicitudLiquidacionMeta,
                 metadata: finalMetadata
             };
+            
+            // ✅ Update síncrono del estado local ANTES del sync atómico
             setTicketData(updated);
-            try {
-                await ticketsAPI.update(currentTicketId, {
-                    status_id: newState,
-                    metadata: finalMetadata
-                });
-            } catch (syncErr) {
-                console.error("[handleActualLiquidation] Error en update directo:", syncErr);
-                try {
-                    await syncToSupabase(updated, { allowStateRollback: true });
-                } catch (fallbackErr) {
-                    console.error("[handleActualLiquidation] Error en fallback syncToSupabase:", fallbackErr);
-                }
+            
+            // ✅ Sync atómico que incluye client_ticket_number + status_id en un solo envío
+            const syncSuccess = await syncToSupabase(updated, { allowStateRollback: true, manual: true });
+            
+            if (!syncSuccess) {
+                console.error("[handleActualLiquidation] syncToSupabase retornó false. Ticket puede no estar persistido.");
             }
+            
             try {
                 await loadCosts();
             } catch (loadErr) {
