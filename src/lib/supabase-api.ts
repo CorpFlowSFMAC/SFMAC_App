@@ -1072,9 +1072,11 @@ export const ticketsAPI = {
             .from('tickets')
             .select(TICKET_LIST_SELECT)
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
+        
+        if (!data) return null;
 
         const [ticketWithCosts] = await attachTicketCosts([data]);
         

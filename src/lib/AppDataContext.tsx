@@ -939,13 +939,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const deleteTicket = useCallback(
         async (id: string) => {
             await ticketsAPI.delete(id);
+            // Actualización optimista en RAM: remueve el ticket de ambas variantes de caché
+            // sin disparar ningún refetch de red (evita PGRST116 / 406 en componentes montados)
             queryClient.setQueryData(
                 [...queryKeys.tickets.summary(), userEmail],
                 (old: any[] | undefined) =>
                     old ? old.filter((t) => t.id !== id) : old
             );
+            queryClient.setQueryData(
+                queryKeys.tickets.summary(),
+                (old: any[] | undefined) =>
+                    old ? old.filter((t) => t.id !== id) : old
+            );
+            // Limpiar también el detalle del ticket borrado del caché
+            queryClient.removeQueries({ queryKey: queryKeys.tickets.detail(id) });
         },
-        [queryClient]
+        [queryClient, userEmail]
     );
 
     return (

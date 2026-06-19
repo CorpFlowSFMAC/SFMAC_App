@@ -195,6 +195,15 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 return;
             }
             await ticketsAPI.delete(ticketData.id);
+            // Actualización optimista en RAM: basta con setQueryData para ambas variantes de la key.
+            // NO usar invalidateQueries aquí: dispararía refetch de TicketWindow ya desmontada
+            // causando errores PGRST116 (0 rows) y bloqueos HTTP 406.
+            const deletedId = ticketData.id;
+            queryClient.setQueryData(
+                queryKeys.tickets.summary(),
+                (old: any[] | undefined) => old ? old.filter((t: any) => t.id !== deletedId) : old
+            );
+            queryClient.removeQueries({ queryKey: queryKeys.tickets.detail(deletedId) });
             showToast("Ticket Eliminado", "El registro ha sido borrado definitivamente.", "success");
             onClose();
         } catch (err: any) {
@@ -244,8 +253,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 `Se trasladaron ${movedCostsCount} costos y ${movedPaymentsCount} pagos al ticket ${selectedTargetTicket.client_ticket_number || selectedTargetTicket.id}.`,
                 "success"
             );
+            // Eliminar el ticket automáticamente tras el traslado exitoso.
             setShowTransferModal(false);
-            setShowDeleteModal(true);
+            await ticketsAPI.delete(ticketData.id);
+            // Actualización optimista en RAM. Sin invalidateQueries: evita bucle de red
+            // y errores PGRST116 en TicketWindow que aún está en el árbol de React.
+            const deletedId = ticketData.id;
+            queryClient.setQueryData(
+                queryKeys.tickets.summary(),
+                (old: any[] | undefined) => old ? old.filter((t: any) => t.id !== deletedId) : old
+            );
+            queryClient.removeQueries({ queryKey: queryKeys.tickets.detail(deletedId) });
+            showToast("Ticket Eliminado", `El ticket y sus ${movedCostsCount} gasto(s) han sido trasladados y el ticket ha sido eliminado.`, "success");
+            onClose();
         } catch (err) {
             console.error("Transfer error:", err);
             showToast("Error", "No se pudo trasladar los gastos.", "error");
@@ -421,10 +441,20 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         if (!ticketData?.id) return;
         setLoadingCosts(true);
         try {
-            const costs = await ticketCostsAPI.getByTicket(ticketData.id);
+            // Cláusula de guardia: si el ticket fue eliminado, la API devuelve 404/vacío.
+            // Absorber silenciosamente en lugar de propagar PGRST116 a la consola.
+            let costs: any[] = [];
+            try {
+                costs = await ticketCostsAPI.getByTicket(ticketData.id);
+            } catch (costsErr: any) {
+                // 404, 406 o cualquier error de red cuando el ticket ya no existe
+                setLoadingCosts(false);
+                return;
+            }
             setTicketCosts(costs || []);
             try {
                 const rawTicket = await ticketsAPI.getById(ticketData.id);
+                // rawTicket es null cuando .maybeSingle() no encuentra filas (ticket borrado)
                 if (rawTicket) {
                     const updatedTicket = normalizeTicket(rawTicket);
                     const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : (costs || []);
