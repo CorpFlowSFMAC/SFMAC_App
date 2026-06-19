@@ -1954,9 +1954,29 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         }
     };
     const handleRequestFinalLiquidation = () => {
+        // ✅ CANDADO 1 (UI): validar client_ticket_number antes de abrir el modal de confirmación.
+        // isSantander exime de este requisito (su número STD ya lo captura el sistema).
+        if (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) {
+            showToast(
+                "Número de Ticket Obligatorio",
+                "Debe ingresar y guardar un número de ticket del cliente válido (Formato: MB000000.26) antes de pasar a liquidación.",
+                "error"
+            );
+            return;
+        }
         setShowLiquidationConfirm(true);
     };
     const handleActualLiquidation = async () => {
+        // ✅ CANDADO 2 (Server-side): segunda línea de defensa por si el modal se abrió por otro flujo.
+        if (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) {
+            showToast(
+                "Bloqueo de Seguridad",
+                "No se puede liquidar sin un número de ticket del cliente válido. Regrese a DOCUMENTACIÓN e ingrese el código MB.",
+                "error"
+            );
+            setShowLiquidationConfirm(false);
+            return;
+        }
         const txToken = generateTransactionToken();
         liquidationTransactionToken.current = txToken;
         setIsSavingNegotiation(true);
@@ -3767,9 +3787,19 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                                 spellCheck={false}
                                                                 disabled={(ticketData.status_id !== "documentacion_enviada" && !isAdmin) || isSantander}
                                                                 style={(ticketData.status_id !== "documentacion_enviada" && !isAdmin) || isSantander ? { background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed', border: '1px solid #E2E8F0' } : {}}
-                                                                onChange={(e) => {
+                                                                onChange={async (e) => {
                                                                     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9.#-]/g, '');
                                                                     setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));
+                                                                    // ✅ AUTO-GUARDADO: persistir en Supabase cuando el formato es válido.
+                                                                    // Sin esto, al cambiar de ventana o reabrir el ticket el número se pierde
+                                                                    // y el ticket pasa a liquidación sin el código del cliente.
+                                                                    if (isClientTicketFormatValid(val)) {
+                                                                        try {
+                                                                            await ticketsAPI.update(ticketData.id, { client_ticket_number: val });
+                                                                        } catch (saveErr) {
+                                                                            console.error('[client_ticket_number] Error guardando en Supabase:', saveErr);
+                                                                        }
+                                                                    }
                                                                 }}
                                                                 onClick={(e) => e.stopPropagation()}
                                                                 readOnly={isSantander}
