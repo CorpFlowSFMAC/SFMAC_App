@@ -5026,6 +5026,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                             setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));
                             showToast("Ticket Registrado", `Se ha asignado el número de ticket: ${val}`, "success");
                         }}
+                        ticketData={ticketData}
                     />
                 )}
             </div>

@@ -384,16 +384,24 @@ function generarConsejos(
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-function VirtualSecretaryFab({
-    mibancoClientId,
-    clientId,
-    clientTicketNumber,
-    isSantander = false,
-    onApplyTicketNumber,
-    gestoraMetrics,
-    margenTicketActual,
-    moTicketActual,
-}: VirtualSecretaryFabProps) {
+function VirtualSecretaryFab(props: VirtualSecretaryFabProps) {
+    const ticketData = props.ticketData;
+    
+    if (!ticketData) {
+        return null; // Evita que la aplicación colapse si no hay un ticket seleccionado
+    }
+
+    const {
+        mibancoClientId,
+        clientId,
+        clientTicketNumber,
+        isSantander = false,
+        onApplyTicketNumber,
+        gestoraMetrics,
+        margenTicketActual,
+        moTicketActual,
+    } = props;
+
     const [isOpen, setIsOpen] = useState(false);
     const [inputValue, setInputValue] = useState("");
     const [saved, setSaved] = useState(false);
