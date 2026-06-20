@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
+import { supabase } from "@/lib/supabase";
 import TicketWindow from "./tickets/TicketWindow";
 import { calculateTicketFinances } from "@/lib/calculations";
 
@@ -159,6 +160,65 @@ export default function AdminDashboard() {
     const [now] = useState(() => new Date());
     const [isMounted, setIsMounted] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [toast, setToast] = useState<{ title: string; desc: string } | null>(null);
+    const [realtimeOverrides, setRealtimeOverrides] = useState<Record<string, any>>({});
+
+    const triggerToast = (title: string, desc: string) => {
+        setToast({ title, desc });
+        setTimeout(() => {
+            setToast(null);
+        }, 6000);
+    };
+
+    const activeTickets = useMemo(() => {
+        if (Object.keys(realtimeOverrides).length === 0) return tickets;
+        return tickets.map((t: any) => {
+            const ovr = Object.entries(realtimeOverrides).find(([key]) => 
+                t.id === key || t.client_ticket_number === key || t.codigo === key
+            );
+            if (ovr) {
+                return { ...t, ...ovr[1] };
+            }
+            return t;
+        });
+    }, [tickets, realtimeOverrides]);
+
+    useEffect(() => {
+        if (!isMounted) return;
+
+        const channel = supabase.channel('realtime:dashboard_metrics');
+
+        channel.on('broadcast', { event: 'ticket_closed_balance_zero' }, (payload: any) => {
+            const data = payload.payload;
+            if (!data) return;
+
+            const ticketId = data.id || data.codigo_ticket;
+            setRealtimeOverrides(prev => ({
+                ...prev,
+                [ticketId]: {
+                    status_id: 'ticket_cerrado',
+                    estadoId: 'ticket_cerrado',
+                    fechaCierre: new Date().toISOString(),
+                    saldo_tecnico: 0,
+                    metadata: {
+                        saldo_tecnico: 0,
+                        netLaborBalance: 0
+                    }
+                }
+            }));
+
+            triggerToast(
+                "💻 CORPFLOW VIGILANCIA",
+                `¡Ticket ${data.codigo_ticket} Auditado y Cerrado! El Dashboard global se ha actualizado con los nuevos montos en deuda cero de forma consistente y real.`
+            );
+        });
+
+        channel.subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [isMounted]);
 
     // Hydration guard
     useEffect(() => { setIsMounted(true); }, []);
@@ -308,7 +368,7 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
     const roi = useMemo(() => {
-        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
+        const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
 
         let ingresosSum = 0;
         let inversionSum = 0;
@@ -370,7 +430,7 @@ export default function AdminDashboard() {
                  closed: closed.length, total: inPeriod.length,
                  byService, inversionItems, ingresosItems,
                  costosArrastrados, arrastradoItems };
-    }, [tickets, dateRange, now]);
+    }, [activeTickets, dateRange, now]);
 
     // ── MÓDULO ADICIONAL: Datos de Gráficos (Pipeline Aprobado, Clientes y Depósitos) ──
     const pipelineApprovedData = useMemo(() => {
@@ -380,7 +440,7 @@ export default function AdminDashboard() {
         
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
 
-        tickets.forEach((t: any) => {
+        activeTickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
             const sid = normalizeStateId(t.status_id || t.estadoId);
             if (!approvedStates.includes(sid)) return;
@@ -403,11 +463,11 @@ export default function AdminDashboard() {
             { name: "En Ejecución", value: round2(enEjecucion), color: "#8B5CF6" },
             { name: "Carga Arrastrada", value: round2(arrastrados), color: "#EF4444" }
         ].filter(item => item.value > 0);
-    }, [tickets, dateRange, now]);
+    }, [activeTickets, dateRange, now]);
 
     const clientBillingData = useMemo(() => {
         const clientMap: Record<string, { id: string, name: string, billing: number, color: string }> = {};
-        tickets.forEach((t: any) => {
+        activeTickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
             
             // Regla de Negocio: Solo mostrar facturación de tickets liquidados (cerrados)
@@ -431,13 +491,13 @@ export default function AdminDashboard() {
             .map(c => ({ ...c, billing: round2(c.billing) }))
             .sort((a, b) => b.billing - a.billing)
             .slice(0, 5); // Top 5
-    }, [tickets, dateRange, now]);
+    }, [activeTickets, dateRange, now]);
 
     const advancesTesoreria = useMemo(() => {
         let totalAdvances = 0;
         let totalBudget = 0;
 
-        tickets.forEach((t: any) => {
+        activeTickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
             totalAdvances += parseFloat(t.adelantos_flujo_b || t.metadata?.adelantos_flujo_b || 0);
             totalBudget += parseFloat(t.ingresos_reales || 0);
@@ -448,12 +508,12 @@ export default function AdminDashboard() {
             totalBudget: round2(totalBudget),
             percent: totalBudget > 0 ? round2((totalAdvances / totalBudget) * 100) : 0
         };
-    }, [tickets, dateRange, now]);
+    }, [activeTickets, dateRange, now]);
 
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
     const tesoreria = useMemo(() => {
-        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
+        const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
 
         // Pipeline: Cotizaciones en curso
         const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente", "visitado"];
@@ -526,14 +586,14 @@ export default function AdminDashboard() {
                 { label: "Pendiente Liquidar", count: penLiq.length, tickets: addMonto(penLiq), color: "#64748B" },
             ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
-    }, [tickets, dateRange, now]);
+    }, [activeTickets, dateRange, now]);
 
     // ── CAPITAL EXPUESTO / ADELANTADO (Pagos a Técnicos en tickets activos) ────────
     // Estados activos previos a ejecución/cierre donde aún hay capital en riesgo
     const ESTADOS_RIESGO_CAPITAL = ["en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "por_liquidar", "nuevo", "asignado_a_tecnico", "en_inspeccion", "visitado"];
 
     const capitalExpuesto = useMemo(() => {
-        const ticketsConAdelantos = tickets
+        const ticketsConAdelantos = activeTickets
             .filter((t: any) => {
                 if (!isTicketInPeriod(t)) return false;
                 const sid = normalizeStateId(t.estadoId);
@@ -579,14 +639,14 @@ export default function AdminDashboard() {
         const totalEnRiesgo = round2(enRiesgo.reduce((s: number, t: any) => s + t._totalAdelantado, 0));
 
         return { tickets: ticketsConAdelantos, total: totalCapital, enRiesgo: enRiesgo.length, totalEnRiesgo };
-    }, [tickets, gestoras, dateRange, now]);
+    }, [activeTickets, gestoras, dateRange, now]);
 
     // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
     const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
     const EN_PROCESO_STATES_RRHH = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
 
     const rrhh = useMemo(() => {
-        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
+        const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
         const active = inPeriod.filter((t: any) =>
             !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId))
         );
@@ -638,13 +698,13 @@ export default function AdminDashboard() {
         const maxLoad = Math.max(...gestorasData.map((g: any) => g.count), 1);
 
         return { slaGlobal, fcrPct, npsPct, gestoras: gestorasData, maxLoad, expired: expired.length };
-    }, [tickets, gestoras]);
+    }, [activeTickets, gestoras]);
 
 
     // ── PRODUCTIVIDAD EN SOLES POR GESTOR DESDE BASE DE DATOS ─────────
     const PRODUCTIVITY_COLORS = ["#8B5CF6", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#EC4899", "#14B8A6"];
     const productivityData = useMemo(() => {
-        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
+        const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
         const validTickets = inPeriod.filter((t: any) => {
             const state = normalizeStateId(t.estadoId ?? t.status_id);
             return state !== "ticket_cancelado" && state !== "ticket_rechazado";
@@ -687,10 +747,10 @@ export default function AdminDashboard() {
             name: item.name,
             value: round2(item.value)
         })).filter((item: any) => item.value > 0);
-    }, [tickets, gestoras, dateRange]);
+    }, [activeTickets, gestoras, dateRange]);
 
     const stackedProductivityData = useMemo(() => {
-        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
+        const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
         const gestoresMapData: { [key: string]: { gestor: string; netoCerrado: number; igvCerrado: number; montoActivos: number } } = {};
 
         inPeriod.forEach((t: any) => {
@@ -743,7 +803,7 @@ export default function AdminDashboard() {
             igvCerrado: round2(g.igvCerrado),
             montoActivos: round2(g.montoActivos)
         })).filter((g: any) => (g.netoCerrado + g.igvCerrado + g.montoActivos) > 0);
-    }, [tickets, gestoras, dateRange]);
+    }, [activeTickets, gestoras, dateRange]);
 
     // ── SEMÁFORO GLOBAL ─────────────────────
     const globalLight = useMemo(() => semaforo([
@@ -770,6 +830,32 @@ export default function AdminDashboard() {
 
     return (
         <div style={{ padding: "1.5rem 2rem", minHeight: "100vh", fontFamily: "Inter,system-ui,sans-serif" }}>
+            {toast && (
+                <div style={{
+                    position: "fixed",
+                    top: "20px",
+                    right: "20px",
+                    zIndex: 9999,
+                    background: "rgba(17, 24, 39, 0.95)",
+                    border: "1px solid rgba(16, 185, 129, 0.4)",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)",
+                    backdropFilter: "blur(12px)",
+                    borderRadius: "12px",
+                    padding: "1rem 1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                    maxWidth: "350px",
+                    transition: "all 0.3s ease-out"
+                }}>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#10B981", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span>{toast.title}</span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "rgba(255, 255, 255, 0.8)", lineHeight: "1.3" }}>
+                        {toast.desc}
+                    </div>
+                </div>
+            )}
 
             {/* ── EXECUTIVE HEADER ─────────────── */}
             <div style={{

@@ -187,10 +187,57 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const [modalTitle, setModalTitle] = useState("");
     const [modalTickets, setModalTickets] = useState<any[]>([]);
 
-    // Control de montaje para Recharts
+    const [toast, setToast] = useState<{ title: string; desc: string } | null>(null);
+    const [realtimeOverrides, setRealtimeOverrides] = useState<Record<string, any>>({});
+
+    const triggerToast = (title: string, desc: string) => {
+        setToast({ title, desc });
+        setTimeout(() => {
+            setToast(null);
+        }, 6000);
+    };
+
+    // Control de montaje para Recharts y Suscripción Realtime
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    useEffect(() => {
+        if (!mounted) return;
+
+        const channel = supabase.channel('realtime:dashboard_metrics');
+
+        channel.on('broadcast', { event: 'ticket_closed_balance_zero' }, (payload: any) => {
+            const data = payload.payload;
+            if (!data) return;
+
+            const ticketId = data.id || data.codigo_ticket;
+            setRealtimeOverrides(prev => ({
+                ...prev,
+                [ticketId]: {
+                    status_id: 'ticket_cerrado',
+                    estadoId: 'ticket_cerrado',
+                    fechaCierre: new Date().toISOString(),
+                    saldo_tecnico: 0,
+                    metadata: {
+                        saldo_tecnico: 0,
+                        netLaborBalance: 0
+                    }
+                }
+            }));
+
+            triggerToast(
+                "💻 CORPFLOW VIGILANCIA",
+                `¡Ticket ${data.codigo_ticket} Auditado y Cerrado! El Dashboard global se ha actualizado con los nuevos montos en deuda cero de forma consistente y real.`
+            );
+        });
+
+        channel.subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [mounted]);
 
     // Leer parámetro de vista desde URL
     useEffect(() => {
@@ -232,13 +279,26 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         }
     };
 
+    const activeRawTickets = useMemo(() => {
+        if (!rawTickets || Object.keys(realtimeOverrides).length === 0) return rawTickets;
+        return rawTickets.map((t: any) => {
+            const ovr = Object.entries(realtimeOverrides).find(([key]) => 
+                t.id === key || t.client_ticket_number === key || t.codigo === key
+            );
+            if (ovr) {
+                return { ...t, ...ovr[1] };
+            }
+            return t;
+        });
+    }, [rawTickets, realtimeOverrides]);
+
     // ── Filter raw tickets by active gestor ──
     const tickets = useMemo(() => {
-        if (!rawTickets || rawTickets.length === 0) return [];
+        if (!activeRawTickets || activeRawTickets.length === 0) return [];
         
         // Si el usuario es administrador, ve todos los tickets
         if (isAdmin) {
-            return rawTickets;
+            return activeRawTickets;
         }
 
         if (!authEmail) return [];
@@ -249,7 +309,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         const myGestora = findGestoraByEmail(gestoras, authEmail);
         const myGestoraId = myGestora?.id;
 
-        return rawTickets.filter((t: any) => {
+        return activeRawTickets.filter((t: any) => {
             const tGestoraEmail = t.gestora?.email || t.gestoras?.email || '';
             const matchDirectEmail = tGestoraEmail.toLowerCase().trim() === emailLower;
             const matchFuzzyEmail = myGestora && tGestoraEmail.toLowerCase().includes('portocarrero') && emailLower.includes('portocarrero');
@@ -277,7 +337,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
             return false;
         });
-    }, [rawTickets, authEmail, gestoras, isAdmin]);
+    }, [activeRawTickets, authEmail, gestoras, isAdmin]);
 
     const isVisibleForMe = useCallback((t: any) => {
         return true; // Already pre-filtered at root
@@ -596,6 +656,32 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
     return (
         <div style={{ padding: "1.5rem 2rem", minHeight: "100vh", background: "transparent", fontFamily: "Inter, system-ui, sans-serif" }}>
+            {toast && (
+                <div style={{
+                    position: "fixed",
+                    top: "20px",
+                    right: "20px",
+                    zIndex: 9999,
+                    background: "rgba(17, 24, 39, 0.95)",
+                    border: "1px solid rgba(16, 185, 129, 0.4)",
+                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)",
+                    backdropFilter: "blur(12px)",
+                    borderRadius: "12px",
+                    padding: "1rem 1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                    maxWidth: "350px",
+                    transition: "all 0.3s ease-out"
+                }}>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#10B981", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span>{toast.title}</span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "rgba(255, 255, 255, 0.8)", lineHeight: "1.3" }}>
+                        {toast.desc}
+                    </div>
+                </div>
+            )}
 
             <GestorTurnoWidget />
 

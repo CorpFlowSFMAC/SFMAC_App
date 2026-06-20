@@ -2499,20 +2499,60 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
             return;
         }
+
+        // PASO 1: Inyección del Guardián de Consistencia Matemática
+        const freshFinances = calculateTicketFinances(ticketData, ticketCosts);
+        if (freshFinances.netLaborBalance !== 0) {
+            const diff = freshFinances.netLaborBalance;
+            showToast(
+                "❌ Descuadre de Saldo", 
+                `No se puede realizar el cierre definitivo. Saldo técnico descuadrado: S/. ${diff.toFixed(2)}. Debe ser S/. 0.00.`, 
+                "error"
+            );
+            alert(`No se puede realizar el cierre definitivo. Saldo técnico descuadrado: S/. ${diff.toFixed(2)}. Debe ser S/. 0.00.`);
+            return;
+        }
+
         setIsSaving(true);
         try {
-            const updated = {
+            // PASO 2: Mutación y Payload de Cierre Real
+            const updatedTicketData = {
                 ...ticketData,
                 estadoId: "ticket_cerrado",
                 status_id: "ticket_cerrado",
-                fechaCierre: new Date().toISOString()
+                fechaCierre: new Date().toISOString(),
+                saldo_tecnico: 0,
+                metadata: {
+                    ...(ticketData.metadata || {}),
+                    saldo_tecnico: 0,
+                    netLaborBalance: 0
+                }
             };
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
             localStorage.removeItem(`ticket_ui_${ticketData.id}`);
-            setTicketData(updated);
-            const success = await syncToSupabase(updated, { manual: true });
+            setTicketData(updatedTicketData);
+            
+            const success = await syncToSupabase(updatedTicketData, { manual: true });
             if (success) {
                 showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
+                
+                // PASO 3: Disparar el Broadcast de Actualización de Métricas del Dashboard
+                try {
+                    const channel = supabase.channel('realtime:dashboard_metrics');
+                    await channel.send({
+                        type: 'broadcast',
+                        event: 'ticket_closed_balance_zero',
+                        payload: {
+                            codigo_ticket: ticketData.client_ticket_number || ticketData.id,
+                            gestora_id: ticketData.gestora_id,
+                            montoNetoTransferido: freshFinances.netLaborBalance,
+                            grossProductivity: freshFinances.totalVenta
+                        }
+                    });
+                } catch (broadcastErr) {
+                    console.error("Error sending realtime broadcast:", broadcastErr);
+                }
+
                 onClose();
             } else {
                 showToast("Error", "No se pudo cerrar el ticket.", "error");
