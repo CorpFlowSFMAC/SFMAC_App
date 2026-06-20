@@ -5018,6 +5018,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                         isSantander={isSantander}
                         gestoraMetrics={gestoraMetrics}
                         margenTicketActual={typeof pctReal === 'number' ? pctReal : undefined}
+                        ticketStatusId={ticketData.status_id}
+                        ticketData={ticketData}
+                        ticketCosts={ticketCosts}
                         moTicketActual={typeof techPactedTotal === 'number' && techPactedTotal > 0 ? techPactedTotal : undefined}
                         onApplyTicketNumber={(val: string) => {
                             setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));

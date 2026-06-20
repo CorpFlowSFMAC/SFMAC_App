@@ -1,10 +1,11 @@
 "use client";
-import { useState, useCallback, useMemo, memo } from "react";
+import { useState, useCallback, useMemo, memo, useEffect } from "react";
 import {
     X, Bot, CheckCircle2, AlertTriangle, Send, Sparkles,
     TrendingUp, TrendingDown, Clock, Target, Zap,
-    ChevronRight, ChevronLeft, Award, Flame, AlertCircle
+    ChevronRight, ChevronLeft, Award, Flame, AlertCircle, DollarSign, Scale, ShieldAlert
 } from "lucide-react";
+import { calculateTicketFinances } from "@/lib/calculations";
 import styles from "./VirtualSecretaryFab.module.css";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -37,7 +38,32 @@ interface VirtualSecretaryFabProps {
     margenTicketActual?: number;
     /** Monto MO pactado en el ticket actual */
     moTicketActual?: number;
+    /** Estado actual del ticket */
+    ticketStatusId?: string;
+    /** Datos completos del ticket para auditoría financiera */
+    ticketData?: any;
+    /** Costos del ticket para recálculos */
+    ticketCosts?: any[];
 }
+
+// ─── Tipos para auditoría financiera ──────────────────────────────────────────
+interface FinancialAudit {
+    reglaId: "deuda_cero" | "margen_saludable" | "formato_cliente";
+    tipo: "alerta" | "bloqueo" | "ok";
+    titulo: string;
+    mensaje: string;
+    valor?: number;
+    umbral?: number;
+    icono: React.ElementType;
+    color: string;
+    bgColor: string;
+}
+
+// ─── Constantes de estados y umbrales ────────────────────────────────────────
+const MIBANCO_CLIENT_ID = "MIBANCO_ID"; // Se inyectará desde props
+const STAGE_LIQUIDACION = 10; // Etapa "por_liquidar" según TICKET_STATE_ORDER
+const STATES_CERRADO = ["ticket_cerrado", "cerrado", "liquidado"];
+const STATES_POR_LIQUIDAR = ["por_liquidar", "requiere_revision_admin"];
 
 // ─── Validador de formato MiBanco ────────────────────────────────────────────
 function isValidMiBancoFormat(num?: string | null): boolean {
@@ -45,6 +71,147 @@ function isValidMiBancoFormat(num?: string | null): boolean {
     if (num.startsWith("STD")) return /^STD\d{4}\.\d{2}$/.test(num);
     if (num.startsWith("#")) return true;
     return /^MB[A-Z0-9]{6}\.\d{2}$/.test(num);
+}
+
+// ─── Motor de Auditoría Financiera (Reglas de Vigilancia) ─────────────────────
+/**
+ * Auditoría en tiempo real del estado financiero del ticket.
+ * NO usa invalidateQueries — todo se ejecuta localmente comparando estado.
+ */
+function ejecutarAuditoriaFinanciera(props: VirtualSecretaryFabProps): FinancialAudit[] {
+    const {
+        clientId,
+        mibancoClientId,
+        clientTicketNumber,
+        ticketStatusId,
+        ticketData,
+        ticketCosts = []
+    } = props;
+    
+    const alertas: FinancialAudit[] = [];
+    const isMiBanco = clientId === mibancoClientId;
+    const statusId = ticketStatusId || ticketData?.status_id || "";
+    const estadoActual = statusId.toLowerCase();
+    
+    // ── Calcular finanzas frescas usando el motor oficial ─────────────────────
+    const finanzas = calculateTicketFinances(ticketData, ticketCosts);
+    const {
+        netLaborBalance = 0,
+        margenReal = 0,
+        realProfitability = 0,
+        pactedMO = 0,
+        totalLaborConfirmed = 0
+    } = finanzas;
+    
+    // =====================================================================
+    // REGLA 1: DEUDA CERO
+    // =====================================================================
+    // Si el ticket está en estado "cerrado" o "por_liquidar" Y tiene saldo 
+    // pendiente al técnico > 0, activar alerta de deuda.
+    // =====================================================================
+    const enEtapaCierre = STATES_CERRADO.includes(estadoActual) || 
+                          STATES_POR_LIQUIDAR.includes(estadoActual);
+    
+    if (enEtapaCierre && netLaborBalance > 0.01) {
+        alertas.push({
+            reglaId: "deuda_cero",
+            tipo: "alerta",
+            titulo: "⚠️ Saldo Pendiente al Técnico",
+            mensaje: `Detecté un saldo pendiente de S/ ${netLaborBalance.toFixed(2)} al técnico. La política de la empresa exige cerrar en deuda cero. Verifica si falta registrar algún depósito en la bandeja de Tesorería.`,
+            valor: netLaborBalance,
+            umbral: 0,
+            icono: DollarSign,
+            color: "#B45309",
+            bgColor: "linear-gradient(135deg, #FFFBEB, #FEF3C7)"
+        });
+    }
+    
+    // =====================================================================
+    // REGLA 2: MARGEN SALUDABLE
+    // =====================================================================
+    // Si la utilidad neta o el margen es <= 0% debido a excesos en MO 
+    // o materiales, mostrar indicador de rentabilidad negativa.
+    // =====================================================================
+    if (margenReal <= 0 || realProfitability <= 0) {
+        const mensajeRentabilidad = realProfitability < 0
+            ? `Este servicio registra una PÉRDIDA de S/ ${Math.abs(realProfitability).toFixed(2)}. Los costos superan el ingreso.`
+            : `Margen cero: el servicio no genera utilidad. El ingreso apenas cubre los costos.`;
+        
+        alertas.push({
+            reglaId: "margen_saludable",
+            tipo: "bloqueo",
+            titulo: "📉 ¡Alerta de Rentabilidad!",
+            mensaje: mensajeRentabilidad,
+            valor: margenReal,
+            umbral: 0,
+            icono: TrendingDown,
+            color: "#991B1B",
+            bgColor: "linear-gradient(135deg, #FEF2F2, #FEE2E2)"
+        });
+    } else if (margenReal < 15 && margenReal > 0) {
+        // Margen bajo pero positivo
+        alertas.push({
+            reglaId: "margen_saludable",
+            tipo: "alerta",
+            titulo: "📊 Margen Reducido",
+            mensaje: `Rentabilidad ajustada: ${margenReal.toFixed(1)}%. Verifica si los costos de materiales o mano de obra están correctos.`,
+            valor: margenReal,
+            icono: Scale,
+            color: "#D97706",
+            bgColor: "linear-gradient(135deg, #FFF7ED, #FFEDD5)"
+        });
+    }
+    
+    // =====================================================================
+    // REGLA 3: FORMATO DE CLIENTE (MIBANCO)
+    // =====================================================================
+    // Si el cliente es MIBANCO y el ticket avanza de la etapa 9 
+    // (documentacion_enviada) sin un formato MB000000.26 válido, 
+    // levantar bandera de bloqueo.
+    // =====================================================================
+    if (isMiBanco) {
+        const etapaActual = getEtapaDesdeStatus(estadoActual);
+        const avanzaDeEtapa9 = etapaActual > 9;
+        const formatoValido = isValidMiBancoFormat(clientTicketNumber);
+        
+        if (avanzaDeEtapa9 && !formatoValido) {
+            alertas.push({
+                reglaId: "formato_cliente",
+                tipo: "bloqueo",
+                titulo: "🔒 Formato de Ticket Obligatorio",
+                mensaje: `Este ticket necesita el código de MiBanco (formato MB000000.26) para avanzar a liquidación. Sin este código, el banco no procesará el cobro.`,
+                icono: ShieldAlert,
+                color: "#7C3AED",
+                bgColor: "linear-gradient(135deg, #F5F3FF, #EDE9FE)"
+            });
+        }
+    }
+    
+    return alertas;
+}
+
+/**
+ * Obtiene el número de etapa desde el status_id para comparaciones.
+ */
+function getEtapaDesdeStatus(statusId: string): number {
+    const ordenEstados: Record<string, number> = {
+        'borrador': 0,
+        'pendiente': 1, 'nuevo': 1,
+        'tecnico_asignado': 2,
+        'en_inspeccion': 3, 'visita_programada': 3,
+        'visita_realizada': 4,
+        'en_cotizacion': 5,
+        'cotizacion_enviada': 6,
+        'cotizacion_aprobada': 7,
+        'en_ejecucion': 8,
+        'documentacion_enviada': 9,
+        'por_liquidar': 10, 'requiere_revision_admin': 10,
+        'ticket_cerrado': 12,
+        'vencido': 13,
+        'ticket_rechazado': 14,
+        'ticket_cancelado': 15
+    };
+    return ordenEstados[statusId.toLowerCase()] ?? 0;
 }
 
 // ─── Motor de consejos ────────────────────────────────────────────────────────
@@ -236,13 +403,46 @@ function VirtualSecretaryFab({
     const hasValidTicket = isValidMiBancoFormat(clientTicketNumber);
     const isMiBancoSinTicket = isMiBanco && !hasValidTicket;
 
-    // Alerta si hay ticket sin registrar O hay problemas de productividad críticos
+    // ─── Auditoría Financiera en Tiempo Real ─────────────────────────────────────
+    // Se ejecuta localmente sin invalidateQueries, comparando estado actual.
+    // Usa useMemo para evitar re-renderizados innecesarios.
+    // =====================================================================
+    const alertasFinancieras = useMemo(() => {
+        if (!ticketData || !ticketCosts) return [];
+        return ejecutarAuditoriaFinanciera({
+            clientId,
+            mibancoClientId,
+            clientTicketNumber,
+            isSantander,
+            onApplyTicketNumber,
+            gestoresMetrics,
+            margenTicketActual,
+            moTicketActual,
+            ticketStatusId,
+            ticketData,
+            ticketCosts
+        });
+    }, [
+        ticketData, 
+        ticketCosts, 
+        clientId, 
+        mibancoClientId, 
+        clientTicketNumber, 
+        ticketStatusId,
+        margenTicketActual,
+        moTicketActual
+    ]);
+    
+    // Combinar alertas financieras con consejos operativos
+    const hayAlertasFinancieras = alertasFinancieras.length > 0;
+    
+    // Alerta si hay ticket sin registrar O hay problemas de productividad críticos O alertas financieras
     const hasCriticalProductivity =
         (gestoraMetrics?.ticketsRevision ?? 0) > 0 ||
         (gestoraMetrics?.ticketsNuevos ?? 0) > 3 ||
         (margenTicketActual !== undefined && margenTicketActual < 0);
 
-    const isAlert = isMiBancoSinTicket || hasCriticalProductivity;
+    const isAlert = isMiBancoSinTicket || hasCriticalProductivity || hayAlertasFinancieras;
 
     // Generar consejos — memoizado, sin red
     const consejos = useMemo(
@@ -250,7 +450,20 @@ function VirtualSecretaryFab({
         [gestoraMetrics, margenTicketActual, moTicketActual, isMiBancoSinTicket]
     );
 
-    const consejo = consejos[consejoIdx] ?? consejos[0];
+    // Combinar alertas financieras y consejos operativos
+    const alertasYConsejos = useMemo(() => {
+        return [...alertasFinancieras.map(a => ({
+            tipo: a.tipo as any,
+            icono: a.icono,
+            titulo: a.titulo,
+            mensaje: a.mensaje,
+            color: a.color,
+            bgColor: a.bgColor,
+            esAuditoria: true
+        })), ...consejos];
+    }, [alertasFinancieras, consejos]);
+
+    const consejo = alertasYConsejos[consejoIdx] ?? alertasYConsejos[0];
     const IconoConsejo = consejo?.icono ?? Bot;
 
     const togglePanel = useCallback(() => {
@@ -281,12 +494,12 @@ function VirtualSecretaryFab({
     );
 
     const nextConsejo = useCallback(() => {
-        setConsejoIdx((i) => (i + 1) % consejos.length);
-    }, [consejos.length]);
+        setConsejoIdx((i) => (i + 1) % alertasYConsejos.length);
+    }, [alertasYConsejos.length]);
 
     const prevConsejo = useCallback(() => {
-        setConsejoIdx((i) => (i - 1 + consejos.length) % consejos.length);
-    }, [consejos.length]);
+        setConsejoIdx((i) => (i - 1 + alertasYConsejos.length) % alertasYConsejos.length);
+    }, [alertasYConsejos.length]);
 
     const currentInputValid = isValidMiBancoFormat(inputValue.trim() || undefined);
 
@@ -311,7 +524,10 @@ function VirtualSecretaryFab({
                         <div className={styles.panelTitleGroup}>
                             <p className={styles.panelTitle}>Secretario Virtual</p>
                             <p className={styles.panelSubtitle}>
-                                {consejos.length} {consejos.length === 1 ? "consejo" : "consejos"} para ti hoy
+                                {hayAlertasFinancieras 
+                                    ? `${alertasFinancieras.length} ${alertasFinancieras.length === 1 ? "alerta" : "alertas"} financiera${alertasFinancieras.length === 1 ? "" : "s"} detectada${alertasFinancieras.length === 1 ? "" : "s"}`
+                                    : `${consejos.length} ${consejos.length === 1 ? "consejo" : "consejos"} para ti hoy`
+                                }
                             </p>
                         </div>
                         <button className={styles.panelCloseBtn} onClick={togglePanel} aria-label="Cerrar">
@@ -383,8 +599,8 @@ function VirtualSecretaryFab({
                                 )}
                             </div>
 
-                            {/* Paginación de consejos */}
-                            {consejos.length > 1 && (
+                            {/* Paginación de consejos y alertas financieras */}
+                            {alertasYConsejos.length > 1 && (
                                 <div className={styles.consejoPagination}>
                                     <button
                                         className={styles.consejoNavBtn}
@@ -395,20 +611,20 @@ function VirtualSecretaryFab({
                                         <ChevronLeft size={14} />
                                     </button>
                                     <div className={styles.consejoDots}>
-                                        {consejos.map((_, i) => (
+                                        {alertasYConsejos.map((_, i) => (
                                             <button
                                                 key={i}
                                                 className={`${styles.consejoDot} ${i === consejoIdx ? styles.consejoDotActive : ""}`}
                                                 onClick={() => setConsejoIdx(i)}
-                                                aria-label={`Ir al consejo ${i + 1}`}
+                                                aria-label={`Ir al ${i < alertasFinancieras.length ? "alerta" : "consejo"} ${i + 1}`}
                                             />
                                         ))}
                                     </div>
                                     <button
                                         className={styles.consejoNavBtn}
                                         onClick={nextConsejo}
-                                        disabled={consejoIdx === consejos.length - 1}
-                                        aria-label="Siguiente consejo"
+                                        disabled={consejoIdx === alertasYConsejos.length - 1}
+                                        aria-label="Siguiente"
                                     >
                                         <ChevronRight size={14} />
                                     </button>
