@@ -49,12 +49,16 @@ function isValidMiBancoFormat(num?: string | null): boolean {
 
 // ─── Motor de consejos ────────────────────────────────────────────────────────
 interface Consejo {
-    tipo: "alerta" | "motivacion" | "tip" | "logro";
+    tipo: "alerta" | "motivacion" | "tip" | "logro" | "cooperacion";
     icono: React.ElementType;
     titulo: string;
     mensaje: string;
     color: string;
     bgColor: string;
+    accion?: {
+        etiqueta: string;
+        href: string;
+    };
 }
 
 function generarConsejos(
@@ -65,6 +69,22 @@ function generarConsejos(
 ): Consejo[] {
     const consejos: Consejo[] = [];
     const nombre = metrics?.nombreGestora ? metrics.nombreGestora.split(" ")[0] : "Gestora";
+
+    // 0. Balanceo proactivo de carga de trabajo (baja actividad)
+    if (metrics && metrics.ticketsEnProceso < 3 && metrics.ticketsNuevos === 0) {
+        consejos.push({
+            tipo: "cooperacion",
+            icono: Sparkles,
+            titulo: "Apoyo de Equipo",
+            mensaje: `¡Excelente ritmo, ${nombre}! Tu bandeja personal está ligera. Te sugerimos revisar el buzón global por nuevos servicios o brindar apoyo documentario a compañeros con alta carga (ej. Hugo).`,
+            color: "#0D9488",
+            bgColor: "linear-gradient(135deg, #F0FDFA, #CCFBF1)",
+            accion: {
+                etiqueta: "Ver tickets de Hugo",
+                href: "/dashboard/admin/tickets?search=Hugo"
+            }
+        });
+    }
 
     // 1. Alerta crítica MiBanco — prioridad máxima
     if (isMiBancoSinTicket) {
@@ -329,11 +349,38 @@ function VirtualSecretaryFab({
                                         {consejo.tipo === "tip" && "💡 Consejo"}
                                         {consejo.tipo === "motivacion" && "🎯 Motivación"}
                                         {consejo.tipo === "logro" && "🏆 Logro"}
+                                        {consejo.tipo === "cooperacion" && "🤝 Cooperación"}
                                     </span>
                                 </div>
 
                                 {/* Mensaje */}
                                 <p className={styles.consejoMensaje}>{consejo.mensaje}</p>
+
+                                {/* Acción sugerida */}
+                                {consejo.accion && (
+                                    <div style={{ marginTop: '12px', textAlign: 'right' }}>
+                                        <a 
+                                            href={consejo.accion.href}
+                                            style={{
+                                                backgroundColor: consejo.color,
+                                                color: '#fff',
+                                                padding: '6px 14px',
+                                                borderRadius: '6px',
+                                                fontSize: '12px',
+                                                fontWeight: 600,
+                                                textDecoration: 'none',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                transition: 'opacity 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                                            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                                        >
+                                            {consejo.accion.etiqueta} <ChevronRight size={14} />
+                                        </a>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Paginación de consejos */}
