@@ -386,9 +386,11 @@ function generarConsejos(
 // ─── Componente principal ─────────────────────────────────────────────────────
 function VirtualSecretaryFab(props: VirtualSecretaryFabProps) {
     const ticketData = props.ticketData;
+    const ticketCosts = props.ticketCosts;
+    const ticketStatusId = props.ticketStatusId;
     
-    if (!ticketData) {
-        return null; // Evita que la aplicación colapse si no hay un ticket seleccionado
+    if (!ticketData || !ticketCosts) {
+        return null; // Bloquea el crash por completo si no hay un ticket individual abierto
     }
 
     const {
@@ -423,7 +425,7 @@ function VirtualSecretaryFab(props: VirtualSecretaryFabProps) {
             clientTicketNumber,
             isSantander,
             onApplyTicketNumber,
-            gestoresMetrics,
+            gestoraMetrics,
             margenTicketActual,
             moTicketActual,
             ticketStatusId,
