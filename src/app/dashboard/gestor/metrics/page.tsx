@@ -290,13 +290,46 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     };
 
     const isInDateRange = useCallback((dateStr: string) => {
+        if (!dateStr) return false;
         const d = new Date(dateStr);
-        const diff = (now.getTime() - d.getTime()) / 86_400_000;
-        if (dateFilter === "today") return diff < 1;
-        if (dateFilter === "week") return diff < 7;
-        if (dateFilter === "month") return diff < 30;
+        if (isNaN(d.getTime())) return false;
+        
+        if (dateFilter === "today") {
+            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return d >= startOfToday;
+        }
+        if (dateFilter === "week") {
+            const startOfWeek = new Date(now);
+            const day = startOfWeek.getDay() || 7;
+            startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
+            startOfWeek.setHours(0, 0, 0, 0);
+            return d >= startOfWeek;
+        }
+        if (dateFilter === "month") {
+            const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            return d >= startOfCurrentMonth;
+        }
         return true;
     }, [dateFilter, now]);
+
+    const isRolledOver = useCallback((t: any) => {
+        const sid = normalizeStateId(t.status_id ?? t.estadoId);
+        const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+        if (isClosed) return false;
+
+        const created = t.original_created_at ?? t.created_at ?? t.createdAt ?? t.fechaCreacion;
+        if (!created) return false;
+        
+        const origDate = new Date(created);
+        const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return origDate < startOfCurrentMonth;
+    }, [now]);
+
+    const isTicketInPeriod = useCallback((t: any) => {
+        if (isInDateRange(t.created_at ?? t.createdAt ?? t.fechaCreacion)) return true;
+        if (t.closure_date && isInDateRange(t.closure_date)) return true;
+        return isRolledOver(t);
+    }, [isInDateRange, isRolledOver]);
 
     // ── Filtered tickets for the period ──
     const periodTickets = useMemo(() =>
@@ -309,6 +342,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         let totalInversion = 0;
         let totalFacturacion = 0;
         let totalUtilidad = 0;
+        let grossProductivity = 0;
         const inversionItems: any[] = [];
         const facturacionItems: any[] = [];
         const utilidadItems: any[] = [];
@@ -318,6 +352,13 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         // (aunque el ticket sea viejo) y tickets cerrados hoy (aunque el ticket sea viejo).
         tickets.forEach((t: any) => {
             const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
+            const state = normalizeStateId(t.estadoId || t.status_id);
+
+            // ── PRODUCTIVIDAD BRUTA ──
+            if (isTicketInPeriod(t) && state !== "ticket_cancelado" && state !== "ticket_rechazado") {
+                const amount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0);
+                grossProductivity += amount;
+            }
 
             // ── INVERSIÓN EJECUTADA ──────────────────────────────────────────────
             // Patrón Admin: cuando los costos relacionales están disponibles, usamos
@@ -357,7 +398,6 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
             // ── FACTURACIÓN Y UTILIDAD ───────────────────────────────────────────
             // Solo para tickets cerrados cuya FECHA DE CIERRE cae en el periodo
-            const state = normalizeStateId(t.estadoId || t.status_id);
             if (state === "ticket_cerrado") {
                 const closureDate = t.fechaPagoFinal || t.closure_date || t.updated_at || t.createdAt || t.created_at;
                 if (isInDateRange(closureDate || now.toISOString())) {
@@ -383,11 +423,12 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             inversion: totalInversion,
             facturacion: totalFacturacion,
             utilidad: totalUtilidad,
+            grossProductivity,
             inversionItems,
             facturacionItems,
             utilidadItems
         };
-    }, [tickets, isInDateRange, now]);
+    }, [tickets, isInDateRange, isTicketInPeriod, now]);
 
 
     // ── Month Utility Target Percent ──
@@ -801,9 +842,10 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                                 <div style={{ fontSize: "1.8rem", fontWeight: 900, color: "white", lineHeight: 1.1 }}>
                                     S/ {formatSoles(financialMetrics.facturacion)}
                                 </div>
-                                <p style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.4)", margin: "4px 0 0" }}>
-                                    Facturación de tickets finalizados
-                                </p>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "5px", fontSize: "0.68rem" }}>
+                                    <span style={{ color: "rgba(255,255,255,0.3)" }}>Con IGV: S/ {formatSoles(financialMetrics.facturacion * 1.18)}</span>
+                                    <span style={{ color: "#818CF8", fontWeight: 700 }}>Prod. Bruta: S/ {formatSoles(financialMetrics.grossProductivity)}</span>
+                                </div>
                             </div>
                         </div>
 
