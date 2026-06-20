@@ -241,31 +241,31 @@ export default function AdminDashboard() {
     }, [dateRange]);
 
 
+    const getStartOfPeriod = (range: string, baseDate: Date): Date => {
+        if (range === "today") {
+            return new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+        }
+        if (range === "week") {
+            const startOfWeek = new Date(baseDate);
+            const day = startOfWeek.getDay() || 7;
+            startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
+            startOfWeek.setHours(0, 0, 0, 0);
+            return startOfWeek;
+        }
+        if (range === "month") {
+            return new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+        }
+        return new Date(2020, 0, 1);
+    };
+
+    const startOfPeriod = useMemo(() => getStartOfPeriod(dateRange, now), [dateRange, now]);
+
     const isInRange = (dateStr: string | null | undefined) => {
         if (!dateStr) return false;
         if (dateRange === "all") return true;
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return false;
-        
-        if (dateRange === "today") {
-            // Strict today: desde las 00:00:00 del día actual en hora local
-            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            return d >= startOfToday;
-        }
-        if (dateRange === "week") {
-            // Strict calendar week: desde el lunes de la semana actual a las 00:00:00 local
-            const startOfWeek = new Date(now);
-            const day = startOfWeek.getDay() || 7; // 1 = Lunes, ..., 7 = Domingo
-            startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
-            startOfWeek.setHours(0, 0, 0, 0);
-            return d >= startOfWeek;
-        }
-        if (dateRange === "month") {
-            // Strict calendar month (Mes Actual): desde el 1 del mes actual a las 00:00:00 local
-            const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            return d >= startOfCurrentMonth;
-        }
-        return true;
+        return d >= startOfPeriod;
     };
 
     // ─── Helper puro: inversión confirmada de un ticket ──────────────────────
@@ -286,7 +286,7 @@ export default function AdminDashboard() {
         return calculateTicketFinances(t, costs).realProfitability;
     };
 
-    // Identificar si un ticket es de arrastre mensual (abierto de meses anteriores)
+    // Identificar si un ticket es de arrastre (abierto de periodos anteriores)
     const isRolledOver = (t: any) => {
         const sid = normalizeStateId(t.status_id ?? t.estadoId);
         const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
@@ -296,8 +296,7 @@ export default function AdminDashboard() {
         if (!created) return false;
         
         const origDate = new Date(created);
-        const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        return origDate < startOfCurrentMonth;
+        return origDate < startOfPeriod;
     };
 
     // Filtro de periodo robusto que incluye los tickets en rango y los arrastrados
@@ -379,16 +378,23 @@ export default function AdminDashboard() {
         let enEjecucion = 0;
         let arrastrados = 0;
         
+        const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
+
         tickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
             const sid = normalizeStateId(t.status_id || t.estadoId);
-            const val = parseFloat(t.ingresos_reales || 0);
+            if (!approvedStates.includes(sid)) return;
+
+            const val = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
             
             if (isRolledOver(t)) {
-                arrastrados += ticketInversion(t);
+                arrastrados += val;
             } else {
-                if (sid === 'cotizacion_aprobada') aprobadas += val;
-                if (sid === 'en_ejecucion') enEjecucion += val;
+                if (sid === 'cotizacion_aprobada') {
+                    aprobadas += val;
+                } else {
+                    enEjecucion += val;
+                }
             }
         });
 
@@ -447,14 +453,16 @@ export default function AdminDashboard() {
 
     // ── MÓDULO 2: Tesorería / Pendientes (Lectura Inmutable Backend) ───────
     const tesoreria = useMemo(() => {
+        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
+
         // Pipeline: Cotizaciones en curso
         const pipelineStates = ["en_cotizacion", "cotizacion_enviada", "borrador", "nuevo", "pendiente", "visitado"];
-        const pipelineTickets = tickets.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId)));
+        const pipelineTickets = inPeriod.filter((t: any) => pipelineStates.includes(normalizeStateId(t.status_id || t.estadoId)));
         const totalPipelineNeto = pipelineTickets.reduce((s, t) => s + (parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0);
 
         // Presupuestos Aprobados: En ejecución o por liquidar
         const approvedStates = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin"];
-        const approvedTickets = tickets.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
+        const approvedTickets = inPeriod.filter((t: any) => approvedStates.includes(normalizeStateId(t.status_id || t.estadoId)));
         const totalAprobados = approvedTickets.reduce((s, t) => s + (parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0);
 
         // Lucro Cesante: dinero que la empresa deja de percibir por
@@ -464,7 +472,7 @@ export default function AdminDashboard() {
             hoursAgo(t.updated_at || t.createdAt || t.created_at || "") >= 48
         );
         const lucroReal = bloqueados48h.reduce((s, t) => {
-            const ingresos = parseFloat(t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+            const ingresos = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
             const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
             const utilidadPerdida = Math.max(0, ingresos - costos);
             return s + utilidadPerdida;
@@ -518,7 +526,7 @@ export default function AdminDashboard() {
                 { label: "Pendiente Liquidar", count: penLiq.length, tickets: addMonto(penLiq), color: "#64748B" },
             ].filter(b => b.count > 0).sort((a,b) => b.count - a.count)
         };
-    }, [tickets]);
+    }, [tickets, dateRange, now]);
 
     // ── CAPITAL EXPUESTO / ADELANTADO (Pagos a Técnicos en tickets activos) ────────
     // Estados activos previos a ejecución/cierre donde aún hay capital en riesgo
@@ -527,6 +535,7 @@ export default function AdminDashboard() {
     const capitalExpuesto = useMemo(() => {
         const ticketsConAdelantos = tickets
             .filter((t: any) => {
+                if (!isTicketInPeriod(t)) return false;
                 const sid = normalizeStateId(t.estadoId);
                 const isActive = !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
                 const totalPagado = calculateTicketFinances(t, t.costos || []).totalExpenses;
@@ -570,7 +579,7 @@ export default function AdminDashboard() {
         const totalEnRiesgo = round2(enRiesgo.reduce((s: number, t: any) => s + t._totalAdelantado, 0));
 
         return { tickets: ticketsConAdelantos, total: totalCapital, enRiesgo: enRiesgo.length, totalEnRiesgo };
-    }, [tickets, gestoras]);
+    }, [tickets, gestoras, dateRange, now]);
 
     // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
     const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
@@ -990,7 +999,7 @@ export default function AdminDashboard() {
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-                            <div style={{ width: "130px", height: "130px" }}>
+                            <div style={{ position: "relative", width: "130px", height: "130px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -1006,8 +1015,25 @@ export default function AdminDashboard() {
                                                 <Cell key={`cell-${index}`} fill={entry.color} />
                                             ))}
                                         </Pie>
+                                        <Tooltip
+                                            contentStyle={{
+                                                background: "rgba(17, 24, 39, 0.95)",
+                                                border: "1px solid rgba(255, 255, 255, 0.1)",
+                                                borderRadius: "8px",
+                                                fontSize: "0.7rem",
+                                                color: "#fff"
+                                            }}
+                                            itemStyle={{ color: "#fff" }}
+                                            formatter={(value: any) => [`S/. ${fmt(value)}`, "Monto"]}
+                                        />
                                     </PieChart>
                                 </ResponsiveContainer>
+                                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center", pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                                    <span style={{ fontSize: "0.52rem", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Total</span>
+                                    <div style={{ fontSize: "0.78rem", fontWeight: 900, color: "white", marginTop: "1px" }}>
+                                        S/. {fmt(pipelineApprovedData.reduce((sum, item) => sum + item.value, 0))}
+                                    </div>
+                                </div>
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", flex: 1 }}>
                                 {pipelineApprovedData.map(item => (

@@ -289,28 +289,32 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         return 0;
     };
 
-    const isInDateRange = useCallback((dateStr: string) => {
-        if (!dateStr) return false;
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return false;
-        
-        if (dateFilter === "today") {
-            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            return d >= startOfToday;
+    const getStartOfPeriod = useCallback((range: string, baseDate: Date): Date => {
+        if (range === "today") {
+            return new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
         }
-        if (dateFilter === "week") {
-            const startOfWeek = new Date(now);
+        if (range === "week") {
+            const startOfWeek = new Date(baseDate);
             const day = startOfWeek.getDay() || 7;
             startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
             startOfWeek.setHours(0, 0, 0, 0);
-            return d >= startOfWeek;
+            return startOfWeek;
         }
-        if (dateFilter === "month") {
-            const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            return d >= startOfCurrentMonth;
+        if (range === "month") {
+            return new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
         }
-        return true;
-    }, [dateFilter, now]);
+        return new Date(2020, 0, 1);
+    }, []);
+
+    const startOfPeriod = useMemo(() => getStartOfPeriod(dateFilter, now), [dateFilter, now, getStartOfPeriod]);
+
+    const isInDateRange = useCallback((dateStr: string) => {
+        if (!dateStr) return false;
+        if (dateFilter === "all") return true;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return false;
+        return d >= startOfPeriod;
+    }, [dateFilter, startOfPeriod]);
 
     const isRolledOver = useCallback((t: any) => {
         const sid = normalizeStateId(t.status_id ?? t.estadoId);
@@ -321,9 +325,8 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         if (!created) return false;
         
         const origDate = new Date(created);
-        const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        return origDate < startOfCurrentMonth;
-    }, [now]);
+        return origDate < startOfPeriod;
+    }, [startOfPeriod]);
 
     const isTicketInPeriod = useCallback((t: any) => {
         if (isInDateRange(t.created_at ?? t.createdAt ?? t.fechaCreacion)) return true;
