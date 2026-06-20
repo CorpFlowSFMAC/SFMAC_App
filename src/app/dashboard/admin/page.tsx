@@ -1427,6 +1427,7 @@ export default function AdminDashboard() {
                                                     }} 
                                                 />
                                             ))}
+                                            <LabelList dataKey="netoCerrado" position="insideLeft" fill="#fff" formatter={(v: any) => v > 0 ? `S/. ${fmt(v)}` : ''} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
                                         <Bar dataKey="igvCerrado" fill="#3B82F6" name="IGV Cerrado (18%)">
                                             {stackedProductivityData.map((entry: any, index: number) => (
@@ -1443,6 +1444,7 @@ export default function AdminDashboard() {
                                                     }} 
                                                 />
                                             ))}
+                                            <LabelList dataKey="igvCerrado" position="insideLeft" fill="#fff" formatter={(v: any) => v > 0 ? `S/. ${fmt(v)}` : ''} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
                                         <Bar dataKey="montoActivos" fill="#F59E0B" name="En Ejecución / Activos (S/.)">
                                             {stackedProductivityData.map((entry: any, index: number) => (
@@ -1459,6 +1461,7 @@ export default function AdminDashboard() {
                                                     }} 
                                                 />
                                             ))}
+                                            <LabelList dataKey="montoActivos" position="insideLeft" fill="#fff" formatter={(v: any) => v > 0 ? `S/. ${fmt(v)}` : ''} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
