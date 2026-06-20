@@ -342,9 +342,9 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                 // Fallback a campos pre-calculados del ticket (vista SQL / metadata)
                 // Fuente de verdad: inversion_ejecutada > total_costs_agg > metadata.inversion_ejecutada
                 const invFallback =
-                    parseFloat(t.inversion_ejecutada ?? 0) ||
-                    parseFloat(t.total_costs_agg ?? 0) ||
-                    parseFloat(t.metadata?.inversion_ejecutada ?? 0) ||
+                    toNum(t.inversion_ejecutada ?? 0) ||
+                    toNum(t.total_costs_agg ?? 0) ||
+                    toNum(t.metadata?.inversion_ejecutada ?? 0) ||
                     0;
                 // Solo sumamos si el depósito cae dentro del rango temporal del indicador
                 // (usamos la fecha de ejecución o creación del ticket como aproximación)
@@ -368,8 +368,8 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         facturacionItems.push({ ...t, _monto: finances.netIncome });
                         utilidadItems.push({ ...t, _monto: finances.realProfitability });
                     } else {
-                        const facFallback = parseFloat(t.ingresos_reales ?? t.total_quoted_amount ?? 0) || 0;
-                        const utiFallback = parseFloat(t.rentabilidad ?? t.utilidad_neta ?? t.metadata?.utilidad_neta ?? 0) || 0;
+                        const facFallback = toNum(t.ingresos_reales ?? t.total_quoted_amount ?? 0);
+                        const utiFallback = toNum(t.rentabilidad ?? t.utilidad_neta ?? t.metadata?.utilidad_neta ?? 0);
                         totalFacturacion += facFallback;
                         totalUtilidad += utiFallback;
                         facturacionItems.push({ ...t, _monto: facFallback });
@@ -735,11 +735,16 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             flexDirection: "column",
                             justifyContent: "space-between",
                             minHeight: "115px",
-                            transition: "transform 0.2s",
-                            cursor: "default"
+                            transition: "all 0.2s",
+                            cursor: "pointer"
                         }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
+                            onClick={() => {
+                                setModalTitle("Detalle de Inversión Ejecutada");
+                                setModalTickets(financialMetrics.inversionItems);
+                                setShowListModal(true);
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0.02) 100%)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)"; }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
@@ -773,11 +778,16 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             flexDirection: "column",
                             justifyContent: "space-between",
                             minHeight: "115px",
-                            transition: "transform 0.2s",
-                            cursor: "default"
+                            transition: "all 0.2s",
+                            cursor: "pointer"
                         }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
+                            onClick={() => {
+                                setModalTitle("Detalle de Facturación Generada");
+                                setModalTickets(financialMetrics.facturacionItems);
+                                setShowListModal(true);
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0.02) 100%)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)"; }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
@@ -811,11 +821,16 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                             flexDirection: "column",
                             justifyContent: "space-between",
                             minHeight: "115px",
-                            transition: "transform 0.2s",
-                            cursor: "default"
+                            transition: "all 0.2s",
+                            cursor: "pointer"
                         }}
-                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; }}
-                            onMouseLeave={e => { e.currentTarget.style.transform = ""; }}
+                            onClick={() => {
+                                setModalTitle("Detalle de Utilidad Real");
+                                setModalTickets(financialMetrics.utilidadItems);
+                                setShowListModal(true);
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.06) 0%,rgba(255,255,255,0.02) 100%)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.background = "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)"; }}
                         >
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
