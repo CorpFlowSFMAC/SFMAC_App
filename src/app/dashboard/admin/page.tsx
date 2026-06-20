@@ -1338,7 +1338,7 @@ export default function AdminDashboard() {
                     )}
                 </div>
 
-                {/* Gráfico de Barras Apiladas (Vigilancia de Productividad & Flujo) */}
+                {/* Gráfico de Barras Horizontales Agrupadas (Vigilancia de Productividad & Flujo) */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Vigilancia de Productividad</div>
@@ -1352,10 +1352,25 @@ export default function AdminDashboard() {
                         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
                             <div style={{ width: "100%", height: "265px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={stackedProductivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                        <XAxis dataKey="gestor" stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} />
-                                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} />
+                                    <BarChart data={stackedProductivityData} layout="vertical" margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#222" horizontal={false} />
+                                        <XAxis 
+                                            type="number" 
+                                            stroke="rgba(255,255,255,0.3)" 
+                                            fontSize={10} 
+                                            tickLine={false} 
+                                            tickFormatter={(v: any) => v >= 1000 ? `S/. ${(v/1000).toFixed(0)}k` : `S/. ${v}`}
+                                        />
+                                        <YAxis 
+                                            dataKey="gestor" 
+                                            type="category" 
+                                            width={110} 
+                                            stroke="rgba(255,255,255,0.3)" 
+                                            fontSize={11} 
+                                            tickLine={false} 
+                                            style={{ fill: "#fff", fontWeight: 700 }}
+                                            tickFormatter={(v: string) => v.split(" ")[0]}
+                                        />
                                         <Tooltip
                                             content={({ active, payload, label }: any) => {
                                                 if (active && payload && payload.length) {
@@ -1397,7 +1412,7 @@ export default function AdminDashboard() {
                                             }}
                                         />
                                         <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '9px', paddingTop: '10px' }} />
-                                        <Bar dataKey="netoCerrado" stackId="productivity" fill="#10B981" name="Neto Cerrado (S/.)">
+                                        <Bar dataKey="netoCerrado" fill="#10B981" name="Neto Cerrado (S/.)">
                                             {stackedProductivityData.map((entry: any, index: number) => (
                                                 <Cell 
                                                     key={`cell-${index}`} 
@@ -1412,9 +1427,8 @@ export default function AdminDashboard() {
                                                     }} 
                                                 />
                                             ))}
-                                            <LabelList dataKey="netoCerrado" position="center" fill="#fff" formatter={(v: any) => v >= 1000 ? `S/. ${(v/1000).toFixed(1)}k` : (v > 0 ? `S/. ${v.toFixed(0)}` : '')} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
-                                        <Bar dataKey="igvCerrado" stackId="productivity" fill="#3B82F6" name="IGV Cerrado (18%)">
+                                        <Bar dataKey="igvCerrado" fill="#3B82F6" name="IGV Cerrado (18%)">
                                             {stackedProductivityData.map((entry: any, index: number) => (
                                                 <Cell 
                                                     key={`cell-${index}`} 
@@ -1429,9 +1443,8 @@ export default function AdminDashboard() {
                                                     }} 
                                                 />
                                             ))}
-                                            <LabelList dataKey="igvCerrado" position="center" fill="#fff" formatter={(v: any) => v >= 1000 ? `S/. ${(v/1000).toFixed(1)}k` : (v > 0 ? `S/. ${v.toFixed(0)}` : '')} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
-                                        <Bar dataKey="montoActivos" stackId="productivity" fill="#F59E0B" name="En Ejecución / Activos (S/.)">
+                                        <Bar dataKey="montoActivos" fill="#F59E0B" name="En Ejecución / Activos (S/.)">
                                             {stackedProductivityData.map((entry: any, index: number) => (
                                                 <Cell 
                                                     key={`cell-${index}`} 
@@ -1446,7 +1459,6 @@ export default function AdminDashboard() {
                                                     }} 
                                                 />
                                             ))}
-                                            <LabelList dataKey="montoActivos" position="center" fill="#fff" formatter={(v: any) => v >= 1000 ? `S/. ${(v/1000).toFixed(1)}k` : (v > 0 ? `S/. ${v.toFixed(0)}` : '')} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
