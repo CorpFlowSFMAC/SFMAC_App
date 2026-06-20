@@ -1221,20 +1221,21 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Soles Acumulados</div>
                     </div>
                     {productivityData.length === 0 ? (
-                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)", minHeight: "120px" }}>
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)", minHeight: "200px" }}>
                             Sin datos de facturación en este periodo
                         </div>
                     ) : (
-                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem" }}>
-                            <div style={{ width: "110px", height: "110px", flexShrink: 0 }}>
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            {/* Wrapper relativo para centrar el total */}
+                            <div style={{ position: "relative", width: "100%", height: "180px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
                                             data={productivityData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={28}
-                                            outerRadius={45}
+                                            innerRadius={55}
+                                            outerRadius={75}
                                             paddingAngle={4}
                                             dataKey="value"
                                         >
@@ -1255,17 +1256,24 @@ export default function AdminDashboard() {
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>
+                                <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center", pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                                    <span style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Total</span>
+                                    <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "white", marginTop: "1px" }}>
+                                        S/. {fmt(productivityData.reduce((sum, item) => sum + item.value, 0))}
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1, overflow: "hidden" }}>
+                            {/* Nombres posicionados abajo */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.5rem", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "0.8rem" }}>
                                 {productivityData.map((item, index) => {
                                     const color = PRODUCTIVITY_COLORS[index % PRODUCTIVITY_COLORS.length];
                                     return (
-                                        <div key={item.name} style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                                        <div key={item.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
                                             <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-                                                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: color, flexShrink: 0 }} />
-                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
+                                                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+                                                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,0.65)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
                                             </div>
-                                            <span style={{ fontSize: "0.85rem", fontWeight: 900, color: "white", paddingLeft: "12px" }}>S/. {fmt(item.value)}</span>
+                                            <span style={{ fontSize: "0.85rem", fontWeight: 900, color: "white", flexShrink: 0 }}>S/. {fmt(item.value)}</span>
                                         </div>
                                     );
                                 })}
