@@ -631,6 +631,55 @@ export default function AdminDashboard() {
         return { slaGlobal, fcrPct, npsPct, gestoras: gestorasData, maxLoad, expired: expired.length };
     }, [tickets, gestoras]);
 
+
+    // ── PRODUCTIVIDAD EN SOLES POR GESTOR DESDE BASE DE DATOS ─────────
+    const PRODUCTIVITY_COLORS = ["#8B5CF6", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#EC4899", "#14B8A6"];
+    const productivityData = useMemo(() => {
+        const inPeriod = tickets.filter((t: any) => isTicketInPeriod(t));
+        const validTickets = inPeriod.filter((t: any) => {
+            const state = normalizeStateId(t.estadoId ?? t.status_id);
+            return state !== "ticket_cancelado" && state !== "ticket_rechazado";
+        });
+
+        const totalsMap: { [key: string]: { name: string; value: number } } = {};
+
+        validTickets.forEach((t: any) => {
+            const gestoraId = t.gestora_id || t.metadata?.gestora_id;
+            let gestoraName = "Sin asignar";
+
+            if (gestoraId) {
+                const g = gestorasMap.get(gestoraId);
+                if (g) {
+                    gestoraName = g.name || g.nombre || g.full_name || "Gestora";
+                }
+            }
+
+            if (gestoraName === "Sin asignar") {
+                const directName = t.gestora?.name || t.gestora?.nombre || t.gestora?.full_name;
+                if (directName) {
+                    gestoraName = directName;
+                }
+            }
+
+            if (gestoraName === "Sin asignar" || gestoraName === "Sin Gestora") {
+                return;
+            }
+
+            const amount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0);
+            if (amount > 0) {
+                if (!totalsMap[gestoraName]) {
+                    totalsMap[gestoraName] = { name: gestoraName, value: 0 };
+                }
+                totalsMap[gestoraName].value += amount;
+            }
+        });
+
+        return Object.values(totalsMap).map((item: any) => ({
+            name: item.name,
+            value: round2(item.value)
+        })).filter((item: any) => item.value > 0);
+    }, [tickets, gestoras, dateRange]);
+
     // ── SEMÁFORO GLOBAL ─────────────────────
     const globalLight = useMemo(() => semaforo([
         { test: tesoreria.bloqueados48 > 0, level: "ROJO" },
@@ -1165,16 +1214,66 @@ export default function AdminDashboard() {
             <SectionHeader icon={<Users size={16} />} title="Productividad & Clima Laboral (RRHH)" color="#8B5CF6" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.2fr", gap: "1rem", marginBottom: "1.25rem" }}>
 
-                {/* KPIs RRHH */}
-                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center", justifyContent: "center" }}>
-                    <GaugeMini pct={rrhh.slaGlobal} label="SLA Global" />
-                    <GaugeMini pct={rrhh.fcrPct} label="FCR (1ª Resolución)" />
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <Star size={16} color="#F59E0B" />
-                        <span style={{ fontSize: "1.5rem", fontWeight: 900, color: "#F59E0B" }}>{rrhh.npsPct}</span>
-                        <span style={{ fontSize: "0.73rem", color: "rgba(255,255,255,0.4)" }}>NPS / Satisfacción</span>
+                {/* Gráfico de Pastel de Productividad por Gestor */}
+                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
+                        <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Productividad por Gestor</div>
+                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Soles Acumulados</div>
                     </div>
+                    {productivityData.length === 0 ? (
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)", minHeight: "120px" }}>
+                            Sin datos de facturación en este periodo
+                        </div>
+                    ) : (
+                        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.8rem" }}>
+                            <div style={{ width: "110px", height: "110px", flexShrink: 0 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={productivityData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={28}
+                                            outerRadius={45}
+                                            paddingAngle={4}
+                                            dataKey="value"
+                                        >
+                                            {productivityData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={PRODUCTIVITY_COLORS[index % PRODUCTIVITY_COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{
+                                                background: "rgba(17, 24, 39, 0.95)",
+                                                border: "1px solid rgba(255, 255, 255, 0.1)",
+                                                borderRadius: "8px",
+                                                fontSize: "0.7rem",
+                                                color: "#fff"
+                                            }}
+                                            itemStyle={{ color: "#fff" }}
+                                            formatter={(value: any) => [`S/. ${fmt(value)}`, "Productividad"]}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1, overflow: "hidden" }}>
+                                {productivityData.map((item, index) => {
+                                    const color = PRODUCTIVITY_COLORS[index % PRODUCTIVITY_COLORS.length];
+                                    return (
+                                        <div key={item.name} style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                                                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "rgba(255,255,255,0.6)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
+                                            </div>
+                                            <span style={{ fontSize: "0.85rem", fontWeight: 900, color: "white", paddingLeft: "12px" }}>S/. {fmt(item.value)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
+
 
                 {/* Carga por gestora — NUEVA VERSIÓN CON DATOS REALES */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem" }}>
