@@ -1314,11 +1314,74 @@ export default function PaymentsPage() {
             // Fetch fresh ticket data with ALL financial columns to ensure accurate balance calculations
             const { data: currentTicket, error: fetchErr } = await supabase
                 .from('tickets')
-                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost')
+                .select('metadata, status_id, labor_cost, total_quoted_amount, technician_id, materials_cost, visit_cost, client_ticket_number, gestora_id, clients(name), technicians(*)')
                 .eq('id', group.realTicketId)
                 .single();
 
             if (fetchErr || !currentTicket) throw new Error("Ticket no encontrado");
+
+            // Helper to trigger notifications under Promise.allSettled
+            const triggerNotifications = () => {
+                const techName = currentTicket.technicians?.name || 
+                                 [currentTicket.technicians?.first_name, currentTicket.technicians?.last_name].filter(Boolean).join(' ') || 
+                                 'Técnico';
+                const techPhone = currentTicket.technicians?.phone || '';
+                const ticketCode = currentTicket.client_ticket_number || group.realTicketId;
+                const clientName = currentTicket.clients?.name || 'Cliente';
+                const monto = parseFloat(String(item.monto || 0)).toFixed(2);
+                
+                // Determinar categoría del abono
+                let categoriaMsg = item.categoria || item.tipo || 'Mano de Obra';
+                if (item.id?.endsWith('_final') || item.id?.endsWith('_liquidacion_manual')) {
+                    categoriaMsg = 'Mano de Obra';
+                } else if (item.id?.endsWith('_adelanto')) {
+                    categoriaMsg = 'Adelanto';
+                } else if (item.id?.endsWith('_visita')) {
+                    categoriaMsg = 'Viáticos';
+                }
+
+                console.log('[Notifications] Iniciando envío de alertas...');
+
+                // Alerta 1: WhatsApp
+                const sendWhatsApp = async () => {
+                    if (!techPhone) {
+                        console.warn('[Notifications] No se pudo enviar WhatsApp: Técnico sin celular');
+                        return;
+                    }
+                    const message = `SINFIMAC NOTIFICACIONES: Hola ${techName}, se ha registrado un depósito de S/. ${monto} por concepto de ${categoriaMsg} para el Ticket ${ticketCode} (${clientName}). Por favor, verifica tu banca móvil.`;
+                    const res = await fetch('/api/whatsapp/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone: techPhone, message })
+                    });
+                    if (!res.ok) {
+                        throw new Error(`WhatsApp API responded with status ${res.status}`);
+                    }
+                    return res.json();
+                };
+
+                // Alerta 2: Supabase Realtime Broadcast a la Gestora
+                const sendBroadcast = async () => {
+                    if (!currentTicket.gestora_id) {
+                        console.warn('[Notifications] No se pudo enviar Broadcast: Ticket sin gestora asignada');
+                        return;
+                    }
+                    const channel = supabase.channel('realtime:deposits');
+                    await channel.send({
+                        type: 'broadcast',
+                        event: 'new_deposit',
+                        payload: {
+                            monto,
+                            codigo_ticket: ticketCode,
+                            gestora_id: currentTicket.gestora_id
+                        }
+                    });
+                };
+
+                Promise.allSettled([sendWhatsApp(), sendBroadcast()]).then((results) => {
+                    console.log('[Notifications] Alertas finalizadas con resultados:', results);
+                });
+            };
 
             if (item.isTableCost && item.costId) {
                 const additionalUpdates: any = { metadataFields: {} };
@@ -1387,6 +1450,9 @@ export default function PaymentsPage() {
                 }
                 
                 await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
+                
+                // Disparar alertas simultáneas
+                triggerNotifications();
                 
                 // ✅ Optimistic Update Local
                 setRawTickets((prev: any[]) => prev.map((t: any) => {
@@ -1576,6 +1642,9 @@ export default function PaymentsPage() {
 
             additionalUpdates.metadataFields = meta;
             await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
+            
+            // Disparar alertas simultáneas
+            triggerNotifications();
             
             // ✅ Optimistic Update Local
             setRawTickets((prev: any[]) => prev.map((t: any) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Users, Settings, UserCog, LogOut, Building2, Ticket, BarChart3, Clock, FolderOpen, FileText, Menu, X } from 'lucide-react';
@@ -25,6 +25,45 @@ export default function GestorLayout({
     const [gestoraNombre, setGestoraNombre] = useState<string | null>(null);
     const [sessionActiva, setSessionActiva] = useState(false);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    const [gestoraId, setGestoraId] = useState<string | null>(null);
+    const [realtimeToast, setRealtimeToast] = useState<{ msg: string; visible: boolean }>({ msg: '', visible: false });
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Suscribirse a alertas realtime de depósitos
+    useEffect(() => {
+        if (!gestoraId) return;
+
+        console.log(`[Realtime] Suscribiéndose a alertas para gestora ID: ${gestoraId}`);
+        const channel = supabase
+            .channel(`realtime:deposits:${gestoraId}`)
+            .on(
+                'broadcast',
+                { event: 'new_deposit' },
+                (response) => {
+                    console.log('[Realtime] Broadcast recibido:', response);
+                    const { monto, codigo_ticket, gestora_id } = response.payload;
+                    
+                    if (gestora_id === gestoraId) {
+                        const message = `💻 CORPFLOW SYSTEM: Se ha registrado un nuevo abono de S/. ${monto} en el Ticket ${codigo_ticket}. El saldo pendiente del técnico ha sido recalculado automáticamente.`;
+                        
+                        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+                        setRealtimeToast({ msg: message, visible: true });
+                        toastTimerRef.current = setTimeout(() => {
+                            setRealtimeToast({ msg: '', visible: false });
+                        }, 8000);
+                    }
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('[Realtime] Suscrito a canal de alertas realtime:deposits');
+                }
+            });
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [gestoraId]);
 
     // Cargar datos del usuario desde cookies, localStorage y sesión de Supabase
     useEffect(() => {
@@ -103,6 +142,9 @@ export default function GestorLayout({
                 .eq('email', email.toLowerCase())
                 .maybeSingle();
             
+            if (g?.id) {
+                setGestoraId(g.id);
+            }
             if (g?.name) {
                 setGestoraNombre(g.name);
                 return;
@@ -322,6 +364,40 @@ export default function GestorLayout({
                             <span>Más</span>
                         </button>
                     </nav>
+
+                    {/* Toast realtime para gestora */}
+                    {realtimeToast.visible && (
+                        <div style={{
+                            position: 'fixed',
+                            bottom: '80px',
+                            right: '24px',
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            backdropFilter: 'blur(12px)',
+                            color: '#f8fafc',
+                            borderLeft: '4px solid #10b981',
+                            borderRadius: '12px',
+                            padding: '16px 20px',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+                            zIndex: 9999,
+                            maxWidth: '380px',
+                            animation: 'slideInToast 0.3s ease-out forwards',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                            fontSize: '0.85rem',
+                            lineHeight: '1.4'
+                        }}>
+                            <style dangerouslySetInnerHTML={{__html: `
+                                @keyframes slideInToast {
+                                    from { transform: translateY(100px); opacity: 0; }
+                                    to { transform: translateY(0); opacity: 1; }
+                                }
+                            `}} />
+                            <div style={{ fontSize: '1.25rem', flexShrink: 0 }}>💻</div>
+                            <div style={{ fontWeight: 500 }}>{realtimeToast.msg}</div>
+                        </div>
+                    )}
                 </div>
             </AppDataProvider>
         </QueryProvider>

@@ -1697,6 +1697,62 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             confirmAdvanceRef.current = false;
             return;
         }
+
+        const triggerNotifications = () => {
+            const techObj = ticketData.technician || ticketData.technicians;
+            const techName = techObj?.name || 
+                             [techObj?.first_name, techObj?.last_name].filter(Boolean).join(' ') || 
+                             'Técnico';
+            const techPhone = techObj?.phone || '';
+            const ticketCode = ticketData.client_ticket_number || ticketData.id;
+            const clientName = ticketData.clients?.name || 'Cliente';
+            const monto = parseFloat(String(amount || 0)).toFixed(2);
+            
+            // Determinar categoría del abono
+            const categoriaMsg = isForMaterials ? 'Materiales' : 'Mano de Obra';
+
+            console.log('[Notifications] Iniciando envío de alertas desde TicketWindow...');
+
+            // Alerta 1: WhatsApp
+            const sendWhatsApp = async () => {
+                if (!techPhone) {
+                    console.warn('[Notifications] No se pudo enviar WhatsApp: Técnico sin celular');
+                    return;
+                }
+                const message = `SINFIMAC NOTIFICACIONES: Hola ${techName}, se ha registrado un depósito de S/. ${monto} por concepto de ${categoriaMsg} para el Ticket ${ticketCode} (${clientName}). Por favor, verifica tu banca móvil.`;
+                const res = await fetch('/api/whatsapp/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: techPhone, message })
+                });
+                if (!res.ok) {
+                    throw new Error(`WhatsApp API responded with status ${res.status}`);
+                }
+                return res.json();
+            };
+
+            // Alerta 2: Supabase Realtime Broadcast a la Gestora
+            const sendBroadcast = async () => {
+                if (!ticketData.gestora_id) {
+                    console.warn('[Notifications] No se pudo enviar Broadcast: Ticket sin gestora asignada');
+                    return;
+                }
+                const channel = supabase.channel('realtime:deposits');
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'new_deposit',
+                    payload: {
+                        monto,
+                        codigo_ticket: ticketCode,
+                        gestora_id: ticketData.gestora_id
+                    }
+                });
+            };
+
+            Promise.allSettled([sendWhatsApp(), sendBroadcast()]).then((results) => {
+                console.log('[Notifications] Alertas finalizadas desde TicketWindow con resultados:', results);
+            });
+        };
         const pendingRequest = ticketData.solicitudAdelanto;
         const isForMaterials = pendingRequest?.classification === 'materials' || advanceClassification === 'materials';
         if (isAdmin) {
@@ -1743,6 +1799,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                     setMontoAdelantoManual("");
                     setPorcentajeAdelanto(null);
                     showToast("Adelanto Confirmado", `Se ha registrado el depósito de S/ ${amount.toFixed(2)}.`, "success");
+                    triggerNotifications();
                 } catch (err: any) {
                     console.error("Error confirming pending advance:", err);
                     const isBadRequest = err?.message?.includes('400') || err?.message?.includes('rejected') || err?.message?.includes('API rejected');
@@ -1803,6 +1860,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             setMontoAdelantoManual("");
             setPorcentajeAdelanto(null);
             showToast("Depósito Confirmado", `Adelanto de S/ ${amount.toFixed(2)} registrado exitosamente.`, "success");
+            triggerNotifications();
         } catch (err) {
             console.error("Error registering pending advance:", err);
             const message = err instanceof DuplicateTicketCostError
