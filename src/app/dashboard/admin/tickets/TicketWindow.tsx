@@ -2047,26 +2047,43 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 monto: amount,
                 excedeTope: isExceeding
             };
+            
+            // =====================================================================
+            // 🔥 PASO 1: CÁLCULOS FRESCOS EN TIEMPO REAL (Evitar Stale Closures)
+            // =====================================================================
+            // Inyectar calculateTicketFinances con los costos actuales para 
+            // garantizar que saldo_tecnico, netLaborBalance y final_balance
+            // se calculen con datos reales de la DB, no con estado congelado.
+            // Esto soluciona el bug donde metadata.stale sobreescribía el saldo.
+            // =====================================================================
+            const freshFinances = calculateTicketFinances(ticketData, ticketCosts);
+            const guaranteedNetBalance = freshFinances.netLaborBalance ?? 0;
+            
             const finalMetadata = {
                 ...(ticketData.metadata || {}),
                 solicitudLiquidacion: solicitudLiquidacionMeta,
                 isAdminRevision: isExceeding,
-                estadoId: newState
+                estadoId: newState,
+                // ✅ Forzar valores frescos del motor financiero (no stale closures)
+                saldo_tecnico: guaranteedNetBalance,       // Garantiza 0 real si corresponde
+                netLaborBalance: guaranteedNetBalance,     // Alias para compatibilidad
+                totalLaborConfirmed: freshFinances.totalLaborConfirmed,
+                totalVenta: freshFinances.totalVenta,
+                utilidad_neta: freshFinances.realProfitability,
+                margen_real: freshFinances.margenReal,
             };
             
             // =====================================================================
-            // 🔄 OPCIÓN C - REFACTORIZADO: Uso de syncToSupabase ATÓMICO
+            // 🔄 PASO 2: PERSISTENCIA ATÓMICA CON MATEMÁTICA FRESCA
             // =====================================================================
-            // En lugar de invocar ticketsAPI.update con payload parcial, Preparar
-            // el objeto de estado actualizado LOCALMENTE con el nuevo status_id
-            // y client_ticket_number, luego ejecutar syncToSupabase de forma
-            // atómica para garantizar que ambos campos viajen en un solo HTTP POST.
+            // Preparar el objeto actualizado con valores financieros recalculados
+            // y enviar ATÓMICAMENTE junto con el cambio de estado a syncToSupabase.
             // =====================================================================
             const updated = {
                 ...ticketData,
                 estadoId: newState,
                 status_id: newState,
-                final_balance: amount,
+                final_balance: guaranteedNetBalance,  // Usar el saldo garantizado, no 'amount'
                 solicitudLiquidacion: solicitudLiquidacionMeta,
                 metadata: finalMetadata
             };
