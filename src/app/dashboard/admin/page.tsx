@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-    PieChart, Pie, Cell
+    PieChart, Pie, Cell, LabelList
 } from 'recharts';
 import Link from "next/link";
 import { useAppData } from "@/lib/AppDataContext";
@@ -1268,7 +1268,7 @@ export default function AdminDashboard() {
                 MÓDULO 3: PRODUCTIVIDAD RRHH
             ══════════════════════════════════ */}
             <SectionHeader icon={<Users size={16} />} title="Productividad & Clima Laboral (RRHH)" color="#8B5CF6" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.05fr 1.35fr 0.6fr", gap: "1rem", marginBottom: "1.25rem" }}>
 
                 {/* Gráfico de Pastel de Productividad por Gestor */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
@@ -1342,7 +1342,7 @@ export default function AdminDashboard() {
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Vigilancia de Productividad</div>
-                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Detalle Neto, IGV & Activos</div>
+                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Detalle Neto, IGV & Activos (Clic para ver)</div>
                     </div>
                     {stackedProductivityData.length === 0 ? (
                         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)", minHeight: "200px" }}>
@@ -1350,9 +1350,9 @@ export default function AdminDashboard() {
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                            <div style={{ width: "100%", height: "220px" }}>
+                            <div style={{ width: "100%", height: "265px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={stackedProductivityData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                    <BarChart data={stackedProductivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                         <XAxis dataKey="gestor" stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} />
                                         <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} />
@@ -1397,9 +1397,57 @@ export default function AdminDashboard() {
                                             }}
                                         />
                                         <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '9px', paddingTop: '10px' }} />
-                                        <Bar dataKey="netoCerrado" stackId="productivity" fill="#10B981" name="Neto Cerrado (S/.)" />
-                                        <Bar dataKey="igvCerrado" stackId="productivity" fill="#3B82F6" name="IGV Cerrado (18%)" />
-                                        <Bar dataKey="montoActivos" stackId="productivity" fill="#F59E0B" name="En Ejecución / Activos (S/.)" />
+                                        <Bar dataKey="netoCerrado" stackId="productivity" fill="#10B981" name="Neto Cerrado (S/.)">
+                                            {stackedProductivityData.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        const matchingGestora = rrhh.gestoras.find((x: any) => x.nombre === entry.gestor);
+                                                        if (matchingGestora) {
+                                                            setModalTitle(`Tickets de ${matchingGestora.nombre}`);
+                                                            setModalTickets(matchingGestora.tickets || []);
+                                                            setShowListModal(true);
+                                                        }
+                                                    }} 
+                                                />
+                                            ))}
+                                            <LabelList dataKey="netoCerrado" position="center" fill="#fff" formatter={(v: any) => v >= 1000 ? `S/. ${(v/1000).toFixed(1)}k` : (v > 0 ? `S/. ${v.toFixed(0)}` : '')} style={{ fontSize: '9px', fontWeight: 900 }} />
+                                        </Bar>
+                                        <Bar dataKey="igvCerrado" stackId="productivity" fill="#3B82F6" name="IGV Cerrado (18%)">
+                                            {stackedProductivityData.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        const matchingGestora = rrhh.gestoras.find((x: any) => x.nombre === entry.gestor);
+                                                        if (matchingGestora) {
+                                                            setModalTitle(`Tickets de ${matchingGestora.nombre}`);
+                                                            setModalTickets(matchingGestora.tickets || []);
+                                                            setShowListModal(true);
+                                                        }
+                                                    }} 
+                                                />
+                                            ))}
+                                            <LabelList dataKey="igvCerrado" position="center" fill="#fff" formatter={(v: any) => v >= 1000 ? `S/. ${(v/1000).toFixed(1)}k` : (v > 0 ? `S/. ${v.toFixed(0)}` : '')} style={{ fontSize: '9px', fontWeight: 900 }} />
+                                        </Bar>
+                                        <Bar dataKey="montoActivos" stackId="productivity" fill="#F59E0B" name="En Ejecución / Activos (S/.)">
+                                            {stackedProductivityData.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        const matchingGestora = rrhh.gestoras.find((x: any) => x.nombre === entry.gestor);
+                                                        if (matchingGestora) {
+                                                            setModalTitle(`Tickets de ${matchingGestora.nombre}`);
+                                                            setModalTickets(matchingGestora.tickets || []);
+                                                            setShowListModal(true);
+                                                        }
+                                                    }} 
+                                                />
+                                            ))}
+                                            <LabelList dataKey="montoActivos" position="center" fill="#fff" formatter={(v: any) => v >= 1000 ? `S/. ${(v/1000).toFixed(1)}k` : (v > 0 ? `S/. ${v.toFixed(0)}` : '')} style={{ fontSize: '9px', fontWeight: 900 }} />
+                                        </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -1411,7 +1459,7 @@ export default function AdminDashboard() {
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Distribución de Carga</div>
-                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Tickets Activos por Gestor</div>
+                        <div style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Clic en barras</div>
                     </div>
                     {rrhh.gestoras.length === 0 ? (
                         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)", minHeight: "200px" }}>
@@ -1419,11 +1467,11 @@ export default function AdminDashboard() {
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                            <div style={{ width: "100%", height: "220px" }}>
+                            <div style={{ width: "100%", height: "200px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={rrhh.gestoras} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                        <XAxis dataKey="nombre" stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} />
+                                        <XAxis dataKey="nombre" stroke="rgba(255,255,255,0.3)" fontSize={9} tickLine={false} tickFormatter={(v: string) => v.split(" ")[0]} />
                                         <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} />
                                         <Tooltip
                                             contentStyle={{
@@ -1437,38 +1485,28 @@ export default function AdminDashboard() {
                                             cursor={{ fill: "rgba(255,255,255,0.05)" }}
                                         />
                                         <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '9px', paddingTop: '10px' }} />
-                                        <Bar dataKey="nuevos" stackId="workload" fill="#8B5CF6" name="Nuevos" />
-                                        <Bar dataKey="enProceso" stackId="workload" fill="#6366F1" name="En Proceso" />
+                                        <Bar dataKey="nuevos" stackId="workload" fill="#EC4899" name="Nuevos">
+                                            {rrhh.gestoras.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => { setModalTitle(`Tickets de ${entry.nombre}`); setModalTickets(entry.tickets || []); setShowListModal(true); }} 
+                                                />
+                                            ))}
+                                            <LabelList dataKey="nuevos" position="center" fill="#fff" formatter={(v: any) => v > 0 ? String(v) : ''} style={{ fontSize: '11px', fontWeight: 900 }} />
+                                        </Bar>
+                                        <Bar dataKey="enProceso" stackId="workload" fill="#00E396" name="En Proceso">
+                                            {rrhh.gestoras.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => { setModalTitle(`Tickets de ${entry.nombre}`); setModalTickets(entry.tickets || []); setShowListModal(true); }} 
+                                                />
+                                            ))}
+                                            <LabelList dataKey="enProceso" position="center" fill="#fff" formatter={(v: any) => v > 0 ? String(v) : ''} style={{ fontSize: '11px', fontWeight: 900 }} />
+                                        </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
-                            </div>
-                            {/* Clickable list under the workload chart for interactive drill-down */}
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "0.8rem", marginTop: "auto" }}>
-                                {rrhh.gestoras.map((g: any) => {
-                                    const stress = g.count > 8 ? "#EF4444" : g.count > 5 ? "#F59E0B" : "#10B981";
-                                    return (
-                                        <div 
-                                            key={g.id}
-                                            onClick={() => { setModalTitle(`Tickets de ${g.nombre}`); setModalTickets(g.tickets || []); setShowListModal(true); }}
-                                            style={{ 
-                                                display: "flex", 
-                                                justifyContent: "space-between", 
-                                                alignItems: "center", 
-                                                background: "rgba(255,255,255,0.02)", 
-                                                border: "1px solid rgba(255,255,255,0.05)",
-                                                borderRadius: "8px",
-                                                padding: "0.4rem 0.6rem",
-                                                cursor: "pointer",
-                                                transition: "all 0.2s"
-                                            }}
-                                            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.borderColor = `${stress}40`; }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.02)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; }}
-                                        >
-                                            <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginRight: "4px" }}>{g.nombre}</span>
-                                            <span style={{ fontSize: "0.75rem", fontWeight: 900, color: stress }}>{g.count} tks</span>
-                                        </div>
-                                    );
-                                })}
                             </div>
                         </div>
                     )}
