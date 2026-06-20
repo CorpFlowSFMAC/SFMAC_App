@@ -467,11 +467,7 @@ export default function AdminDashboard() {
             const ingresos = parseFloat(t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
             const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
             const utilidadPerdida = Math.max(0, ingresos - costos);
-            // Penalización SLA: +5% adicional por cada 24h extra sobre las 48h de bloqueo
-            const horasBloqueo = hoursAgo(t.updated_at || t.createdAt || t.created_at || "");
-            const diasExtra = Math.max(0, Math.floor((horasBloqueo - 48) / 24));
-            const penalizacionSLA = utilidadPerdida * (diasExtra * 0.05);
-            return s + utilidadPerdida + penalizacionSLA;
+            return s + utilidadPerdida;
         }, 0);
 
         // Aging
@@ -1055,23 +1051,20 @@ export default function AdminDashboard() {
 
                     <div 
                         onClick={() => {
-                            setModalTitle("Lucro Cesante: Tickets bloqueados >48h + Penalización SLA");
+                            setModalTitle("Lucro Cesante: Tickets bloqueados >48h");
                             setModalTickets(tesoreria.bloqueados48hTickets.map(t => {
                                 const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
                                 const costos = parseFloat(t.labor_cost || 0) + parseFloat(t.materials_cost || 0) + parseFloat(t.visit_cost || 0);
                                 const utilidadPerdida = Math.max(0, ingresoNeto - costos);
                                 const horasBloqueo = hoursAgo(t.updated_at || t.createdAt || t.created_at || "");
-                                const diasExtra = Math.max(0, Math.floor((horasBloqueo - 48) / 24));
-                                const penalizacionSLA = utilidadPerdida * (diasExtra * 0.05);
                                 return {
                                     ...t,
                                     servicio: t.service_type || t.tipo_servicio,
                                     cliente: t.clients?.name || t.clienteNombre || 'Cliente',
                                     _ingresosProyectados: ingresoNeto,
                                     _costosProyectados: costos,
-                                    _utilidadPendiente: utilidadPerdida + penalizacionSLA,
-                                    _horasBloqueo: Math.floor(horasBloqueo),
-                                    _penalizacionSLA: penalizacionSLA
+                                    _utilidadPendiente: utilidadPerdida,
+                                    _horasBloqueo: Math.floor(horasBloqueo)
                                 };
                             }));
                             setShowListModal(true);
@@ -1080,7 +1073,7 @@ export default function AdminDashboard() {
                     >
                         <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#EF4444", marginBottom: "2px" }}>⚡ Lucro Cesante (bloqueados &gt;48h)</div>
                         <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#EF4444" }}>S/ {fmt(tesoreria.lucro)}</div>
-                        <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>{tesoreria.bloqueados48hTickets.length} ticket(s) — inoperatividad + penalización SLA</div>
+                        <div style={{ fontSize: "0.68rem", color: "rgba(239,68,68,0.7)" }}>{tesoreria.bloqueados48hTickets.length} ticket(s) — inoperatividad / bloqueados</div>
                     </div>
 
                     {/* Capital Expuesto — CLICKABLE */}
