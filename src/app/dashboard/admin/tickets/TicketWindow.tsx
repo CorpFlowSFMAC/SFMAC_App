@@ -1715,38 +1715,139 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
 
             // Alerta 1: WhatsApp
             const sendWhatsApp = async () => {
-                if (!techPhone) {
-                    console.warn('[Notifications] No se pudo enviar WhatsApp: Técnico sin celular');
+                const message = `SINFIMAC NOTIFICACIONES: Hola ${techName}, se ha registrado un depósito de S/. ${monto} por concepto de ${categoriaMsg} para el Ticket ${ticketCode} (${clientName}). Por favor, verifica tu banca móvil.`;
+                
+                const phoneDigits = (techPhone || '').replace(/\D/g, '');
+                const hasValidLength = phoneDigits.length === 9 || (phoneDigits.length === 11 && phoneDigits.startsWith('51'));
+                
+                if (!techPhone || !techPhone.trim() || !hasValidLength) {
+                    console.warn('[Notifications] No se pudo enviar WhatsApp: Técnico sin celular o longitud inválida');
+                    try {
+                        await supabase.from('notification_logs').insert({
+                            ticket_code: ticketCode,
+                            recipient_type: 'tecnico',
+                            recipient_name: techName,
+                            destination: techPhone || 'VACÍO',
+                            message_body: message,
+                            status: 'error_numero_vacio',
+                            error_details: 'El número de celular está vacío o no tiene una longitud válida de 9 u 11 dígitos (con código de país).'
+                        });
+                    } catch (logErr) {
+                        console.error('[Notifications] Error guardando log error_numero_vacio desde TicketWindow:', logErr);
+                    }
                     return;
                 }
-                const message = `SINFIMAC NOTIFICACIONES: Hola ${techName}, se ha registrado un depósito de S/. ${monto} por concepto de ${categoriaMsg} para el Ticket ${ticketCode} (${clientName}). Por favor, verifica tu banca móvil.`;
-                const res = await fetch('/api/whatsapp/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: techPhone, message })
-                });
-                if (!res.ok) {
-                    throw new Error(`WhatsApp API responded with status ${res.status}`);
+                
+                try {
+                    const res = await fetch('/api/whatsapp/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone: techPhone, message })
+                    });
+                    
+                    if (!res.ok) {
+                        const errorText = await res.text().catch(() => '');
+                        throw new Error(`WhatsApp API responded with status ${res.status}: ${errorText}`);
+                    }
+                    
+                    try {
+                        await supabase.from('notification_logs').insert({
+                            ticket_code: ticketCode,
+                            recipient_type: 'tecnico',
+                            recipient_name: techName,
+                            destination: techPhone,
+                            message_body: message,
+                            status: 'enviado'
+                        });
+                    } catch (logErr) {
+                        console.error('[Notifications] Error guardando log enviado desde TicketWindow:', logErr);
+                    }
+                    
+                    return res.json();
+                } catch (err: any) {
+                    console.error('[Notifications] Error al enviar WhatsApp desde TicketWindow:', err);
+                    try {
+                        await supabase.from('notification_logs').insert({
+                            ticket_code: ticketCode,
+                            recipient_type: 'tecnico',
+                            recipient_name: techName,
+                            destination: techPhone,
+                            message_body: message,
+                            status: 'fallido',
+                            error_details: err?.message || String(err)
+                        });
+                    } catch (logErr) {
+                        console.error('[Notifications] Error guardando log fallido desde TicketWindow:', logErr);
+                    }
+                    throw err;
                 }
-                return res.json();
             };
 
             // Alerta 2: Supabase Realtime Broadcast a la Gestora
             const sendBroadcast = async () => {
-                if (!ticketData.gestora_id) {
+                const gestoraId = ticketData.gestora_id;
+                const gestoraObj = ticketData.gestora || ticketData.gestoras;
+                const gestoraName = gestoraObj?.name || 'Gestora';
+                const broadcastMessage = `Broadcast new_deposit: S/. ${monto} para el Ticket ${ticketCode}`;
+                
+                if (!gestoraId) {
                     console.warn('[Notifications] No se pudo enviar Broadcast: Ticket sin gestora asignada');
+                    try {
+                        await supabase.from('notification_logs').insert({
+                            ticket_code: ticketCode,
+                            recipient_type: 'gestora',
+                            recipient_name: gestoraName,
+                            destination: 'SIN_ASIGNAR',
+                            message_body: broadcastMessage,
+                            status: 'error_numero_vacio',
+                            error_details: 'Ticket sin gestora asignada.'
+                        });
+                    } catch (logErr) {
+                        console.error('[Notifications] Error guardando log broadcast vacío desde TicketWindow:', logErr);
+                    }
                     return;
                 }
-                const channel = supabase.channel('realtime:deposits');
-                await channel.send({
-                    type: 'broadcast',
-                    event: 'new_deposit',
-                    payload: {
-                        monto,
-                        codigo_ticket: ticketCode,
-                        gestora_id: ticketData.gestora_id
+                
+                try {
+                    const channel = supabase.channel('realtime:deposits');
+                    await channel.send({
+                        type: 'broadcast',
+                        event: 'new_deposit',
+                        payload: {
+                            monto,
+                            codigo_ticket: ticketCode,
+                            gestora_id: gestoraId
+                        }
+                    });
+                    
+                    try {
+                        await supabase.from('notification_logs').insert({
+                            ticket_code: ticketCode,
+                            recipient_type: 'gestora',
+                            recipient_name: gestoraName,
+                            destination: gestoraId,
+                            message_body: broadcastMessage,
+                            status: 'enviado'
+                        });
+                    } catch (logErr) {
+                        console.error('[Notifications] Error guardando log broadcast enviado desde TicketWindow:', logErr);
                     }
-                });
+                } catch (err: any) {
+                    console.error('[Notifications] Error al enviar Broadcast desde TicketWindow:', err);
+                    try {
+                        await supabase.from('notification_logs').insert({
+                            ticket_code: ticketCode,
+                            recipient_type: 'gestora',
+                            recipient_name: gestoraName,
+                            destination: gestoraId,
+                            message_body: broadcastMessage,
+                            status: 'fallido',
+                            error_details: err?.message || String(err)
+                        });
+                    } catch (logErr) {
+                        console.error('[Notifications] Error guardando log broadcast fallido desde TicketWindow:', logErr);
+                    }
+                }
             };
 
             Promise.allSettled([sendWhatsApp(), sendBroadcast()]).then((results) => {

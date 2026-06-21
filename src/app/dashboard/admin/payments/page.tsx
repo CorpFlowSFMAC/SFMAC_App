@@ -339,6 +339,7 @@ function flattenTicketForPayments(t: any) {
 
 export default function PaymentsPage() {
     const [rawTickets, setRawTickets] = useState<any[]>([]);
+    const [notificationLogs, setNotificationLogs] = useState<any[]>([]);
     const [loadedMetadata, setLoadedMetadata] = useState<{[key: string]: any}>({});
     const [loadingMetaId, setLoadingMetaId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -385,6 +386,22 @@ export default function PaymentsPage() {
             const data = await Promise.race([fetchPromise, timeoutPromise]) as any[];
             
             setRawTickets(data || []);
+
+            try {
+                const ticketCodes = (data || []).map(t => t.client_ticket_number || t.id).filter(Boolean);
+                if (ticketCodes.length > 0) {
+                    const { data: logs, error: logsErr } = await supabase
+                        .from('notification_logs')
+                        .select('*')
+                        .in('ticket_code', ticketCodes)
+                        .order('created_at', { ascending: false });
+                    if (!logsErr && logs) {
+                        setNotificationLogs(logs);
+                    }
+                }
+            } catch (logsErr) {
+                console.error('[Payments] Error fetching notification logs:', logsErr);
+            }
         } catch (err: any) {
             console.error('[Payments] Fetch Error:', err);
             setFetchError(err.message || "Error de conexión");
@@ -1344,38 +1361,199 @@ export default function PaymentsPage() {
 
                 // Alerta 1: WhatsApp
                 const sendWhatsApp = async () => {
-                    if (!techPhone) {
-                        console.warn('[Notifications] No se pudo enviar WhatsApp: Técnico sin celular');
+                    const message = `SINFIMAC NOTIFICACIONES: Hola ${techName}, se ha registrado un depósito de S/. ${monto} por concepto de ${categoriaMsg} para el Ticket ${ticketCode} (${clientName}). Por favor, verifica tu banca móvil.`;
+                    
+                    const phoneDigits = (techPhone || '').replace(/\D/g, '');
+                    const hasValidLength = phoneDigits.length === 9 || (phoneDigits.length === 11 && phoneDigits.startsWith('51'));
+                    
+                    if (!techPhone || !techPhone.trim() || !hasValidLength) {
+                        console.warn('[Notifications] No se pudo enviar WhatsApp: Técnico sin celular o longitud inválida');
+                        try {
+                            const newLog = {
+                                ticket_code: ticketCode,
+                                recipient_type: 'tecnico',
+                                recipient_name: techName,
+                                destination: techPhone || 'VACÍO',
+                                message_body: message,
+                                status: 'error_numero_vacio',
+                                error_details: 'El número de celular está vacío o no tiene una longitud válida de 9 u 11 dígitos (con código de país).'
+                            };
+                            const { data: inserted, error: insErr } = await supabase
+                                .from('notification_logs')
+                                .insert(newLog)
+                                .select()
+                                .single();
+                            if (!insErr && inserted) {
+                                setNotificationLogs(prev => [inserted, ...prev]);
+                            } else {
+                                setNotificationLogs(prev => [{ ...newLog, id: Math.random().toString(), created_at: new Date().toISOString() }, ...prev]);
+                            }
+                        } catch (logErr) {
+                            console.error('[Notifications] Error guardando log error_numero_vacio:', logErr);
+                        }
                         return;
                     }
-                    const message = `SINFIMAC NOTIFICACIONES: Hola ${techName}, se ha registrado un depósito de S/. ${monto} por concepto de ${categoriaMsg} para el Ticket ${ticketCode} (${clientName}). Por favor, verifica tu banca móvil.`;
-                    const res = await fetch('/api/whatsapp/send', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ phone: techPhone, message })
-                    });
-                    if (!res.ok) {
-                        throw new Error(`WhatsApp API responded with status ${res.status}`);
+                    
+                    try {
+                        const res = await fetch('/api/whatsapp/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phone: techPhone, message })
+                        });
+                        
+                        if (!res.ok) {
+                            const errorText = await res.text().catch(() => '');
+                            throw new Error(`WhatsApp API responded with status ${res.status}: ${errorText}`);
+                        }
+                        
+                        try {
+                            const newLog = {
+                                ticket_code: ticketCode,
+                                recipient_type: 'tecnico',
+                                recipient_name: techName,
+                                destination: techPhone,
+                                message_body: message,
+                                status: 'enviado'
+                            };
+                            const { data: inserted, error: insErr } = await supabase
+                                .from('notification_logs')
+                                .insert(newLog)
+                                .select()
+                                .single();
+                            if (!insErr && inserted) {
+                                setNotificationLogs(prev => [inserted, ...prev]);
+                            } else {
+                                setNotificationLogs(prev => [{ ...newLog, id: Math.random().toString(), created_at: new Date().toISOString() }, ...prev]);
+                            }
+                        } catch (logErr) {
+                            console.error('[Notifications] Error guardando log enviado:', logErr);
+                        }
+                        
+                        return res.json();
+                    } catch (err: any) {
+                        console.error('[Notifications] Error al enviar WhatsApp:', err);
+                        try {
+                            const newLog = {
+                                ticket_code: ticketCode,
+                                recipient_type: 'tecnico',
+                                recipient_name: techName,
+                                destination: techPhone,
+                                message_body: message,
+                                status: 'fallido',
+                                error_details: err?.message || String(err)
+                            };
+                            const { data: inserted, error: insErr } = await supabase
+                                .from('notification_logs')
+                                .insert(newLog)
+                                .select()
+                                .single();
+                            if (!insErr && inserted) {
+                                setNotificationLogs(prev => [inserted, ...prev]);
+                            } else {
+                                setNotificationLogs(prev => [{ ...newLog, id: Math.random().toString(), created_at: new Date().toISOString() }, ...prev]);
+                            }
+                        } catch (logErr) {
+                            console.error('[Notifications] Error guardando log fallido:', logErr);
+                        }
+                        throw err;
                     }
-                    return res.json();
                 };
 
                 // Alerta 2: Supabase Realtime Broadcast a la Gestora
                 const sendBroadcast = async () => {
-                    if (!currentTicket.gestora_id) {
+                    const gestoraId = currentTicket.gestora_id;
+                    const gestoraObj = currentTicket.gestoras || currentTicket.gestora;
+                    const gestoraName = gestoraObj?.name || 'Gestora';
+                    const broadcastMessage = `Broadcast new_deposit: S/. ${monto} para el Ticket ${ticketCode}`;
+                    
+                    if (!gestoraId) {
                         console.warn('[Notifications] No se pudo enviar Broadcast: Ticket sin gestora asignada');
+                        try {
+                            const newLog = {
+                                ticket_code: ticketCode,
+                                recipient_type: 'gestora',
+                                recipient_name: gestoraName,
+                                destination: 'SIN_ASIGNAR',
+                                message_body: broadcastMessage,
+                                status: 'error_numero_vacio',
+                                error_details: 'Ticket sin gestora asignada.'
+                            };
+                            const { data: inserted, error: insErr } = await supabase
+                                .from('notification_logs')
+                                .insert(newLog)
+                                .select()
+                                .single();
+                            if (!insErr && inserted) {
+                                setNotificationLogs(prev => [inserted, ...prev]);
+                            } else {
+                                setNotificationLogs(prev => [{ ...newLog, id: Math.random().toString(), created_at: new Date().toISOString() }, ...prev]);
+                            }
+                        } catch (logErr) {
+                            console.error('[Notifications] Error guardando log broadcast vacío:', logErr);
+                        }
                         return;
                     }
-                    const channel = supabase.channel('realtime:deposits');
-                    await channel.send({
-                        type: 'broadcast',
-                        event: 'new_deposit',
-                        payload: {
-                            monto,
-                            codigo_ticket: ticketCode,
-                            gestora_id: currentTicket.gestora_id
+                    
+                    try {
+                        const channel = supabase.channel('realtime:deposits');
+                        await channel.send({
+                            type: 'broadcast',
+                            event: 'new_deposit',
+                            payload: {
+                                monto,
+                                codigo_ticket: ticketCode,
+                                gestora_id: gestoraId
+                            }
+                        });
+                        
+                        try {
+                            const newLog = {
+                                ticket_code: ticketCode,
+                                recipient_type: 'gestora',
+                                recipient_name: gestoraName,
+                                destination: gestoraId,
+                                message_body: broadcastMessage,
+                                status: 'enviado'
+                            };
+                            const { data: inserted, error: insErr } = await supabase
+                                .from('notification_logs')
+                                .insert(newLog)
+                                .select()
+                                .single();
+                            if (!insErr && inserted) {
+                                setNotificationLogs(prev => [inserted, ...prev]);
+                            } else {
+                                setNotificationLogs(prev => [{ ...newLog, id: Math.random().toString(), created_at: new Date().toISOString() }, ...prev]);
+                            }
+                        } catch (logErr) {
+                            console.error('[Notifications] Error guardando log broadcast enviado:', logErr);
                         }
-                    });
+                    } catch (err: any) {
+                        console.error('[Notifications] Error al enviar Broadcast:', err);
+                        try {
+                            const newLog = {
+                                ticket_code: ticketCode,
+                                recipient_type: 'gestora',
+                                recipient_name: gestoraName,
+                                destination: gestoraId,
+                                message_body: broadcastMessage,
+                                status: 'fallido',
+                                error_details: err?.message || String(err)
+                            };
+                            const { data: inserted, error: insErr } = await supabase
+                                .from('notification_logs')
+                                .insert(newLog)
+                                .select()
+                                .single();
+                            if (!insErr && inserted) {
+                                setNotificationLogs(prev => [inserted, ...prev]);
+                            } else {
+                                setNotificationLogs(prev => [{ ...newLog, id: Math.random().toString(), created_at: new Date().toISOString() }, ...prev]);
+                            }
+                        } catch (logErr) {
+                            console.error('[Notifications] Error guardando log broadcast fallido:', logErr);
+                        }
+                    }
                 };
 
                 Promise.allSettled([sendWhatsApp(), sendBroadcast()]).then((results) => {
@@ -2360,6 +2538,59 @@ export default function PaymentsPage() {
                                                     ? 'Cargando historial...' 
                                                     : (expandedHistory === (group.realTicketId || group.ticketId) ? 'Ocultar historial' : 'Ver historial')}
                                             </button>
+
+                                            {/* Historial de Alertas */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Alertas:</span>
+                                                {(() => {
+                                                    const groupLogs = (notificationLogs || []).filter(log => 
+                                                        log.ticket_code === group.ticketNum || 
+                                                        log.ticket_code === group.realTicketId
+                                                    );
+                                                    if (groupLogs.length === 0) {
+                                                        return <span style={{ fontSize: '0.7rem', color: '#94A3B8', fontStyle: 'italic' }}>Ninguna</span>;
+                                                    }
+                                                    return (
+                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                            {groupLogs.slice(0, 5).map((log) => {
+                                                                const isSuccess = log.status === 'enviado';
+                                                                const isErrorEmpty = log.status === 'error_numero_vacio';
+                                                                
+                                                                let tooltipText = "";
+                                                                if (isSuccess) {
+                                                                    tooltipText = `Enviado a ${log.destination}`;
+                                                                } else if (isErrorEmpty) {
+                                                                    tooltipText = `Error: Número vacío/inválido para ${log.recipient_name}`;
+                                                                } else {
+                                                                    tooltipText = `Fallido: ${log.error_details || 'Error desconocido en Hetzner'}`;
+                                                                }
+
+                                                                return (
+                                                                    <div 
+                                                                        key={log.id} 
+                                                                        title={tooltipText}
+                                                                        style={{ 
+                                                                            display: 'inline-flex', 
+                                                                            alignItems: 'center', 
+                                                                            cursor: 'help',
+                                                                            color: isSuccess ? '#10B981' : '#EF4444',
+                                                                            transition: 'transform 0.1s'
+                                                                        }}
+                                                                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.15)'}
+                                                                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                                                    >
+                                                                        {isSuccess ? (
+                                                                            <CheckCircle2 size={16} />
+                                                                        ) : (
+                                                                            <AlertTriangle size={16} />
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
                                         </div>
                                         
                                         {/* EXPANDED HISTORY (Sub-card style) */}
