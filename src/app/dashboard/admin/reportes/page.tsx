@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    Line, ComposedChart, ScatterChart, Scatter, ZAxis, Cell
+    Line, ComposedChart, ScatterChart, Scatter, ZAxis, Cell, AreaChart, Area
 } from 'recharts';
 import { 
     TrendingUp, TrendingDown, Users, Award, AlertTriangle,
@@ -37,21 +37,97 @@ function calcularHoras(ticket: any): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 📊 Gráfico Principal: Generado vs Gasto Operativo
-const GeneratedVsExpenseChart = ({ data }: { data: any[] }) => (
-    <div style={{ width: '100%', height: 350 }}>
-        <ResponsiveContainer>
+const GeneratedVsExpenseChart = ({ data, type = "bar" }: { data: any[], type?: "bar" | "area" | "line" }) => {
+    const renderChartContent = () => {
+        const genStroke = "#6366f1"; // Indigo
+        const expStroke = "#10B981"; // Emerald/Success
+
+        if (type === "area") {
+            return (
+                <AreaChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                    <defs>
+                        <linearGradient id="genGradientArea" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
+                            <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="expGradientArea" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
+                            <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.4)" />
+                    <XAxis 
+                        dataKey="nombre" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#64748B', fontSize: 10, fontWeight: 700 }}
+                        dy={10}
+                    />
+                    <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#64748B', fontSize: 11 }}
+                        tickFormatter={(val) => `S/ ${val.toLocaleString()}`}
+                    />
+                    <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem', fontFamily: 'Inter, sans-serif' }}
+                        formatter={(value: any, name: any) => [
+                            `S/ ${Math.round(value).toLocaleString()}`,
+                            name
+                        ]}
+                    />
+                    <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 25 }} />
+                    <Area type="monotone" dataKey="facturacion" name="Generado (S/)" fill="url(#genGradientArea)" stroke={genStroke} strokeWidth={2.5} />
+                    <Area type="monotone" dataKey="inversion" name="Gasto Operativo (S/)" fill="url(#expGradientArea)" stroke={expStroke} strokeWidth={2.5} />
+                </AreaChart>
+            );
+        }
+
+        if (type === "line") {
+            return (
+                <ComposedChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.4)" />
+                    <XAxis 
+                        dataKey="nombre" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#64748B', fontSize: 10, fontWeight: 700 }}
+                        dy={10}
+                    />
+                    <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#64748B', fontSize: 11 }}
+                        tickFormatter={(val) => `S/ ${val.toLocaleString()}`}
+                    />
+                    <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem', fontFamily: 'Inter, sans-serif' }}
+                        formatter={(value: any, name: any) => [
+                            `S/ ${Math.round(value).toLocaleString()}`,
+                            name
+                        ]}
+                    />
+                    <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 25 }} />
+                    <Line type="monotone" dataKey="facturacion" name="Generado (S/)" stroke={genStroke} strokeWidth={3} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="inversion" name="Gasto Operativo (S/)" stroke={expStroke} strokeWidth={3} activeDot={{ r: 6 }} />
+                </ComposedChart>
+            );
+        }
+
+        // Default: bar
+        return (
             <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                 <defs>
                     <linearGradient id="genGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#0A1E5E" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#1E3A8A" stopOpacity={1} />
+                        <stop offset="0%" stopColor="#4F46E5" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#312E81" stopOpacity={1} />
                     </linearGradient>
                     <linearGradient id="expGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#94A3B8" stopOpacity={0.8} />
-                        <stop offset="100%" stopColor="#64748B" stopOpacity={0.8} />
+                        <stop offset="0%" stopColor="#10B981" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#059669" stopOpacity={1} />
                     </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.4)" />
                 <XAxis 
                     dataKey="nombre" 
                     axisLine={false} 
@@ -67,7 +143,7 @@ const GeneratedVsExpenseChart = ({ data }: { data: any[] }) => (
                 />
                 <Tooltip 
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', padding: '1rem', fontFamily: 'Inter, sans-serif' }}
-                    cursor={{ fill: 'rgba(59,130,246,0.04)' }}
+                    cursor={{ fill: 'rgba(99, 102, 241, 0.04)' }}
                     formatter={(value: any, name: any) => [
                         `S/ ${Math.round(value).toLocaleString()}`,
                         name
@@ -77,9 +153,17 @@ const GeneratedVsExpenseChart = ({ data }: { data: any[] }) => (
                 <Bar dataKey="facturacion" name="Generado (S/)" fill="url(#genGradient)" radius={[6, 6, 0, 0]} barSize={35} />
                 <Bar dataKey="inversion" name="Gasto Operativo (S/)" fill="url(#expGradient)" radius={[6, 6, 0, 0]} barSize={35} />
             </BarChart>
-        </ResponsiveContainer>
-    </div>
-);
+        );
+    };
+
+    return (
+        <div style={{ width: '100%', height: 350 }}>
+            <ResponsiveContainer>
+                {renderChartContent()}
+            </ResponsiveContainer>
+        </div>
+    );
+};
 
 // 📈 Gráfico Secundario: Utilidad Neta (Productividad Real)
 const NetProfitChart = ({ data }: { data: any[] }) => (
@@ -149,26 +233,51 @@ const FinancialScatterChart = ({ data }: { data: any[] }) => (
     </div>
 );
 
+// Helper to get pastel colors for gestoras
+const getPastelColor = (name: string) => {
+    const lower = name.toLowerCase();
+    if (lower.includes('francen') || lower.includes('valderrama')) {
+        return '#A7F3D0'; // Verde menta pastel
+    }
+    if (lower.includes('janeth') || lower.includes('portocarrero')) {
+        return '#BAE6FD'; // Azul cielo suave pastel
+    }
+    return '#E2E8F0'; // Default gray pastel
+};
+
 // 🎯 Goal Target Card (Admin View)
 const GoalThermometer = ({ current, target, label }: { current: number, target: number, label: string }) => {
     const percent = Math.min((current / (target || 1)) * 100, 120);
     const isOverTarget = percent >= 100;
+    const barColor = getPastelColor(label);
     
     return (
-        <div className={styles.premiumThermometer}>
+        <div className={styles.premiumThermometer} style={{
+            background: '#FFFFFF',
+            borderRadius: '1rem',
+            border: '1px solid #E2E8F0',
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.035)',
+            padding: '1.5rem',
+            transition: 'all 0.3s ease'
+        }}>
             <div className={styles.thermTitle}>
                 <div className={styles.thermInfo}>
-                    <h4>{label}</h4>
+                    <h4 style={{ fontWeight: 800, color: '#0F172A' }}>{label}</h4>
                     <span className={isOverTarget ? styles.thermSuccess : styles.thermRunning}>
                         {isOverTarget ? "Meta Superada" : "En camino"}
                     </span>
                 </div>
-                <div className={styles.thermPercent}>{Math.round(percent)}%</div>
+                <div className={styles.thermPercent} style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0F172A' }}>{Math.round(percent)}%</div>
             </div>
-            <div className={styles.thermTrack}>
+            <div className={styles.thermTrack} style={{ background: '#F1F5F9', borderRadius: '20px', height: '10px', overflow: 'hidden' }}>
                 <div 
-                    className={isOverTarget ? styles.thermFillDone : styles.thermFillProcess} 
-                    style={{ width: `${Math.min(percent, 100)}%` }}
+                    style={{ 
+                        width: `${Math.min(percent, 100)}%`, 
+                        background: barColor, 
+                        height: '100%',
+                        borderRadius: '20px',
+                        transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }} 
                 />
                 <div className={styles.thermGoalLine} style={{ left: '100%' }}><span>META</span></div>
             </div>
@@ -197,6 +306,7 @@ export default function ReportesEficienciaPage() {
     const [editingTarget, setEditingTarget] = useState<Record<string, number>>({});
     const [activeTicket, setActiveTicket] = useState<any>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [adminChartType, setAdminChartType] = useState<"bar" | "area" | "line">("bar");
 
     // Estado para ordenamiento de la tabla
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'rentabilidad', direction: 'desc' });
@@ -335,10 +445,10 @@ export default function ReportesEficienciaPage() {
 
             const finances = calculateTicketFinances(t, []); // Usar lógica centralizada
             
-            // Montos Financieros - APLICANDO REGLA "NETO SIN IGV"
-            if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
-                const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
-                map[gid].facturacion += ingresoNeto;
+            // Montos Financieros - PRODUCTIVIDAD BRUTA CON 18% IGV (Tickets activos y cerrados, excepto cancelados/rechazados)
+            if (sid !== 'ticket_cancelado' && sid !== 'ticket_rechazado') {
+                const ingresoBruto = parseFloat(t.total_quoted_amount || t.montoFinal || 0);
+                map[gid].facturacion += ingresoBruto;
             }
             map[gid].inversion += (finances.totalLaborConfirmed + finances.totalOpConfirmed);
         });
@@ -707,57 +817,133 @@ export default function ReportesEficienciaPage() {
                                 <p>Distribución de carga y efectividad por responsable</p>
                             </div>
                             <div className={styles.gestorasGridPermanent}>
-                                {productivityByGestor.map((g, i) => (
-                                    <div key={i} className={styles.gestoraActionCard} onClick={() => setSelectedGestoraId(g.id)}>
-                                        <div className={styles.gestoraCardHeader}>
-                                            <div className={styles.gestoraAvatar}>{g.nombre.charAt(0)}</div>
-                                            <div className={styles.gestoraNameInfo}>
-                                                <div className={styles.gName}>{g.nombre}</div>
-                                                <div className={styles.gStatus}>{g.cerrados} de {g.totalTickets} tickets cerrados</div>
+                                {productivityByGestor.map((g, i) => {
+                                    const progressColor = getPastelColor(g.nombre);
+                                    const isBonusUnlocked = g.bonoValido && g.percentMeta >= 80;
+                                    return (
+                                        <div 
+                                            key={i} 
+                                            className={styles.gestoraActionCard} 
+                                            onClick={() => setSelectedGestoraId(g.id)}
+                                            style={{
+                                                background: '#FFFFFF',
+                                                borderRadius: '1rem',
+                                                border: '1px solid #E2E8F0',
+                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.035)',
+                                                padding: '1.25rem 1.5rem',
+                                                transition: 'all 0.3s ease',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '1rem',
+                                                position: 'relative'
+                                            }}
+                                        >
+                                            <div className={styles.gestoraCardHeader}>
+                                                <div className={styles.gestoraAvatar} style={{ background: progressColor, color: '#1E293B' }}>{g.nombre.charAt(0)}</div>
+                                                <div className={styles.gestoraNameInfo}>
+                                                    <div className={styles.gName}>{g.nombre}</div>
+                                                    <div className={styles.gStatus}>{g.cerrados} de {g.totalTickets} tickets cerrados</div>
+                                                </div>
+                                                <div className={styles.gProfileBtn}><ChevronRight size={16} /></div>
                                             </div>
-                                            <div className={styles.gProfileBtn}><ChevronRight size={16} /></div>
+                                            <div className={styles.gestoraMiniFunnel}>
+                                                <div className={styles.miniFunnelLabels}>
+                                                    <span>Pendientes</span>
+                                                    <span>{Math.round((g.cerrados / (g.totalTickets || 1)) * 100)}%</span>
+                                                </div>
+                                                <div className={styles.miniBarTrack} style={{ background: '#F1F5F9', height: '8px', borderRadius: '20px' }}>
+                                                    <div style={{
+                                                        width: `${g.cerrados / (g.totalTickets || 1) * 100}%`,
+                                                        background: progressColor,
+                                                        height: '100%',
+                                                        borderRadius: '20px',
+                                                        transition: 'width 0.6s ease'
+                                                    }} />
+                                                </div>
+                                            </div>
+                                            <div className={styles.gestoraKpisMini}>
+                                                <div className={styles.miniKpi}>
+                                                    <label>Facturación</label>
+                                                    <strong>S/ {Math.round(g.facturacion).toLocaleString()}</strong>
+                                                </div>
+                                                <div className={styles.miniKpi}>
+                                                    <label>Velocidad</label>
+                                                    <strong style={{ color: g.avgTime <= 48 ? '#10B981' : g.avgTime <= 72 ? '#F59E0B' : '#EF4444' }}>
+                                                        {Math.round(g.avgTime)}h
+                                                    </strong>
+                                                </div>
+                                                <div className={styles.miniKpi}>
+                                                    <label>Utilidad</label>
+                                                    <strong style={{ color: g.rentabilidad >= 0 ? '#10B981' : '#EF4444' }}>
+                                                        S/ {Math.round(g.rentabilidad).toLocaleString()}
+                                                    </strong>
+                                                </div>
+                                            </div>
+                                            {/* Elegant Bono Proyectado badge at card bottom */}
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                paddingTop: '0.75rem',
+                                                borderTop: '1px solid #F1F5F9',
+                                                fontSize: '0.8rem'
+                                            }}>
+                                                <span style={{ color: '#64748B', fontWeight: 600 }}>Bono Proyectado:</span>
+                                                <span style={isBonusUnlocked ? {
+                                                    color: '#10B981',
+                                                    fontWeight: 800,
+                                                    background: 'rgba(16, 185, 129, 0.08)',
+                                                    border: '1px solid rgba(16, 185, 129, 0.15)',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px'
+                                                } : {
+                                                    color: '#94A3B8',
+                                                    fontWeight: 600,
+                                                    background: '#F1F5F9',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px'
+                                                }}>
+                                                    S/ {Math.round(g.bonoProyectado).toLocaleString()}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className={styles.gestoraMiniFunnel}>
-                                            <div className={styles.miniFunnelLabels}>
-                                                <span>Pendientes</span>
-                                                <span>{Math.round((g.cerrados / (g.totalTickets || 1)) * 100)}%</span>
-                                            </div>
-                                            <div className={styles.miniBarTrack}>
-                                                <div className={styles.miniBarProceso} style={{ width: `${(g.totalTickets - g.cerrados) / (g.totalTickets || 1) * 100}%` }} />
-                                                <div className={styles.miniBarCerrado} style={{ width: `${g.cerrados / (g.totalTickets || 1) * 100}%` }} />
-                                            </div>
-                                        </div>
-                                        <div className={styles.gestoraKpisMini}>
-                                            <div className={styles.miniKpi}>
-                                                <label>Facturación</label>
-                                                <strong>S/ {Math.round(g.facturacion).toLocaleString()}</strong>
-                                            </div>
-                                            <div className={styles.miniKpi}>
-                                                <label>Velocidad</label>
-                                                <strong style={{ color: g.avgTime <= 48 ? '#10B981' : g.avgTime <= 72 ? '#F59E0B' : '#EF4444' }}>
-                                                    {Math.round(g.avgTime)}h
-                                                </strong>
-                                            </div>
-                                            <div className={styles.miniKpi}>
-                                                <label>Utilidad</label>
-                                                <strong style={{ color: g.rentabilidad >= 0 ? '#10B981' : '#EF4444' }}>
-                                                    S/ {Math.round(g.rentabilidad).toLocaleString()}
-                                                </strong>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
                         {/* 📈 Gráficos de Gestión Gerencial */}
                         <div className={styles.analyticsVisualGrid}>
                             <div className={styles.analyticsMainCard}>
-                                <div className={styles.chartHeader}>
-                                    <h3>Generado vs Gasto Operativo por Gestora</h3>
-                                    <p>Comparativa de facturación neta vs inversión en tickets</p>
+                                <div className={styles.chartHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                    <div>
+                                        <h3>Generado vs Gasto Operativo por Gestora</h3>
+                                        <p>Comparativa de facturación neta vs inversión en tickets</p>
+                                    </div>
+                                    <div style={{ display: 'flex', background: 'var(--ei-background)', padding: '4px', borderRadius: '10px', border: '1px solid var(--ei-border)' }}>
+                                        {(["bar", "area", "line"] as const).map((t) => (
+                                            <button
+                                                key={t}
+                                                onClick={() => setAdminChartType(t)}
+                                                style={{
+                                                    padding: '0.4rem 0.8rem',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 700,
+                                                    transition: 'all 0.2s',
+                                                    background: adminChartType === t ? 'var(--ei-surface)' : 'transparent',
+                                                    color: adminChartType === t ? 'var(--ei-primary-light)' : 'var(--ei-text-muted)',
+                                                    boxShadow: adminChartType === t ? 'var(--ei-shadow-sm)' : 'none'
+                                                }}
+                                            >
+                                                {t === "bar" ? "Barras" : t === "area" ? "Área" : "Líneas"}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <GeneratedVsExpenseChart data={productivityByGestor} />
+                                <GeneratedVsExpenseChart data={productivityByGestor} type={adminChartType} />
                             </div>
                             <div className={styles.analyticsSecondaryCard}>
                                 <div className={styles.chartHeader}>
@@ -851,21 +1037,36 @@ export default function ReportesEficienciaPage() {
                             <div className={styles.elegantCard}>
                                 <h3>Resumen de Planilla Variable</h3>
                                 <div className={styles.bonusSummaryList}>
-                                    {productivityByGestor.map((g, i) => (
-                                        <div key={i} className={styles.bonusItemRow}>
-                                            <div className={styles.bMngr}>
-                                                <strong>{g.nombre}</strong>
-                                                <span>Sueldo Base: S/ {g.costoLaboral}</span>
+                                    {productivityByGestor.map((g, i) => {
+                                        const isBonusUnlocked = g.bonoValido && g.percentMeta >= 80;
+                                        return (
+                                            <div key={i} className={styles.bonusItemRow} style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                padding: '1rem',
+                                                background: isBonusUnlocked ? 'rgba(16, 185, 129, 0.04)' : '#F9FAFB',
+                                                border: isBonusUnlocked ? '1px solid rgba(16, 185, 129, 0.15)' : '1px solid #E2E8F0',
+                                                borderRadius: '12px',
+                                                marginBottom: '0.75rem',
+                                                transition: 'all 0.3s ease'
+                                            }}>
+                                                <div className={styles.bMngr}>
+                                                    <strong style={{ display: 'block', color: '#0F172A', fontWeight: 700 }}>{g.nombre}</strong>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Sueldo Base: S/ {g.costoLaboral}</span>
+                                                </div>
+                                                <div className={styles.bCalc} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                                    <label style={{ fontSize: '0.7rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 600 }}>Bono Proyectado</label>
+                                                    <strong style={{ fontSize: '1.1rem', color: isBonusUnlocked ? '#10B981' : '#0F172A', fontWeight: 800 }}>
+                                                        S/ {Math.round(g.bonoProyectado).toLocaleString()}
+                                                    </strong>
+                                                </div>
+                                                <div className={styles.bStatus} style={{ display: 'flex', alignItems: 'center' }}>
+                                                    {g.bonoValido ? <CheckCircle size={20} color="#10B981" /> : <AlertTriangle size={20} color="#F59E0B" />}
+                                                </div>
                                             </div>
-                                            <div className={styles.bCalc}>
-                                                <label>Bono Proyectado</label>
-                                                <strong>S/ {Math.round(g.bonoProyectado).toLocaleString()}</strong>
-                                            </div>
-                                            <div className={styles.bStatus}>
-                                                {g.bonoValido ? <CheckCircle size={20} color="#10B981" /> : <AlertTriangle size={20} color="#F59E0B" />}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>

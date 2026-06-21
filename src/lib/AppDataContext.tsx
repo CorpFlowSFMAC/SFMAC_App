@@ -747,7 +747,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             .channel("appdata:targets")
             .on(
                 "postgres_changes",
-                { event: "*", schema: "public", table: "gestoras_targets" },
+                { event: "*", schema: "public", table: "gestor_goals" },
                 () => {
                     queryClient.invalidateQueries({
                         queryKey: queryKeys.gestorasTargets.all,

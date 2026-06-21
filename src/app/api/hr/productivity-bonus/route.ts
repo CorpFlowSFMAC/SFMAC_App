@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     // 2. Fetch targets for that month
     const monthKey = `${year}-${month.padStart(2, '0')}`;
     const { data: targets, error: tgError } = await supabase
-      .from("gestoras_targets")
+      .from("gestor_goals")
       .select("*")
       .eq("month_key", monthKey);
 
