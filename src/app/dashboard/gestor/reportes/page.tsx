@@ -7,7 +7,7 @@ export default function GestorReportesPage() {
     const router = useRouter();
     
     useEffect(() => {
-        router.push('/dashboard/gestor?view=reportes');
+        router.push('/dashboard/gestor/metrics?view=reportes');
     }, [router]);
     
     return (

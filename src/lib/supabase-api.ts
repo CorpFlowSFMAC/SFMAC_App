@@ -1509,7 +1509,7 @@ export const evidencesAPI = {
 export const gestorasTargetsAPI = {
     async getAll() {
         const { data, error } = await supabase
-            .from("gestoras_targets")
+            .from("gestor_goals")
             .select("*")
             .order("month_key", { ascending: false });
         if (error) throw error;
@@ -1517,7 +1517,7 @@ export const gestorasTargetsAPI = {
     },
     async getByMonth(monthKey: string) {
         const { data, error } = await supabase
-            .from("gestoras_targets")
+            .from("gestor_goals")
             .select("*")
             .eq("month_key", monthKey);
         if (error) throw error;
@@ -1525,7 +1525,7 @@ export const gestorasTargetsAPI = {
     },
     async set(gestora_id: string, month_key: string, updates: any) {
         const { data, error } = await supabase
-            .from("gestoras_targets")
+            .from("gestor_goals")
             .upsert({ gestora_id, month_key, ...updates }, { onConflict: "gestora_id,month_key" })
             .select();
         if (error) throw error;

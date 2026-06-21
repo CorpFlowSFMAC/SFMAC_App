@@ -27,7 +27,12 @@ import {
     YAxis,
     Tooltip as ReChartsTooltip,
     Legend as ReChartsLegend,
-    CartesianGrid
+    CartesianGrid,
+    AreaChart,
+    Area,
+    LineChart,
+    Line,
+    ComposedChart
 } from "recharts";
 
 // ── SLA Constants ─────────────────────────────
@@ -180,6 +185,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const [showWizard, setShowWizard] = useState(false);
     const [openTicketIds, setOpenTicketIds] = useState<string[]>([]);
     const [activeView, setActiveView] = useState<"dashboard" | "tickets" | "technicians" | "reportes">(() => { return (tab as any) || "dashboard"; });
+    const [gestorChartType, setGestorChartType] = useState<"bar" | "area" | "line">("bar");
     const [mounted, setMounted] = useState(false);
     
     // Estados para el modal de drill-down de las tarjetas financieras
@@ -243,9 +249,9 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
-            const view = params.get('view');
-            if (view === 'tickets' || view === 'reportes' || view === 'technicians') {
-                setActiveView(view);
+            const view = params.get('view') || params.get('tab');
+            if (view === 'tickets' || view === 'reportes' || view === 'technicians' || view === 'dashboard') {
+                setActiveView(view as any);
             }
         }
     }, []);
@@ -1568,52 +1574,279 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
             )}
 
             {activeView === "reportes" && (
-                <div style={{ padding: "1rem" }}>
+                <div style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                    {/* Header */}
                     <div style={{
-                        textAlign: "center", padding: "3rem",
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
                         background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
-                        borderRadius: "16px", border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: "16px", padding: "1.25rem 2rem", border: "1px solid rgba(255,255,255,0.08)",
                         boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
                     }}>
-                        <BarChart3 size={48} style={{ margin: "0 auto 1rem", color: "#ff6600" }} />
-                        <h2 style={{ margin: "0 0 0.5rem", color: "white", fontSize: "1.25rem" }}>Reportes de Eficiencia</h2>
-                        <p style={{ margin: 0, color: "rgba(255,255,255,0.5)" }}>
-                            Período: {dateFilter === "today" ? "Hoy" : dateFilter === "week" ? "Esta Semana" : dateFilter === "month" ? "Este Mes" : "Todos"}
-                        </p>
-                        
-                        {/* KPI Summary */}
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginTop: "2rem" }}>
-                            <div style={{ padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                                <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#8B5CF6" }}>{kpis.total}</div>
-                                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>Total Tickets</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                            <div style={{
+                                width: "42px", height: "42px", borderRadius: "12px",
+                                background: "linear-gradient(135deg,#8B5CF6,#4F46E5)",
+                                display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center"
+                            }}>
+                                <BarChart3 size={20} color="white" />
                             </div>
-                            <div style={{ padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                                <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#10B981" }}>{kpis.closed.length}</div>
-                                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>Cerrados</div>
-                            </div>
-                            <div style={{ padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                                <div style={{ fontSize: "1.5rem", fontWeight: 900, color: "#F59E0B" }}>{kpis.backlog.length}</div>
-                                <div style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.5)" }}>En Proceso</div>
+                            <div>
+                                <h2 style={{ margin: 0, color: "white", fontSize: "1.25rem", fontWeight: 800 }}>Efficiency Intelligence</h2>
+                                <p style={{ margin: "0.2rem 0 0 0", color: "rgba(255,255,255,0.4)", fontSize: "0.8rem", fontWeight: 500 }}>
+                                    Periodo Evaluativo — Vista de Gestora
+                                </p>
                             </div>
                         </div>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                            {(["today", "week", "month", "all"] as const).map(f => (
+                                <button key={f} onClick={() => setDateFilter(f)} style={{
+                                    padding: "0.45rem 1rem", borderRadius: "8px", border: "none", cursor: "pointer",
+                                    fontSize: "0.78rem", fontWeight: 700,
+                                    background: dateFilter === f ? "#8B5CF6" : "rgba(255,255,255,0.04)",
+                                    color: dateFilter === f ? "white" : "rgba(255,255,255,0.6)",
+                                    transition: "all 0.2s"
+                                }}>
+                                    {{ today: "Hoy", week: "7 días", month: "30 días", all: "Todo" }[f]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* KPI Cards Grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.25rem" }}>
+                        <KpiCard 
+                            label="Total Tickets" 
+                            value={kpis.total} 
+                            icon={<BarChart3 size={18} color="#A78BFA" />} 
+                            iconBg="rgba(139, 92, 246, 0.1)" 
+                            sub="Asignados en el periodo"
+                        />
+                        <KpiCard 
+                            label="Cerrados" 
+                            value={kpis.closed.length} 
+                            icon={<CheckCircle2 size={18} color="#34D399" />} 
+                            iconBg="rgba(16, 185, 129, 0.1)" 
+                            sub="Liquidación completada"
+                            trend="up"
+                        />
+                        <KpiCard 
+                            label="Backlog (>24h)" 
+                            value={kpis.backlog.length} 
+                            icon={<Timer size={18} color="#FBBF24" />} 
+                            iconBg="rgba(245, 158, 11, 0.1)" 
+                            sub="En proceso o demorados"
+                            alert={kpis.backlog.length > 5}
+                        />
+                        <KpiCard 
+                            label="MTTR Promedio" 
+                            value={kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : "-"} 
+                            icon={<Zap size={18} color="#22D3EE" />} 
+                            iconBg="rgba(6, 182, 212, 0.1)" 
+                            sub="Tiempo de resolución"
+                        />
+                    </div>
+
+                    {/* Analytics Layout */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "1.5rem", flexWrap: "wrap" }}>
                         
-                        {/* Stats detailed */}
+                        {/* Financial Performance Chart Card */}
                         <div style={{
-                            marginTop: "1.5rem", textAlign: "left", padding: "1.2rem",
-                            background: "linear-gradient(135deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0.01) 100%)",
-                            borderRadius: "12px", border: "1px solid rgba(255,255,255,0.08)"
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "16px", border: "1px solid rgba(255,255,255,0.08)", padding: "1.5rem",
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column", gap: "1.25rem"
                         }}>
-                            <h3 style={{ margin: "0 0 0.75rem", fontSize: "0.9rem", color: "#ff6600", fontWeight: 800 }}>Métricas Detalladas</h3>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", color: "rgba(255,255,255,0.8)" }}>
-                                <div>SLA Cumplimiento:</div>
-                                <div style={{ fontWeight: 700, color: "white" }}>{kpis.slaCompliance}%</div>
-                                <div>MTTR Promedio:</div>
-                                <div style={{ fontWeight: 700, color: "white" }}>{kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : "-"}</div>
-                                <div>SLA Vencidos:</div>
-                                <div style={{ fontWeight: 700, color: kpis.expiredOpen.length > 0 ? "#EF4444" : "#10B981" }}>{kpis.expiredOpen.length}</div>
-                                <div>Backlog:</div>
-                                <div style={{ fontWeight: 700, color: kpis.backlog.length > 3 ? "#EF4444" : "#10B981" }}>{kpis.backlog.length}</div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                                <div>
+                                    <h3 style={{ margin: 0, color: "white", fontSize: "1rem", fontWeight: 800 }}>Rendimiento Financiero (Últimos 7 días)</h3>
+                                    <p style={{ margin: "0.2rem 0 0 0", color: "rgba(255,255,255,0.4)", fontSize: "0.78rem" }}>
+                                        Ingresos Netos unificados vs Utilidad en tickets cerrados
+                                    </p>
+                                </div>
+                                <div style={{ display: "flex", background: "rgba(255, 255, 255, 0.04)", padding: "4px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                                    {(["bar", "area", "line"] as const).map((t) => (
+                                        <button
+                                            key={t}
+                                            onClick={() => setGestorChartType(t)}
+                                            style={{
+                                                padding: "0.4rem 0.8rem", borderRadius: "8px", border: "none", cursor: "pointer",
+                                                fontSize: "0.75rem", fontWeight: 700, transition: "all 0.2s",
+                                                background: gestorChartType === t ? "rgba(255,255,255,0.08)" : "transparent",
+                                                color: gestorChartType === t ? "#A78BFA" : "rgba(255,255,255,0.5)",
+                                            }}
+                                        >
+                                            {t === "bar" ? "Barras" : t === "area" ? "Área" : "Líneas"}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
+                            
+                            <div style={{ flex: 1, minHeight: "300px" }}>
+                                {gestorChartType === "area" ? (
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <AreaChart data={financialBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                            <defs>
+                                                <linearGradient id="gestorGenGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.4} />
+                                                    <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0} />
+                                                </linearGradient>
+                                                <linearGradient id="gestorExpGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
+                                                    <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.05)" />
+                                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} tickFormatter={(val) => `S/ ${val}`} />
+                                            <ReChartsTooltip contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.95)", borderColor: "rgba(255,255,255,0.12)", borderRadius: "8px", color: "white" }} formatter={(value: any) => [`S/ ${formatSoles(Number(value))}`]} />
+                                            <ReChartsLegend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 15, fontSize: '0.75rem' }} />
+                                            <Area type="monotone" dataKey="billing" name="Generado Neta (S/)" fill="url(#gestorGenGrad)" stroke="#8B5CF6" strokeWidth={2} />
+                                            <Area type="monotone" dataKey="profit" name="Utilidad Neta (S/)" fill="url(#gestorExpGrad)" stroke="#10B981" strokeWidth={2} />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                ) : gestorChartType === "line" ? (
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <ComposedChart data={financialBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.05)" />
+                                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} tickFormatter={(val) => `S/ ${val}`} />
+                                            <ReChartsTooltip contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.95)", borderColor: "rgba(255,255,255,0.12)", borderRadius: "8px", color: "white" }} formatter={(value: any) => [`S/ ${formatSoles(Number(value))}`]} />
+                                            <ReChartsLegend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 15, fontSize: '0.75rem' }} />
+                                            <Line type="monotone" dataKey="billing" name="Generado Neta (S/)" stroke="#8B5CF6" strokeWidth={2.5} activeDot={{ r: 5 }} />
+                                            <Line type="monotone" dataKey="profit" name="Utilidad Neta (S/)" stroke="#10B981" strokeWidth={2.5} activeDot={{ r: 5 }} />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height={300}>
+                                        <ReChartsBarChart data={financialBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                            <defs>
+                                                <linearGradient id="gestorGenGradBar" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={1} />
+                                                    <stop offset="100%" stopColor="#5B21B6" stopOpacity={1} />
+                                                </linearGradient>
+                                                <linearGradient id="gestorExpGradBar" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#10B981" stopOpacity={1} />
+                                                    <stop offset="100%" stopColor="#047857" stopOpacity={1} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255, 255, 255, 0.05)" />
+                                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} tickFormatter={(val) => `S/ ${val}`} />
+                                            <ReChartsTooltip contentStyle={{ backgroundColor: "rgba(15, 23, 42, 0.95)", borderColor: "rgba(255,255,255,0.12)", borderRadius: "8px", color: "white" }} formatter={(value: any) => [`S/ ${formatSoles(Number(value))}`]} />
+                                            <ReChartsLegend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ paddingBottom: 15, fontSize: '0.75rem' }} />
+                                            <Bar dataKey="billing" name="Generado Neta (S/)" fill="url(#gestorGenGradBar)" radius={[4, 4, 0, 0]} barSize={25} />
+                                            <Bar dataKey="profit" name="Utilidad Neta (S/)" fill="url(#gestorExpGradBar)" radius={[4, 4, 0, 0]} barSize={25} />
+                                        </ReChartsBarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* SLA Compliance card */}
+                        <div style={{
+                            background: "linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)",
+                            borderRadius: "16px", border: "1px solid rgba(255,255,255,0.08)", padding: "1.5rem",
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.25)", display: "flex", flexDirection: "column",
+                            alignItems: "center", justifyContent: "center", gap: "1rem"
+                        }}>
+                            <h3 style={{ margin: 0, width: "100%", color: "white", fontSize: "1rem", fontWeight: 800, textAlign: "left" }}>Cumplimiento de SLA</h3>
+                            <SlaGauge pct={kpis.slaCompliance} />
+                            
+                            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "0.65rem", marginTop: "0.5rem" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "rgba(255,255,255,0.6)" }}>
+                                    <span>Cumplimiento del Periodo:</span>
+                                    <strong style={{ color: kpis.slaCompliance >= 90 ? "#10B981" : kpis.slaCompliance >= 70 ? "#F59E0B" : "#EF4444" }}>
+                                        {kpis.slaCompliance.toFixed(1)}%
+                                    </strong>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "rgba(255,255,255,0.6)" }}>
+                                    <span>MTTR Promedio Global:</span>
+                                    <strong style={{ color: "white" }}>{kpis.mttrHours > 0 ? formatHours(kpis.mttrHours) : "-"}</strong>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "rgba(255,255,255,0.6)" }}>
+                                    <span>Tickets SLA Vencidos:</span>
+                                    <strong style={{ color: kpis.expiredOpen.length > 0 ? "#F43F5E" : "#10B981" }}>{kpis.expiredOpen.length}</strong>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "rgba(255,255,255,0.6)" }}>
+                                    <span>Backlog en Espera (&gt;24h):</span>
+                                    <strong style={{ color: kpis.backlog.length > 3 ? "#F59E0B" : "#10B981" }}>{kpis.backlog.length}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {/* Priority List (SLA Critical Tickets) */}
+                    <div style={{
+                        background: "linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)",
+                        borderRadius: "16px", border: "1px solid rgba(255,255,255,0.08)", padding: "1.5rem",
+                        boxShadow: "0 4px 20px rgba(0,0,0,0.25)"
+                    }}>
+                        <h3 style={{ margin: "0 0 1rem 0", color: "white", fontSize: "1rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <AlertTriangle size={16} color="#FBBF24" /> Lista de Prioridades (SLA Críticos)
+                        </h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                            {top5Urgent.map((t: any, idx: number) => {
+                                const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                const ageText = formatHours(t._ageH);
+                                const slaState = t._sla; // "ok" | "warning" | "critical" | "expired"
+                                
+                                const slaColor = slaState === "expired" ? "#F43F5E" : slaState === "critical" ? "#F59E0B" : slaState === "warning" ? "#3B82F6" : "#10B981";
+                                const slaLabel = slaState === "expired" ? "VENCIDO" : slaState === "critical" ? "SLA CRÍTICO" : slaState === "warning" ? "ALERTA" : "EN TIEMPO";
+
+                                return (
+                                    <div 
+                                        key={t.id || idx}
+                                        onClick={() => {
+                                            if (!openTicketIds.includes(t.id)) {
+                                                setOpenTicketIds([...openTicketIds, t.id]);
+                                            }
+                                        }}
+                                        style={{
+                                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                                            padding: "0.85rem 1.25rem", borderRadius: "12px", background: "rgba(255,255,255,0.02)",
+                                            border: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", transition: "all 0.25s"
+                                        }}
+                                        onMouseEnter={e => {
+                                            e.currentTarget.style.background = "rgba(255,255,255,0.06)";
+                                            e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+                                            e.currentTarget.style.transform = "translateX(4px)";
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.background = "rgba(255,255,255,0.02)";
+                                            e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)";
+                                            e.currentTarget.style.transform = "none";
+                                        }}
+                                    >
+                                        <div style={{ display: "flex", alignItems: "center", gap: "1rem", minWidth: 0 }}>
+                                            <div style={{ 
+                                                background: "rgba(255,255,255,0.06)", color: "white", padding: "0.4rem 0.6rem", 
+                                                borderRadius: "8px", fontSize: "0.75rem", fontFamily: "monospace", fontWeight: 700 
+                                            }}>
+                                                {ticketNum}
+                                            </div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ color: "white", fontWeight: 700, fontSize: "0.85rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientName}</div>
+                                                <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", marginTop: "0.15rem" }}>Abierto hace: {ageText}</div>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                                            <span style={{
+                                                fontSize: "0.65rem", fontWeight: 800, padding: "0.2rem 0.5rem", borderRadius: "6px",
+                                                background: `${slaColor}20`, color: slaColor, border: `1px solid ${slaColor}40`
+                                            }}>
+                                                {slaLabel}
+                                            </span>
+                                            <ChevronRight size={16} color="rgba(255,255,255,0.3)" />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {top5Urgent.length === 0 && (
+                                <div style={{ padding: "2rem", textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: "0.85rem" }}>
+                                    No hay tickets pendientes o abiertos en este momento. ¡SLA al 100%!
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

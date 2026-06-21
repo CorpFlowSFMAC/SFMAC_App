@@ -6,38 +6,38 @@
 
 /* ─── Design Tokens ─── */
 :root {
-    --ei-primary: #0A1E5E;
-    --ei-primary-light: #1E3A8A;
-    --ei-primary-glow: rgba(30, 58, 138, 0.15);
-    --ei-accent: #3B82F6;
-    --ei-accent-glow: rgba(59, 130, 246, 0.12);
+    --ei-primary: #1e1b4b; /* Deep Indigo */
+    --ei-primary-light: #3730a3; /* Royal Indigo */
+    --ei-primary-glow: rgba(99, 102, 241, 0.18);
+    --ei-accent: #6366f1; /* Neon Indigo */
+    --ei-accent-glow: rgba(99, 102, 241, 0.12);
     --ei-surface: #FFFFFF;
     --ei-surface-elevated: #FFFFFF;
-    --ei-background: #F1F5F9;
-    --ei-background-subtle: #F8FAFC;
-    --ei-border: #E2E8F0;
-    --ei-border-light: #F1F5F9;
-    --ei-text-primary: #0F172A;
-    --ei-text-secondary: #475569;
-    --ei-text-muted: #94A3B8;
-    --ei-success: #10B981;
-    --ei-success-bg: #ECFDF5;
-    --ei-danger: #EF4444;
-    --ei-danger-bg: #FEF2F2;
-    --ei-warning: #F59E0B;
-    --ei-warning-bg: #FFFBEB;
-    --ei-info: #3B82F6;
-    --ei-info-bg: #EFF6FF;
-    --ei-gold: #D97706;
+    --ei-background: #f8fafc;
+    --ei-background-subtle: #f1f5f9;
+    --ei-border: #e2e8f0;
+    --ei-border-light: #f1f5f9;
+    --ei-text-primary: #0f172a;
+    --ei-text-secondary: #334155;
+    --ei-text-muted: #64748b;
+    --ei-success: #10b981; /* Emerald Neon */
+    --ei-success-bg: #ecfdf5;
+    --ei-danger: #f43f5e; /* Rose Neon */
+    --ei-danger-bg: #fff1f2;
+    --ei-warning: #f59e0b; /* Amber */
+    --ei-warning-bg: #fffbeb;
+    --ei-info: #06b6d4; /* Cyan Neon */
+    --ei-info-bg: #ecfeff;
+    --ei-gold: #d97706;
     --ei-radius-sm: 8px;
     --ei-radius-md: 14px;
     --ei-radius-lg: 20px;
     --ei-radius-xl: 24px;
-    --ei-shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-    --ei-shadow-md: 0 4px 12px rgba(0,0,0,0.06);
-    --ei-shadow-lg: 0 12px 32px rgba(0,0,0,0.08);
-    --ei-shadow-glow: 0 8px 24px rgba(30,58,138,0.15);
-    --ei-transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    --ei-shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.02);
+    --ei-shadow-md: 0 4px 20px -2px rgba(99,102,241,0.08), 0 2px 8px -1px rgba(0,0,0,0.04);
+    --ei-shadow-lg: 0 20px 25px -5px rgba(99,102,241,0.12), 0 10px 10px -5px rgba(0,0,0,0.04);
+    --ei-shadow-glow: 0 8px 30px rgba(99,102,241,0.22);
+    --ei-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── Base Container ─── */
@@ -315,9 +315,9 @@
 }
 
 .kpiHeroCard:hover, .kpiCostCard:hover, .kpiGaugeCard:hover, .kpiTimeCard:hover {
-    box-shadow: var(--ei-shadow-lg);
-    transform: translateY(-3px);
-    border-color: transparent;
+    box-shadow: var(--ei-shadow-lg), 0 0 15px var(--ei-primary-glow);
+    transform: translateY(-4px);
+    border-color: var(--ei-accent);
 }
 
 /* ── Card 1: Facturación Hero ── */
@@ -717,7 +717,7 @@
 
 .gestoraActionCard:hover {
     transform: translateY(-4px);
-    box-shadow: var(--ei-shadow-lg);
+    box-shadow: var(--ei-shadow-lg), 0 0 15px var(--ei-primary-glow);
     border-color: var(--ei-accent);
 }
 
