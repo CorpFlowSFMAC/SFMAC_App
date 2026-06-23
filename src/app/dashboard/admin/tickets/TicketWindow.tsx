@@ -1181,6 +1181,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         setTicketData((prev: any) => ({
             ...prev,
             technician: newTechnicianObj,
+            technicians: newTechnicianObj,
+            tecnico: newTechnicianObj,
             technician_id: technician_id,
             status_id: newEstadoId
         }));

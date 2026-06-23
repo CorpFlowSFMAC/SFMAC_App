@@ -466,6 +466,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             estadoId: normalizeStateId(statusId),
                                             metadata: mergedMeta,
                                             tecnico: patchedTecnico,
+                                            technician: patchedTecnico,
+                                            technicians: patchedTecnico,
                                             gestora: patchedGestora,
                                             // Propagar campos clave a nivel raiz
                                             solicitudAdelanto: mergedMeta.solicitudAdelanto,
@@ -572,6 +574,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     ...pNew,
                                     metadata: mergedMeta,
                                     tecnico: patchedTecnico,
+                                    technician: patchedTecnico,
+                                    technicians: patchedTecnico,
                                     gestora: patchedGestora,
                                     solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                     solicitudPago: mergedMeta.solicitudPago,
