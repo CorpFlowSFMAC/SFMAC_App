@@ -2158,13 +2158,16 @@ export default function AdminDashboard() {
                                         <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay facturas emitidas.</td></tr>
                                     ) : invoices.sort((a,b) => (a.status === 'emitida' ? -1 : 1)).map(inv => {
                                         const isPaid = inv.status === 'cobrada';
+                                        const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
+                                        const ticketCode = tk?.client_ticket_number || (tk?.id || inv.ticket_id).split('-')[0];
+                                        const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
                                         return (
                                             <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                                                 <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'white' }}>{inv.ticket_code}</div>
+                                                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'white' }}>{ticketCode}</div>
                                                     <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{new Date(inv.issued_date || inv.created_at).toLocaleDateString()}</div>
                                                 </td>
-                                                <td style={{ padding: '12px 8px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>{inv.client_name}</td>
+                                                <td style={{ padding: '12px 8px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>{clientName}</td>
                                                 <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(inv.amount_total)}</td>
                                                 <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                                                     <span style={{
