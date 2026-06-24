@@ -168,6 +168,11 @@ export default function AdminDashboard() {
     const [expenses, setExpenses] = useState<any[]>([]);
     const [showOpexForm, setShowOpexForm] = useState(false);
     const [newOpex, setNewOpex] = useState({ category: 'ALQUILER', amount: '', description: '' });
+    
+    // Invoices Management State
+    const [showInvoicesModal, setShowInvoicesModal] = useState(false);
+    const [invoiceProcessing, setInvoiceProcessing] = useState<string | null>(null);
+    const [invoiceOcNumber, setInvoiceOcNumber] = useState<Record<string, string>>({});
 
     const triggerToast = (title: string, desc: string) => {
         setToast({ title, desc });
@@ -319,6 +324,31 @@ export default function AdminDashboard() {
         } catch (error) {
             console.error("Error adding expense:", error);
             triggerToast("Error", "No se pudo registrar el gasto.");
+        }
+    };
+
+    const handleMarkAsPaid = async (invoiceId: string) => {
+        if (!invoiceId) return;
+        setInvoiceProcessing(invoiceId);
+        try {
+            const oc = invoiceOcNumber[invoiceId] || null;
+            const { error } = await supabase.from('invoices').update({
+                status: 'cobrada',
+                paid_date: new Date().toISOString(),
+                invoice_number: oc
+            }).eq('id', invoiceId);
+            
+            if (error) throw error;
+            
+            triggerToast("Factura Pagada", "El estado de la factura ha sido actualizado exitosamente.");
+            
+            setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: 'cobrada', paid_date: new Date().toISOString(), invoice_number: oc } : inv));
+            
+        } catch (error) {
+            console.error("Error al marcar como pagada:", error);
+            triggerToast("Error", "No se pudo actualizar la factura.");
+        } finally {
+            setInvoiceProcessing(null);
         }
     };
 
@@ -1116,15 +1146,26 @@ export default function AdminDashboard() {
             ══════════════════════════════════ */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                 <SectionHeader icon={<Activity size={16} />} title="Métricas CFO & Flujo de Caja (Cuentas por Cobrar & EBITDA)" color="#3B82F6" />
-                <button 
-                    onClick={() => setShowOpexForm(!showOpexForm)}
-                    style={{
-                        background: "rgba(59,130,246,0.1)", color: "#3B82F6", border: "1px solid rgba(59,130,246,0.2)",
-                        padding: "0.4rem 1rem", borderRadius: "8px", fontSize: "0.8rem", fontWeight: 700,
-                        cursor: "pointer", transition: "all 0.2s"
-                    }}>
-                    {showOpexForm ? "Ocultar Formulario OPEX" : "+ Registrar Gasto (OPEX)"}
-                </button>
+                <div style={{ display: "flex", gap: "10px" }}>
+                    <button 
+                        onClick={() => setShowInvoicesModal(true)}
+                        style={{
+                            background: "rgba(16, 185, 129, 0.1)", color: "#10B981", border: "1px solid rgba(16, 185, 129, 0.2)",
+                            padding: "0.4rem 1rem", borderRadius: "8px", fontSize: "0.8rem", fontWeight: 700,
+                            cursor: "pointer", transition: "all 0.2s"
+                        }}>
+                        Administrar Cobranzas
+                    </button>
+                    <button 
+                        onClick={() => setShowOpexForm(!showOpexForm)}
+                        style={{
+                            background: "rgba(59,130,246,0.1)", color: "#3B82F6", border: "1px solid rgba(59,130,246,0.2)",
+                            padding: "0.4rem 1rem", borderRadius: "8px", fontSize: "0.8rem", fontWeight: 700,
+                            cursor: "pointer", transition: "all 0.2s"
+                        }}>
+                        {showOpexForm ? "Ocultar Formulario OPEX" : "+ Registrar Gasto (OPEX)"}
+                    </button>
+                </div>
             </div>
             
             {showOpexForm && (
@@ -2029,6 +2070,112 @@ export default function AdminDashboard() {
                                     </tbody>
                                 </table>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL DE ADMINISTRACIÓN DE COBRANZAS ── */}
+            {showInvoicesModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 10000, padding: '2rem'
+                }} onClick={() => setShowInvoicesModal(false)}>
+                    <div style={{
+                        background: '#0F0F1A', border: '1px solid rgba(255,255,255,0.1)',
+                        width: '100%', maxWidth: '900px', maxHeight: '85vh',
+                        borderRadius: '24px', display: 'flex', flexDirection: 'column',
+                        overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                        position: 'relative'
+                    }} onClick={e => e.stopPropagation()}>
+                        
+                        <div style={{ padding: '1.5rem 2rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <BanknoteIcon size={20} color="#EF4444" /> Cuentas por Cobrar & Facturación
+                                </h3>
+                                <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+                                    Asigne OC o registre pagos para aumentar su Tasa de Recaudación (Cash-In)
+                                </p>
+                            </div>
+                            <button onClick={() => setShowInvoicesModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                X
+                            </button>
+                        </div>
+                        
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 2rem' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                        <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Ticket / Factura</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Cliente</th>
+                                        <th style={{ textAlign: 'right', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Monto (S/)</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Estado</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>OC / Referencia</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {invoices.length === 0 ? (
+                                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay facturas emitidas.</td></tr>
+                                    ) : invoices.sort((a,b) => (a.status === 'emitida' ? -1 : 1)).map(inv => {
+                                        const isPaid = inv.status === 'cobrada';
+                                        return (
+                                            <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'white' }}>{inv.ticket_code}</div>
+                                                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{new Date(inv.issued_date || inv.created_at).toLocaleDateString()}</div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>{inv.client_name}</td>
+                                                <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(inv.amount_total)}</td>
+                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                                    <span style={{
+                                                        background: isPaid ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                                                        color: isPaid ? '#10B981' : '#F59E0B',
+                                                        padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800
+                                                    }}>
+                                                        {isPaid ? 'PAGADO' : 'PENDIENTE'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                                    {isPaid ? (
+                                                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>{inv.invoice_number || 'N/A'}</span>
+                                                    ) : (
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder="Opcional OC"
+                                                            value={invoiceOcNumber[inv.id] || ''}
+                                                            onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [inv.id]: e.target.value }))}
+                                                            style={{
+                                                                background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
+                                                                color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem',
+                                                                width: '100px', textAlign: 'center'
+                                                            }}
+                                                        />
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                                    {!isPaid && (
+                                                        <button 
+                                                            disabled={invoiceProcessing === inv.id}
+                                                            onClick={() => handleMarkAsPaid(inv.id)}
+                                                            style={{
+                                                                background: '#3B82F6', color: 'white', border: 'none',
+                                                                padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
+                                                                cursor: invoiceProcessing === inv.id ? 'wait' : 'pointer',
+                                                                opacity: invoiceProcessing === inv.id ? 0.5 : 1
+                                                            }}>
+                                                            {invoiceProcessing === inv.id ? '...' : 'Cobrar'}
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
