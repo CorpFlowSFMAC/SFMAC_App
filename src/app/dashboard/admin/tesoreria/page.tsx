@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { 
     Search, Filter, DollarSign, Clock, AlertCircle, CheckCircle2, 
     ArrowRight, ChevronRight, FileText, Download, User, Building2,
-    Calendar, Inbox, Wallet, History, ShieldCheck, Zap, X, Upload, Trash2, ExternalLink
+    Calendar, Inbox, Wallet, History, ShieldCheck, Zap, X, Upload, Trash2, ExternalLink, TrendingUp
 } from "lucide-react";
 import { useAppData } from "@/lib/AppDataContext";
 import { supabase } from "@/lib/supabase";
@@ -305,6 +305,14 @@ export default function TesoreriaPage() {
                         <History size={18} />
                         Historial
                     </button>
+                    <button 
+                        className={`${styles.tab} ${activeTab === 'opex' as any ? styles.activeTab : ''}`}
+                        onClick={() => setActiveTab('opex' as any)}
+                        style={{ color: '#8B5CF6' }}
+                    >
+                        <TrendingUp size={18} />
+                        Control OPEX & EBITDA
+                    </button>
                 </div>
 
                 <div className={styles.filters}>
@@ -334,7 +342,21 @@ export default function TesoreriaPage() {
 
             {/* Content Area */}
             <div className={styles.content}>
-                {loading ? (
+                {activeTab === 'opex' as any ? (
+                    <div className={styles.emptyState}>
+                        <TrendingUp size={48} color="#8B5CF6" />
+                        <h3 style={{ marginTop: '1rem', color: '#FFF' }}>Panel Financiero CFO</h3>
+                        <p style={{ color: 'rgba(255,255,255,0.7)', maxWidth: '400px', marginBottom: '1.5rem' }}>
+                            El control de OPEX, Cuentas por Cobrar (Aging), EBITDA y Capital Inmovilizado (WIP) se gestiona de forma centralizada en el Dashboard Principal.
+                        </p>
+                        <button 
+                            onClick={() => window.location.href = '/dashboard/admin'}
+                            style={{ background: '#8B5CF6', color: '#FFF', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                            Ir al Dashboard CFO
+                        </button>
+                    </div>
+                ) : loading ? (
                     <div className={styles.loadingState}>
                         <div className={styles.spinner}></div>
                         <p>Cargando bandeja...</p>

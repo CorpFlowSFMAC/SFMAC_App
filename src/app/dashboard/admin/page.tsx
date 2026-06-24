@@ -1232,6 +1232,35 @@ export default function AdminDashboard() {
                 />
             </div>
 
+            {/* ── BARRA VISUAL DE AGING (CUENTAS POR COBRAR) ── */}
+            <div style={{
+                background: "linear-gradient(135deg,rgba(255,255,255,0.03) 0%,rgba(255,255,255,0.01) 100%)",
+                border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "1.25rem",
+                marginBottom: "1.25rem", display: "flex", flexDirection: "column", gap: "0.5rem"
+            }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", fontWeight: 700, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: "1px" }}>
+                    <span>Aging de Cuentas por Cobrar (Deuda Total: S/ {fmt(cfoAccountsReceivable.totalPending || 0)})</span>
+                </div>
+                <div style={{ width: "100%", height: "12px", background: "rgba(0,0,0,0.5)", borderRadius: "6px", display: "flex", overflow: "hidden" }}>
+                    {(cfoAccountsReceivable.totalPending || 0) > 0 ? (
+                        <>
+                            <div title={`0-30 días (Normal): S/ ${fmt(cfoAccountsReceivable.aging?.['0_30'] || 0)}`} style={{ width: `${(cfoAccountsReceivable.aging?.['0_30'] || 0) / cfoAccountsReceivable.totalPending * 100}%`, height: "100%", background: "#10B981" }} />
+                            <div title={`31-60 días (Atención): S/ ${fmt(cfoAccountsReceivable.aging?.['31_60'] || 0)}`} style={{ width: `${(cfoAccountsReceivable.aging?.['31_60'] || 0) / cfoAccountsReceivable.totalPending * 100}%`, height: "100%", background: "#F59E0B" }} />
+                            <div title={`61-90 días (Riesgo): S/ ${fmt(cfoAccountsReceivable.aging?.['61_90'] || 0)}`} style={{ width: `${(cfoAccountsReceivable.aging?.['61_90'] || 0) / cfoAccountsReceivable.totalPending * 100}%`, height: "100%", background: "#EF4444" }} />
+                            <div title={`90+ días (Crítico): S/ ${fmt(cfoAccountsReceivable.aging?.['90_plus'] || 0)}`} style={{ width: `${(cfoAccountsReceivable.aging?.['90_plus'] || 0) / cfoAccountsReceivable.totalPending * 100}%`, height: "100%", background: "#7F1D1D" }} />
+                        </>
+                    ) : (
+                        <div style={{ width: "100%", height: "100%", background: "#10B981" }} />
+                    )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "rgba(255,255,255,0.4)" }}>
+                    <span>Normal (0-30): S/ {fmt(cfoAccountsReceivable.aging?.['0_30'] || 0)}</span>
+                    <span>Atención (31-60): S/ {fmt(cfoAccountsReceivable.aging?.['31_60'] || 0)}</span>
+                    <span>Riesgo (61-90): S/ {fmt(cfoAccountsReceivable.aging?.['61_90'] || 0)}</span>
+                    <span>Crítico (90+): S/ {fmt(cfoAccountsReceivable.aging?.['90_plus'] || 0)}</span>
+                </div>
+            </div>
+
             <SectionHeader icon={<Layers size={16} />} title="Tesorería & Flujo de Caja" color="#F59E0B" />
 
             {/* 📈 NUEVOS GRÁFICOS FINANCIEROS GERENCIALES (RECHARTS + AURA LIST) ─────────── */}

@@ -2639,6 +2639,30 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             if (success) {
                 showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
                 
+                // PASO 2.5: Inyectar síncronamente la creación de factura (CFO)
+                try {
+                    const terms = ticketData.cliente?.default_payment_terms || 30;
+                    const dueDate = new Date();
+                    dueDate.setDate(dueDate.getDate() + terms);
+                    
+                    const invoicePayload = {
+                        ticket_id: ticketData.id,
+                        client_id: ticketData.client_id,
+                        ticket_code: ticketData.client_ticket_number || ticketData.id,
+                        client_name: ticketData.cliente?.nombre || ticketData.cliente?.name || 'Cliente Genérico',
+                        amount_total: freshFinances.totalVenta,
+                        amount_igv: freshFinances.totalVenta * 0.18,
+                        status: 'emitida',
+                        due_date: dueDate.toISOString(),
+                        issued_date: new Date().toISOString()
+                    };
+                    
+                    const { error: invoiceErr } = await supabase.from('invoices').insert([invoicePayload]);
+                    if (invoiceErr) console.error("Error creating CFO invoice:", invoiceErr);
+                } catch (e) {
+                    console.error("CFO Sync Error:", e);
+                }
+
                 // PASO 3: Disparar el Broadcast de Actualización de Métricas del Dashboard
                 try {
                     const channel = supabase.channel('realtime:dashboard_metrics');
