@@ -2,6 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
+import * as XLSX from "xlsx";
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from "date-fns";
 import { useState, useMemo, useEffect, useRef } from "react";
 
 import {
@@ -171,6 +173,7 @@ export default function AdminDashboard() {
     
     // Invoices Management State
     const [showInvoicesModal, setShowInvoicesModal] = useState(false);
+    const [cfoDetailModal, setCfoDetailModal] = useState<'receivable' | 'invoiced' | 'wip' | 'ebitda' | null>(null);
     const [invoiceProcessing, setInvoiceProcessing] = useState<string | null>(null);
     const [invoiceOcNumber, setInvoiceOcNumber] = useState<Record<string, string>>({});
 
@@ -900,6 +903,18 @@ export default function AdminDashboard() {
     const lightColor = globalLight === "ROJO" ? "#EF4444" : globalLight === "AMBAR" ? "#F59E0B" : "#10B981";
     const lightBg = globalLight === "ROJO" ? "rgba(239,68,68,0.12)" : globalLight === "AMBAR" ? "rgba(245,158,11,0.12)" : "rgba(16,185,129,0.1)";
 
+    const exportToExcel = (data: any[], filename: string) => {
+        try {
+            const worksheet = XLSX.utils.json_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
+            XLSX.writeFile(workbook, `${filename}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        } catch (e) {
+            console.error("Error exporting to Excel:", e);
+            setToast({ message: "Error al exportar Excel", type: "error" });
+        }
+    };
+
     if (!isMounted) {
         return (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
@@ -1221,21 +1236,25 @@ export default function AdminDashboard() {
                     sub={`Cash-In: S/ ${fmt(cfoAccountsReceivable.totalCollected || 0)} (${Math.round(cfoAccountsReceivable.collectionRate || 0)}%)`} color="#EF4444"
                     icon={BanknoteIcon}
                     light={(cfoAccountsReceivable.collectionRate || 0) >= 80 ? "VERDE" : (cfoAccountsReceivable.collectionRate || 0) >= 50 ? "AMBAR" : "ROJO"}
+                    onClick={() => setCfoDetailModal('receivable')}
                 />
                 <RoiCard label="Facturación Emitida" value={`S/ ${fmt(cfoAccountsReceivable.totalInvoiced || 0)}`}
                     sub="Monto total de facturas emitidas" color="#10B981"
                     icon={DollarSign}
                     light="VERDE"
+                    onClick={() => setCfoDetailModal('invoiced')}
                 />
                 <RoiCard label="Capital Inmovilizado (WIP)" value={`S/ ${fmt(cfoWip.totalWIP || 0)}`}
                     sub={`${cfoWip.wipTickets?.length || 0} tickets en proceso / estancados`} color="#F59E0B"
                     icon={Layers}
                     light={(cfoWip.totalWIP || 0) > 5000 ? "ROJO" : "AMBAR"}
+                    onClick={() => setCfoDetailModal('wip')}
                 />
                 <RoiCard label="EBITDA" value={`S/ ${fmt(cfoEbitda.ebitda || 0)}`}
                     sub={`Punto de Equilibrio: S/ ${fmt(cfoEbitda.breakEven || 0)}`} color="#8B5CF6"
                     icon={TrendingUp}
                     light={(cfoEbitda.ebitda || 0) > 0 ? "VERDE" : "ROJO"}
+                    onClick={() => setCfoDetailModal('ebitda')}
                 />
             </div>
 
@@ -2263,6 +2282,240 @@ export default function AdminDashboard() {
                         onClose={() => setSelectedTicket(null)} 
                         onUpdate={handleUpdateTicket}
                     />
+                </div>
+            )}
+            {/* ── MODAL DE DETALLE DE MÉTRICAS CFO ── */}
+            {cfoDetailModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 12000, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+                    <div style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', width: '100%', maxWidth: '900px', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)' }}>
+                            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                {cfoDetailModal === 'receivable' && <><BanknoteIcon size={18} color="#EF4444" /> Detalle de Cuentas por Cobrar</>}
+                                {cfoDetailModal === 'invoiced' && <><DollarSign size={18} color="#10B981" /> Detalle de Facturación Emitida</>}
+                                {cfoDetailModal === 'wip' && <><Layers size={18} color="#F59E0B" /> Detalle de Capital Inmovilizado (WIP)</>}
+                                {cfoDetailModal === 'ebitda' && <><TrendingUp size={18} color="#8B5CF6" /> Detalle de EBITDA (Ingresos vs OPEX)</>}
+                            </h2>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button 
+                                    onClick={() => {
+                                        let exportData: any[] = [];
+                                        let filename = 'Reporte';
+                                        if (cfoDetailModal === 'receivable') {
+                                            exportData = cfoAccountsReceivable.pendingInvoices.map((inv: any) => {
+                                                const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
+                                                return {
+                                                    'ID Factura': inv.id,
+                                                    'Ticket Cliente': tk?.client_ticket_number || tk?.id?.split('-')[0] || inv.ticket_id.split('-')[0],
+                                                    'Fecha Emisión': inv.issued_date ? new Date(inv.issued_date).toLocaleDateString() : 'N/A',
+                                                    'Monto (S/)': inv.amount_total,
+                                                    'Estado': inv.status
+                                                };
+                                            });
+                                            filename = 'Cuentas_Por_Cobrar';
+                                        } else if (cfoDetailModal === 'invoiced') {
+                                            exportData = invoices.map((inv: any) => {
+                                                const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
+                                                return {
+                                                    'ID Factura': inv.id,
+                                                    'Ticket Cliente': tk?.client_ticket_number || tk?.id?.split('-')[0] || inv.ticket_id.split('-')[0],
+                                                    'Fecha Emisión': inv.issued_date ? new Date(inv.issued_date).toLocaleDateString() : 'N/A',
+                                                    'Monto (S/)': inv.amount_total,
+                                                    'Estado': inv.status
+                                                };
+                                            });
+                                            filename = 'Facturacion_Emitida';
+                                        } else if (cfoDetailModal === 'wip') {
+                                            exportData = (cfoWip.wipTickets || []).map((t: any) => ({
+                                                'Ticket': t.client_ticket_number || t.id.split('-')[0],
+                                                'Cliente': t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A',
+                                                'Gestor': t.assigned_to_name || 'N/A',
+                                                'Monto Presupuestado': t.presupuesto_aprobado || 0,
+                                                'Estado': t.status
+                                            }));
+                                            filename = 'Capital_Inmovilizado_WIP';
+                                        } else if (cfoDetailModal === 'ebitda') {
+                                            const ticketsEbitda = activeTickets.filter(t => t.status === 'facturado' || t.status === 'pagado').map(t => ({
+                                                'Tipo': 'Ingreso Bruto (Ticket)',
+                                                'Descripción': t.client_ticket_number || t.id.split('-')[0],
+                                                'Monto (S/)': (t.presupuesto_aprobado || 0) - (t.costo_real || 0)
+                                            }));
+                                            const opexEbitda = expenses.map(e => ({
+                                                'Tipo': `Gasto OPEX (${e.category})`,
+                                                'Descripción': e.description,
+                                                'Monto (S/)': -(e.amount || 0)
+                                            }));
+                                            exportData = [...ticketsEbitda, ...opexEbitda];
+                                            filename = 'EBITDA_Desglose';
+                                        }
+                                        exportToExcel(exportData, filename);
+                                    }}
+                                    style={{
+                                        background: 'rgba(16, 185, 129, 0.1)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.2)',
+                                        padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600,
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+                                    }}>
+                                    <Download size={14} /> Exportar XLSX
+                                </button>
+                                <button onClick={() => setCfoDetailModal(null)} style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+                            {cfoDetailModal === 'receivable' && (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Factura / Ticket</th>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Cliente</th>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Fecha Emisión</th>
+                                            <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {cfoAccountsReceivable.pendingInvoices.length === 0 ? (
+                                            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay cuentas por cobrar.</td></tr>
+                                        ) : cfoAccountsReceivable.pendingInvoices.map((inv: any) => {
+                                            const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
+                                            const ticketCode = tk?.client_ticket_number || (tk?.id || inv.ticket_id).split('-')[0];
+                                            const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
+                                            return (
+                                                <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
+                                                    <td style={{ padding: '0.75rem 0.5rem', fontWeight: 600 }}>{ticketCode}</td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)' }}>{clientName}</td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)' }}>{inv.issued_date ? new Date(inv.issued_date).toLocaleDateString() : '-'}</td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#EF4444' }}>S/ {fmt(inv.amount_total)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+
+                            {cfoDetailModal === 'invoiced' && (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Factura / Ticket</th>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Cliente</th>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Estado</th>
+                                            <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoices.length === 0 ? (
+                                            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay facturas registradas.</td></tr>
+                                        ) : invoices.sort((a,b) => (a.status === 'emitida' ? -1 : 1)).map((inv: any) => {
+                                            const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
+                                            const ticketCode = tk?.client_ticket_number || (tk?.id || inv.ticket_id).split('-')[0];
+                                            const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
+                                            return (
+                                                <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
+                                                    <td style={{ padding: '0.75rem 0.5rem', fontWeight: 600 }}>{ticketCode}</td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)' }}>{clientName}</td>
+                                                    <td style={{ padding: '0.75rem 0.5rem' }}>
+                                                        <span style={{
+                                                            background: inv.status === 'cobrada' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                                                            color: inv.status === 'cobrada' ? '#10B981' : '#EF4444',
+                                                            padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase'
+                                                        }}>
+                                                            {inv.status}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>S/ {fmt(inv.amount_total)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+
+                            {cfoDetailModal === 'wip' && (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Ticket / Cliente</th>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Gestor Asignado</th>
+                                            <th style={{ padding: '0.75rem 0.5rem' }}>Estado Operativo</th>
+                                            <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Capital Inmovilizado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {!(cfoWip.wipTickets?.length) ? (
+                                            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay tickets estancados en proceso.</td></tr>
+                                        ) : cfoWip.wipTickets.map((t: any) => {
+                                            const ticketCode = t.client_ticket_number || t.id.split('-')[0];
+                                            const clientName = t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A';
+                                            return (
+                                                <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
+                                                    <td style={{ padding: '0.75rem 0.5rem' }}>
+                                                        <div style={{ fontWeight: 600 }}>{ticketCode}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>{clientName}</div>
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)' }}>{t.assigned_to_name || 'Sin Asignar'}</td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)' }}>{t.status}</td>
+                                                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#F59E0B' }}>S/ {fmt(t.presupuesto_aprobado || 0)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+
+                            {cfoDetailModal === 'ebitda' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                    <div>
+                                        <h3 style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Utilidad Bruta de Tickets (Facturados/Cobrados)</h3>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                                    <th style={{ padding: '0.75rem 0.5rem' }}>Ticket</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Presupuesto</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Costo Real</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Utilidad Neta</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {activeTickets.filter(t => t.status === 'facturado' || t.status === 'pagado').map(t => {
+                                                    const profit = (t.presupuesto_aprobado || 0) - (t.costo_real || 0);
+                                                    return (
+                                                        <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
+                                                            <td style={{ padding: '0.75rem 0.5rem', fontWeight: 600 }}>{t.client_ticket_number || t.id.split('-')[0]}</td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>S/ {fmt(t.presupuesto_aprobado || 0)}</td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', color: '#EF4444' }}>S/ {fmt(t.costo_real || 0)}</td>
+                                                            <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: profit >= 0 ? '#10B981' : '#EF4444' }}>S/ {fmt(profit)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Gastos Operativos (OPEX)</h3>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                                    <th style={{ padding: '0.75rem 0.5rem' }}>Categoría</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem' }}>Descripción</th>
+                                                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Monto Negativo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {expenses.map((e: any) => (
+                                                    <tr key={e.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
+                                                        <td style={{ padding: '0.75rem 0.5rem', fontWeight: 600 }}>{e.category}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)' }}>{e.description}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#EF4444' }}>-S/ {fmt(e.amount)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
