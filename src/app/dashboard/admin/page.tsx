@@ -715,8 +715,15 @@ export default function AdminDashboard() {
     // ── CFO METRICS (STANDARD) ──────────────────────────────────────────
     const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices), [invoices]);
     const cfoWip = useMemo(() => calculateWIP(activeTickets), [activeTickets]);
-    // Usa la utilidad del ROI para el EBITDA, ya que el ROI tiene el cálculo correcto considerando periodos
-    const cfoEbitda = useMemo(() => calculateEBITDA(roi.utilidad, expenses), [roi.utilidad, expenses]);
+    // Usa la utilidad total del mes (cerrados + en ejecución) para el EBITDA real
+    const cfoEbitda = useMemo(() => {
+        const inPeriod = activeTickets.filter((t: any) => {
+            const sid = normalizeStateId(t.status_id ?? t.estadoId);
+            return isTicketInPeriod(t) && !["ticket_rechazado", "ticket_cancelado", "anulado"].includes(sid);
+        });
+        const totalGrossProfit = inPeriod.reduce((sum: number, t: any) => sum + ticketUtilidad(t), 0);
+        return calculateEBITDA(totalGrossProfit, expenses);
+    }, [activeTickets, expenses, isTicketInPeriod]);
 
     // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
     const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];

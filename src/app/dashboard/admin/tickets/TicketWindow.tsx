@@ -2648,8 +2648,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                     const invoicePayload = {
                         ticket_id: ticketData.id,
                         client_id: ticketData.client_id,
-                        ticket_code: ticketData.client_ticket_number || ticketData.id,
-                        client_name: ticketData.cliente?.nombre || ticketData.cliente?.name || 'Cliente Genérico',
+                        amount_base: freshFinances.totalVenta / 1.18, // Added amount_base
                         amount_total: freshFinances.totalVenta,
                         amount_igv: freshFinances.totalVenta * 0.18,
                         status: 'emitida',
