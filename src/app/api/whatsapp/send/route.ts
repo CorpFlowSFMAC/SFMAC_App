@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'x-api-key': process.env.id_secreto || '',
+                'Authorization': `Bearer ${process.env.id_secreto || ''}`
             },
             body: JSON.stringify({
                 phone: phone.trim(),
@@ -37,6 +39,8 @@ export async function POST(request: NextRequest) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'x-api-key': process.env.id_secreto || '',
+                    'Authorization': `Bearer ${process.env.id_secreto || ''}`
                 },
                 body: JSON.stringify({
                     phone: phone.trim(),

@@ -325,3 +325,139 @@ export function sanitizeTicketMetadata(metadata: any): any {
     
     return cleaned;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CFO METRICS: Cuentas por Cobrar (Aging)
+// ─────────────────────────────────────────────────────────────────────────────
+export function calculateAccountsReceivable(invoices: any[]) {
+    const today = new Date();
+    
+    let totalInvoiced = 0;
+    let totalCollected = 0;
+    
+    let aging0_30 = 0;
+    let aging31_60 = 0;
+    let aging61_90 = 0;
+    let aging90_plus = 0;
+    
+    let collectedInvoices = [];
+    let pendingInvoices = [];
+
+    (invoices || []).forEach(inv => {
+        if (inv.status === 'anulada') return;
+        
+        const amount = toNum(inv.amount_total);
+        totalInvoiced += amount;
+        
+        if (inv.status === 'cobrada') {
+            totalCollected += amount;
+            collectedInvoices.push(inv);
+        } else {
+            pendingInvoices.push(inv);
+            
+            // Calculate aging based on issued_date or due_date
+            const baseDate = new Date(inv.issued_date || inv.created_at);
+            const diffTime = Math.abs(today.getTime() - baseDate.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays <= 30) aging0_30 += amount;
+            else if (diffDays <= 60) aging31_60 += amount;
+            else if (diffDays <= 90) aging61_90 += amount;
+            else aging90_plus += amount;
+        }
+    });
+
+    const collectionRate = totalInvoiced > 0 ? (totalCollected / totalInvoiced) * 100 : 0;
+    const totalPending = totalInvoiced - totalCollected;
+
+    return {
+        totalInvoiced,
+        totalCollected,
+        totalPending,
+        collectionRate,
+        aging: {
+            '0_30': aging0_30,
+            '31_60': aging31_60,
+            '61_90': aging61_90,
+            '90_plus': aging90_plus
+        },
+        collectedInvoices,
+        pendingInvoices
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CFO METRICS: WIP (Work In Progress / Capital Inmovilizado Total)
+// ─────────────────────────────────────────────────────────────────────────────
+export function calculateWIP(activeTickets: any[]) {
+    let disbursedCapital = 0; // Capital ya pagado (confirmado)
+    let committedCapital = 0; // Capital comprometido a pagar (MO pactada - pagado)
+    let wipTickets: any[] = [];
+    
+    (activeTickets || []).forEach(t => {
+        // Tickets que no están cerrados o anulados
+        if (t.status_id === 'ticket_cerrado' || t.status_id === 'anulado') return;
+        
+        // Use calculateTicketFinances assuming costs are joined (or 0 if not yet)
+        const fin = calculateTicketFinances(t, t.ticket_costs || []);
+        
+        const disbursed = fin.totalExpenses;
+        const committed = fin.netLaborBalance; // Owed to technician
+        const totalWIP = disbursed + committed;
+        
+        if (totalWIP > 0) {
+            disbursedCapital += disbursed;
+            committedCapital += committed;
+            wipTickets.push({
+                ...t,
+                _disbursed: disbursed,
+                _committed: committed,
+                _totalWIP: totalWIP
+            });
+        }
+    });
+
+    // Ordenar tickets WIP por mayor capital inmovilizado
+    wipTickets.sort((a, b) => b._totalWIP - a._totalWIP);
+
+    return {
+        totalWIP: disbursedCapital + committedCapital,
+        disbursedCapital,
+        committedCapital,
+        wipTickets
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CFO METRICS: OPEX y EBITDA
+// ─────────────────────────────────────────────────────────────────────────────
+export function calculateEBITDA(totalGrossProfit: number, expenses: any[]) {
+    let totalOpex = 0;
+    let activeExpenses: any[] = [];
+
+    (expenses || []).forEach(exp => {
+        if (!exp.is_active) return;
+        
+        const amt = toNum(exp.amount);
+        // Normalize frequency to monthly
+        const freq = (exp.frequency || 'mensual').toLowerCase();
+        let monthlyAmt = amt;
+        
+        if (freq === 'quincenal') monthlyAmt = amt * 2;
+        else if (freq === 'semanal') monthlyAmt = amt * 4;
+        else if (freq === 'anual') monthlyAmt = amt / 12;
+        
+        totalOpex += monthlyAmt;
+        activeExpenses.push({ ...exp, _monthlyAmt: monthlyAmt });
+    });
+
+    const ebitda = totalGrossProfit - totalOpex;
+    const breakEven = totalOpex;
+
+    return {
+        ebitda,
+        totalOpex,
+        breakEven,
+        activeExpenses
+    };
+}

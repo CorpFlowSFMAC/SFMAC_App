@@ -20,7 +20,7 @@ import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { supabase } from "@/lib/supabase";
 import TicketWindow from "./tickets/TicketWindow";
-import { calculateTicketFinances } from "@/lib/calculations";
+import { calculateTicketFinances, calculateAccountsReceivable, calculateWIP, calculateEBITDA } from "@/lib/calculations";
 
 // ── Helpers ──────────────────────────────────
 const SLA_HOURS = 72;
@@ -162,6 +162,12 @@ export default function AdminDashboard() {
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [toast, setToast] = useState<{ title: string; desc: string } | null>(null);
     const [realtimeOverrides, setRealtimeOverrides] = useState<Record<string, any>>({});
+    
+    // CFO Metrics State
+    const [invoices, setInvoices] = useState<any[]>([]);
+    const [expenses, setExpenses] = useState<any[]>([]);
+    const [showOpexForm, setShowOpexForm] = useState(false);
+    const [newOpex, setNewOpex] = useState({ category: 'ALQUILER', amount: '', description: '' });
 
     const triggerToast = (title: string, desc: string) => {
         setToast({ title, desc });
@@ -223,6 +229,18 @@ export default function AdminDashboard() {
     // Hydration guard
     useEffect(() => { setIsMounted(true); }, []);
 
+    // Fetch CFO Data
+    useEffect(() => {
+        if (!isMounted) return;
+        const fetchCFOData = async () => {
+            const { data: invData } = await supabase.from('invoices').select('*');
+            const { data: expData } = await supabase.from('company_expenses').select('*').eq('is_active', true);
+            if (invData) setInvoices(invData);
+            if (expData) setExpenses(expData);
+        };
+        fetchCFOData();
+    }, [isMounted, lastRefresh]);
+
     // ⚡ FIX (2026-06-13): Estabilizar la referencia de refreshTickets con useRef
     // para cortar el bucle de invalidaciones cruzadas en el Dashboard Estratégico.
     //
@@ -279,7 +297,30 @@ export default function AdminDashboard() {
         }
     };
 
-
+    const handleAddExpense = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const amt = parseFloat(newOpex.amount);
+        if (isNaN(amt) || amt <= 0) return;
+        
+        try {
+            const { data, error } = await supabase.from('company_expenses').insert([{
+                category: newOpex.category,
+                amount: amt,
+                description: newOpex.description,
+                is_active: true
+            }]).select('*');
+            if (error) throw error;
+            if (data && data.length > 0) {
+                setExpenses(prev => [...prev, data[0]]);
+                setNewOpex({ category: 'ALQUILER', amount: '', description: '' });
+                setShowOpexForm(false);
+                triggerToast("OPEX Registrado", `Gasto de S/ ${amt} añadido a ${newOpex.category}.`);
+            }
+        } catch (error) {
+            console.error("Error adding expense:", error);
+            triggerToast("Error", "No se pudo registrar el gasto.");
+        }
+    };
 
     // ── Rango de Fechas para Métricas Globales (Cash Flow) ──
     const rangeDates = useMemo(() => {
@@ -640,6 +681,12 @@ export default function AdminDashboard() {
 
         return { tickets: ticketsConAdelantos, total: totalCapital, enRiesgo: enRiesgo.length, totalEnRiesgo };
     }, [activeTickets, gestoras, dateRange, now]);
+
+    // ── CFO METRICS (STANDARD) ──────────────────────────────────────────
+    const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices), [invoices]);
+    const cfoWip = useMemo(() => calculateWIP(activeTickets), [activeTickets]);
+    // Usa la utilidad del ROI para el EBITDA, ya que el ROI tiene el cálculo correcto considerando periodos
+    const cfoEbitda = useMemo(() => calculateEBITDA(roi.utilidad, expenses), [roi.utilidad, expenses]);
 
     // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
     const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
@@ -1063,6 +1110,86 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             )}
+
+            {/* ══════════════════════════════════
+                MÓDULO CFO: MÉTRICAS FINANCIERAS
+            ══════════════════════════════════ */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <SectionHeader icon={<Activity size={16} />} title="Métricas CFO & Flujo de Caja (Cuentas por Cobrar & EBITDA)" color="#3B82F6" />
+                <button 
+                    onClick={() => setShowOpexForm(!showOpexForm)}
+                    style={{
+                        background: "rgba(59,130,246,0.1)", color: "#3B82F6", border: "1px solid rgba(59,130,246,0.2)",
+                        padding: "0.4rem 1rem", borderRadius: "8px", fontSize: "0.8rem", fontWeight: 700,
+                        cursor: "pointer", transition: "all 0.2s"
+                    }}>
+                    {showOpexForm ? "Ocultar Formulario OPEX" : "+ Registrar Gasto (OPEX)"}
+                </button>
+            </div>
+            
+            {showOpexForm && (
+                <div style={{
+                    background: "linear-gradient(135deg,rgba(255,255,255,0.05) 0%,rgba(255,255,255,0.01) 100%)",
+                    border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", padding: "1.25rem",
+                    marginBottom: "1.25rem", display: "flex", gap: "1rem", alignItems: "flex-end"
+                }}>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        <label style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>Categoría</label>
+                        <select 
+                            value={newOpex.category} onChange={e => setNewOpex({...newOpex, category: e.target.value})}
+                            style={{ padding: "0.6rem", borderRadius: "8px", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", color: "#FFF", fontSize: "0.9rem" }}>
+                            <option value="ALQUILER">Alquiler / Oficina</option>
+                            <option value="NOMINA_ADMIN">Nómina Administrativa</option>
+                            <option value="SOFTWARE">Suscripciones / Software</option>
+                            <option value="MARKETING">Marketing / Ventas</option>
+                            <option value="OTROS">Otros Gastos Fijos</option>
+                        </select>
+                    </div>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        <label style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>Descripción</label>
+                        <input type="text" placeholder="Ej. Alquiler Mayo 2026"
+                            value={newOpex.description} onChange={e => setNewOpex({...newOpex, description: e.target.value})}
+                            style={{ padding: "0.6rem", borderRadius: "8px", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", color: "#FFF", fontSize: "0.9rem" }} />
+                    </div>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        <label style={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.6)" }}>Monto (S/)</label>
+                        <input type="number" placeholder="Ej. 1500" min="0" step="0.01"
+                            value={newOpex.amount} onChange={e => setNewOpex({...newOpex, amount: e.target.value})}
+                            style={{ padding: "0.6rem", borderRadius: "8px", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", color: "#FFF", fontSize: "0.9rem" }} />
+                    </div>
+                    <button onClick={handleAddExpense}
+                        style={{
+                            background: "#3B82F6", color: "#FFF", border: "none",
+                            padding: "0.6rem 1.25rem", borderRadius: "8px", fontSize: "0.9rem", fontWeight: 700,
+                            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+                        }}>
+                        Guardar OPEX
+                    </button>
+                </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
+                <RoiCard label="Cuentas por Cobrar" value={`S/ ${fmt(cfoAccountsReceivable.totalDeuda)}`}
+                    sub={`Cash-In: S/ ${fmt(cfoAccountsReceivable.cashIn)} (${Math.round(cfoAccountsReceivable.percentageCashIn)}%)`} color="#EF4444"
+                    icon={BanknoteIcon}
+                    light={cfoAccountsReceivable.percentageCashIn >= 80 ? "VERDE" : cfoAccountsReceivable.percentageCashIn >= 50 ? "AMBAR" : "ROJO"}
+                />
+                <RoiCard label="Facturación Emitida" value={`S/ ${fmt(cfoAccountsReceivable.totalEmitido)}`}
+                    sub="Monto total de facturas emitidas" color="#10B981"
+                    icon={DollarSign}
+                    light="VERDE"
+                />
+                <RoiCard label="Capital Inmovilizado (WIP)" value={`S/ ${fmt(cfoWip.totalInmovilizado)}`}
+                    sub={`${cfoWip.ticketsInmovilizados} tickets en proceso / estancados`} color="#F59E0B"
+                    icon={Layers}
+                    light={cfoWip.totalInmovilizado > 5000 ? "ROJO" : "AMBAR"}
+                />
+                <RoiCard label="EBITDA" value={`S/ ${fmt(cfoEbitda.ebitda)}`}
+                    sub={`Punto de Equilibrio: S/ ${fmt(cfoEbitda.puntoEquilibrio)}`} color="#8B5CF6"
+                    icon={TrendingUp}
+                    light={cfoEbitda.isProfitable ? "VERDE" : "ROJO"}
+                />
+            </div>
 
             <SectionHeader icon={<Layers size={16} />} title="Tesorería & Flujo de Caja" color="#F59E0B" />
 
