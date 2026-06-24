@@ -1169,25 +1169,25 @@ export default function AdminDashboard() {
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
-                <RoiCard label="Cuentas por Cobrar" value={`S/ ${fmt(cfoAccountsReceivable.totalDeuda)}`}
-                    sub={`Cash-In: S/ ${fmt(cfoAccountsReceivable.cashIn)} (${Math.round(cfoAccountsReceivable.percentageCashIn)}%)`} color="#EF4444"
+                <RoiCard label="Cuentas por Cobrar" value={`S/ ${fmt(cfoAccountsReceivable.totalPending || 0)}`}
+                    sub={`Cash-In: S/ ${fmt(cfoAccountsReceivable.totalCollected || 0)} (${Math.round(cfoAccountsReceivable.collectionRate || 0)}%)`} color="#EF4444"
                     icon={BanknoteIcon}
-                    light={cfoAccountsReceivable.percentageCashIn >= 80 ? "VERDE" : cfoAccountsReceivable.percentageCashIn >= 50 ? "AMBAR" : "ROJO"}
+                    light={(cfoAccountsReceivable.collectionRate || 0) >= 80 ? "VERDE" : (cfoAccountsReceivable.collectionRate || 0) >= 50 ? "AMBAR" : "ROJO"}
                 />
-                <RoiCard label="Facturación Emitida" value={`S/ ${fmt(cfoAccountsReceivable.totalEmitido)}`}
+                <RoiCard label="Facturación Emitida" value={`S/ ${fmt(cfoAccountsReceivable.totalInvoiced || 0)}`}
                     sub="Monto total de facturas emitidas" color="#10B981"
                     icon={DollarSign}
                     light="VERDE"
                 />
-                <RoiCard label="Capital Inmovilizado (WIP)" value={`S/ ${fmt(cfoWip.totalInmovilizado)}`}
-                    sub={`${cfoWip.ticketsInmovilizados} tickets en proceso / estancados`} color="#F59E0B"
+                <RoiCard label="Capital Inmovilizado (WIP)" value={`S/ ${fmt(cfoWip.totalWIP || 0)}`}
+                    sub={`${cfoWip.wipTickets?.length || 0} tickets en proceso / estancados`} color="#F59E0B"
                     icon={Layers}
-                    light={cfoWip.totalInmovilizado > 5000 ? "ROJO" : "AMBAR"}
+                    light={(cfoWip.totalWIP || 0) > 5000 ? "ROJO" : "AMBAR"}
                 />
-                <RoiCard label="EBITDA" value={`S/ ${fmt(cfoEbitda.ebitda)}`}
-                    sub={`Punto de Equilibrio: S/ ${fmt(cfoEbitda.puntoEquilibrio)}`} color="#8B5CF6"
+                <RoiCard label="EBITDA" value={`S/ ${fmt(cfoEbitda.ebitda || 0)}`}
+                    sub={`Punto de Equilibrio: S/ ${fmt(cfoEbitda.breakEven || 0)}`} color="#8B5CF6"
                     icon={TrendingUp}
-                    light={cfoEbitda.isProfitable ? "VERDE" : "ROJO"}
+                    light={(cfoEbitda.ebitda || 0) > 0 ? "VERDE" : "ROJO"}
                 />
             </div>
 
