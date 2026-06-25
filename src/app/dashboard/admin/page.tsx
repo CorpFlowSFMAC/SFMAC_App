@@ -2364,15 +2364,16 @@ export default function AdminDashboard() {
 
                         <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
                             {cfoDetailModal === 'receivable' && (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Factura / Ticket</th>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Cliente</th>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Fecha Emisión</th>
-                                            <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Monto</th>
-                                        </tr>
-                                    </thead>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', minWidth: '500px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '30%' }}>Factura / Ticket</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '30%' }}>Cliente</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '20%' }}>Fecha Emisión</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', width: '20%' }}>Monto</th>
+                                            </tr>
+                                        </thead>
                                     <tbody>
                                         {cfoAccountsReceivable.pendingInvoices.length === 0 ? (
                                             <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay cuentas por cobrar.</td></tr>
@@ -2390,19 +2391,21 @@ export default function AdminDashboard() {
                                             );
                                         })}
                                     </tbody>
-                                </table>
+                                    </table>
+                                </div>
                             )}
 
                             {cfoDetailModal === 'invoiced' && (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Factura / Ticket</th>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Cliente</th>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Estado</th>
-                                            <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Monto</th>
-                                        </tr>
-                                    </thead>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', minWidth: '500px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '30%' }}>Factura / Ticket</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '30%' }}>Cliente</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '20%' }}>Estado</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', width: '20%' }}>Monto</th>
+                                            </tr>
+                                        </thead>
                                     <tbody>
                                         {invoices.length === 0 ? (
                                             <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay facturas registradas.</td></tr>
@@ -2428,39 +2431,42 @@ export default function AdminDashboard() {
                                             );
                                         })}
                                     </tbody>
-                                </table>
+                                    </table>
+                                </div>
                             )}
 
                             {cfoDetailModal === 'wip' && (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Ticket / Cliente</th>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Gestor Asignado</th>
-                                            <th style={{ padding: '0.75rem 0.5rem' }}>Estado Operativo</th>
-                                            <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Capital Inmovilizado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {!(cfoWip.wipTickets?.length) ? (
-                                            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay tickets estancados en proceso.</td></tr>
-                                        ) : cfoWip.wipTickets.map((t: any) => {
-                                            const ticketCode = t.client_ticket_number || t.id.split('-')[0];
-                                            const clientName = t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A';
-                                            return (
-                                                <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
-                                                    <td style={{ padding: '0.75rem 0.5rem' }}>
-                                                        <div style={{ fontWeight: 600 }}>{ticketCode}</div>
-                                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>{clientName}</div>
-                                                    </td>
-                                                    <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)' }}>{t.assigned_to_name || 'Sin Asignar'}</td>
-                                                    <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)' }}>{t.status}</td>
-                                                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#F59E0B' }}>S/ {fmt(t.presupuesto_aprobado || 0)}</td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', minWidth: '500px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '35%' }}>Ticket / Cliente</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '25%' }}>Gestor Asignado</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', width: '20%' }}>Estado Operativo</th>
+                                                <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right', width: '20%' }}>Capital Inmovilizado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {!(cfoWip.wipTickets?.length) ? (
+                                                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay tickets estancados en proceso.</td></tr>
+                                            ) : cfoWip.wipTickets.map((t: any) => {
+                                                const ticketCode = t.client_ticket_number || t.id.split('-')[0];
+                                                const clientName = t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A';
+                                                return (
+                                                    <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
+                                                        <td style={{ padding: '0.75rem 0.5rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ticketCode}</div>
+                                                            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{clientName}</div>
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.assigned_to_name || 'Sin Asignar'}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.status || 'N/A'}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#F59E0B' }}>S/ {fmt(t._totalWIP || 0)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
 
                             {cfoDetailModal === 'ebitda' && (
