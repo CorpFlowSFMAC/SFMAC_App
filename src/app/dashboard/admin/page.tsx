@@ -717,7 +717,7 @@ export default function AdminDashboard() {
 
     // ── CFO METRICS (STANDARD) ──────────────────────────────────────────
     const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices), [invoices]);
-    const cfoWip = useMemo(() => calculateWIP(activeTickets), [activeTickets]);
+    const cfoWip = useMemo(() => calculateWIP(activeTickets, gestorasMap), [activeTickets, gestorasMap]);
     // Usa la utilidad total del mes (cerrados + en ejecución) para el EBITDA real
     const cfoEbitda = useMemo(() => {
         const inPeriod = activeTickets.filter((t: any) => {
@@ -2328,9 +2328,11 @@ export default function AdminDashboard() {
                                             exportData = (cfoWip.wipTickets || []).map((t: any) => ({
                                                 'Ticket': t.client_ticket_number || t.id.split('-')[0],
                                                 'Cliente': t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A',
-                                                'Gestor': t.assigned_to_name || 'N/A',
-                                                'Monto Presupuestado': t.presupuesto_aprobado || 0,
-                                                'Estado': t.status
+                                                'Gestor Asignado': t._gestorasName || 'Sin Gestora',
+                                                'Estado Operativo': t._estadoOperativo || 'N/A',
+                                                'Capital Desembolsado (S/)': t._disbursed || 0,
+                                                'Capital Comprometido (S/)': t._committed || 0,
+                                                'Total Capital Inmovilizado (S/)': t._totalWIP || 0
                                             }));
                                             filename = 'Capital_Inmovilizado_WIP';
                                         } else if (cfoDetailModal === 'ebitda') {
@@ -2458,8 +2460,8 @@ export default function AdminDashboard() {
                                                             <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ticketCode}</div>
                                                             <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{clientName}</div>
                                                         </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.assigned_to_name || 'Sin Asignar'}</td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.status || 'N/A'}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t._gestorasName || 'Sin Gestora'}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t._estadoOperativo || 'N/A'}</td>
                                                         <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#F59E0B' }}>S/ {fmt(t._totalWIP || 0)}</td>
                                                     </tr>
                                                 );
