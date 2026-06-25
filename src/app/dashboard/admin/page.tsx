@@ -10,7 +10,7 @@ import {
     DollarSign, TrendingUp, AlertTriangle, Users, CheckCircle2,
     Zap, ArrowRight, BarChart3, Target, Activity, Shield,
     ChevronRight, AlertCircle, Star, Layers,
-    BanknoteIcon, Award
+    BanknoteIcon, Award, Download, X
 } from "lucide-react";
 import {
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
