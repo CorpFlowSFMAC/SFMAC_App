@@ -2325,13 +2325,20 @@ export default function AdminDashboard() {
                                             });
                                             filename = 'Facturacion_Emitida';
                                         } else if (cfoDetailModal === 'wip') {
-                                            exportData = (cfoWip.wipTickets || []).map((t: any) => ({
-                                                'Ticket': t.client_ticket_number || t.id.split('-')[0],
-                                                'Cliente': t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A',
-                                                'Gestor': t.assigned_to_name || 'N/A',
-                                                'Monto Presupuestado': t.presupuesto_aprobado || 0,
-                                                'Estado': t.status
-                                            }));
+                                            exportData = (cfoWip.wipTickets || []).map((t: any) => {
+                                                const gestoraId = t.gestora_id || t.metadata?.gestora_id;
+                                                const g = (Array.isArray(gestoras) ? gestoras : []).find((x: any) => x.id === gestoraId);
+                                                const gestorName = g ? (g.name || g.nombre || g.full_name || "Gestora") : (t.gestora?.name || t.gestora?.nombre || t.assigned_to_name || "Sin Asignar");
+                                                const estado = normalizeStateId(t.estadoId || t.status_id || t.status || 'N/A');
+                                                
+                                                return {
+                                                    'Ticket': t.client_ticket_number || t.id.split('-')[0],
+                                                    'Cliente': t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A',
+                                                    'Gestor': gestorName,
+                                                    'Monto Presupuestado': t.presupuesto_aprobado || 0,
+                                                    'Estado': estado
+                                                };
+                                            });
                                             filename = 'Capital_Inmovilizado_WIP';
                                         } else if (cfoDetailModal === 'ebitda') {
                                             const ticketsEbitda = activeTickets.filter(t => t.status === 'facturado' || t.status === 'pagado').map(t => ({
@@ -2452,14 +2459,20 @@ export default function AdminDashboard() {
                                             ) : cfoWip.wipTickets.map((t: any) => {
                                                 const ticketCode = t.client_ticket_number || t.id.split('-')[0];
                                                 const clientName = t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A';
+                                                
+                                                const gestoraId = t.gestora_id || t.metadata?.gestora_id;
+                                                const g = (Array.isArray(gestoras) ? gestoras : []).find((x: any) => x.id === gestoraId);
+                                                const gestorName = g ? (g.name || g.nombre || g.full_name || "Gestora") : (t.gestora?.name || t.gestora?.nombre || t.assigned_to_name || "Sin Asignar");
+                                                const estado = normalizeStateId(t.estadoId || t.status_id || t.status || 'N/A');
+                                                
                                                 return (
                                                     <tr key={t.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
                                                         <td style={{ padding: '0.75rem 0.5rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                             <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ticketCode}</div>
                                                             <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{clientName}</div>
                                                         </td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.assigned_to_name || 'Sin Asignar'}</td>
-                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.status || 'N/A'}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{gestorName}</td>
+                                                        <td style={{ padding: '0.75rem 0.5rem', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{estado}</td>
                                                         <td style={{ padding: '0.75rem 0.5rem', textAlign: 'right', fontWeight: 700, color: '#F59E0B' }}>S/ {fmt(t._totalWIP || 0)}</td>
                                                     </tr>
                                                 );
