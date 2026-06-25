@@ -389,7 +389,7 @@ export function calculateAccountsReceivable(invoices: any[]) {
 // ─────────────────────────────────────────────────────────────────────────────
 // CFO METRICS: WIP (Work In Progress / Capital Inmovilizado Total)
 // ─────────────────────────────────────────────────────────────────────────────
-export function calculateWIP(activeTickets: any[]) {
+export function calculateWIP(activeTickets: any[], gestorasMap: Map<string, any> = new Map()) {
     let disbursedCapital = 0; // Capital ya pagado (confirmado)
     let committedCapital = 0; // Capital comprometido a pagar (MO pactada - pagado)
     let wipTickets: any[] = [];
@@ -408,11 +408,41 @@ export function calculateWIP(activeTickets: any[]) {
         if (totalWIP > 0) {
             disbursedCapital += disbursed;
             committedCapital += committed;
+            
+            // Resolver nombre de gestora
+            const gestoresRawId = t.gestora_id || t.metadata?.gestora_id;
+            let gestoresName = 'Sin Gestora';
+            if (gestoresRawId) {
+                const g = gestorasMap.get(gestoresRawId);
+                if (g) {
+                    gestoresName = g.name || g.nombre || g.full_name || 'Gestora';
+                } else {
+                    // Fallback: buscar en el objeto t.gestora directamente
+                    gestoresName = t.gestora?.nombre || t.gestora?.name || t.gestora?.full_name || 'Sin Gestora';
+                }
+            }
+            
+            // Resolver estado operativo legible
+            // Intentar obtener el estado desde varias fuentes posibles
+            let estadoOperativo = t.status || t.estado || t.estadoId || t.status_id || 'N/A';
+            
+            // Si el estado parece ser un ID técnico (contiene guiones bajos o es muy largo)
+            // intentar usar la etiqueta de estado más legible
+            if (typeof t.estado_nombre === 'string' && t.estado_nombre.length > 0) {
+                estadoOperativo = t.estado_nombre;
+            } else if (typeof t.status_label === 'string' && t.status_label.length > 0) {
+                estadoOperativo = t.status_label;
+            } else if (typeof t.metadata?.estado === 'string' && t.metadata.estado.length > 0) {
+                estadoOperativo = t.metadata.estado;
+            }
+            
             wipTickets.push({
                 ...t,
                 _disbursed: disbursed,
                 _committed: committed,
-                _totalWIP: totalWIP
+                _totalWIP: totalWIP,
+                _gestoresName: gestoresName,
+                _estadoOperativo: estadoOperativo
             });
         }
     });
