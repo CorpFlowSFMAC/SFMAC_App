@@ -1171,26 +1171,30 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 }
             }
 
-            // Fila de especialista automática eliminada para evitar duplicidad de peticiones (monto 0) en Tesorería.
+            // Actualizar estado local ANTES de invalidar queries
+            setTicketData((prev: any) => ({
+                ...prev,
+                technician: newTechnicianObj,
+                technicians: newTechnicianObj,
+                tecnico: newTechnicianObj,
+                technician_id: technician_id,
+                status_id: newEstadoId
+            }));
+            setShowAssignmentDrawer(false);
+
+            // Invalidar queries para actualizar datos del servidor
+            queryClient.invalidateQueries({ queryKey: ['tickets'] });
+
+            // Resetear flag SOLO después de que la actualización local se haya aplicado
+            // y las queries se hayan invalidado. El flag protege contra sobreescrituras
+            // del useEffect mientras la data del servidor no ha sido refrescada.
+            isReassigning.current = false;
         } catch (err: any) {
             console.error('Error persisting assignment to Supabase:', err);
             alert("❌ Error al asignar el técnico: " + (err.message || "Error en el servidor"));
             isReassigning.current = false;
             return;
         }
-        setTicketData((prev: any) => ({
-            ...prev,
-            technician: newTechnicianObj,
-            technicians: newTechnicianObj,
-            tecnico: newTechnicianObj,
-            technician_id: technician_id,
-            status_id: newEstadoId
-        }));
-        setShowAssignmentDrawer(false);
-        queryClient.invalidateQueries({ queryKey: ['tickets'] });
-        setTimeout(() => {
-            isReassigning.current = false;
-        }, 500);
     };
     const handleDismissRejection = async () => {
         try {
