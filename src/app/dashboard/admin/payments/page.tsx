@@ -2417,23 +2417,73 @@ export default function PaymentsPage() {
                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', textAlign: 'right', minWidth: '130px' }}>
                                                 <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1E293B', lineHeight: '1.2' }}>{group.tecnico.nombre}</span>
                                                 
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', background: '#F8FAFC', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E2E8F0', width: '100%' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#475569', fontWeight: 600 }}>
-                                                        <CreditCard size={10} /> {group.tecnico.banco}
-                                                    </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#0F172A', fontWeight: 700 }}>
-                                                        N° {group.tecnico.numeroCuenta}
-                                                        <button onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }}
-                                                            style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#64748B' }} title="Copiar cuenta">
-                                                            <Copy size={12} />
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                {(() => {
+                                                    const hasBank = group.tecnico.numeroCuenta && group.tecnico.numeroCuenta !== '---' && group.tecnico.numeroCuenta.trim() !== '';
+                                                    const hasYape = group.tecnico.yape && group.tecnico.yape !== '---' && group.tecnico.yape.trim() !== '';
+                                                    const hasPlin = group.tecnico.plin && group.tecnico.plin !== '---' && group.tecnico.plin.trim() !== '';
 
-                                                <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                                                    {group.tecnico.yape && <span style={{ color: '#7C3AED', fontSize: '0.65rem', fontWeight: 700, background: '#F3E8FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E9D5FF' }}>YAPE</span>}
-                                                    {group.tecnico.plin && <span style={{ color: '#0EA5E9', fontSize: '0.65rem', fontWeight: 700, background: '#E0F2FE', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>PLIN</span>}
-                                                </div>
+                                                    let primaryMethod = 'none';
+                                                    if (hasBank) primaryMethod = 'bank';
+                                                    else if (hasYape) primaryMethod = 'yape';
+                                                    else if (hasPlin) primaryMethod = 'plin';
+
+                                                    return (
+                                                        <>
+                                                            {primaryMethod === 'bank' && (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', background: '#F8FAFC', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E2E8F0', width: '100%' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#475569', fontWeight: 600 }}>
+                                                                        <CreditCard size={10} /> {group.tecnico.banco}
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#0F172A', fontWeight: 700 }}>
+                                                                        N° {group.tecnico.numeroCuenta}
+                                                                        <button onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }}
+                                                                            style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#64748B' }} title="Copiar cuenta">
+                                                                            <Copy size={12} />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {primaryMethod === 'yape' && (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', background: '#F3E8FF', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E9D5FF', width: '100%' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#7C3AED', fontWeight: 800 }}>
+                                                                        <Smartphone size={10} /> YAPE
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#5B21B6', fontWeight: 700 }}>
+                                                                        {group.tecnico.yape}
+                                                                        <button onClick={() => { navigator.clipboard.writeText(group.tecnico.yape!); showToast('Yape copiado'); }}
+                                                                            style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#7C3AED' }} title="Copiar Yape">
+                                                                            <Copy size={12} />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {primaryMethod === 'plin' && (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', background: '#E0F2FE', padding: '4px 8px', borderRadius: '6px', border: '1px solid #BAE6FD', width: '100%' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#0EA5E9', fontWeight: 800 }}>
+                                                                        <Smartphone size={10} /> PLIN
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#0369A1', fontWeight: 700 }}>
+                                                                        {group.tecnico.plin}
+                                                                        <button onClick={() => { navigator.clipboard.writeText(group.tecnico.plin!); showToast('Plin copiado'); }}
+                                                                            style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#0EA5E9' }} title="Copiar Plin">
+                                                                            <Copy size={12} />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {primaryMethod === 'none' && (
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', background: '#FEF2F2', padding: '4px 8px', borderRadius: '6px', border: '1px solid #FECACA', width: '100%' }}>
+                                                                    <span style={{ fontSize: '0.65rem', color: '#DC2626', fontWeight: 700 }}>Sin cuenta registrada</span>
+                                                                </div>
+                                                            )}
+
+                                                            <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                                                                {primaryMethod === 'bank' && hasYape && <span style={{ color: '#7C3AED', fontSize: '0.65rem', fontWeight: 700, background: '#F3E8FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E9D5FF' }}>YAPE</span>}
+                                                                {(primaryMethod === 'bank' || primaryMethod === 'yape') && hasPlin && <span style={{ color: '#0EA5E9', fontSize: '0.65rem', fontWeight: 700, background: '#E0F2FE', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>PLIN</span>}
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
 
