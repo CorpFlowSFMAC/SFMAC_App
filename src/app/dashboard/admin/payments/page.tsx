@@ -881,7 +881,7 @@ export default function PaymentsPage() {
                         utilidad: realProfitability,
                         margen: margenReal,
                         gastosOperativos: totalOpConfirmed,
-                        descripcion: t.description || '',
+                        descripcion: t.descripcionServicio || t.description || '',
                     });
                 }
 
@@ -2356,11 +2356,11 @@ export default function PaymentsPage() {
                                         transition: 'transform 0.2s, box-shadow 0.2s',
                                         position: 'relative'
                                     }}>
-                                        {/* HEADER CARD (COMPACTO) */}
-                                        <div style={{ padding: '12px 16px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            {/* Columna Izquierda: Cliente, Sede, Ticket */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '60%' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        {/* HEADER CARD (REDISTRIBUIDO Y MINIMALISTA) */}
+                                        <div style={{ padding: '16px', borderBottom: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                                            {/* Columna Izquierda: Ticket, Cliente, Sede, Descripción */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                                     <span style={{ 
                                                         fontFamily: 'monospace', fontWeight: 800, color: '#2563EB', 
                                                         background: '#EFF6FF', padding: '2px 6px', borderRadius: '4px', 
@@ -2397,25 +2397,42 @@ export default function PaymentsPage() {
                                                     )}
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                                                    <Building2 size={12} color="#64748B" />
+                                                    <Building2 size={12} color="#64748B" style={{ flexShrink: 0 }} />
                                                     <strong style={{ color: '#0F172A', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.cliente}</strong>
+                                                    <span style={{ color: '#CBD5E1' }}>|</span>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.sede}</span>
                                                 </div>
-                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94A3B8', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.sede}</p>
+                                                {group.descripcion && (
+                                                    <p style={{ 
+                                                        margin: 0, fontSize: '0.75rem', color: '#64748B', 
+                                                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', 
+                                                        overflow: 'hidden', lineHeight: '1.2' 
+                                                    }} title={group.descripcion}>
+                                                        {group.descripcion}
+                                                    </p>
+                                                )}
                                             </div>
 
-                                            {/* Columna Derecha: Técnico */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', textAlign: 'right' }}>
-                                                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1E293B' }}>{group.tecnico.nombre}</span>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>
-                                                    <CreditCard size={10} /> {group.tecnico.banco}
-                                                    <button onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }}
-                                                        style={{ background: 'none', border: 'none', padding: '0', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Copiar cuenta">
-                                                        <Copy size={12} color="#64748B" />
-                                                    </button>
+                                            {/* Columna Derecha: Técnico y Pagos */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', textAlign: 'right', minWidth: '130px' }}>
+                                                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1E293B', lineHeight: '1.2' }}>{group.tecnico.nombre}</span>
+                                                
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', background: '#F8FAFC', padding: '4px 8px', borderRadius: '6px', border: '1px solid #E2E8F0', width: '100%' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#475569', fontWeight: 600 }}>
+                                                        <CreditCard size={10} /> {group.tecnico.banco}
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: '#0F172A', fontWeight: 700 }}>
+                                                        N° {group.tecnico.numeroCuenta}
+                                                        <button onClick={() => { navigator.clipboard.writeText(group.tecnico.numeroCuenta); showToast('Cuenta copiada'); }}
+                                                            style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#64748B' }} title="Copiar cuenta">
+                                                            <Copy size={12} />
+                                                        </button>
+                                                    </div>
                                                 </div>
+
                                                 <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                                                    {group.tecnico.yape && <span style={{ color: '#7C3AED', fontSize: '0.65rem', fontWeight: 700, background: '#F3E8FF', padding: '1px 4px', borderRadius: '3px' }}>YAPE</span>}
-                                                    {group.tecnico.plin && <span style={{ color: '#0EA5E9', fontSize: '0.65rem', fontWeight: 700, background: '#E0F2FE', padding: '1px 4px', borderRadius: '3px' }}>PLIN</span>}
+                                                    {group.tecnico.yape && <span style={{ color: '#7C3AED', fontSize: '0.65rem', fontWeight: 700, background: '#F3E8FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E9D5FF' }}>YAPE</span>}
+                                                    {group.tecnico.plin && <span style={{ color: '#0EA5E9', fontSize: '0.65rem', fontWeight: 700, background: '#E0F2FE', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>PLIN</span>}
                                                 </div>
                                             </div>
                                         </div>
