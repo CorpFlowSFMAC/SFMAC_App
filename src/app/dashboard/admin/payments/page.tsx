@@ -1359,7 +1359,7 @@ export default function PaymentsPage() {
 
                 console.log('[Notifications] Iniciando envío de alertas...');
 
-                // Alerta 1: WhatsApp
+                // Alerta 1: WhatsApp — AISLADO: cualquier error 500/401 del proxy NO rompe el flujo de pago
                 const sendWhatsApp = async () => {
                     const message = `SINFIMAC NOTIFICACIONES: Hola ${techName}, se ha registrado un depósito de S/. ${monto} por concepto de ${categoriaMsg} para el Ticket ${ticketCode} (${clientName}). Por favor, verifica tu banca móvil.`;
                     
@@ -1391,9 +1391,10 @@ export default function PaymentsPage() {
                         } catch (logErr) {
                             console.error('[Notifications] Error guardando log error_numero_vacio:', logErr);
                         }
-                        return;
+                        return; // ✅ No lanza error — flujo continúa
                     }
                     
+                    // ── BLOQUE AISLADO: fetch al proxy WhatsApp con protección total ──
                     try {
                         const res = await fetch('/api/whatsapp/send', {
                             method: 'POST',
@@ -1403,7 +1404,33 @@ export default function PaymentsPage() {
                         
                         if (!res.ok) {
                             const errorText = await res.text().catch(() => '');
-                            throw new Error(`WhatsApp API responded with status ${res.status}: ${errorText}`);
+                            const errMsg = `WhatsApp API responded with status ${res.status}: ${errorText}`;
+                            console.error('[Notifications] WhatsApp fetch error:', errMsg);
+                            // Registrar como fallido y CONTINUAR sin romper flujo
+                            try {
+                                const newLog = {
+                                    ticket_code: ticketCode,
+                                    recipient_type: 'tecnico',
+                                    recipient_name: techName,
+                                    destination: techPhone,
+                                    message_body: message,
+                                    status: 'fallido',
+                                    error_details: errMsg
+                                };
+                                const { data: inserted, error: insErr } = await supabase
+                                    .from('notification_logs')
+                                    .insert(newLog)
+                                    .select()
+                                    .single();
+                                if (!insErr && inserted) {
+                                    setNotificationLogs(prev => [inserted, ...prev]);
+                                } else {
+                                    setNotificationLogs(prev => [{ ...newLog, id: Math.random().toString(), created_at: new Date().toISOString() }, ...prev]);
+                                }
+                            } catch (logErr) {
+                                console.error('[Notifications] Error guardando log de error 500:', logErr);
+                            }
+                            return; // ✅ NO lanza error — flujo continúa
                         }
                         
                         try {
@@ -1431,7 +1458,8 @@ export default function PaymentsPage() {
                         
                         return res.json();
                     } catch (err: any) {
-                        console.error('[Notifications] Error al enviar WhatsApp:', err);
+                        // ⛔ Error de red/fetch — registrar y CONTINUAR sin romper flujo de pago
+                        console.error('[Notifications] Error de red al enviar WhatsApp:', err);
                         try {
                             const newLog = {
                                 ticket_code: ticketCode,
@@ -1455,7 +1483,7 @@ export default function PaymentsPage() {
                         } catch (logErr) {
                             console.error('[Notifications] Error guardando log fallido:', logErr);
                         }
-                        throw err;
+                        return; // ✅ NO lanza error — flujo continúa
                     }
                 };
 
@@ -1629,8 +1657,8 @@ export default function PaymentsPage() {
                 
                 await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
                 
-                // Disparar alertas simultáneas
-                triggerNotifications();
+                // Disparar alertas simultáneas — AISLADO: errores de WhatsApp/Broadcast NO afectan el pago
+                try { triggerNotifications(); } catch (e) { console.error('[handleConfirmPayment] triggerNotifications falló:', e); }
                 
                 // ✅ Optimistic Update Local
                 setRawTickets((prev: any[]) => prev.map((t: any) => {
@@ -1821,8 +1849,8 @@ export default function PaymentsPage() {
             additionalUpdates.metadataFields = meta;
             await updatePaymentSafe(group.realTicketId, nuevoPago, additionalUpdates);
             
-            // Disparar alertas simultáneas
-            triggerNotifications();
+            // Disparar alertas simultáneas — AISLADO: errores de WhatsApp/Broadcast NO afectan el pago
+            try { triggerNotifications(); } catch (e) { console.error('[handleConfirmPayment] triggerNotifications falló:', e); }
             
             // ✅ Optimistic Update Local
             setRawTickets((prev: any[]) => prev.map((t: any) => {
