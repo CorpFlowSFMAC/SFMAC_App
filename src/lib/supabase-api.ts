@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { stripFinancialMetadata } from './financialMetadata'
 import { round2 } from './formatters'
 import { sanitizeTicketMetadata } from './calculations'
+import { supabaseAdmin } from './supabase-admin'
 
 const toNumberSafe = (value: any): number => {
     const num = typeof value === 'string' ? parseFloat(value) : Number(value);
@@ -1338,7 +1339,8 @@ export const paymentsAPI = {
         payment_date?: string;
         status?: string;
     }) {
-        const { data, error } = await supabase
+        // Usar supabaseAdmin con sesión persistente de admin para evitar 401
+        const { data, error } = await supabaseAdmin
             .from('ticket_payments')
             .insert(payment)
             .select()
@@ -1353,7 +1355,7 @@ export const paymentsAPI = {
 
             // 1) Si viene referencia a un costo específico, marcarlo como pagado o consumir parcialmente
             if (payment.reference_number) {
-                const { data: costRecord, error: costErr } = await supabase
+                const { data: costRecord, error: costErr } = await supabaseAdmin
                     .from('ticket_costs')
                     .select('*')
                     .eq('id', payment.reference_number)
@@ -1365,20 +1367,20 @@ export const paymentsAPI = {
 
                     if (paidAmount >= originalAmount) {
                         // Pago completo: marcar pagado
-                        await supabase
+                        await supabaseAdmin
                             .from('ticket_costs')
                             .update({ estado_pago: 'pagado', fecha_pago: paymentDate })
                             .eq('id', costRecord.id);
                     } else if (paidAmount > 0) {
                         // Pago parcial: marcar registro original como 'abonado' y crear costo por saldo pendiente
                         try {
-                            await supabase
+                            await supabaseAdmin
                                 .from('ticket_costs')
                                 .update({ estado_pago: 'abonado', fecha_pago: paymentDate })
                                 .eq('id', costRecord.id);
 
                             const remaining = round2(originalAmount - paidAmount);
-                            await supabase
+                            await supabaseAdmin
                                 .from('ticket_costs')
                                 .insert({
                                     ticket_id: costRecord.ticket_id,
@@ -1401,7 +1403,7 @@ export const paymentsAPI = {
                 const pt = (payment.payment_type || '').toLowerCase();
                 if (pt.includes('adelanto')) {
                     try {
-                        const { data: createdCost, error: createCostErr } = await supabase
+                        const { data: createdCost, error: createCostErr } = await supabaseAdmin
                             .from('ticket_costs')
                             .insert({
                                 ticket_id: payment.ticket_id,
@@ -1416,7 +1418,7 @@ export const paymentsAPI = {
 
                         if (!createCostErr && createdCost && createdCost.id) {
                             // Vincular el pago creado con el costo de adelanto para trazabilidad
-                            await supabase
+                            await supabaseAdmin
                                 .from('ticket_payments')
                                 .update({ reference_number: createdCost.id })
                                 .eq('id', created.id);
