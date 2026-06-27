@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { action, email, nombre, turnoId, userRole, deviceInfo } = body;
+        const { action, email, nombre, turnoId, userRole, deviceInfo, status_attendance, location_gps } = body;
 
         // Importar server client
         const { getClient } = await import('@/lib/supabase-server');
@@ -134,6 +134,8 @@ export async function POST(request: NextRequest) {
                     estado: 'en_jornada',
                     ip_address: ipAddress,
                     device_info: deviceInfo || null,
+                    status_attendance: status_attendance || null,
+                    location_gps: location_gps || null,
                 })
                 .select('id, hora_ingreso')
                 .single();
@@ -149,16 +151,41 @@ export async function POST(request: NextRequest) {
 
         // ── SALIDA: cerrar turno ──────────────────────────────────────────
         if (action === 'salida' && turnoId) {
+            // Fetch ingreso time to calculate horas_trabajadas
+            const { data: turnoData } = await client
+                .from('turnos')
+                .select('hora_ingreso')
+                .eq('id', turnoId)
+                .single();
+
+            const now = new Date();
+            let horasTrabajadas: number | null = null;
+            let salidaStatusAttendance: string | null = null;
+
+            if (turnoData?.hora_ingreso) {
+                horasTrabajadas = (now.getTime() - new Date(turnoData.hora_ingreso).getTime()) / 3_600_000;
+                horasTrabajadas = Math.round(horasTrabajadas * 100) / 100;
+                if (horasTrabajadas > 9) {
+                    salidaStatusAttendance = 'horas_extra';
+                }
+            }
+
             const { error } = await client
                 .from('turnos')
-                .update({ hora_salida: new Date().toISOString(), estado: 'finalizado' })
+                .update({
+                    hora_salida: now.toISOString(),
+                    estado: 'finalizado',
+                    horas_trabajadas: horasTrabajadas,
+                    ...(salidaStatusAttendance ? { status_attendance: salidaStatusAttendance } : {})
+                })
                 .eq('id', turnoId);
 
             if (error) throw error;
 
             return NextResponse.json({
                 success: true,
-                action: 'salida'
+                action: 'salida',
+                horas_trabajadas: horasTrabajadas
             });
         }
 

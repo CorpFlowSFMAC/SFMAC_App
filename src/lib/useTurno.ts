@@ -13,10 +13,13 @@ import { supabase } from "@/lib/supabase";
 // de hora tarde se evalúan solo al montar y cada vez que cambia turnoActivo.
 // ─────────────────────────────────────────────────────────────────────────────
 
+export type StatusAttendance = 'a_tiempo' | 'tardanza' | 'horas_extra';
+
 export interface TurnoActivo {
     id: string;
     hora_ingreso: string;
     estado: string;
+    status_attendance?: StatusAttendance;
 }
 
 export interface UseTurnoResult {
@@ -26,6 +29,7 @@ export interface UseTurnoResult {
     isLoaded: boolean;
     esTarde: boolean; // true si hora actual >= 18:00
     horasTranscurridas: string;
+    userName: string;
     handleIngreso: () => Promise<void>;
     handleSalida: () => Promise<void>;
 }
@@ -61,6 +65,28 @@ function calcularHoras(horaIngreso: string): string {
     const hrs = Math.floor(totalMin / 60);
     const mins = totalMin % 60;
     return `${hrs}h ${mins}m`;
+}
+
+function calcStatusAttendance(): StatusAttendance {
+    const now = new Date();
+    const h = now.getHours();
+    const m = now.getMinutes();
+    // A tiempo si marca antes de las 09:30
+    return (h < 9 || (h === 9 && m <= 30)) ? 'a_tiempo' : 'tardanza';
+}
+
+function captureGPS(): Promise<string | null> {
+    return new Promise((resolve) => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            resolve(null);
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => resolve(`${pos.coords.latitude},${pos.coords.longitude}`),
+            () => resolve(null),
+            { timeout: 5000, maximumAge: 60000 }
+        );
+    });
 }
 
 // ── Hook principal ───────────────────────────────────────────────────────────
@@ -102,7 +128,7 @@ export function useTurno(): UseTurnoResult {
             const today = new Date().toISOString().split('T')[0];
             const { data } = await supabase
                 .from('turnos')
-                .select('id, hora_ingreso, estado')
+                .select('id, hora_ingreso, estado, status_attendance')
                 .eq('usuario_email', email)
                 .eq('fecha', today)
                 .order('created_at', { ascending: false })
@@ -117,7 +143,12 @@ export function useTurno(): UseTurnoResult {
             // Compatibilidad con estado anterior (EN_CURSO) y nuevo (en_jornada)
             const estaActivo = data.estado === 'en_jornada' || data.estado === 'EN_CURSO' || data.estado === 'en_refrigerio';
             if (estaActivo) {
-                setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso, estado: data.estado });
+                setTurnoActivo({
+                    id: data.id,
+                    hora_ingreso: data.hora_ingreso,
+                    estado: data.estado,
+                    status_attendance: data.status_attendance || undefined
+                });
             } else {
                 setTurnoHoyCerrado(true);
             }
@@ -142,12 +173,15 @@ export function useTurno(): UseTurnoResult {
             return;
         }
 
+        const statusAttendance = calcStatusAttendance();
+        const locationGps = await captureGPS();
+
         try {
             // Intentar vía API V3 (server role key — evita RLS y captura IP/device)
             const response = await fetch('/api/v3/gestor', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'ingreso', email, nombre, userRole, deviceInfo })
+                body: JSON.stringify({ action: 'ingreso', email, nombre, userRole, deviceInfo, status_attendance: statusAttendance, location_gps: locationGps })
             });
             const result = await response.json();
 
@@ -155,7 +189,8 @@ export function useTurno(): UseTurnoResult {
                 setTurnoActivo({
                     id: result.turno.id,
                     hora_ingreso: result.turno.hora_ingreso,
-                    estado: 'en_jornada'
+                    estado: 'en_jornada',
+                    status_attendance: statusAttendance
                 });
                 setTurnoLoading(false);
                 return;
@@ -174,12 +209,14 @@ export function useTurno(): UseTurnoResult {
                     fecha: today,
                     estado: 'en_jornada',
                     device_info: deviceInfo,
+                    status_attendance: statusAttendance,
+                    location_gps: locationGps,
                 })
                 .select('id, hora_ingreso')
                 .single();
 
             if (!error && data) {
-                setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso, estado: 'en_jornada' });
+                setTurnoActivo({ id: data.id, hora_ingreso: data.hora_ingreso, estado: 'en_jornada', status_attendance: statusAttendance });
             } else {
                 alert('Error al marcar ingreso: ' + (error?.message || 'Error de conexión'));
             }
@@ -229,6 +266,7 @@ export function useTurno(): UseTurnoResult {
         isLoaded,
         esTarde,
         horasTranscurridas,
+        userName: getNameFromStorage(),
         handleIngreso,
         handleSalida,
     };

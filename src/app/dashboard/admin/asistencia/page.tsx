@@ -23,6 +23,9 @@ interface Turno {
     estado: EstadoTurno;
     horas_trabajadas: number | null;
     observaciones: string | null;
+    status_attendance: string | null;
+    ticket_id: string | null;
+    location_gps: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -65,6 +68,35 @@ function HorasBadge({ horas }: { horas: number | null; esEnCurso?: boolean }) {
     );
 }
 
+function StatusPill({ status }: { status: string | null }) {
+    if (!status) return <span style={{ color: "#94A3B8", fontSize: "0.75rem" }}>—</span>;
+    const map: Record<string, { bg: string; color: string; label: string }> = {
+        a_tiempo:    { bg: "#D1FAE5", color: "#065F46", label: "✓ A Tiempo" },
+        tardanza:    { bg: "#FEF3C7", color: "#92400E", label: "⏰ Tardanza" },
+        horas_extra: { bg: "#FEE2E2", color: "#991B1B", label: "🔥 Horas Extra" },
+    };
+    const s = map[status] ?? { bg: "#F1F5F9", color: "#475569", label: status };
+    return (
+        <span style={{
+            display: "inline-flex", alignItems: "center", gap: "4px",
+            background: s.bg, color: s.color,
+            fontSize: "0.72rem", fontWeight: 800, padding: "4px 10px",
+            borderRadius: "999px", whiteSpace: "nowrap"
+        }}>
+            {s.label}
+        </span>
+    );
+}
+
+function getRowBgByAttendance(status: string | null, fallback: string): string {
+    switch (status) {
+        case "a_tiempo":    return "rgba(167,243,208,0.08)";
+        case "tardanza":    return "rgba(253,230,138,0.12)";
+        case "horas_extra": return "rgba(252,165,165,0.08)";
+        default:            return fallback;
+    }
+}
+
 // ── MAIN ──────────────────────────────────────────────
 export default function AsistenciaAdminPage() {
     const [turnos, setTurnos] = useState<Turno[]>([]);
@@ -90,7 +122,19 @@ export default function AsistenciaAdminPage() {
         fetchTurnos();
         // Tick cada 60s para actualizar horas en jornada sin refetch
         const interval = setInterval(() => setTick(t => t + 1), 60_000);
-        return () => clearInterval(interval);
+
+        // Realtime subscription — auto-refresh on any INSERT/UPDATE
+        const channel = supabase
+            .channel('realtime:assistance')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos' }, (_payload) => {
+                fetchTurnos(); // re-fetch on any change
+            })
+            .subscribe();
+
+        return () => {
+            clearInterval(interval);
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     // Turnos del día seleccionado
@@ -117,7 +161,9 @@ export default function AsistenciaAdminPage() {
         const promedio = cerrados.length > 0
             ? cerrados.reduce((s, t) => s + (t.horas_trabajadas ?? 0), 0) / cerrados.length
             : 0;
-        return { enCurso, cerrados, conExtra, promedio };
+        const tardanzas = turnosDia.filter(t => t.status_attendance === "tardanza");
+        const aTiempo = turnosDia.filter(t => t.status_attendance === "a_tiempo");
+        return { enCurso, cerrados, conExtra, promedio, tardanzas, aTiempo };
     }, [turnosDia]);
 
     // Días disponibles para el selector
@@ -191,7 +237,7 @@ export default function AsistenciaAdminPage() {
             </div>
 
             {/* ── KPI CARDS ── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
                 <KpiCard
                     icon={<Users size={20} color="#4338CA" />}
                     iconBg="#EEF2FF"
@@ -221,6 +267,21 @@ export default function AsistenciaAdminPage() {
                     value={kpis.conExtra.length}
                     sub="Personal > 9h hoy"
                     highlight={kpis.conExtra.length > 0}
+                />
+                <KpiCard
+                    icon={<Star size={20} color="#92400E" />}
+                    iconBg="#FDE68A"
+                    label="Tardanzas"
+                    value={kpis.tardanzas.length}
+                    sub="Llegadas tarde hoy"
+                    highlight={kpis.tardanzas.length > 0}
+                />
+                <KpiCard
+                    icon={<CheckCircle2 size={20} color="#065F46" />}
+                    iconBg="#D1FAE5"
+                    label="A Tiempo"
+                    value={kpis.aTiempo.length}
+                    sub="Puntuales hoy"
                 />
             </div>
 
@@ -260,7 +321,7 @@ export default function AsistenciaAdminPage() {
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                             <tr style={{ background: "#F8FAFC" }}>
-                                {["Personal", "Ingreso", "Salida", "Horas totales", "Estado"].map(h => (
+                                {["Personal", "Ingreso", "Salida", "Horas totales", "Puntualidad", "Estado"].map(h => (
                                     <th key={h} style={{
                                         padding: "0.7rem 1.25rem", textAlign: "left",
                                         fontSize: "0.68rem", fontWeight: 800, color: "#64748B",
@@ -279,7 +340,7 @@ export default function AsistenciaAdminPage() {
 
                                 return (
                                     <tr key={turno.id} style={{
-                                        background: idx % 2 === 0 ? "white" : "#FAFBFC",
+                                        background: getRowBgByAttendance(turno.status_attendance, idx % 2 === 0 ? "white" : "#FAFBFC"),
                                         borderBottom: "1px solid #F1F5F9",
                                         transition: "background 0.15s"
                                     }}>
@@ -339,6 +400,10 @@ export default function AsistenciaAdminPage() {
                                                     (en tiempo real)
                                                 </span>
                                             )}
+                                        </td>
+                                        {/* Puntualidad */}
+                                        <td style={{ padding: "0.9rem 1.25rem" }}>
+                                            <StatusPill status={turno.status_attendance} />
                                         </td>
                                         {/* Estado */}
                                         <td style={{ padding: "0.9rem 1.25rem" }}>
@@ -436,7 +501,7 @@ export default function AsistenciaAdminPage() {
                                             <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                                 <thead>
                                                     <tr style={{ background: "#F8FAFC" }}>
-                                                        {["Fecha", "Ingreso", "Salida", "Total", ""].map(h => (
+                                                        {["Fecha", "Ingreso", "Salida", "Total", "Puntualidad", ""].map(h => (
                                                             <th key={h} style={{
                                                                 padding: "0.55rem 1.25rem", textAlign: "left",
                                                                 fontSize: "0.65rem", fontWeight: 800, color: "#94A3B8",
@@ -459,6 +524,9 @@ export default function AsistenciaAdminPage() {
                                                             </td>
                                                             <td style={{ padding: "0.65rem 1.25rem" }}>
                                                                 <HorasBadge horas={t.horas_trabajadas} />
+                                                            </td>
+                                                            <td style={{ padding: "0.65rem 1.25rem" }}>
+                                                                <StatusPill status={t.status_attendance} />
                                                             </td>
                                                             <td style={{ padding: "0.65rem 1.25rem" }}>
                                                                 {t.estado === "en_jornada" && (
