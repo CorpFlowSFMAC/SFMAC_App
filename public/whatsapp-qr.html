@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SINFIMAC - WhatsApp QR Code</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            max-width: 500px;
+            width: 100%;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #64748b;
+            margin-bottom: 32px;
+            font-size: 16px;
+        }
+        .status {
+            padding: 16px 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .status.disconnected {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .status.connected {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        .qr-container {
+            background: white;
+            border: 3px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 16px;
+            display: inline-block;
+            margin-bottom: 24px;
+        }
+        .qr-container img {
+            width: 250px;
+            height: 250px;
+            display: block;
+        }
+        .instructions {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: left;
+            margin-bottom: 24px;
+        }
+        .instructions h3 {
+            color: #1e293b;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        .instructions ol {
+            color: #475569;
+            padding-left: 20px;
+            line-height: 1.8;
+        }
+        .instructions li {
+            margin-bottom: 4px;
+        }
+        .refresh-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+        .hidden {
+            display: none;
+        }
+        .success-message {
+            background: #dcfce7;
+            color: #166534;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+        .success-message h3 {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .scanning {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">📱 SINFIMAC</div>
+        <div class="subtitle">WhatsApp Bridge - Vinculación de Dispositivo</div>
+        
+        <div id="status-disconnected" class="status disconnected">
+            ⚠️ DESCONECTADO - Escanea el QR para conectar
+        </div>
+        
+        <div id="status-connected" class="status connected hidden">
+            ✅ CONECTADO - WhatsApp vinculado correctamente
+        </div>
+        
+        <div id="qr-section" class="qr-container">
+            <img id="qr-image" src="http://87.99.137.96:3001/qr.png" alt="WhatsApp QR Code">
+        </div>
+        
+        <div id="success-section" class="success-message hidden">
+            <h3>🎉 ¡WhatsApp Conectado!</h3>
+            <p>El servicio de notificaciones está funcionando correctamente.</p>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 Instrucciones para conectar:</h3>
+            <ol>
+                <li>Abre <strong>WhatsApp</strong> en tu teléfono</li>
+                <li>Ve a <strong>Configuración</strong> → <strong>Dispositivos vinculados</strong></li>
+                <li>Toca <strong>Vincular dispositivo</strong></li>
+                <li>Escanea el código QR que aparece arriba</li>
+            </ol>
+        </div>
+        
+        <button class="refresh-btn" onclick="checkStatus()">
+            🔄 Verificar Conexión
+        </button>
+    </div>
+    
+    <script>
+        async function checkStatus() {
+            try {
+                const response = await fetch('http://87.99.137.96:3001/');
+                const data = await response.json();
+                
+                const statusDisconnected = document.getElementById('status-disconnected');
+                const statusConnected = document.getElementById('status-connected');
+                const qrSection = document.getElementById('qr-section');
+                const successSection = document.getElementById('success-section');
+                const qrImage = document.getElementById('qr-image');
+                
+                if (data.status === 'connected') {
+                    statusDisconnected.classList.add('hidden');
+                    statusConnected.classList.remove('hidden');
+                    qrSection.classList.add('hidden');
+                    successSection.classList.remove('hidden');
+                } else {
+                    statusConnected.classList.add('hidden');
+                    statusDisconnected.classList.remove('hidden');
+                    qrSection.classList.remove('hidden');
+                    successSection.classList.add('hidden');
+                    // Refresh QR code
+                    qrImage.src = 'http://87.99.137.96:3001/qr.png?t=' + new Date().getTime();
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+                alert('Error al verificar el estado. Intenta de nuevo.');
+            }
+        }
+        
+        // Check status every 3 seconds
+        setInterval(checkStatus, 3000);
+        
+        // Initial check
+        checkStatus();
+    </script>
+</body>
+</html>

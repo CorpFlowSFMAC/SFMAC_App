@@ -355,7 +355,7 @@ export default function PaymentsPage() {
                     metadata: loadedMetadata[t.id] || t.metadata
                 };
                 const flat = flattenTicketForPayments(enrichedTicket);
-                const relatedCosts = t.costos || [];
+                const relatedCosts = t.ticket_costs || [];
                 flat.pendingCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pendiente');
                 flat.paidCosts = relatedCosts.filter((c: any) => c.estado_pago === 'pagado' || c.estado_pago === 'adelanto');
                 flat.exceedanceRequests = relatedCosts.filter((c: any) => (c.estado_pago || '').toUpperCase() === 'REQUIERE_APROBACION_ADMIN');
@@ -690,7 +690,7 @@ export default function PaymentsPage() {
                 const meta = t.metadata || {};
                 
                 // 🚀 MOTOR FINANCIERO V3: Fuente de Verdad Inmutable
-                const finances = calculateTicketFinances(t, t.costos);
+                const finances = calculateTicketFinances(t, t.ticket_costs);
                 const {
                     pactedMO,
                     totalLaborConfirmed,
@@ -722,7 +722,7 @@ export default function PaymentsPage() {
                 // 1. Identificar ítems PENDIENTES (No están en finances.laborItems ni finances.operatingItems porque no están confirmados)
                 
                 // A. Costos de Tabla Pendientes
-                (t.costos || []).forEach((c: any) => {
+                (t.ticket_costs || []).forEach((c: any) => {
                     const st = (c.estado_pago || '').toUpperCase();
                     if (st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN') {
                         const isSpecialist = c.specialist_id && c.specialist_id !== t.technician_id;
@@ -810,7 +810,7 @@ export default function PaymentsPage() {
                 const liqInHistory = liqMonto > 0 && laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
 
                 // V3: detectar solicitudes pendientes — solo fuentes oficiales (ticket_costs + metadata estructurada)
-                const hasCostPending = (t.costos || []).some((c: any) => {
+                const hasCostPending = (t.ticket_costs || []).some((c: any) => {
                     const st = (c.estado_pago || '').toUpperCase();
                     return st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN';
                 });
@@ -1664,7 +1664,7 @@ export default function PaymentsPage() {
                 setRawTickets((prev: any[]) => prev.map((t: any) => {
                     if (t.id === group.realTicketId) {
                         const updated = { ...t };
-                        updated.costos = (updated.costos || []).map((c: any) => 
+                        updated.ticket_costs = (updated.ticket_costs || []).map((c: any) => 
                             c.id === item.costId ? { ...c, estado_pago: 'pagado', url_comprobante: nuevoPago.voucherRef } : c
                         );
                         if (additionalUpdates?.status_id) {

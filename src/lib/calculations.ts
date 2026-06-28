@@ -318,7 +318,8 @@ export function sanitizeTicketMetadata(metadata: any): any {
     delete cleaned.gestora;
     
     // 2. Limpiar arrays pesados que crecen infinitamente en metadata
-    delete cleaned.costos;
+    delete cleaned.costos;       // Legacy alias (deprecated)
+    delete cleaned.ticket_costs; // Native property
     delete cleaned.gastos;
     delete cleaned.historialPagosTecnico;
     delete cleaned.historialDepositos;

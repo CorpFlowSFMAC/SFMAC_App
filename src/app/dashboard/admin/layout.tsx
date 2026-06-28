@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, UserCog, LogOut, Ticket, DollarSign, BarChart3, Route, Shield, Clock, Calculator, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, UserCog, LogOut, Ticket, DollarSign, BarChart3, Route, Shield, Clock, Calculator, Menu, X, MessageSquare } from 'lucide-react';
 import styles from "./admin.module.css";
 import Image from "next/image";
 import { AppDataProvider } from "@/lib/AppDataContext";
@@ -328,6 +328,11 @@ export default function AdminLayout({
                             <Link href="/dashboard/admin/usuarios" prefetch={false} className={`${styles.navItem} ${pathname.includes('/usuarios') ? styles.navItemActive : ''}`}>
                                 <Shield size={20} />
                                 <span className={styles.navText}>Usuarios RBAC</span>
+                            </Link>
+
+                            <Link href="/dashboard/admin/whatsapp-admin" prefetch={false} className={`${styles.navItem} ${pathname.includes('/whatsapp-admin') ? styles.navItemActive : ''}`}>
+                                <MessageSquare size={20} />
+                                <span className={styles.navText}>WhatsApp</span>
                             </Link>
                         </nav>
 

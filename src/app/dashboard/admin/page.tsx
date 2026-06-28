@@ -405,7 +405,7 @@ export default function AdminDashboard() {
     // ─── Helper puro: inversión confirmada de un ticket ──────────────────────
     // Fuente: Motor Financiero V3 (ticket_costs). Fallback a vista SQL si costos vacíos.
     const ticketInversion = (t: any): number => {
-        const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
+        const costs: any[] = Array.isArray(t.ticket_costs) ? t.ticket_costs : [];
         if (costs.length === 0)
             return parseFloat(t.inversion_ejecutada ?? t.total_costs_agg ?? 0);
         // Retorna el Cash Out Real
@@ -413,7 +413,7 @@ export default function AdminDashboard() {
     };
 
     const ticketUtilidad = (t: any): number => {
-        const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
+        const costs: any[] = Array.isArray(t.ticket_costs) ? t.ticket_costs : [];
         if (costs.length === 0)
             return parseFloat(t.rentabilidad ?? 0);
         // Retorna el Accrual Basis (Toma en cuenta la deuda con el técnico)
@@ -633,7 +633,7 @@ export default function AdminDashboard() {
         // Cuellos de botella detallados
         const espCot = pipelineTickets.filter(t => ["nuevo", "asignado_a_tecnico", "en_inspeccion", "borrador"].includes(normalizeStateId(t.status_id || t.estadoId)));
         const espApro = pipelineTickets.filter(t => ["cotizacion_enviada"].includes(normalizeStateId(t.status_id || t.estadoId)));
-        const espAde = approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.status_id || t.estadoId)) && calculateTicketFinances(t, t.costos || []).totalExpenses <= 0);
+        const espAde = approvedTickets.filter(t => ["cotizacion_aprobada"].includes(normalizeStateId(t.status_id || t.estadoId)) && calculateTicketFinances(t, t.ticket_costs || []).totalExpenses <= 0);
         const enEjec = approvedTickets.filter(t => normalizeStateId(t.status_id || t.estadoId) === "en_ejecucion");
         const penLiq = approvedTickets.filter(t => ["por_liquidar", "documentacion_enviada", "liquidado", "requiere_revision_admin"].includes(normalizeStateId(t.status_id || t.estadoId)));
 
@@ -672,11 +672,11 @@ export default function AdminDashboard() {
                 if (!isTicketInPeriod(t)) return false;
                 const sid = normalizeStateId(t.estadoId);
                 const isActive = !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
-                const totalPagado = calculateTicketFinances(t, t.costos || []).totalExpenses;
+                const totalPagado = calculateTicketFinances(t, t.ticket_costs || []).totalExpenses;
                 return isActive && totalPagado > 0;
             })
             .map((t: any) => {
-                const costs = t.costos || [];
+                const costs = t.ticket_costs || [];
                 const totalAdelantado = calculateTicketFinances(t, costs).totalExpenses;
 
                 // Resolver nombre de gestora

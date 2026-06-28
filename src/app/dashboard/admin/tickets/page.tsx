@@ -952,7 +952,7 @@ function TicketRow({ ticket, onTicketClick }: any) {
     const ingresoNeto = parseFloat(ticket.ingresos_reales || 0) || (ingresoFacturado / 1.18);
 
     // Usar motor financiero centralizado en lugar de depender solo de campos agregados
-    const costsArray = Array.isArray(ticket.costos) ? ticket.costos : [];
+    const costsArray = Array.isArray(ticket.ticket_costs) ? ticket.ticket_costs : [];
     const finances = calculateTicketFinances(ticket, costsArray);
     const incomingCostsAgg = parseFloat(ticket.total_costs_agg || ticket.total_costs || ticket.inversion_ejecutada || 0);
     

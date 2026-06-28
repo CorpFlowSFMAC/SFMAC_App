@@ -17,7 +17,7 @@ const TERMINAL_STATES = ["por_liquidar", "ticket_cerrado"];
 const TRANSIT_STATES = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar"];
 
 function netUtility(t: any): number {
-    return Math.max(0, calculateTicketFinances(t, t.costos || []).realProfitability);
+    return Math.max(0, calculateTicketFinances(t, t.ticket_costs || []).realProfitability);
 }
 
 // ── Days remaining in current month ──

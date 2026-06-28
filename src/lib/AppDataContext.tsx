@@ -624,7 +624,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                             if (!old) return old;
                             return old.map(t => {
                                 if (t.id === ticketId) {
-                                    const currentCosts = Array.isArray(t.costos) ? [...t.costos] : [];
+                                    const currentCosts = Array.isArray(t.ticket_costs) ? [...t.ticket_costs] : [];
                                     const payloadCost = payload.new as any;
                                     
                                     if (payload.eventType === 'DELETE') {

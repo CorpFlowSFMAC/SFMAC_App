@@ -420,7 +420,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         // no solo los creados en el periodo, porque queremos depósitos hechos hoy
         // (aunque el ticket sea viejo) y tickets cerrados hoy (aunque el ticket sea viejo).
         tickets.forEach((t: any) => {
-            const costs: any[] = Array.isArray(t.costos) ? t.costos : [];
+            const costs: any[] = Array.isArray(t.ticket_costs) ? t.ticket_costs : [];
             const state = normalizeStateId(t.estadoId || t.status_id);
 
             // ── PRODUCTIVIDAD BRUTA ──
@@ -521,7 +521,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
         });
 
         const utilityTotal = achievedTickets.reduce((a, t) => {
-            const finances = calculateTicketFinances(t, t.costos || []);
+            const finances = calculateTicketFinances(t, t.ticket_costs || []);
             return a + Math.max(0, finances.realProfitability);
         }, 0);
 
@@ -606,7 +606,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
             dayTickets.forEach((t: any) => {
                 const state = normalizeStateId(t.estadoId);
-                const finances = calculateTicketFinances(t, t.costos || []);
+                const finances = calculateTicketFinances(t, t.ticket_costs || []);
                 // Facturación y Utilidad generada solo sobre tickets cerrados
                 if (state === "ticket_cerrado") {
                     billing += finances.netIncome;
@@ -1183,7 +1183,7 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
 
                         const TRANSIT_S = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar"];
                         const myNetUtil = (t: any) => {
-                            return Math.max(0, calculateTicketFinances(t, t.costos || []).realProfitability);
+                            return Math.max(0, calculateTicketFinances(t, t.ticket_costs || []).realProfitability);
                         };
 
                         const achievedTickets = tickets.filter(t => {

@@ -179,14 +179,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         setIsDeleting(true);
         try {
             const costs = await ticketCostsAPI.getByTicket(ticketData.id);
-            if (costs && costs.length > 0) {
-                const pendingCount = costs.filter((c: any) => c.estado_pago === 'pendiente').length;
-                const paidCount = costs.filter((c: any) => c.estado_pago === 'pagado').length;
+            if (costs && ticket_costs ?.length > 0) {
+                const pendingCount = ticket_costs ?.filter((c: any) => c.estado_pago === 'pendiente').length;
+                const paidCount = ticket_costs ?.filter((c: any) => c.estado_pago === 'pagado').length;
                 setShowDeleteModal(false);
                 setShowTransferModal(true);
                 showToast(
                     "Bloqueo de Seguridad", 
-                    `Este ticket tiene ${costs.length} registros en costos (${paidCount} pagados, ${pendingCount} pendientes). Debe eliminarlos o trasladarlos antes de borrar el ticket.`, 
+                    `Este ticket tiene ${ticket_costs ?.length} registros en costos (${paidCount} pagados, ${pendingCount} pendientes). Debe eliminarlos o trasladarlos antes de borrar el ticket.`, 
                     "info"
                 );
                 return;
@@ -457,7 +457,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 // rawTicket es null cuando .maybeSingle() no encuentra filas (ticket borrado)
                 if (rawTicket) {
                     const updatedTicket = normalizeTicket(rawTicket);
-                    const localCosts = Array.isArray(updatedTicket.costos) ? updatedTicket.costos : (costs || []);
+                    const localCosts = Array.isArray(updatedTicket.ticket_costs) ? updatedTicket.ticket_costs : (costs || []);
                     const v3Finances = calculateTicketFinances(updatedTicket, localCosts);
                     setTicketData((prev: TicketData) => ({
                         ...prev,
@@ -551,11 +551,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                     delete meta.metadata;
                 }
                 const rawEstadoId = normalizeStateId(fullTicket.status_id || meta.status_id || 'nuevo');
-                const visitConfirmed = (fullTicket.costos || []).some((c: any) => {
+                const visitConfirmed = (fullTicket.ticket_costs || []).some((c: any) => {
                     const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
                     return (c.estado_pago || '').toLowerCase() === 'pagado' && (text.includes('movilidad') || text.includes('visita'));
                 });
-                const advanceConfirmed = (fullTicket.costos || []).some((c: any) => {
+                const advanceConfirmed = (fullTicket.ticket_costs || []).some((c: any) => {
                     const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
                     return (c.estado_pago || '').toLowerCase() === 'pagado' && text.includes('adelanto');
                 });
@@ -697,11 +697,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             if (!hasStatusChanged && !hasTechChanged && !hasTechObjectChanged && !hasGestoraChanged && !hasMetaChanged && !hasLaborCostChanged && !hasMaterialsCostChanged && !hasDiagnosisChanged) return prev;
             let meta = ticket.metadata || {};
             const rawEstadoId = normalizeStateId(ticket.status_id || meta.status_id || 'nuevo');
-            const visitConfirmed = (ticket.costos || []).some((c: any) => {
+            const visitConfirmed = (ticket.ticket_costs || []).some((c: any) => {
                 const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
                 return (c.estado_pago || '').toLowerCase() === 'pagado' && (text.includes('movilidad') || text.includes('visita'));
             });
-            const advanceConfirmed = (ticket.costos || []).some((c: any) => {
+            const advanceConfirmed = (ticket.ticket_costs || []).some((c: any) => {
                 const text = `${c.categoria || ''} ${c.concepto || ''}`.toLowerCase();
                 return (c.estado_pago || '').toLowerCase() === 'pagado' && text.includes('adelanto');
             });
@@ -884,7 +884,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         delete cleanedBusinessData.technicians;
         delete cleanedBusinessData.gestoras;
         delete cleanedBusinessData.gestora;
-        delete cleanedBusinessData.costos;
+        delete cleanedBusinessData.ticket_costs;
         delete cleanedBusinessData.pendingCosts;
         delete cleanedBusinessData.paidCosts;
         delete cleanedBusinessData.exceedanceRequests;
@@ -946,7 +946,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         delete cleanServerMeta.technician;
         delete cleanServerMeta.gestoras;
         delete cleanServerMeta.gestora;
-        delete cleanServerMeta.costos;
+        delete cleanServerMeta.ticket_costs;
         delete cleanServerMeta.pendingCosts;
         delete cleanServerMeta.paidCosts;
         delete cleanServerMeta.exceedanceRequests;

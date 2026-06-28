@@ -1,0 +1,382 @@
+.container {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.headerTitle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.headerTitle h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.refreshButton {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.refreshButton:hover {
+    background: #2563eb;
+}
+
+.refreshButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.section {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.sectionTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 20px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.statusCard {
+    min-height: 150px;
+}
+
+.loading, .error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #64748b;
+    min-height: 150px;
+}
+
+.error {
+    color: #ef4444;
+}
+
+.statusHeader {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 16px;
+}
+
+.statusIndicator {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.statusIndicator.connected {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.statusIndicator.disconnected {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.statusInfo h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+}
+
+.statusInfo p {
+    margin: 0;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.lastCheck {
+    font-size: 12px !important;
+    margin-top: 4px !important;
+}
+
+.errorBox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #fef3c7;
+    border-radius: 8px;
+    color: #92400e;
+    font-size: 14px;
+}
+
+.disconnectedActions {
+    margin-top: 16px;
+    padding: 16px;
+    background: #fef2f2;
+    border-radius: 8px;
+    border: 1px solid #fecaca;
+}
+
+.disconnectedMessage {
+    color: #991b1b;
+    margin: 0 0 16px 0;
+    line-height: 1.5;
+}
+
+.qrButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #dc2626;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.qrButton:hover {
+    background: #b91c1c;
+}
+
+.qrContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.qrImage {
+    width: 250px;
+    height: 250px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 8px;
+    background: white;
+}
+
+.qrInstructions {
+    color: #64748b;
+    font-size: 14px;
+    text-align: center;
+    margin: 0;
+}
+
+.testForm {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.inputGroup label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #475569;
+}
+
+.inputGroup input,
+.inputGroup textarea {
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.inputGroup input:focus,
+.inputGroup textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.sendButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: #16a34a;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    align-self: flex-start;
+}
+
+.sendButton:hover {
+    background: #15803d;
+}
+
+.sendButton:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+}
+
+.testResult {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.testResult.success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.testResult.failure {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.logsTable {
+    overflow-x: auto;
+}
+
+.logsTable table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.logsTable th,
+.logsTable td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.logsTable th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: #475569;
+}
+
+.logsTable tr:hover {
+    background: #f8fafc;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.statusBadge.enviado {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.statusBadge.fallido {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.errorCell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #dc2626;
+    font-size: 12px;
+}
+
+.noLogs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px;
+    color: #94a3b8;
+}
+
+.instructions ol {
+    margin: 0;
+    padding-left: 24px;
+}
+
+.instructions li {
+    margin-bottom: 16px;
+    line-height: 1.6;
+    color: #475569;
+}
+
+.instructions code {
+    display: block;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 6px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 13px;
+}
+
+.instructions span {
+    display: block;
+    margin: 8px 0;
+    color: #94a3b8;
+    font-style: italic;
+}

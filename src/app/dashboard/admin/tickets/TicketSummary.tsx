@@ -165,11 +165,11 @@ export const TechnicianSchedulingBar = memo(function TechnicianSchedulingBar({ t
     const visitCost = parseFloat(ticket.visit_cost || 0);
 
     const voucherVisita = useMemo(() => {
-        return (ticket.costos || []).find((p: any) => {
+        return (ticket.ticket_costs || []).find((p: any) => {
             const low = `${p.categoria || ""} ${p.concepto || ""}`.toLowerCase();
             return low.includes('movilidad') || low.includes('visita') || low.includes('pasaje');
         })?.url_comprobante;
-    }, [ticket.costos]);
+    }, [ticket.ticket_costs]);
 
     const [showFullVoucher, setShowFullVoucher] = useState<string | null>(null);
 
@@ -910,7 +910,7 @@ export const QuotationInfoBar = memo(function QuotationInfoBar({ ticket, onToggl
     const isEnviada = ticket.status_id === 'cotizacion_enviada';
 
     // Cálculos de desglose
-    const finances = calculateTicketFinances(ticket, ticket.costos || []);
+    const finances = calculateTicketFinances(ticket, ticket.ticket_costs || []);
     const igvLocal = finances.igv;
     const subtotalLocal = finances.totalVenta;
     const totalFinal = finances.totalGeneral;

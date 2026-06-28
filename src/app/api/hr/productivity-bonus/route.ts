@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       const target = targets?.find(tg => tg.gestora_id === g.id);
 
       const utilityTotal = myTickets.reduce((acc, t) => {
-        return acc + calculateTicketFinances(t, t.costos || []).realProfitability;
+        return acc + calculateTicketFinances(t, t.ticket_costs || []).realProfitability;
       }, 0);
 
       const targetAmount = target?.target_amount || 35000;

@@ -51,7 +51,7 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
     const ticketIds = tickets.map((ticket) => ticket.id).filter((id): id is string => Boolean(id));
 
     if (ticketIds.length === 0) {
-        return tickets.map((ticket) => ({ ...ticket, costos: [] }));
+        return tickets.map((ticket) => ({ ...ticket, ticket_costs: [] }));
     }
 
     const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`, {
@@ -77,7 +77,7 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
 
     return tickets.map((ticket) => ({
         ...ticket,
-        costos: ticket.id ? (costsByTicket.get(ticket.id) || []) : [],
+        ticket_costs: ticket.id ? (costsByTicket.get(ticket.id) || []) : [],
     }));
 };
 
@@ -1010,14 +1010,14 @@ export const ticketsAPI = {
             const fallbackWithCosts = await attachTicketCosts(fallbackData || []);
             return fallbackWithCosts.map((t: any) => ({
                 ...t,
-                costos: Array.isArray(t.costos) ? t.costos : [],
+                ticket_costs: Array.isArray(t.ticket_costs) ? t.ticket_costs : [],
             }));
         }
 
         const ticketsWithCosts = await attachTicketCosts(data || []);
         return ticketsWithCosts.map((t: any) => ({
             ...t,
-            costos: Array.isArray(t.costos) ? t.costos : [],
+            ticket_costs: Array.isArray(t.ticket_costs) ? t.ticket_costs : [],
         }));
     },
 
@@ -1061,7 +1061,7 @@ export const ticketsAPI = {
         // se filtra en el lado JS (processTicketsToGroups) según negocio.
         return ticketsWithCosts.map((t: any) => ({
             ...t,
-            costos: Array.isArray(t.costos) ? t.costos : [],
+            ticket_costs: Array.isArray(t.ticket_costs) ? t.ticket_costs : [],
         }));
     },
 
@@ -1084,7 +1084,7 @@ export const ticketsAPI = {
         // Normalizar costos para el motor de cálculos
         const ticket = {
             ...ticketWithCosts,
-            costos: Array.isArray(ticketWithCosts.costos) ? ticketWithCosts.costos : []
+            ticket_costs: Array.isArray(ticketWithCosts.ticket_costs) ? ticketWithCosts.ticket_costs : []
         };
         
         return ticket;
