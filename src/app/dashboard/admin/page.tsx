@@ -376,20 +376,30 @@ export default function AdminDashboard() {
 
 
     const getStartOfPeriod = (range: string, baseDate: Date): Date => {
+        // Aseguramos que la fecha base se procese en huso horario de Perú (UTC-5)
+        // para evitar falsos positivos por desfases en servidores (ej. Hetzner)
+        const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/Lima",
+            year: "numeric", month: "2-digit", day: "2-digit"
+        });
+        const parts = formatter.formatToParts(baseDate);
+        const y = parts.find(p => p.type === "year")!.value;
+        const m = parts.find(p => p.type === "month")!.value;
+        const d = parts.find(p => p.type === "day")!.value;
+
         if (range === "today") {
-            return new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate());
+            return new Date(`${y}-${m}-${d}T00:00:00.000-05:00`);
         }
         if (range === "week") {
-            const startOfWeek = new Date(baseDate);
+            const startOfWeek = new Date(`${y}-${m}-${d}T00:00:00.000-05:00`);
             const day = startOfWeek.getDay() || 7;
             startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
-            startOfWeek.setHours(0, 0, 0, 0);
             return startOfWeek;
         }
         if (range === "month") {
-            return new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+            return new Date(`${y}-${m}-01T00:00:00.000-05:00`);
         }
-        return new Date(2020, 0, 1);
+        return new Date("2020-01-01T00:00:00.000-05:00");
     };
 
     const startOfPeriod = useMemo(() => getStartOfPeriod(dateRange, now), [dateRange, now]);
@@ -422,15 +432,26 @@ export default function AdminDashboard() {
 
     // Identificar si un ticket es de arrastre (abierto de periodos anteriores)
     const isRolledOver = (t: any) => {
-        const sid = normalizeStateId(t.status_id ?? t.estadoId);
-        const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
-        if (isClosed) return false;
-
         const created = t.original_created_at ?? t.created_at ?? t.createdAt ?? t.fechaCreacion;
         if (!created) return false;
         
         const origDate = new Date(created);
-        return origDate < startOfPeriod;
+        if (origDate >= startOfPeriod) return false;
+
+        const sid = normalizeStateId(t.status_id ?? t.estadoId);
+        const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+        
+        if (isClosed) {
+            const closureDate = t.closure_date ?? t.updated_at;
+            if (closureDate) {
+                const cDate = new Date(closureDate);
+                if (cDate < startOfPeriod) return false;
+            } else {
+                return false;
+            }
+        }
+
+        return true;
     };
 
     // Filtro de periodo robusto que incluye los tickets en rango y los arrastrados
