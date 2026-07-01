@@ -4,8 +4,14 @@ import { useState, useMemo } from "react";
 import {
     Calculator, TrendingUp, History, Download,
     CheckCircle2, Clock, AlertTriangle, ArrowUpRight,
-    Briefcase, X, Target, Zap, Star, ChevronRight, Info
+    Briefcase, X, Target, Zap, Star, ChevronRight, Info,
+    BarChart3, Users2, Layers
 } from "lucide-react";
+import {
+    ResponsiveContainer, ComposedChart, BarChart, Bar, XAxis, YAxis,
+    CartesianGrid, Tooltip, Legend, ReferenceLine, Area, AreaChart,
+    LabelList
+} from 'recharts';
 import { useAppData } from "@/lib/AppDataContext";
 import { normalizeStateId } from "@/lib/ticketStates";
 import { formatSoles } from "@/lib/formatters";
@@ -123,6 +129,88 @@ export default function ClosingPage() {
 
         return { achievedTickets, rolloverTickets, statsByGestora, totalAchieved, totalRollover, totalBonus, closureRate };
     }, [tickets, gestoras, gestorasTargets, selectedMonth, selectedYear, monthKey]);
+
+    // ── HISTORICAL DATA (últimos 6 meses) ─────────────────────────────────
+    const historicalData = useMemo(() => {
+        const MONTH_NAMES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        const OPEX_FIJO = 70000;
+        const META_GESTOR = 35000;
+        const months: { year: number; month: number }[] = [];
+
+        // Build last 6 months including the selected one
+        for (let i = 5; i >= 0; i--) {
+            let m = selectedMonth - i;
+            let y = selectedYear;
+            while (m < 0) { m += 12; y -= 1; }
+            months.push({ year: y, month: m });
+        }
+
+        const monthlyProgress: any[] = [];
+        const gestorProductivity: any[] = [];
+        const rolloverTrend: any[] = [];
+
+        months.forEach(({ year, month }) => {
+            const start = new Date(year, month, 1);
+            const end = new Date(year, month + 1, 0, 23, 59, 59);
+            const label = `${MONTH_NAMES[month]} ${String(year).slice(2)}`;
+
+            // Achieved: tickets with closure_date in this month
+            const achieved = tickets.filter((t: any) => {
+                if (!t.closure_date) return false;
+                const d = new Date(t.closure_date);
+                return d >= start && d <= end;
+            });
+
+            const facturacion = achieved.reduce((a: number, t: any) =>
+                a + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
+
+            monthlyProgress.push({
+                name: label,
+                facturacion: Math.round(facturacion),
+                opex: OPEX_FIJO,
+            });
+
+            // Per-gestora breakdown
+            const gestoraEntry: any = { name: label };
+            gestoras.forEach((g: any) => {
+                const gAchieved = achieved.filter((t: any) => t.gestora_id === g.id);
+                const total = gAchieved.reduce((a: number, t: any) =>
+                    a + parseFloat(t.montoFinal || t.total_quoted_amount || 0), 0);
+                gestoraEntry[g.name || g.id] = Math.round(total);
+            });
+            gestoraEntry.meta = META_GESTOR;
+            gestorProductivity.push(gestoraEntry);
+
+            // Rollover: tickets created before end of month, still open at end of month
+            const rollover = tickets.filter((t: any) => {
+                const created = new Date(t.createdAt || t.created_at);
+                if (created > end) return false;
+                const sid = normalizeStateId(t.estadoId);
+                const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
+                if (!t.closure_date && !isClosed) return true;
+                if (t.closure_date) {
+                    const cDate = new Date(t.closure_date);
+                    return cDate > end;
+                }
+                return false;
+            });
+
+            const rolloverAmount = rollover.reduce((a: number, t: any) => {
+                const costs: any[] = Array.isArray(t.ticket_costs) ? t.ticket_costs : [];
+                if (costs.length === 0)
+                    return a + parseFloat(t.inversion_ejecutada || t.total_costs_agg || 0);
+                return a + calculateTicketFinances(t, costs).totalExpenses;
+            }, 0);
+
+            rolloverTrend.push({
+                name: label,
+                cargaArrastrada: Math.round(rolloverAmount),
+                tickets: rollover.length,
+            });
+        });
+
+        return { monthlyProgress, gestorProductivity, rolloverTrend, gestorNames: gestoras.map((g: any) => g.name || g.id) };
+    }, [tickets, gestoras, selectedMonth, selectedYear]);
 
     if (loadingTickets || loadingGestoras) {
         return (
@@ -401,6 +489,141 @@ export default function ClosingPage() {
                     color="#3B82F6"
                     onClick={() => setActiveModal('rate')}
                 />
+            </div>
+
+            {/* ══════════════════════════════════════════════════════════════════════
+                 BLOQUE GRÁFICO 1: Avance Mes a Mes — Facturación Total vs OPEX
+               ══════════════════════════════════════════════════════════════════════ */}
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', padding: '1.5rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <h2 style={{ color: 'white', margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <BarChart3 color="#87CEEB" size={20} /> Avance Mes a Mes — Facturación Total vs OPEX
+                    </h2>
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem', fontWeight: 600 }}>Últimos 6 meses · OPEX base S/ 70,000</span>
+                </div>
+                <div style={{ width: '100%', height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={historicalData.monthlyProgress} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                            <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} />
+                            <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} tickFormatter={(v: number) => `S/${(v/1000).toFixed(0)}k`} />
+                            <Tooltip
+                                contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white', fontSize: '0.82rem' }}
+                                formatter={(value: number, name: string) => [`S/ ${value.toLocaleString('es-PE')}`, name === 'facturacion' ? 'Facturación Total' : 'OPEX Fijo']}
+                                labelStyle={{ color: 'rgba(255,255,255,0.5)' }}
+                            />
+                            <Legend
+                                wrapperStyle={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}
+                                formatter={(value: string) => value === 'facturacion' ? 'Facturación Total' : 'OPEX Fijo Mensual'}
+                            />
+                            <Bar dataKey="facturacion" fill="#87CEEB" radius={[6, 6, 0, 0]} barSize={36} />
+                            <ReferenceLine y={70000} stroke="#FF8A80" strokeDasharray="6 4" strokeWidth={2} label={{ value: 'OPEX S/ 70k', fill: '#FF8A80', fontSize: 11, position: 'insideTopRight' }} />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+                {/* Superávit / Déficit indicator */}
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                    {historicalData.monthlyProgress.map((d: any, i: number) => {
+                        const diff = d.facturacion - d.opex;
+                        const isPositive = diff >= 0;
+                        return (
+                            <div key={i} style={{ background: isPositive ? 'rgba(134,239,172,0.08)' : 'rgba(255,138,128,0.08)', border: `1px solid ${isPositive ? 'rgba(134,239,172,0.2)' : 'rgba(255,138,128,0.2)'}`, borderRadius: '10px', padding: '6px 12px', fontSize: '0.72rem', fontWeight: 700 }}>
+                                <span style={{ color: 'rgba(255,255,255,0.4)' }}>{d.name}: </span>
+                                <span style={{ color: isPositive ? '#86EFAC' : '#FF8A80' }}>{isPositive ? '+' : ''}S/ {diff.toLocaleString('es-PE')}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* ══════════════════════════════════════════════════════════════════════
+                 BLOQUE GRÁFICO 2: Producción Monetaria por Gestor
+               ══════════════════════════════════════════════════════════════════════ */}
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', padding: '1.5rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <h2 style={{ color: 'white', margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Users2 color="#B5EAD7" size={20} /> Producción Monetaria por Gestor
+                    </h2>
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem', fontWeight: 600 }}>Meta por gestor: S/ 35,000</span>
+                </div>
+                <div style={{ width: '100%', height: 320 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={historicalData.gestorProductivity} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                            <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} />
+                            <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} tickFormatter={(v: number) => `S/${(v/1000).toFixed(0)}k`} />
+                            <Tooltip
+                                contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white', fontSize: '0.82rem' }}
+                                formatter={(value: number, name: string) => [`S/ ${value.toLocaleString('es-PE')}`, name === 'meta' ? 'Meta Gestor' : name]}
+                                labelStyle={{ color: 'rgba(255,255,255,0.5)' }}
+                            />
+                            <Legend wrapperStyle={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }} />
+                            {historicalData.gestorNames.map((gName: string, idx: number) => {
+                                const PASTEL_BARS = ['#B5EAD7', '#A0C4FF', '#FFDAC1', '#C3B1E1', '#FFD6E0'];
+                                return (
+                                    <Bar key={gName} dataKey={gName} fill={PASTEL_BARS[idx % PASTEL_BARS.length]} radius={[4, 4, 0, 0]} barSize={28} />
+                                );
+                            })}
+                            <ReferenceLine y={35000} stroke="#FFDAC1" strokeDasharray="6 4" strokeWidth={2} label={{ value: 'Meta S/ 35k', fill: '#FFDAC1', fontSize: 11, position: 'insideTopRight' }} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
+            {/* ══════════════════════════════════════════════════════════════════════
+                 BLOQUE GRÁFICO 3: Tendencia de Carga Financiera Arrastrada
+               ══════════════════════════════════════════════════════════════════════ */}
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', padding: '1.5rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <h2 style={{ color: 'white', margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Layers color="#FFB7B2" size={20} /> Tendencia de Carga Financiera Arrastrada
+                    </h2>
+                    <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem', fontWeight: 600 }}>Capital inmovilizado en tickets no cerrados</span>
+                </div>
+                <div style={{ width: '100%', height: 280 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={historicalData.rolloverTrend} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                            <defs>
+                                <linearGradient id="rolloverGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#FFB7B2" stopOpacity={0.35} />
+                                    <stop offset="95%" stopColor="#FFB7B2" stopOpacity={0.02} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                            <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12 }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} />
+                            <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} tickFormatter={(v: number) => `S/${(v/1000).toFixed(0)}k`} />
+                            <Tooltip
+                                contentStyle={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: 'white', fontSize: '0.82rem' }}
+                                formatter={(value: number, name: string) => [
+                                    name === 'cargaArrastrada' ? `S/ ${value.toLocaleString('es-PE')}` : `${value} tickets`,
+                                    name === 'cargaArrastrada' ? 'Carga Arrastrada' : 'Tickets en Rollover'
+                                ]}
+                                labelStyle={{ color: 'rgba(255,255,255,0.5)' }}
+                            />
+                            <Legend wrapperStyle={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }} formatter={(value: string) => value === 'cargaArrastrada' ? 'Carga Financiera Arrastrada' : 'Tickets en Rollover'} />
+                            <Area type="monotone" dataKey="cargaArrastrada" stroke="#FFB7B2" strokeWidth={2.5} fill="url(#rolloverGrad)" dot={{ r: 4, fill: '#FFB7B2', stroke: '#1a1a2e', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+                {/* Trend indicator */}
+                {historicalData.rolloverTrend.length >= 2 && (() => {
+                    const curr = historicalData.rolloverTrend[historicalData.rolloverTrend.length - 1]?.cargaArrastrada || 0;
+                    const prev = historicalData.rolloverTrend[historicalData.rolloverTrend.length - 2]?.cargaArrastrada || 0;
+                    const diff = curr - prev;
+                    const pct = prev > 0 ? Math.round((diff / prev) * 100) : 0;
+                    const isDown = diff <= 0;
+                    return (
+                        <div style={{ marginTop: '0.75rem', padding: '10px 16px', background: isDown ? 'rgba(134,239,172,0.06)' : 'rgba(255,138,128,0.06)', border: `1px solid ${isDown ? 'rgba(134,239,172,0.15)' : 'rgba(255,138,128,0.15)'}`, borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontSize: '1.2rem' }}>{isDown ? '📉' : '📈'}</span>
+                            <span style={{ color: isDown ? '#86EFAC' : '#FF8A80', fontWeight: 800, fontSize: '0.85rem' }}>
+                                {isDown ? 'Tendencia a la baja' : '⚠ Tendencia alcista'} — {pct >= 0 ? '+' : ''}{pct}% vs mes anterior
+                            </span>
+                            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginLeft: 'auto' }}>
+                                Actual: S/ {curr.toLocaleString('es-PE')} · Anterior: S/ {prev.toLocaleString('es-PE')}
+                            </span>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* ── GOAL TRACKER PER GESTORA ── */}
