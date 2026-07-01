@@ -174,6 +174,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         message: "",
         onConfirm: () => {}
     });
+    
+    // CONCILIACIÓN RETROACTIVA STATES
+    const [isRetroactiveClosure, setIsRetroactiveClosure] = useState(false);
+    const [retroactiveDate, setRetroactiveDate] = useState("2026-06-30T23:59:59");
+    
     const checkAndHardDelete = async () => {
         if (!ticketData?.id) return;
         setIsDeleting(true);
@@ -979,7 +984,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 solicitudesDeposito: businessData.solicitudesDeposito !== undefined ? businessData.solicitudesDeposito : (serverMeta.solicitudesDeposito ?? null),
                 evidenciasEjecucion,
                 metadata: undefined
-            }
+            },
+            ...(businessData.closure_date ? { closure_date: businessData.closure_date } : {})
         };
         const currentDataStr = JSON.stringify(updates);
         if (currentDataStr === lastSyncData.current && !dataOverride) return false;
@@ -2628,6 +2634,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 estadoId: "ticket_cerrado",
                 status_id: "ticket_cerrado",
                 fechaCierre: new Date().toISOString(),
+                closure_date: isRetroactiveClosure ? new Date(retroactiveDate + "-05:00").toISOString() : undefined,
                 saldo_tecnico: 0,
                 metadata: {
                     ...(ticketData.metadata || {}),
@@ -4406,24 +4413,50 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                         Registre el depósito final en el panel de <strong>Tesorería</strong> inferior para cerrar este ticket definitivamente.
                                                     </span>
                                                     {isAdmin && (techPactedTotal - unifiedPaymentsSum) <= 0.01 && (
-                                                        <button 
-                                                            onClick={handleCompleteClosure}
-                                                            className={styles.approveExceedBtn}
-                                                            style={{
-                                                                marginTop: '15px',
-                                                                background: '#10B981',
-                                                                color: 'white',
-                                                                border: 'none',
-                                                                padding: '12px 24px',
-                                                                borderRadius: '10px',
-                                                                fontWeight: 700,
-                                                                cursor: 'pointer',
-                                                                boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)'
-                                                            }}
-                                                        >
-                                                            SINFIMAC CORP - TESORERÍA v1.3.4
-                                                            CONFIRMAR CIERRE DEFINITIVO (SALDO 0)
-                                                        </button>
+                                                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center', marginTop: '15px' }}>
+                                                            <div style={{ background: 'rgba(255, 241, 242, 0.5)', border: '1px solid #FECDD3', padding: '15px', borderRadius: '12px', width: '100%', maxWidth: '400px' }}>
+                                                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 600, color: '#9F1239', fontSize: '0.9rem' }}>
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={isRetroactiveClosure} 
+                                                                        onChange={(e) => setIsRetroactiveClosure(e.target.checked)}
+                                                                        style={{ width: '16px', height: '16px', accentColor: '#E11D48' }}
+                                                                    />
+                                                                    Ajustar Fecha Contable por Conciliación de Cliente
+                                                                </label>
+                                                                {isRetroactiveClosure && (
+                                                                    <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                                        <span style={{ fontSize: '0.8rem', color: '#BE123C' }}>Seleccione la fecha límite de cierre del mes anterior:</span>
+                                                                        <input 
+                                                                            type="datetime-local" 
+                                                                            value={retroactiveDate}
+                                                                            onChange={(e) => setRetroactiveDate(e.target.value)}
+                                                                            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #FDA4AF', width: '100%', outline: 'none' }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <button 
+                                                                onClick={handleCompleteClosure}
+                                                                className={styles.approveExceedBtn}
+                                                                style={{
+                                                                    background: '#10B981',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    padding: '12px 24px',
+                                                                    borderRadius: '10px',
+                                                                    fontWeight: 700,
+                                                                    cursor: 'pointer',
+                                                                    boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)',
+                                                                    width: '100%',
+                                                                    maxWidth: '400px'
+                                                                }}
+                                                            >
+                                                                SINFIMAC CORP - TESORERÍA v1.3.4<br/>
+                                                                CONFIRMAR CIERRE DEFINITIVO (SALDO 0)
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
                                             )}
