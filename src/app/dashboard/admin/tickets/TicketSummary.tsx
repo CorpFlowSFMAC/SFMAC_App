@@ -1348,23 +1348,28 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
                     )}
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span className={styles.infoLabel}>Historial de Movimientos</span>
-                        {[...confirmedLaborItems, ...operatingItems].length > 0 ? (
-                            <div className={styles.recentHistoryCompact}>
-                                {[...confirmedLaborItems, ...operatingItems].slice(0, 3).map((p: any, idx: number) => (
-                                    <div key={idx} className={styles.historyDot} title={`${p.tipo || p.concepto || 'Pago'}: S/ ${p.monto}`}>
-                                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: (p.categoria || p.tipo || '').toLowerCase().includes('mat') ? '#DB2777' : '#2563EB' }} />
+                        <span className={styles.infoLabel}>Montos Pendientes</span>
+                        {(() => {
+                            const pendingItems = (costos || []).filter((c: any) => (c.estado_pago || '').toLowerCase() === 'pendiente');
+                            if (pendingItems.length > 0) {
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        {pendingItems.slice(0, 3).map((p: any, idx: number) => (
+                                            <span key={idx} style={{ fontSize: '10px', color: '#B91C1C', fontWeight: 600 }} title={p.concepto || p.tipo || 'Pendiente'}>
+                                                • S/ {parseFloat(p.monto || 0).toFixed(2)}
+                                            </span>
+                                        ))}
+                                        {pendingItems.length > 3 && (
+                                            <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                                                + {pendingItems.length - 3} más
+                                            </span>
+                                        )}
                                     </div>
-                                ))}
-                                {[...confirmedLaborItems, ...operatingItems].length > 3 && (
-                                    <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
-                                        + {[...confirmedLaborItems, ...operatingItems].length - 3} mov.
-                                    </span>
-                                )}
-                            </div>
-                        ) : (
-                            <span style={{ fontSize: '11px', color: '#94A3B8', fontStyle: 'italic' }}>Sin pagos registrados</span>
-                        )}
+                                );
+                            } else {
+                                return <span style={{ fontSize: '11px', color: '#94A3B8', fontStyle: 'italic' }}>Sin pendientes</span>;
+                            }
+                        })()}
                     </div>
                 </div>
             </div>
