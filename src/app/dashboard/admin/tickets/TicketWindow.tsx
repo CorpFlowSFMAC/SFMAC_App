@@ -4225,7 +4225,6 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                             <span>Informacion financiera auditada y cerrada</span>
                                                         </div>
                                                     </div>
-                                                    </div>
                                                     <div className={styles.concludedHeaderStats}>
                                                         <div className={styles.statBadge}>
                                                             <span className={styles.statLabel}>Ticket Cliente</span>
