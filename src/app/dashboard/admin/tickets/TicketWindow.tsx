@@ -178,6 +178,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
     // CONCILIACIÓN RETROACTIVA STATES
     const [isRetroactiveClosure, setIsRetroactiveClosure] = useState(false);
     const [retroactiveDate, setRetroactiveDate] = useState("2026-06-30T23:59:59");
+
+    // CLOSED TICKET EDIT STATES
+    const [isEditingClosedData, setIsEditingClosedData] = useState(false);
+    const [closedDataEdits, setClosedDataEdits] = useState({ client_ticket_number: "", closure_date: "" });
     
     const checkAndHardDelete = async () => {
         if (!ticketData?.id) return;
@@ -4221,21 +4225,83 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                             <span>Informacion financiera auditada y cerrada</span>
                                                         </div>
                                                     </div>
+                                                    </div>
                                                     <div className={styles.concludedHeaderStats}>
                                                         <div className={styles.statBadge}>
-                                                            <span className={styles.statLabel}>Ticket</span>
+                                                            <span className={styles.statLabel}>Ticket Cliente</span>
                                                             <span className={styles.statValue}>
                                                                 {ticketData.client_ticket_number && ticketData.client_ticket_number.trim() !== "" 
                                                                     ? ticketData.client_ticket_number 
                                                                     : "PENDIENTE"}
                                                             </span>
                                                         </div>
-                                                        <div className={styles.statBadgeGreen}>
-                                                            <span className={styles.statLabelGreen}>Liquidado</span>
-                                                            <CheckCircle size={14} color="#059669" />
+                                                        <div className={styles.statBadge}>
+                                                            <span className={styles.statLabel}>Cierre Real</span>
+                                                            <span className={styles.statValue} style={{ fontSize: '11px', color: '#475569' }}>
+                                                                {ticketData.closure_date ? new Date(ticketData.closure_date).toLocaleString('es-PE') : (ticketData.updated_at ? new Date(ticketData.updated_at).toLocaleString('es-PE') : '—')}
+                                                            </span>
                                                         </div>
+                                                        {isAdmin && (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    if (isEditingClosedData) {
+                                                                        handleUpdateClosedData();
+                                                                    } else {
+                                                                        const defaultDate = ticketData.closure_date ? new Date(ticketData.closure_date).toISOString().slice(0,16) : new Date().toISOString().slice(0,16);
+                                                                        setClosedDataEdits({
+                                                                            client_ticket_number: ticketData.client_ticket_number || "",
+                                                                            closure_date: defaultDate
+                                                                        });
+                                                                        setIsEditingClosedData(true);
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    background: isEditingClosedData ? '#10B981' : '#F1F5F9',
+                                                                    color: isEditingClosedData ? 'white' : '#475569',
+                                                                    border: isEditingClosedData ? 'none' : '1px solid #CBD5E1',
+                                                                    padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', alignSelf: 'center'
+                                                                }}
+                                                            >
+                                                                {isEditingClosedData ? <CheckCircle2 size={12}/> : <Pencil size={12}/>}
+                                                                {isEditingClosedData ? "GUARDAR" : "EDITAR MÉTRICAS"}
+                                                            </button>
+                                                        )}
+                                                        {isEditingClosedData && (
+                                                            <button onClick={() => setIsEditingClosedData(false)} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', alignSelf: 'center' }}>
+                                                                <X size={12}/>
+                                                            </button>
+                                                        )}
+                                                        {!isEditingClosedData && (
+                                                            <div className={styles.statBadgeGreen}>
+                                                                <span className={styles.statLabelGreen}>Liquidado</span>
+                                                                <CheckCircle size={14} color="#059669" />
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
+                                                {isEditingClosedData && (
+                                                    <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '15px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+                                                            <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569' }}>TICKET CLIENTE (Mibanco/Santander)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={closedDataEdits.client_ticket_number}
+                                                                onChange={(e) => setClosedDataEdits(prev => ({...prev, client_ticket_number: e.target.value.toUpperCase()}))}
+                                                                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', outline: 'none' }}
+                                                                placeholder="Ej. MB000000.26"
+                                                            />
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+                                                            <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569' }}>FECHA DE CIERRE (Métrica Contable)</label>
+                                                            <input 
+                                                                type="datetime-local" 
+                                                                value={closedDataEdits.closure_date}
+                                                                onChange={(e) => setClosedDataEdits(prev => ({...prev, closure_date: e.target.value}))}
+                                                                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', outline: 'none' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 <div className={styles.financialAuditGrid}>
                                                     {/* Card 1: PRESUPUESTO APROBADO */}
                                                     <div className={styles.financeCard} style={{
