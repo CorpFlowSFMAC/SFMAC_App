@@ -262,7 +262,8 @@ export default function ClosingPage() {
                             )}
                             {closingData.achievedTickets.map((t, i) => {
                                 const bruto = parseFloat(t.montoFinal || t.total_quoted_amount || 0);
-                                const sub = parseFloat(t.ingresos_reales || 0) || (bruto / 1.18);
+                                // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                                const sub = parseFloat(t.ingresos_reales ?? 0) || (bruto / 1.18);
                                 const util = netUtility(t);
                                 const pagos = sub - util;
                                 const g = closingData.statsByGestora.find(g => g.id === t.gestora_id);
