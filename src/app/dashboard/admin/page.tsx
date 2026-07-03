@@ -424,8 +424,18 @@ export default function AdminDashboard() {
 
     const ticketUtilidad = (t: any): number => {
         const costs: any[] = Array.isArray(t.ticket_costs) ? t.ticket_costs : [];
-        if (costs.length === 0)
-            return parseFloat(t.rentabilidad ?? 0);
+        if (costs.length === 0) {
+            // Fallback: calcular utilidad directamente de campos del ticket
+            // Utilidad = Ingresos (sin IGV) - Costos (labor + materials + visit)
+            const ingresosRaw = parseFloat(t.ingresos_reales ?? t.total_quoted_amount ?? t.montoFinal ?? 0);
+            const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
+            const ingresosBase = esMasIGV ? ingresosRaw : Math.round(ingresosRaw / 1.18 * 100) / 100;
+            const laborCost = parseFloat(t.labor_cost ?? 0);
+            const materialsCost = parseFloat(t.materials_cost ?? 0);
+            const visitCost = parseFloat(t.visit_cost ?? 0);
+            const totalCostos = laborCost + materialsCost + visitCost;
+            return Math.round((ingresosBase - totalCostos) * 100) / 100;
+        }
         // Retorna el Accrual Basis (Toma en cuenta la deuda con el técnico)
         return calculateTicketFinances(t, costs).realProfitability;
     };
