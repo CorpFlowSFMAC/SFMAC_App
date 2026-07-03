@@ -2638,7 +2638,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 estadoId: "ticket_cerrado",
                 status_id: "ticket_cerrado",
                 fechaCierre: new Date().toISOString(),
-                closure_date: isRetroactiveClosure ? new Date(retroactiveDate + "-05:00").toISOString() : undefined,
+                closure_date: isRetroactiveClosure ? new Date(retroactiveDate + "-05:00").toISOString() : (ticketData.closure_date || new Date().toISOString()),
                 saldo_tecnico: 0,
                 metadata: {
                     ...(ticketData.metadata || {}),
@@ -4237,7 +4237,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                         <div className={styles.statBadge}>
                                                             <span className={styles.statLabel}>Cierre Real</span>
                                                             <span className={styles.statValue} style={{ fontSize: '11px', color: '#475569' }}>
-                                                                {ticketData.closure_date ? new Date(ticketData.closure_date).toLocaleString('es-PE') : (ticketData.updated_at ? new Date(ticketData.updated_at).toLocaleString('es-PE') : '—')}
+                                                                {ticketData.closure_date ? new Date(ticketData.closure_date).toLocaleString('es-PE') : '—'}
                                                             </span>
                                                         </div>
                                                         {isAdmin && (
