@@ -2611,6 +2611,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         }
         onClose();
     };
+    const displayClosureDate = ticketData.closure_date || ticketData.fechaCierre || ticketData.updated_at;
+
     const handleUpdateClosedData = async () => {
         try {
             await ticketsAPI.update(ticketData.id, { 
@@ -4257,7 +4259,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                         <div className={styles.statBadge}>
                                                             <span className={styles.statLabel}>Cierre Real</span>
                                                             <span className={styles.statValue} style={{ fontSize: '11px', color: '#475569' }}>
-                                                                {ticketData.closure_date ? new Date(ticketData.closure_date).toLocaleString('es-PE') : '—'}
+                                                                {displayClosureDate ? new Date(displayClosureDate).toLocaleString('es-PE') : '—'}
                                                             </span>
                                                         </div>
                                                         {isAdmin && (
@@ -4266,7 +4268,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                                     if (isEditingClosedData) {
                                                                         handleUpdateClosedData();
                                                                     } else {
-                                                                        const defaultDate = ticketData.closure_date ? new Date(ticketData.closure_date).toISOString().slice(0,16) : new Date().toISOString().slice(0,16);
+                                                                        const defaultDate = displayClosureDate ? new Date(displayClosureDate).toISOString().slice(0,16) : new Date().toISOString().slice(0,16);
                                                                         setClosedDataEdits({
                                                                             client_ticket_number: ticketData.client_ticket_number || "",
                                                                             closure_date: defaultDate
