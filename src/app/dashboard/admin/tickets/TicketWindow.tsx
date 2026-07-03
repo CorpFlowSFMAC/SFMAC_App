@@ -5349,9 +5349,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                         ticketData={ticketData}
                         ticketCosts={ticketCosts}
                         moTicketActual={typeof techPactedTotal === 'number' && techPactedTotal > 0 ? techPactedTotal : undefined}
-                        onApplyTicketNumber={(val: string) => {
+                        onApplyTicketNumber={async (val: string) => {
                             setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));
-                            showToast("Ticket Registrado", `Se ha asignado el número de ticket: ${val}`, "success");
+                            try {
+                                await ticketsAPI.update(ticketData.id, { client_ticket_number: val });
+                                showToast("Ticket Registrado", `Se ha asignado el número de ticket: ${val}`, "success");
+                            } catch (err) {
+                                console.error('Error guardando ticket desde el secretario virtual:', err);
+                            }
                         }}
                     />
                 )}
