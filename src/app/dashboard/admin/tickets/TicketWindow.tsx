@@ -2611,6 +2611,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         }
         onClose();
     };
+    const handleUpdateClosedData = async () => {
+        try {
+            await ticketsAPI.update(ticketData.id, { 
+                client_ticket_number: closedDataEdits.client_ticket_number,
+                ...(closedDataEdits.closure_date ? { closure_date: new Date(closedDataEdits.closure_date + "-05:00").toISOString() } : {})
+            });
+            setTicketData((prev: any) => ({ 
+                ...prev, 
+                client_ticket_number: closedDataEdits.client_ticket_number,
+                ...(closedDataEdits.closure_date ? { closure_date: new Date(closedDataEdits.closure_date + "-05:00").toISOString() } : {})
+            }));
+            setIsEditingClosedData(false);
+            console.log("Cierre Real actualizado en BD:", closedDataEdits.closure_date);
+            showToast("Métricas actualizadas", "Los paneles reflejarán los cambios inmediatamente.", "success");
+        } catch (error) {
+            console.error("Error actualizando datos de cierre:", error);
+            showToast("Error de Red", "No se pudo actualizar. Verifique la consola.", "error");
+        }
+    };
+
     const handleCompleteClosure = async () => {
         if (isSaving) {
             showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
