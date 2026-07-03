@@ -478,7 +478,10 @@ export default function AdminDashboard() {
             inversionSum += inv;
 
             const isClosed = normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado";
-            if (isClosed) {
+            const displayClosureDate = t.closure_date || t.fechaCierre || t.updated_at;
+            const closedInCurrentPeriod = isClosed && displayClosureDate && isInRange(displayClosureDate);
+
+            if (closedInCurrentPeriod) {
                 closed.push(t);
                 ingresosSum += parseFloat(t.ingresos_reales ?? 0);
                 utilidadSum += ticketUtilidad(t);

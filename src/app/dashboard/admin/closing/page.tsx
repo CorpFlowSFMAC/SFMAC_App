@@ -52,8 +52,9 @@ export default function ClosingPage() {
 
         // Tickets with closure_date inside this period → ACHIEVED (LOGRADO)
         const achievedTickets = tickets.filter(t => {
-            if (!t.closure_date) return false;
-            const d = new Date(t.closure_date);
+            const displayClosure = t.closure_date || t.fechaCierre || t.updated_at;
+            if (!displayClosure) return false;
+            const d = new Date(displayClosure);
             return d >= startOfMonth && d <= endOfMonth;
         });
 
@@ -61,11 +62,18 @@ export default function ClosingPage() {
         const rolloverTickets = tickets.filter(t => {
             const created = new Date(t.createdAt || t.created_at);
             if (created > endOfMonth) return false;
+            
+            const displayClosure = t.closure_date || t.fechaCierre || t.updated_at;
             const sid = normalizeStateId(t.estadoId);
-            if (!t.closure_date) return true; // open with no closure_date
-            const cDate = new Date(t.closure_date);
-            return cDate > endOfMonth; // closed after this period
-        }).filter(t => !TERMINAL_STATES.includes(normalizeStateId(t.estadoId)) || !t.closure_date);
+            
+            if (TERMINAL_STATES.includes(sid) && displayClosure) {
+                const cDate = new Date(displayClosure);
+                if (cDate < startOfMonth) return false;
+                if (cDate >= startOfMonth && cDate <= endOfMonth) return false; // Achieved, not rollover
+                return true; // Closed in future month
+            }
+            return true; // Still open
+        });
 
         // Per-gestora stats
         const statsByGestora = gestoras.map(g => {
