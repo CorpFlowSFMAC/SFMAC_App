@@ -2629,17 +2629,24 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         setIsSaving(true);
         try {
             // PASO 2: Mutación y Payload de Cierre Real
+            // REGLA DE NEGOCIO: closure_date SIEMPRE se asigna al cerrar un ticket
+            const closureDateValue = isRetroactiveClosure 
+                ? new Date(retroactiveDate + "-05:00").toISOString() 
+                : new Date().toISOString();
+            
             const updatedTicketData = {
                 ...ticketData,
                 estadoId: "ticket_cerrado",
                 status_id: "ticket_cerrado",
                 fechaCierre: new Date().toISOString(),
-                closure_date: isRetroactiveClosure ? new Date(retroactiveDate + "-05:00").toISOString() : undefined,
+                closure_date: closureDateValue,
                 saldo_tecnico: 0,
                 metadata: {
                     ...(ticketData.metadata || {}),
                     saldo_tecnico: 0,
-                    netLaborBalance: 0
+                    netLaborBalance: 0,
+                    fechaCierreReal: closureDateValue,
+                    cierreRetroactivo: isRetroactiveClosure
                 }
             };
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
