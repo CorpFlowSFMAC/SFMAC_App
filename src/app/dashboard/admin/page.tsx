@@ -475,6 +475,16 @@ export default function AdminDashboard() {
         return isRolledOver(t);
     };
 
+    // Helper: obtener fecha de cierre efectiva (closure_date > updated_at > created_at)
+    const getEffectiveClosureDate = (t: any) => {
+        if (t.closure_date) return new Date(t.closure_date);
+        // Para tickets cerrados sin closure_date, usar updated_at (fecha de última modificación)
+        if (normalizeStateId(t.status_id) === 'ticket_cerrado') {
+            return new Date(t.updated_at || t.created_at);
+        }
+        return null;
+    };
+
     // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
     const roi = useMemo(() => {
         const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
@@ -492,8 +502,9 @@ export default function AdminDashboard() {
             inversionSum += inv;
 
             const isClosed = normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado";
-            const displayClosureDate = t.closure_date || t.fechaCierre || t.updated_at;
-            const closedInCurrentPeriod = isClosed && displayClosureDate && isInRange(displayClosureDate);
+            // Usar fecha de cierre efectiva: closure_date > updated_at (para cerrados)
+            const effectiveDate = getEffectiveClosureDate(t);
+            const closedInCurrentPeriod = isClosed && effectiveDate && effectiveDate >= startOfPeriod;
 
             if (closedInCurrentPeriod) {
                 closed.push(t);
