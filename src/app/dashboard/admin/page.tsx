@@ -427,9 +427,13 @@ export default function AdminDashboard() {
         if (costs.length === 0) {
             // Fallback: calcular utilidad directamente de campos del ticket
             // Utilidad = Ingresos (sin IGV) - Costos (labor + materials + visit)
-            const ingresosRaw = parseFloat(t.ingresos_reales ?? t.total_quoted_amount ?? t.montoFinal ?? 0);
-            const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
-            const ingresosBase = esMasIGV ? ingresosRaw : Math.round(ingresosRaw / 1.18 * 100) / 100;
+            // NOTA: ingresos_reales YA ES la base sin IGV (total_quoted_amount / 1.18)
+            // Solo dividir por 1.18 si usamos total_quoted_amount
+            const tieneIngresosReales = t.ingresos_reales && parseFloat(t.ingresos_reales) > 0;
+            const ingresosRaw = tieneIngresosReales 
+                ? parseFloat(t.ingresos_reales) 
+                : parseFloat(t.total_quoted_amount ?? t.montoFinal ?? 0) / 1.18;
+            const ingresosBase = Math.round(ingresosRaw * 100) / 100;
             const laborCost = parseFloat(t.labor_cost ?? 0);
             const materialsCost = parseFloat(t.materials_cost ?? 0);
             const visitCost = parseFloat(t.visit_cost ?? 0);
