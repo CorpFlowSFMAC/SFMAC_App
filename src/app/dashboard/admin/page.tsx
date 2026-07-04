@@ -608,7 +608,9 @@ export default function AdminDashboard() {
             const clientColor = t.cliente?.color || t.clients?.color_aura || "#3B82F6";
             
             // Regla de Negocio: Montos CON IGV liquidados
-            const billingAmount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? String(parseFloat(t.ingresos_reales ?? 0) * 1.18));
+            // Fix: usar total_quoted_amount con fallback correcto (dividir por 1.18 si no existe ingresos_reales)
+            const rawBilling = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || t.monto_presupuesto || 0) / 1.18);
+            const billingAmount = rawBilling * 1.18; // Billing = base sin IGV * 1.18 (con IGV)
             if (billingAmount <= 0) return;
 
             if (!clientMap[clientId]) {

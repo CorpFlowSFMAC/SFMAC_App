@@ -477,7 +477,8 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
                         facturacionItems.push({ ...t, _monto: finances.netIncome });
                         utilidadItems.push({ ...t, _monto: finances.realProfitability });
                     } else {
-                        const facFallback = toNum(t.ingresos_reales ?? t.total_quoted_amount ?? 0);
+                        // Fix: ingresos_reales es base sin IGV, si no existe calcular de total_quoted_amount / 1.18
+                        const facFallback = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount ?? 0) / 1.18);
                         const utiFallback = toNum(t.rentabilidad ?? t.utilidad_neta ?? t.metadata?.utilidad_neta ?? 0);
                         totalFacturacion += facFallback;
                         totalUtilidad += utiFallback;
