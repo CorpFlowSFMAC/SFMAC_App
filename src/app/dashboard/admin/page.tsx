@@ -375,29 +375,98 @@ export default function AdminDashboard() {
     }, [dateRange]);
 
 
-    const getStartOfPeriod = (range: string, baseDate: Date): Date => {
-        // Aseguramos que la fecha base se procese en huso horario de Perú (UTC-5)
-        // para evitar falsos positivos por desfases en servidores (ej. Hetzner)
+    // ─── Helpers Robustos de Fecha (sin problemas de zona horaria) ───────────────
+    // Extraemos año/mes directamente de la fecha para evitar desfases UTC
+    
+    const getPeriodYearMonth = (range: string, baseDate: Date): { year: number; month: number; day?: number } => {
+        // Extraer año y mes en huso horario de Perú
         const formatter = new Intl.DateTimeFormat("en-US", {
             timeZone: "America/Lima",
             year: "numeric", month: "2-digit", day: "2-digit"
         });
         const parts = formatter.formatToParts(baseDate);
-        const y = parts.find(p => p.type === "year")!.value;
-        const m = parts.find(p => p.type === "month")!.value;
-        const d = parts.find(p => p.type === "day")!.value;
-
+        const y = parseInt(parts.find(p => p.type === "year")!.value, 10);
+        const m = parseInt(parts.find(p => p.type === "month")!.value, 10);
+        
         if (range === "today") {
-            return new Date(`${y}-${m}-${d}T00:00:00.000-05:00`);
+            const d = parseInt(parts.find(p => p.type === "day")!.value, 10);
+            return { year: y, month: m, day: d };
         }
         if (range === "week") {
-            const startOfWeek = new Date(`${y}-${m}-${d}T00:00:00.000-05:00`);
-            const day = startOfWeek.getDay() || 7;
-            startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
-            return startOfWeek;
+            const d = parseInt(parts.find(p => p.type === "day")!.value, 10);
+            const startOfWeekDay = baseDate.getDay() || 7;
+            const startDay = d - (startOfWeekDay - 1);
+            if (startDay >= 1) {
+                return { year: y, month: m, day: startDay };
+            }
+            // Si empezamos en mes anterior
+            const prevDate = new Date(baseDate);
+            prevDate.setDate(startDay);
+            const formatterPrev = new Intl.DateTimeFormat("en-US", {
+                timeZone: "America/Lima",
+                year: "numeric", month: "2-digit", day: "2-digit"
+            });
+            const partsPrev = formatterPrev.formatToParts(prevDate);
+            return {
+                year: parseInt(partsPrev.find(p => p.type === "year")!.value, 10),
+                month: parseInt(partsPrev.find(p => p.type === "month")!.value, 10),
+                day: parseInt(partsPrev.find(p => p.type === "day")!.value, 10)
+            };
         }
         if (range === "month") {
-            return new Date(`${y}-${m}-01T00:00:00.000-05:00`);
+            return { year: y, month: m };
+        }
+        return { year: 2020, month: 1 };
+    };
+
+    // Comparar si una fecha ISO está dentro del periodo (por año/mes, robusto a UTC)
+    const isDateInPeriod = (dateStr: string | null | undefined, period: { year: number; month: number; day?: number }, range: string): boolean => {
+        if (!dateStr) return false;
+        if (range === "all") return true;
+        
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return false;
+        
+        // Extraer año/mes de la fecha en huso horario de Perú
+        const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/Lima",
+            year: "numeric", month: "2-digit", day: "2-digit"
+        });
+        const parts = formatter.formatToParts(d);
+        const dateYear = parseInt(parts.find(p => p.type === "year")!.value, 10);
+        const dateMonth = parseInt(parts.find(p => p.type === "month")!.value, 10);
+        const dateDay = parseInt(parts.find(p => p.type === "day")!.value, 10);
+        
+        if (range === "month") {
+            return dateYear === period.year && dateMonth === period.month;
+        }
+        if (range === "week") {
+            const targetDate = new Date(period.year, period.month - 1, period.day || 1);
+            const endOfWeek = new Date(targetDate);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+            
+            const ticketDate = new Date(dateYear, dateMonth - 1, dateDay);
+            return ticketDate >= targetDate && ticketDate <= endOfWeek;
+        }
+        if (range === "today") {
+            return dateYear === period.year && dateMonth === period.month && dateDay === period.day;
+        }
+        return true;
+    };
+
+    const periodInfo = useMemo(() => getPeriodYearMonth(dateRange, now), [dateRange, now]);
+
+    // Mantenemos startOfPeriod por compatibilidad (legacy) pero ahora con el helper robusto
+    const getStartOfPeriod = (range: string, baseDate: Date): Date => {
+        const period = getPeriodYearMonth(range, baseDate);
+        if (range === "month") {
+            return new Date(`${period.year}-${String(period.month).padStart(2, '0')}-01T00:00:00.000-05:00`);
+        }
+        if (range === "week" && period.day) {
+            return new Date(`${period.year}-${String(period.month).padStart(2, '0')}-${String(period.day).padStart(2, '0')}T00:00:00.000-05:00`);
+        }
+        if (range === "today" && period.day) {
+            return new Date(`${period.year}-${String(period.month).padStart(2, '0')}-${String(period.day).padStart(2, '0')}T00:00:00.000-05:00`);
         }
         return new Date("2020-01-01T00:00:00.000-05:00");
     };
@@ -405,11 +474,7 @@ export default function AdminDashboard() {
     const startOfPeriod = useMemo(() => getStartOfPeriod(dateRange, now), [dateRange, now]);
 
     const isInRange = (dateStr: string | null | undefined) => {
-        if (!dateStr) return false;
-        if (dateRange === "all") return true;
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return false;
-        return d >= startOfPeriod;
+        return isDateInPeriod(dateStr, periodInfo, dateRange);
     };
 
     // ─── Helper puro: inversión confirmada de un ticket ──────────────────────
@@ -445,22 +510,23 @@ export default function AdminDashboard() {
     };
 
     // Identificar si un ticket es de arrastre (abierto de periodos anteriores)
+    // Usa comparación robusta por año/mes para evitar desfases UTC
     const isRolledOver = (t: any) => {
         const created = t.original_created_at ?? t.created_at ?? t.createdAt ?? t.fechaCreacion;
         if (!created) return false;
         
-        const origDate = new Date(created);
-        if (origDate >= startOfPeriod) return false;
+        // Si fue creado EN el periodo actual, NO es arrastre
+        if (isDateInPeriod(created, periodInfo, dateRange)) return false;
 
+        // Verificar si es un ticket cerrado
         const sid = normalizeStateId(t.status_id ?? t.estadoId);
         const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
         
         if (isClosed) {
             const closureDate = t.closure_date ?? t.updated_at;
-            if (closureDate) {
-                const cDate = new Date(closureDate);
-                if (cDate < startOfPeriod) return false;
-            } else {
+            // Si está cerrado pero el closure_date está fuera del periodo actual
+            // (o no existe), no lo consideramos arrastre activo
+            if (!closureDate || !isDateInPeriod(closureDate, periodInfo, dateRange)) {
                 return false;
             }
         }
@@ -470,8 +536,11 @@ export default function AdminDashboard() {
 
     // Filtro de periodo robusto que incluye los tickets en rango y los arrastrados
     const isTicketInPeriod = (t: any) => {
-        if (isInRange(t.created_at ?? t.createdAt ?? t.fechaCreacion)) return true;
-        if (t.closure_date && isInRange(t.closure_date)) return true;
+        // Ticket creado en el periodo
+        if (isDateInPeriod(t.created_at ?? t.createdAt ?? t.fechaCreacion, periodInfo, dateRange)) return true;
+        // Ticket cerrado en el periodo
+        if (t.closure_date && isDateInPeriod(t.closure_date, periodInfo, dateRange)) return true;
+        // Ticket arrastrado de periodos anteriores
         return isRolledOver(t);
     };
 
@@ -483,6 +552,22 @@ export default function AdminDashboard() {
             return new Date(t.updated_at || t.created_at);
         }
         return null;
+    };
+
+    // ── Definición estricta de estados de cierre real ─────────────────────────────
+    const REAL_CLOSURE_STATES = ["ticket_cerrado", "liquidado"];
+    
+    const isRealClosureState = (t: any): boolean => {
+        const sid = normalizeStateId(t.status_id ?? t.estadoId);
+        return REAL_CLOSURE_STATES.includes(sid);
+    };
+
+    // ── Estados que representan ingresos generados (no solo ticket_cerrado) ───────
+    const REVENUE_STATES = ["ticket_cerrado", "por_liquidar", "cotizacion_aprobada", "documentacion_enviada", "requiere_revision_admin", "liquidado"];
+    
+    const isRevenueState = (t: any): boolean => {
+        const sid = normalizeStateId(t.status_id ?? t.estadoId);
+        return REVENUE_STATES.includes(sid);
     };
 
     // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
@@ -501,17 +586,28 @@ export default function AdminDashboard() {
             const inv = ticketInversion(t);
             inversionSum += inv;
 
-            const isClosed = normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado";
-            // Usar fecha de cierre efectiva: closure_date > updated_at (para cerrados)
-            const effectiveDate = getEffectiveClosureDate(t);
-            const closedInCurrentPeriod = isClosed && effectiveDate && effectiveDate >= startOfPeriod;
+            // Filtrar tickets cerrados en el periodo actual (definición estricta)
+            const hasRealClosure = isRealClosureState(t);
+            const fechaReferenciaStr = hasRealClosure ? (t.closure_date || t.updated_at) : null;
+            
+            let closedInCurrentPeriod = false;
+            if (hasRealClosure && fechaReferenciaStr) {
+                // Usar comparación de año/mes directa (robusta a UTC)
+                const fechaRef = new Date(fechaReferenciaStr);
+                const yearMatch = fechaRef.getFullYear() === periodInfo.year;
+                const monthMatch = (fechaRef.getMonth() + 1) === periodInfo.month; // +1 porque getMonth() es 0-indexed
+                closedInCurrentPeriod = yearMatch && monthMatch;
+            }
 
             if (closedInCurrentPeriod) {
                 closed.push(t);
-                // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
-                const rawIngresos = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
-                ingresosSum += rawIngresos;
-                utilidadSum += ticketUtilidad(t);
+                // Usar ingresos_reales (sin IGV) o fallback a total_quoted_amount / 1.18
+                const rawIngresos = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+                // Solo sumar si hay monto válido
+                if (rawIngresos > 0) {
+                    ingresosSum += rawIngresos;
+                    utilidadSum += ticketUtilidad(t);
+                }
             }
 
             if (isRolledOver(t)) {
@@ -531,8 +627,8 @@ export default function AdminDashboard() {
             .map(s => {
                 const stTotal = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
                 const stClosed = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
-                // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
-                const ing  = stClosed.reduce((a, t) => a + (parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18)), 0);
+                // Usar ingresos_reales (sin IGV) o fallback a total_quoted_amount / 1.18
+                const ing  = stClosed.reduce((a, t) => a + (parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0);
                 const cost = stTotal.reduce((a, t) => a + ticketInversion(t), 0);
                 const util = stClosed.reduce((a, t) => a + ticketUtilidad(t), 0);
                 return { ...s, tickets: stTotal.length, ingresos: ing, margen: ing > 0 ? (util / ing) * 100 : 0 };
@@ -540,8 +636,8 @@ export default function AdminDashboard() {
             .filter(s => s.tickets > 0)
             .sort((a, b) => b.ingresos - a.ingresos);
 
-        // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
-        const getIngresosBase = (t: any) => parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
+        // Helper: obtener ingresos base sin IGV con fallback completo
+        const getIngresosBase = (t: any) => parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
 
         const ingresosItems = closed
             .filter(t => getIngresosBase(t) > 0)
