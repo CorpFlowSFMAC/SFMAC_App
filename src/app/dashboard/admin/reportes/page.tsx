@@ -496,8 +496,9 @@ export default function ReportesEficienciaPage() {
             const sid = normalizeStateId(t.status_id || t.estadoId);
             
             // Sincronización: Facturación NETA (Sin IGV)
+            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
             if (['por_liquidar', 'liquidado', 'ticket_cerrado'].includes(sid)) {
-                const ingresoNeto = parseFloat(t.ingresos_reales || 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+                const ingresoNeto = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
                 map[cid].billing += ingresoNeto;
             }
             

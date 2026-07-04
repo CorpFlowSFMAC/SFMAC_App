@@ -475,6 +475,16 @@ export default function AdminDashboard() {
         return isRolledOver(t);
     };
 
+    // Helper: obtener fecha de cierre efectiva (closure_date > updated_at > created_at)
+    const getEffectiveClosureDate = (t: any) => {
+        if (t.closure_date) return new Date(t.closure_date);
+        // Para tickets cerrados sin closure_date, usar updated_at (fecha de última modificación)
+        if (normalizeStateId(t.status_id) === 'ticket_cerrado') {
+            return new Date(t.updated_at || t.created_at);
+        }
+        return null;
+    };
+
     // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
     const roi = useMemo(() => {
         const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
@@ -492,12 +502,15 @@ export default function AdminDashboard() {
             inversionSum += inv;
 
             const isClosed = normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado";
-            const displayClosureDate = t.closure_date || t.fechaCierre || t.updated_at;
-            const closedInCurrentPeriod = isClosed && displayClosureDate && isInRange(displayClosureDate);
+            // Usar fecha de cierre efectiva: closure_date > updated_at (para cerrados)
+            const effectiveDate = getEffectiveClosureDate(t);
+            const closedInCurrentPeriod = isClosed && effectiveDate && effectiveDate >= startOfPeriod;
 
             if (closedInCurrentPeriod) {
                 closed.push(t);
-                ingresosSum += parseFloat(t.ingresos_reales ?? 0);
+                // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                const rawIngresos = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
+                ingresosSum += rawIngresos;
                 utilidadSum += ticketUtilidad(t);
             }
 
@@ -518,7 +531,8 @@ export default function AdminDashboard() {
             .map(s => {
                 const stTotal = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
                 const stClosed = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
-                const ing  = stClosed.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0);
+                // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                const ing  = stClosed.reduce((a, t) => a + (parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18)), 0);
                 const cost = stTotal.reduce((a, t) => a + ticketInversion(t), 0);
                 const util = stClosed.reduce((a, t) => a + ticketUtilidad(t), 0);
                 return { ...s, tickets: stTotal.length, ingresos: ing, margen: ing > 0 ? (util / ing) * 100 : 0 };
@@ -526,8 +540,11 @@ export default function AdminDashboard() {
             .filter(s => s.tickets > 0)
             .sort((a, b) => b.ingresos - a.ingresos);
 
+        // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+        const getIngresosBase = (t: any) => parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
+
         const ingresosItems = closed
-            .filter(t => parseFloat(t.ingresos_reales ?? 0) > 0)
+            .filter(t => getIngresosBase(t) > 0)
             .sort((a, b) =>
                 new Date(b.closure_date ?? b.updated_at ?? b.created_at ?? 0).getTime() -
                 new Date(a.closure_date ?? a.updated_at ?? a.created_at ?? 0).getTime()
@@ -612,7 +629,8 @@ export default function AdminDashboard() {
         activeTickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
             totalAdvances += parseFloat(t.adelantos_flujo_b || t.metadata?.adelantos_flujo_b || 0);
-            totalBudget += parseFloat(t.ingresos_reales || 0);
+            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+            totalBudget += parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
         });
 
         return {
@@ -1102,7 +1120,8 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Ingresos Generados: Aprobados & Facturados (SIN IGV)");
                         setModalTickets(roi.ingresosItems.map((t: any) => {
-                            const ingresoReal = parseFloat(t.ingresos_reales || 0);
+                            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                            const ingresoReal = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
                             return {
                                 ...t,
                                 cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
@@ -1139,7 +1158,8 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Análisis de Utilidad Neta (Profitability) - SIN IGV");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const ing  = parseFloat(t.ingresos_reales ?? 0);
+                            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                            const ing  = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
                             const cost = ticketInversion(t);
                             const util = ticketUtilidad(t);
                             return { ...t,
@@ -1159,7 +1179,8 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Eficiencia Operativa / ROI");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const ing  = parseFloat(t.ingresos_reales ?? 0);
+                            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                            const ing  = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
                             const cost = ticketInversion(t);
                             const util = ticketUtilidad(t);
                             return { ...t,
