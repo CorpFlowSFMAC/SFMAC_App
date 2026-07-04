@@ -9,7 +9,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
 
 const PG_CONFIG = {
-    host: '87.99.137.96',
+    host: process.env.DATABASE_URL 
+        ? process.env.DATABASE_URL.replace('postgresql://postgres:CorpFlowSFMAC_DB_2026@', '').split(':')[0]
+        : '172.18.0.7',
     port: 5432,
     database: 'postgres',
     user: 'postgres',
