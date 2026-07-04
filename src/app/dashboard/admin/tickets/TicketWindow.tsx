@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, normalizeTicket } from "@/lib/useQueryHooks";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, TrendingUp } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, TrendingUp, Pencil } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -178,6 +178,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
     // CONCILIACIÓN RETROACTIVA STATES
     const [isRetroactiveClosure, setIsRetroactiveClosure] = useState(false);
     const [retroactiveDate, setRetroactiveDate] = useState("2026-06-30T23:59:59");
+
+    // CLOSED TICKET EDIT STATES
+    const [isEditingClosedData, setIsEditingClosedData] = useState(false);
+    const [closedDataEdits, setClosedDataEdits] = useState({ client_ticket_number: "", closure_date: "" });
     
     const checkAndHardDelete = async () => {
         if (!ticketData?.id) return;
@@ -2607,6 +2611,28 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         }
         onClose();
     };
+    const displayClosureDate = ticketData.closure_date || ticketData.fechaCierre || ticketData.updated_at;
+
+    const handleUpdateClosedData = async () => {
+        try {
+            await ticketsAPI.update(ticketData.id, { 
+                client_ticket_number: closedDataEdits.client_ticket_number,
+                ...(closedDataEdits.closure_date ? { closure_date: new Date(closedDataEdits.closure_date + "-05:00").toISOString() } : {})
+            });
+            setTicketData((prev: any) => ({ 
+                ...prev, 
+                client_ticket_number: closedDataEdits.client_ticket_number,
+                ...(closedDataEdits.closure_date ? { closure_date: new Date(closedDataEdits.closure_date + "-05:00").toISOString() } : {})
+            }));
+            setIsEditingClosedData(false);
+            console.log("Cierre Real actualizado en BD:", closedDataEdits.closure_date);
+            showToast("Métricas actualizadas", "Los paneles reflejarán los cambios inmediatamente.", "success");
+        } catch (error) {
+            console.error("Error actualizando datos de cierre:", error);
+            showToast("Error de Red", "No se pudo actualizar. Verifique la consola.", "error");
+        }
+    };
+
     const handleCompleteClosure = async () => {
         if (isSaving) {
             showToast("⏳ Operacion Pendiente", "Por favor espere a que la sincronización termine.", "error");
@@ -2629,7 +2655,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         setIsSaving(true);
         try {
             // PASO 2: Mutación y Payload de Cierre Real
-            // REGLA DE NEGOCIO: closure_date SIEMPRE se asigna al cerrar un ticket
+            // REGLA DE NEGOCIO: closure_date SIEMPRE se asigna al cerrar
+            // - Cierre normal: fecha actual del sistema
+            // - Cierre retroactivo: fecha seleccionada por el usuario
             const closureDateValue = isRetroactiveClosure 
                 ? new Date(retroactiveDate + "-05:00").toISOString() 
                 : new Date().toISOString();
@@ -4230,19 +4258,80 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                     </div>
                                                     <div className={styles.concludedHeaderStats}>
                                                         <div className={styles.statBadge}>
-                                                            <span className={styles.statLabel}>Ticket</span>
+                                                            <span className={styles.statLabel}>Ticket Cliente</span>
                                                             <span className={styles.statValue}>
                                                                 {ticketData.client_ticket_number && ticketData.client_ticket_number.trim() !== "" 
                                                                     ? ticketData.client_ticket_number 
                                                                     : "PENDIENTE"}
                                                             </span>
                                                         </div>
-                                                        <div className={styles.statBadgeGreen}>
-                                                            <span className={styles.statLabelGreen}>Liquidado</span>
-                                                            <CheckCircle size={14} color="#059669" />
+                                                        <div className={styles.statBadge}>
+                                                            <span className={styles.statLabel}>Cierre Real</span>
+                                                            <span className={styles.statValue} style={{ fontSize: '11px', color: '#475569' }}>
+                                                                {displayClosureDate ? new Date(displayClosureDate).toLocaleString('es-PE') : '—'}
+                                                            </span>
                                                         </div>
+                                                        {isAdmin && (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    if (isEditingClosedData) {
+                                                                        handleUpdateClosedData();
+                                                                    } else {
+                                                                        const defaultDate = displayClosureDate ? new Date(displayClosureDate).toISOString().slice(0,16) : new Date().toISOString().slice(0,16);
+                                                                        setClosedDataEdits({
+                                                                            client_ticket_number: ticketData.client_ticket_number || "",
+                                                                            closure_date: defaultDate
+                                                                        });
+                                                                        setIsEditingClosedData(true);
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    background: isEditingClosedData ? '#10B981' : '#F1F5F9',
+                                                                    color: isEditingClosedData ? 'white' : '#475569',
+                                                                    border: isEditingClosedData ? 'none' : '1px solid #CBD5E1',
+                                                                    padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', alignSelf: 'center'
+                                                                }}
+                                                            >
+                                                                {isEditingClosedData ? <CheckCircle2 size={12}/> : <Pencil size={12}/>}
+                                                                {isEditingClosedData ? "GUARDAR" : "EDITAR MÉTRICAS"}
+                                                            </button>
+                                                        )}
+                                                        {isEditingClosedData && (
+                                                            <button onClick={() => setIsEditingClosedData(false)} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', alignSelf: 'center' }}>
+                                                                <X size={12}/>
+                                                            </button>
+                                                        )}
+                                                        {!isEditingClosedData && (
+                                                            <div className={styles.statBadgeGreen}>
+                                                                <span className={styles.statLabelGreen}>Liquidado</span>
+                                                                <CheckCircle size={14} color="#059669" />
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
+                                                {isEditingClosedData && (
+                                                    <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '15px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+                                                            <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569' }}>TICKET CLIENTE (Mibanco/Santander)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={closedDataEdits.client_ticket_number}
+                                                                onChange={(e) => setClosedDataEdits(prev => ({...prev, client_ticket_number: e.target.value.toUpperCase()}))}
+                                                                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', outline: 'none' }}
+                                                                placeholder="Ej. MB000000.26"
+                                                            />
+                                                        </div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+                                                            <label style={{ fontSize: '10px', fontWeight: 700, color: '#475569' }}>FECHA DE CIERRE (Métrica Contable)</label>
+                                                            <input 
+                                                                type="datetime-local" 
+                                                                value={closedDataEdits.closure_date}
+                                                                onChange={(e) => setClosedDataEdits(prev => ({...prev, closure_date: e.target.value}))}
+                                                                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', outline: 'none' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 <div className={styles.financialAuditGrid}>
                                                     {/* Card 1: PRESUPUESTO APROBADO */}
                                                     <div className={styles.financeCard} style={{
@@ -5290,9 +5379,14 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                         ticketData={ticketData}
                         ticketCosts={ticketCosts}
                         moTicketActual={typeof techPactedTotal === 'number' && techPactedTotal > 0 ? techPactedTotal : undefined}
-                        onApplyTicketNumber={(val: string) => {
+                        onApplyTicketNumber={async (val: string) => {
                             setTicketData((prev: any) => ({ ...prev, client_ticket_number: val }));
-                            showToast("Ticket Registrado", `Se ha asignado el número de ticket: ${val}`, "success");
+                            try {
+                                await ticketsAPI.update(ticketData.id, { client_ticket_number: val });
+                                showToast("Ticket Registrado", `Se ha asignado el número de ticket: ${val}`, "success");
+                            } catch (err) {
+                                console.error('Error guardando ticket desde el secretario virtual:', err);
+                            }
                         }}
                     />
                 )}

@@ -303,22 +303,34 @@ export default function TicketsPage() {
         if (isSearching && globalSearchResults) {
             return globalSearchResults.all;
         }
-        const base = ticketsForMe.filter(t => filterByView(t, viewMode));
+        let base = ticketsForMe.filter(t => filterByView(t, viewMode));
         
         // Filtro por estado específico del kanban (ej: "visitado", "en_ejecucion")
         if (viewMode === "active" && statFilter && KANBAN_FILTER_STATES.includes(statFilter)) {
-            return base.filter(t => normalizeStateId(t.estadoId) === statFilter);
+            base = base.filter(t => normalizeStateId(t.estadoId) === statFilter);
+        } else if (viewMode === "active" && statFilter === "nuevos") {
+            base = base.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId)));
+        } else if (viewMode === "active" && statFilter === "enProceso") {
+            base = base.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId)));
+        } else if (viewMode === "active" && statFilter === "revision") {
+            base = base.filter(t => normalizeStateId(t.estadoId) === "requiere_revision_admin");
         }
-        if (viewMode === "active" && statFilter === "nuevos") {
-            return base.filter(t => NUEVOS_STATES.includes(normalizeStateId(t.estadoId)));
+
+        // ── ORDENAMIENTO CONTABLE ──────────────────────────────────────────────
+        // COMPLETADOS: ordenar por fecha de cierre, de más reciente a más antiguo
+        if (viewMode === "closed") {
+            return [...base].sort((a, b) => {
+                const dA = new Date(a.closure_date || a.fechaCierre || a.updated_at || 0).getTime();
+                const dB = new Date(b.closure_date || b.fechaCierre || b.updated_at || 0).getTime();
+                return dB - dA; // Mayor (más reciente) primero
+            });
         }
-        if (viewMode === "active" && statFilter === "enProceso") {
-            return base.filter(t => EN_PROCESO_STATES.includes(normalizeStateId(t.estadoId)));
-        }
-        if (viewMode === "active" && statFilter === "revision") {
-            return base.filter(t => normalizeStateId(t.estadoId) === "requiere_revision_admin");
-        }
-        return base;
+        // EN PROCESO / ACTIVOS: ordenar por fecha de creación, de más reciente a más antiguo
+        return [...base].sort((a, b) => {
+            const dA = new Date(a.createdAt || a.created_at || a.fechaCreacion || 0).getTime();
+            const dB = new Date(b.createdAt || b.created_at || b.fechaCreacion || 0).getTime();
+            return dB - dA; // Mayor (más reciente) primero
+        });
     }, [ticketsForMe, filterByView, viewMode, statFilter, isSearching, globalSearchResults]);
 
     return (
