@@ -592,11 +592,15 @@ export default function AdminDashboard() {
             
             let closedInCurrentPeriod = false;
             if (hasRealClosure && fechaReferenciaStr) {
-                // Usar comparación de año/mes directa (robusta a UTC)
-                const fechaRef = new Date(fechaReferenciaStr);
-                const yearMatch = fechaRef.getFullYear() === periodInfo.year;
-                const monthMatch = (fechaRef.getMonth() + 1) === periodInfo.month; // +1 porque getMonth() es 0-indexed
-                closedInCurrentPeriod = yearMatch && monthMatch;
+                // Usar Intl.DateTimeFormat con America/Lima para consistencia de zona horaria
+                const formatter = new Intl.DateTimeFormat("en-US", {
+                    timeZone: "America/Lima",
+                    year: "numeric", month: "2-digit"
+                });
+                const parts = formatter.formatToParts(new Date(fechaReferenciaStr));
+                const dateYear = parseInt(parts.find(p => p.type === "year")!.value, 10);
+                const dateMonth = parseInt(parts.find(p => p.type === "month")!.value, 10);
+                closedInCurrentPeriod = dateYear === periodInfo.year && dateMonth === periodInfo.month;
             }
 
             if (closedInCurrentPeriod) {
