@@ -1,136 +1,106 @@
 /**
- * API de Corrección de closure_date
+ * API de Gestión de Trigger de closure_date
  * Ejecuta:
- * 1. UPDATE tickets SET closure_date = updated_at WHERE status_id = 'ticket_cerrado' AND closure_date IS NULL
- * 2. Crea trigger para auto-poblar closure_date en el futuro
+ * 1. Verifica si el trigger existe
+ * 2. Crea el trigger si no existe
+ * 3. Verifica el estado del trigger
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseServiceKey, getSupabaseUrl } from '@/lib/supabase-config';
+import { Client } from 'pg';
 
-const supabaseUrl = getSupabaseUrl();
-const supabaseServiceKey = getSupabaseServiceKey();
-
-function getClient() {
-    if (supabaseServiceKey && supabaseUrl) {
-        return createClient(supabaseUrl, supabaseServiceKey);
-    }
-    return null;
-}
+const PG_CONFIG = {
+    host: '87.99.137.96',
+    port: 5432,
+    database: 'postgres',
+    user: 'postgres',
+    password: 'CorpFlowSFMAC_DB_2026',
+    ssl: false
+};
 
 export async function GET(request: NextRequest) {
-    const client = getClient();
-
-    if (!client || !supabaseUrl) {
-        return NextResponse.json({
-            success: false,
-            error: 'Supabase no configurado correctamente'
-        }, { status: 500 });
-    }
-
-    const results: any = {
-        step1: null,
-        step2: null,
-        verification: null
-    };
-
+    const client = new Client(PG_CONFIG);
+    
     try {
-        // ============================================================
-        // STEP 1: UPDATE tickets con closure_date NULL
-        // ============================================================
+        await client.connect();
         
-        // Primero, obtener los IDs de tickets a actualizar
-        const { data: ticketsToUpdate, error: fetchError } = await client
-            .from('tickets')
-            .select('id')
-            .eq('status_id', 'ticket_cerrado')
-            .is('closure_date', null);
-
-        if (fetchError) {
-            return NextResponse.json({
-                success: false,
-                error: 'Error al obtener tickets: ' + fetchError.message
-            }, { status: 500 });
-        }
-
-        const countToUpdate = ticketsToUpdate?.length || 0;
-        results.step1 = {
-            ticketsFound: countToUpdate,
-            message: countToUpdate > 0 
-                ? `Encontrados ${countToUpdate} tickets para actualizar`
-                : 'No hay tickets que actualizar'
+        const results: any = {
+            triggerExists: false,
+            functionCreated: false,
+            triggerCreated: false,
+            error: null
         };
 
-        // Actualizar cada ticket individualmente
-        if (countToUpdate > 0) {
-            let updatedCount = 0;
-            let errorCount = 0;
+        // ============================================================
+        // STEP 1: Verificar si el trigger ya existe
+        // ============================================================
+        const checkTrigger = await client.query(`
+            SELECT tgname, tgname 
+            FROM pg_trigger 
+            WHERE tgname = 'tr_populate_closure_date'
+        `);
+        
+        results.triggerExists = checkTrigger.rows.length > 0;
+        
+        if (results.triggerExists) {
+            results.message = 'El trigger ya existe y está activo';
+        } else {
+            // ============================================================
+            // STEP 2: Crear la función
+            // ============================================================
+            await client.query(`
+                CREATE OR REPLACE FUNCTION populate_closure_date_tg()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                  IF NEW.status_id IN ('ticket_cerrado', 'liquidado') AND NEW.closure_date IS NULL THEN
+                    NEW.closure_date := NOW();
+                  END IF;
+                  RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+            `);
+            results.functionCreated = true;
             
-            for (const ticket of ticketsToUpdate) {
-                const { error: updateError } = await client
-                    .from('tickets')
-                    .update({ closure_date: new Date().toISOString() }) // Temporal para referencia
-                    .eq('id', ticket.id);
-                
-                // En realidad necesitamos actualizar closure_date con updated_at
-                // Como no podemos hacer UPDATE con valor de otra columna directamente,
-                // obtenemos el updated_at y lo usamos
-                const { data: ticketData } = await client
-                    .from('tickets')
-                    .select('updated_at')
-                    .eq('id', ticket.id)
-                    .single();
-                
-                if (ticketData?.updated_at) {
-                    const { error: updateError2 } = await client
-                        .from('tickets')
-                        .update({ closure_date: ticketData.updated_at })
-                        .eq('id', ticket.id);
-                    
-                    if (!updateError2) {
-                        updatedCount++;
-                    } else {
-                        errorCount++;
-                    }
-                }
-            }
-            
-            results.step1.updated = updatedCount;
-            results.step1.errors = errorCount;
+            // ============================================================
+            // STEP 3: Crear el trigger
+            // ============================================================
+            await client.query(`
+                CREATE TRIGGER tr_populate_closure_date
+                BEFORE INSERT OR UPDATE ON tickets
+                FOR EACH ROW
+                EXECUTE FUNCTION populate_closure_date_tg();
+            `);
+            results.triggerCreated = true;
+            results.message = 'Trigger creado exitosamente';
         }
 
         // ============================================================
-        // STEP 2: Verificación
+        // STEP 4: Verificación final
         // ============================================================
+        const verifyTrigger = await client.query(`
+            SELECT tgname, tgname 
+            FROM pg_trigger 
+            WHERE tgname = 'tr_populate_closure_date'
+        `);
         
-        const { count: remainingNull } = await client
-            .from('tickets')
-            .select('id', { count: 'exact', head: true })
-            .eq('status_id', 'ticket_cerrado')
-            .is('closure_date', null);
-
-        const { count: totalClosed } = await client
-            .from('tickets')
-            .select('id', { count: 'exact', head: true })
-            .eq('status_id', 'ticket_cerrado');
-
         results.verification = {
-            totalClosedTickets: totalClosed || 0,
-            remainingNullClosureDate: remainingNull || 0,
-            allPopulated: (remainingNull || 0) === 0
+            triggerActive: verifyTrigger.rows.length > 0,
+            triggerName: verifyTrigger.rows.length > 0 ? verifyTrigger.rows[0].tgname : null
         };
+
+        await client.end();
 
         return NextResponse.json({
             success: true,
-            message: 'Proceso completado',
-            results,
-            note: 'NOTA: El trigger debe crearse manualmente en PostgreSQL. Ver instrucciones abajo.'
+            message: 'Trigger verificado y creado si no existía',
+            results
         });
 
     } catch (err: any) {
+        await client.end().catch(() => {});
         return NextResponse.json({
             success: false,
-            error: err.message
+            error: err.message,
+            detail: err.stack
         }, { status: 500 });
     }
 }
