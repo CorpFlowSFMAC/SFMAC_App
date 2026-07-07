@@ -894,11 +894,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             const updated = await ticketsAPI.update(id, finalUpdates);
             const normalized = normalizeTicket(updated);
 
-            // Forzar invalidación completa del caché para recalcular métricas de ingresos
-            if (isClosureEvent) {
-                console.log('[AppDataContext] 🚨 Cierre detectado, forzando invalidación de caché...');
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-            }
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // FIX: Invalidar SIEMPRE después de un update para garantizar datos frescos
+            // Anteriormente solo se invalidaba en cierre de tickets, causando que la
+            // reasignación de técnicos mostrara el valor antiguo al reabrir la ventana.
+            // ═══════════════════════════════════════════════════════════════════════════════
+            console.log('[AppDataContext] 🔄 Invalidando caché después de update ticket...');
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
 
             // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
             // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()
@@ -939,10 +941,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 ...t,
                                 ...normalized,
                                 metadata: mergedMeta,
+                                // Campos críticos siempre del normalized si existen, sino del update o del cache
+                                technician_id: finalUpdates.technician_id !== undefined 
+                                    ? finalUpdates.technician_id 
+                                    : (normalized?.technician_id || t.technician_id),
                                 tecnico: normalized?.tecnico || t.tecnico,
-                                gestora: normalized?.gestora || t.gestora,
+                                technicians: normalized?.technicians || t.technicians,
+                                gesteora: normalized?.gestora || t.gestora,
                                 cliente: normalized?.cliente || t.cliente,
                                 sede: normalized?.sede || t.sede,
+                                status_id: finalUpdates.status_id || normalized?.status_id || t.status_id,
                                 solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                 solicitudPago: mergedMeta.solicitudPago,
                                 solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
