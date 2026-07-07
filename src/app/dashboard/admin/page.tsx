@@ -159,9 +159,20 @@ function GestoraBar({ name, count, max, color }: any) {
 export default function AdminDashboard() {
     const { tickets = [], loadingTickets, technicians, gestoras = [], updateTicket, refreshTickets } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
-    const [now] = useState(() => new Date());
+    const [now, setNow] = useState(() => new Date());
     const [isMounted, setIsMounted] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    
+    // ── Actualizar 'now' cada 5 minutos para asegurar que las métricas del mes actual ──
+    // se recalculen correctamente cuando cambie el día/mes sin necesidad de recargar la página
+    useEffect(() => {
+        const FIVE_MINUTES = 5 * 60 * 1000;
+        const interval = setInterval(() => {
+            setNow(new Date());
+        }, FIVE_MINUTES);
+        return () => clearInterval(interval);
+    }, []);
+
     const [toast, setToast] = useState<{ title: string; desc: string } | null>(null);
     const [realtimeOverrides, setRealtimeOverrides] = useState<Record<string, any>>({});
     
