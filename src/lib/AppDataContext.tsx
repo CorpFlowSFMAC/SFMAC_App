@@ -894,11 +894,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             const updated = await ticketsAPI.update(id, finalUpdates);
             const normalized = normalizeTicket(updated);
 
-            // Forzar invalidación completa del caché para recalcular métricas de ingresos
-            if (isClosureEvent) {
-                console.log('[AppDataContext] 🚨 Cierre detectado, forzando invalidación de caché...');
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-            }
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // FIX: Invalidar SIEMPRE después de un update para garantizar datos frescos
+            // Anteriormente solo se invalidaba en cierre de tickets, causando que la
+            // reasignación de técnicos mostrara el valor antiguo al reabrir la ventana.
+            // ═══════════════════════════════════════════════════════════════════════════════
+            console.log('[AppDataContext] 🔄 Invalidando caché después de update ticket...');
+            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
 
             // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
             // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()
