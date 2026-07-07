@@ -273,7 +273,16 @@ export default function GestorDashboard({ tab }: GestorPageProps) {
     const [searchTerm, setSearchTerm] = useState("");
 
     const quote = useMemo(() => QUOTES[new Date().getDay() % QUOTES.length], []);
-    const now = useMemo(() => new Date(), []);
+    
+    // ── 'now' como estado para actualizarse periódicamente y calcular métricas del mes actual ──
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+        const FIVE_MINUTES = 5 * 60 * 1000;
+        const interval = setInterval(() => {
+            setNow(new Date());
+        }, FIVE_MINUTES);
+        return () => clearInterval(interval);
+    }, []);
 
 
     const handleCreateTicket = async (ticketData: any) => {
