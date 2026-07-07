@@ -545,26 +545,12 @@ export default function AdminDashboard() {
         return true;
     };
 
-    // Filtro de periodo robusto que incluye los tickets en rango y los arrastrados
-    const isTicketInPeriod = (t: any) => {
-        // Ticket creado en el periodo
-        if (isDateInPeriod(t.created_at ?? t.createdAt ?? t.fechaCreacion, periodInfo, dateRange)) return true;
-        // Ticket cerrado en el periodo
-        if (t.closure_date && isDateInPeriod(t.closure_date, periodInfo, dateRange)) return true;
-        // Ticket arrastrado de periodos anteriores
-        return isRolledOver(t);
-    };
-
-    // Helper: obtener fecha de cierre efectiva (closure_date > updated_at > created_at)
-    const getEffectiveClosureDate = (t: any) => {
-        if (t.closure_date) return new Date(t.closure_date);
-        // Para tickets cerrados sin closure_date, usar updated_at (fecha de última modificación)
-        if (normalizeStateId(t.status_id) === 'ticket_cerrado') {
-            return new Date(t.updated_at || t.created_at);
-        }
-        return null;
-    };
-
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // NUEVO EJE CONTABLE: closure_date como ÚNICA fuente de verdad
+    // Regla: Solo los tickets con estado 'ticket_cerrado' o 'liquidado' Y closure_date
+    // dentro del periodo actual se incluyen en las métricas de ingresos/utilidad.
+    // ═══════════════════════════════════════════════════════════════════════════════
+    
     // ── Definición estricta de estados de cierre real ─────────────────────────────
     const REAL_CLOSURE_STATES = ["ticket_cerrado", "liquidado"];
     
@@ -581,7 +567,42 @@ export default function AdminDashboard() {
         return REVENUE_STATES.includes(sid);
     };
 
+    // Filtro de periodo basado EXCLUSIVAMENTE en closure_date (eje contable)
+    // Un ticket se considera "en el periodo" solo si:
+    // 1. Tiene estado de cierre real (ticket_cerrado o liquidado)
+    // 2. Su closure_date cae dentro del periodo actual
+    const isClosedInPeriod = (t: any): boolean => {
+        if (!isRealClosureState(t)) return false;
+        if (!t.closure_date) return false;
+        return isDateInPeriod(t.closure_date, periodInfo, dateRange);
+    };
+
+    // Helper: obtener fecha de cierre efectiva (closure_date > updated_at > created_at)
+    const getEffectiveClosureDate = (t: any) => {
+        if (t.closure_date) return new Date(t.closure_date);
+        if (normalizeStateId(t.status_id) === 'ticket_cerrado') {
+            return new Date(t.updated_at || t.created_at);
+        }
+        return null;
+    };
+
+    // Filtro legacy: mantener compatibilidad pero usar closure_date como prioritario
+    // NOTA: Para métricas de INGRESOS y UTILIDAD usar isClosedInPeriod()
+    // Para métricas OPERATIVAS (SLA, tickets en proceso) usar isTicketInPeriod()
+    const isTicketInPeriod = (t: any) => {
+        // Si es un ticket con cierre real en este periodo → incluir
+        if (isClosedInPeriod(t)) return true;
+        // Tickets arrastrados de periodos anteriores (abiertos que vienen del mes pasado)
+        if (isRolledOver(t)) return true;
+        // Tickets creados en el periodo actual (sin cierre aún)
+        if (isDateInPeriod(t.created_at ?? t.createdAt ?? t.fechaCreacion, periodInfo, dateRange)) return true;
+        return false;
+    };
+
     // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
+    // IMPORTANTE: Este módulo ahora usa EXCLUSIVAMENTE closure_date como eje contable.
+    // Solo los tickets con estado 'ticket_cerrado' o 'liquidado' Y closure_date en el
+    // periodo actual se incluyen en los cálculos de ingresos y utilidad.
     const roi = useMemo(() => {
         const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
 
@@ -597,22 +618,10 @@ export default function AdminDashboard() {
             const inv = ticketInversion(t);
             inversionSum += inv;
 
-            // Filtrar tickets cerrados en el periodo actual (definición estricta)
-            const hasRealClosure = isRealClosureState(t);
-            const fechaReferenciaStr = hasRealClosure ? (t.closure_date || t.updated_at) : null;
-            
-            let closedInCurrentPeriod = false;
-            if (hasRealClosure && fechaReferenciaStr) {
-                // Usar Intl.DateTimeFormat con America/Lima para consistencia de zona horaria
-                const formatter = new Intl.DateTimeFormat("en-US", {
-                    timeZone: "America/Lima",
-                    year: "numeric", month: "2-digit"
-                });
-                const parts = formatter.formatToParts(new Date(fechaReferenciaStr));
-                const dateYear = parseInt(parts.find(p => p.type === "year")!.value, 10);
-                const dateMonth = parseInt(parts.find(p => p.type === "month")!.value, 10);
-                closedInCurrentPeriod = dateYear === periodInfo.year && dateMonth === periodInfo.month;
-            }
+            // NUEVO EJE CONTABLE: Usar isClosedInPeriod() que filtra por:
+            // 1. Estado: ticket_cerrado o liquidado
+            // 2. closure_date dentro del periodo actual
+            const closedInCurrentPeriod = isClosedInPeriod(t);
 
             if (closedInCurrentPeriod) {
                 closed.push(t);

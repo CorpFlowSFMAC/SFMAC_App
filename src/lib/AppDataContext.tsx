@@ -877,6 +877,23 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         async (id: string, updates: any) => {
             const updated = await ticketsAPI.update(id, updates);
             const normalized = normalizeTicket(updated);
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // NUEVO EJE CONTABLE: Detectar cuando un ticket se marca como liquidado/cerrado
+            // y forzar invalidación completa del caché para recalcular métricas de ingresos.
+            // ═══════════════════════════════════════════════════════════════════════════════
+            const newStatusId = updates?.status_id || normalized?.status_id;
+            const isClosureEvent = newStatusId && 
+                (newStatusId.toLowerCase() === 'ticket_cerrado' || 
+                 newStatusId.toLowerCase() === 'liquidado');
+            
+            // Si es un evento de cierre, forzar invalidación completa del caché
+            if (isClosureEvent) {
+                console.log('[AppDataContext] 🚨 Cierre detectado, forzando invalidación de caché...');
+                // Invalidar TODAS las queries de tickets para forzar recálculo
+                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            }
+
             // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
             // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()
             queryClient.setQueryData(
