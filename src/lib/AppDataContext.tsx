@@ -941,10 +941,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 ...t,
                                 ...normalized,
                                 metadata: mergedMeta,
+                                // Campos críticos siempre del normalized si existen, sino del update o del cache
+                                technician_id: finalUpdates.technician_id !== undefined 
+                                    ? finalUpdates.technician_id 
+                                    : (normalized?.technician_id || t.technician_id),
                                 tecnico: normalized?.tecnico || t.tecnico,
-                                gestora: normalized?.gestora || t.gestora,
+                                technicians: normalized?.technicians || t.technicians,
+                                gesteora: normalized?.gestora || t.gestora,
                                 cliente: normalized?.cliente || t.cliente,
                                 sede: normalized?.sede || t.sede,
+                                status_id: finalUpdates.status_id || normalized?.status_id || t.status_id,
                                 solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                 solicitudPago: mergedMeta.solicitudPago,
                                 solicitudLiquidacion: mergedMeta.solicitudLiquidacion,
