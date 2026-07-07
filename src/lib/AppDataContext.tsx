@@ -875,22 +875,28 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const updateTicket = useCallback(
         async (id: string, updates: any) => {
-            const updated = await ticketsAPI.update(id, updates);
-            const normalized = normalizeTicket(updated);
-
             // ═══════════════════════════════════════════════════════════════════════════════
-            // NUEVO EJE CONTABLE: Detectar cuando un ticket se marca como liquidado/cerrado
-            // y forzar invalidación completa del caché para recalcular métricas de ingresos.
+            // NUEVO EJE CONTABLE: Si se cierra un ticket sin closure_date, asignar updated_at
+            // Esto asegura que todo ticket cerrado sea visible contablemente en el mes actual
             // ═══════════════════════════════════════════════════════════════════════════════
-            const newStatusId = updates?.status_id || normalized?.status_id;
+            const newStatusId = updates?.status_id;
             const isClosureEvent = newStatusId && 
                 (newStatusId.toLowerCase() === 'ticket_cerrado' || 
                  newStatusId.toLowerCase() === 'liquidado');
             
-            // Si es un evento de cierre, forzar invalidación completa del caché
+            let finalUpdates = { ...updates };
+            if (isClosureEvent && !updates.closure_date) {
+                // Asignar updated_at como closure_date por defecto
+                finalUpdates.closure_date = new Date().toISOString();
+                console.log('[AppDataContext] 📅 closure_date asignado automáticamente al cerrar ticket');
+            }
+
+            const updated = await ticketsAPI.update(id, finalUpdates);
+            const normalized = normalizeTicket(updated);
+
+            // Forzar invalidación completa del caché para recalcular métricas de ingresos
             if (isClosureEvent) {
                 console.log('[AppDataContext] 🚨 Cierre detectado, forzando invalidación de caché...');
-                // Invalidar TODAS las queries de tickets para forzar recálculo
                 await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
             }
 
