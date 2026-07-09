@@ -692,15 +692,35 @@ export default function PaymentsPage() {
                 // 🚀 MOTOR FINANCIERO V3: Fuente de Verdad Inmutable
                 const finances = calculateTicketFinances(t, t.ticket_costs);
                 const {
-                    pactedMO,
+                    pactedMO: calcPactedMO,
                     totalLaborConfirmed,
                     totalOpConfirmed,
-                    netLaborBalance,
+                    netLaborBalance: calcNetLaborBalance,
                     laborItems,
                     operatingItems,
                     realProfitability,
-                    margenReal
+                    margenReal,
+                    totalVenta
                 } = finances;
+                
+                // 🔧 BLINDAJE: Si pactedMO es 0 pero hay costos pendientes de MO, calcular desde costos
+                const pendingLaborCosts = (t.ticket_costs || []).filter((c: any) => {
+                    const cat = (c.categoria || '').toLowerCase();
+                    const estado = (c.estado_pago || '').toUpperCase();
+                    return (cat.includes('mano') || cat.includes('labor')) && 
+                           (estado === 'PENDIENTE' || estado === 'REQUIERE_APROBACION_ADMIN');
+                });
+                const pendingLaborSum = pendingLaborCosts.reduce((sum: number, c: any) => sum + (c.monto || 0), 0);
+                
+                // Usar pactedMO del cálculo o calcular desde costos pendientes
+                const pactedMO = (calcPactedMO > 0) ? calcPactedMO : (totalLaborConfirmed + pendingLaborSum);
+                const netLaborBalance = (calcPactedMO > 0) ? calcNetLaborBalance : pendingLaborSum;
+                
+                // 🔧 BLINDAJE UTILIDAD: Recalcular si pactedMO fue corregido
+                const ventaTotal = totalVenta || t.total_quoted_amount || 0;
+                const utilidadNeta = (calcPactedMO > 0) 
+                    ? realProfitability 
+                    : Math.max(0, ventaTotal - pactedMO);
 
                 const allConfirmedHistory = [...laborItems, ...operatingItems].sort((a, b) => 
                     new Date(b.fecha || b.created_at || 0).getTime() - new Date(a.fecha || a.created_at || 0).getTime()
@@ -878,7 +898,7 @@ export default function PaymentsPage() {
                         items: techItems,
                         historialDepositos: allConfirmedHistory,
                         montoFacturado: t.total_quoted_amount || 0,
-                        utilidad: realProfitability,
+                        utilidad: utilidadNeta,
                         margen: margenReal,
                         gastosOperativos: totalOpConfirmed,
                         descripcion: t.descripcionServicio || t.description || '',
