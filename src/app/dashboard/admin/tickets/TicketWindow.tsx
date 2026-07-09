@@ -2183,7 +2183,31 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             const isExceeding = (finances.totalLaborConfirmed + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
             const currentTicketId = ticketData.id;
-            const technicianId = ticketData.technician?.id || ticketData.technician_id || ticket.technician_id;
+            
+            // =====================================================================
+            // 🔒 BLINDAJE DE LIQUIDACIÓN: Regla de Negocio
+            // La liquidación SIEMPRE va al técnico ORIGINAL (metadata.technician_id)
+            // =====================================================================
+            const originalTechnicianId = ticket.metadata?.technician_id;
+            const currentTechnicianId = ticketData.technician?.id || ticketData.technician_id || ticket.technician_id;
+            
+            // Si hay discrepancia, alertar y usar el original
+            if (originalTechnicianId && originalTechnicianId !== currentTechnicianId) {
+                console.warn('[BLINDAJE LIQUIDACIÓN] ⚠️ DISCREPANCIA DETECTADA:', {
+                    originalTechnicianId,
+                    currentTechnicianId,
+                    ticketNumber: ticketData.client_ticket_number
+                });
+                showToast(
+                    '⚠️ ALERTA DE SEGURIDAD',
+                    `Discrepancia detectada: El técnico original (${ticket.metadata?.technician?.name || originalTechnicianId}) es diferente del actual. La liquidación se generará a nombre del técnico ORIGINAL.`,
+                    'warning'
+                );
+            }
+            
+            // ✅ Siempre usar el technician_id ORIGINAL de la metadata para liquidación
+            const technicianId = originalTechnicianId || currentTechnicianId;
+            
             let costCreated = false;
             try {
                 if (amount > 0.01 && technicianId) {
@@ -2246,6 +2270,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 totalVenta: freshFinances.totalVenta,
                 utilidad_neta: freshFinances.realProfitability,
                 margen_real: freshFinances.margenReal,
+                // 🔒 BLINDAJE DE CIERRE: Usar fechaFinEjecucion si existe para closure_date
+                // Esto evita que el trigger de BD asigne la fecha actual en lugar de la real
+                closure_date: ticketData.metadata?.fechaFinEjecucion || null
             };
             
             // =====================================================================
@@ -2260,6 +2287,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 status_id: newState,
                 final_balance: guaranteedNetBalance,  // Usar el saldo garantizado, no 'amount'
                 solicitudLiquidacion: solicitudLiquidacionMeta,
+                closure_date: ticketData.metadata?.fechaFinEjecucion || undefined, // 🔒 Pre-asignar closure_date
                 metadata: finalMetadata
             };
             
