@@ -57,9 +57,13 @@ export function RealtimeSyncProvider({ children }: { children: React.ReactNode }
             { event: '*', schema: 'public', table: 'ticket_costs' },
             (payload) => {
                 console.log('[Realtime] Cambio detectado en ticket_costs:', payload);
-                // Invalidar SOLO la query de payments, no todas las de tickets
-                // Esto evita el bucle infinito entre ticket-costs y strategic views
-                queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                // 🔧 FIX: Invalidar con prefijo ['tickets'] para alcanzar TODAS las queries
+                // que incluyen el userEmail: ["tickets", "payments", userEmail], 
+                // ["tickets", "summary", userEmail], etc.
+                // Con refetchType: 'active' solo refetchea queries activas (evita loops)
+                queryClient.invalidateQueries({ queryKey: ['tickets'], refetchType: 'active' });
+                // También invalidar strategic metrics
+                queryClient.invalidateQueries({ queryKey: ['strategic-metrics'], refetchType: 'active' });
             }
         );
 

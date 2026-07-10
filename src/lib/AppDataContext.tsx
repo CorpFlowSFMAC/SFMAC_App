@@ -204,9 +204,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     // ── Refresh = invalidar caché → TanStack refetch automáticamente ──
     const refreshTickets = useCallback(async () => {
         // Invalidar todas las queries de tickets incluyendo pagos
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
     }, [queryClient]);
 
     const refreshClients = useCallback(async () => {
@@ -861,7 +861,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             const created = await ticketsAPI.create(data);
             const normalized = normalizeTicket(created);
             // 🚀 OPTIMIZACIÓN: insertamos directo en cache + invalidamos summary para asegurar sync
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             
             // También insertar directo para respuesta instantánea
             queryClient.setQueryData(
@@ -900,7 +900,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             // reasignación de técnicos mostrara el valor antiguo al reabrir la ventana.
             // ═══════════════════════════════════════════════════════════════════════════════
             console.log('[AppDataContext] 🔄 Invalidando caché después de update ticket...');
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
 
             // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
             // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()

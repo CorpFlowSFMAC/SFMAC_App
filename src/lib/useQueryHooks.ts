@@ -656,7 +656,7 @@ export function useCreateTicket() {
         onSettled: () => {
             // Se asume que el WebSocket o el onMutate actualizarán el summary
             // o se invalida solo el summary si es creación
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
         },
     });
 }
@@ -691,7 +691,7 @@ export function useDeleteTicket() {
             }
         },
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
         },
     });
 }
