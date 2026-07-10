@@ -301,6 +301,23 @@ export default function AdminDashboard() {
     const [modalTitle, setModalTitle] = useState("");
     const [modalTickets, setModalTickets] = useState<any[]>([]);
 
+    // Estados para el Modal Flotante de TicketWindow
+    const [showFloatingTicket, setShowFloatingTicket] = useState(false);
+    const [floatingTicket, setFloatingTicket] = useState<any>(null);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [floatingIndex, setFloatingIndex] = useState(0);
+
+    // Función para abrir el TicketWindow flotante
+    const openFloatingTicket = (ticketId: string) => {
+        const ticket = activeTickets.find((t: any) => t.id === ticketId) || tickets.find((t: any) => t.id === ticketId);
+        if (ticket) {
+            setFloatingTicket(ticket);
+            setFloatingIndex(0);
+            setShowFloatingTicket(true);
+            setIsMinimized(false);
+        }
+    };
+
     // Estado para el Modal de Capital Expuesto
     const [showCapitalModal, setShowCapitalModal] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<any>(null);
@@ -2116,59 +2133,82 @@ export default function AdminDashboard() {
                                     📊 Exportar CSV
                                 </button>
                             </div>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
                                 <thead>
                                     <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Servicio</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto (S/)</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Detalle Servicio</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Creación</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ Sin IGV</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ C/IGV</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {modalTickets.map((t: any, idx: number) => {
-                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
                                         const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
                                         const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
-                                        const fecha = t._fecha || t.created_at || t.createdAt || t.updated_at || '';
-                                        const monto = t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0;
-                                        
+                                        const fechaCreacion = t.created_at || t.createdAt || t.fechaCreacion || '';
+                                        const fechaCierre = t.closure_date || '';
+                                        const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                                        const montoSinIGV = montoBase > 0 ? montoBase : (t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0);
+                                        const montoConIGV = montoSinIGV * 1.18;
+
                                         return (
-                                            <tr 
-                                                key={(t.id || idx) + '-' + idx} 
-                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                                            <tr
+                                                key={(t.id || idx) + '-' + idx}
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.1)'}
                                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                onClick={() => t.id && openFloatingTicket(t.id)}
                                             >
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'monospace', cursor: 'pointer' }}>
                                                         {ticketNum}
+                                                        <span style={{ marginLeft: '6px', fontSize: '0.6rem', opacity: 0.6 }}>🔗</span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>
                                                         {clientName}
                                                     </div>
+                                                    {agencia && (
+                                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', marginTop: '2px' }}>
+                                                            📍 {agencia}
+                                                        </div>
+                                                    )}
                                                 </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <span style={{ 
-                                                        padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
-                                                        background: 'rgba(139,92,246,0.15)', 
-                                                        color: '#A78BFA', 
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <span style={{
+                                                        padding: '3px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
+                                                        background: 'rgba(139,92,246,0.15)',
+                                                        color: '#A78BFA',
                                                         border: '1px solid rgba(139,92,246,0.3)'
                                                     }}>
                                                         {servicio.toUpperCase()}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(monto)}
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                                                        {fechaCreacion ? new Date(fechaCreacion).toLocaleDateString('es-PE') : 'N/A'}
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>
-                                                        {fecha ? new Date(fecha).toLocaleDateString('es-PE') : 'N/A'}
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: fechaCierre ? '#10B981' : 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                                                        {fechaCierre ? new Date(fechaCierre).toLocaleDateString('es-PE') : 'Abierto'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>
+                                                        S/ {fmt(montoSinIGV)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                        S/ {fmt(montoConIGV)}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -2223,84 +2263,89 @@ export default function AdminDashboard() {
                                     <div style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>No hay adelantos en tickets activos.</div>
                                 </div>
                             ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                                        <tr style={{ background: '#0F0F1A', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                            {['ID Ticket', 'Gestora', 'Agencia / Sede', 'Especialista', 'Monto Adelantado', 'Estado', 'Aging'].map(h => (
-                                                <th key={h} style={{ padding: '14px 12px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', textAlign: 'left', letterSpacing: '0.05em' }}>{h}</th>
-                                            ))}
-                                            <th style={{ padding: '14px 4px' }}></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {capitalExpuesto.tickets.map((t: any) => {
-                                            const agingHours = Math.floor(t._ageH);
-                                            const agingDays = Math.floor(t._ageH / 24);
-                                            const agingLabel = agingDays >= 1 ? `${agingDays}d ${agingHours % 24}h` : `${agingHours}h`;
-                                            const agingCol = t._ageH >= 72 ? '#EF4444' : t._ageH >= 48 ? '#F59E0B' : '#10B981';
-                                            const rowBg = t._isRiesgo ? 'rgba(239,68,68,0.04)' : 'transparent';
-                                            const rowBorder = t._isRiesgo ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.03)';
-                                            const estadoLabel = (t.estadoId || 'nuevo').replace(/_/g, ' ').toUpperCase();
-                                            return (
-                                                <tr 
-                                                    key={t.id} 
-                                                    onClick={() => setSelectedTicket(t)}
-                                                    style={{ borderBottom: `1px solid ${rowBorder}`, background: rowBg, cursor: 'pointer' }}
-                                                    onMouseEnter={e => e.currentTarget.style.background = t._isRiesgo ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.02)'}
-                                                    onMouseLeave={e => e.currentTarget.style.background = rowBg}
-                                                >
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontWeight: 800, fontSize: '0.82rem', color: t._isRiesgo ? '#FCA5A5' : 'white', fontFamily: 'monospace' }}>
-                                                            {t.numeroTicketCliente || String(t.id || '').substring(0, 8).toUpperCase()}
+                                                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Detalle Servicio</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Creación</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ Sin IGV</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ C/IGV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {modalTickets.map((t: any, idx: number) => {
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
+                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
+                                        const fechaCreacion = t.created_at || t.createdAt || t.fechaCreacion || '';
+                                        const fechaCierre = t.closure_date || '';
+                                        const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                                        const montoSinIGV = montoBase > 0 ? montoBase : (t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0);
+                                        const montoConIGV = montoSinIGV * 1.18;
+
+                                        return (
+                                            <tr
+                                                key={(t.id || idx) + '-' + idx}
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.1)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                onClick={() => t.id && openFloatingTicket(t.id)}
+                                            >
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'monospace', cursor: 'pointer' }}>
+                                                        {ticketNum}
+                                                        <span style={{ marginLeft: '6px', fontSize: '0.6rem', opacity: 0.6 }}>🔗</span>
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                        {clientName}
+                                                    </div>
+                                                    {agencia && (
+                                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', marginTop: '2px' }}>
+                                                            📍 {agencia}
                                                         </div>
-                                                        <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
-                                                            {new Date(t.createdAt || t.created_at).toLocaleDateString('es-PE')}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 900, color: 'white', flexShrink: 0 }}>
-                                                                {(t._gestoraName || '?').substring(0, 2).toUpperCase()}
-                                                            </div>
-                                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>{t._gestoraName}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{t.cliente?.nombre || String.fromCharCode(8212)}</div>
-                                                        <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>{t._sede}</div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{t._especialista}</span>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontSize: '1rem', fontWeight: 900, color: t._isRiesgo ? '#EF4444' : '#F59E0B' }}>S/ {fmt(t._totalAdelantado)}</div>
-                                                        <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>{t._pagos.length} pago{t._pagos.length !== 1 ? 's' : ''}</div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.62rem', fontWeight: 800, background: t._isRiesgo ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)', color: t._isRiesgo ? '#FCA5A5' : 'rgba(255,255,255,0.6)', border: t._isRiesgo ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' }}>
-                                                            {estadoLabel}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontWeight: 900, fontSize: '0.88rem', color: agingCol }}>{agingLabel}</div>
-                                                        <div style={{ width: '50px', height: '3px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', marginTop: '4px' }}>
-                                                            <div style={{ width: `${Math.min(t._ageH / 72 * 100, 100)}%`, height: '100%', background: agingCol, borderRadius: '2px' }} />
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 8px' }}>
-                                                        <Link prefetch={false} href={`/dashboard/admin/tickets?ticketId=${t.id}`} onClick={() => setShowCapitalModal(false)}
-                                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'white', transition: 'all 0.2s' }}
-                                                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.2)'}
-                                                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'}
-                                                        >
-                                                            <ChevronRight size={14} />
-                                                        </Link>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <span style={{
+                                                        padding: '3px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
+                                                        background: 'rgba(139,92,246,0.15)',
+                                                        color: '#A78BFA',
+                                                        border: '1px solid rgba(139,92,246,0.3)'
+                                                    }}>
+                                                        {servicio.toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                                                        {fechaCreacion ? new Date(fechaCreacion).toLocaleDateString('es-PE') : 'N/A'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: fechaCierre ? '#10B981' : 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                                                        {fechaCierre ? new Date(fechaCierre).toLocaleDateString('es-PE') : 'Abierto'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>
+                                                        S/ {fmt(montoSinIGV)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                        S/ {fmt(montoConIGV)}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                             )}
                         </div>
                     </div>
@@ -2338,73 +2383,83 @@ export default function AdminDashboard() {
                         </div>
                         
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 2rem' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                        <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Ticket / Factura</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Cliente</th>
-                                        <th style={{ textAlign: 'right', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Monto (S/)</th>
-                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Estado</th>
-                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>OC / Referencia</th>
-                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Acción</th>
+                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Detalle Servicio</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Creación</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ Sin IGV</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ C/IGV</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {invoices.length === 0 ? (
-                                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay facturas emitidas.</td></tr>
-                                    ) : invoices.sort((a,b) => (a.status === 'emitida' ? -1 : 1)).map(inv => {
-                                        const isPaid = inv.status === 'cobrada';
-                                        const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
-                                        const ticketCode = tk?.client_ticket_number || (tk?.id || inv.ticket_id).split('-')[0];
-                                        const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
+                                    {modalTickets.map((t: any, idx: number) => {
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
+                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
+                                        const fechaCreacion = t.created_at || t.createdAt || t.fechaCreacion || '';
+                                        const fechaCierre = t.closure_date || '';
+                                        const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                                        const montoSinIGV = montoBase > 0 ? montoBase : (t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0);
+                                        const montoConIGV = montoSinIGV * 1.18;
+
                                         return (
-                                            <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <tr
+                                                key={(t.id || idx) + '-' + idx}
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.1)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                onClick={() => t.id && openFloatingTicket(t.id)}
+                                            >
                                                 <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'white' }}>{ticketCode}</div>
-                                                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{new Date(inv.issued_date || inv.created_at).toLocaleDateString()}</div>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'monospace', cursor: 'pointer' }}>
+                                                        {ticketNum}
+                                                        <span style={{ marginLeft: '6px', fontSize: '0.6rem', opacity: 0.6 }}>🔗</span>
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '12px 8px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>{clientName}</td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(inv.amount_total)}</td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                        {clientName}
+                                                    </div>
+                                                    {agencia && (
+                                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', marginTop: '2px' }}>
+                                                            📍 {agencia}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
                                                     <span style={{
-                                                        background: isPaid ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-                                                        color: isPaid ? '#10B981' : '#F59E0B',
-                                                        padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800
+                                                        padding: '3px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
+                                                        background: 'rgba(139,92,246,0.15)',
+                                                        color: '#A78BFA',
+                                                        border: '1px solid rgba(139,92,246,0.3)'
                                                     }}>
-                                                        {isPaid ? 'PAGADO' : 'PENDIENTE'}
+                                                        {servicio.toUpperCase()}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                                    {isPaid ? (
-                                                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>{inv.invoice_number || 'N/A'}</span>
-                                                    ) : (
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="Opcional OC"
-                                                            value={invoiceOcNumber[inv.id] || ''}
-                                                            onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [inv.id]: e.target.value }))}
-                                                            style={{
-                                                                background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
-                                                                color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem',
-                                                                width: '100px', textAlign: 'center'
-                                                            }}
-                                                        />
-                                                    )}
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                                                        {fechaCreacion ? new Date(fechaCreacion).toLocaleDateString('es-PE') : 'N/A'}
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                                    {!isPaid && (
-                                                        <button 
-                                                            disabled={invoiceProcessing === inv.id}
-                                                            onClick={() => handleMarkAsPaid(inv.id)}
-                                                            style={{
-                                                                background: '#3B82F6', color: 'white', border: 'none',
-                                                                padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
-                                                                cursor: invoiceProcessing === inv.id ? 'wait' : 'pointer',
-                                                                opacity: invoiceProcessing === inv.id ? 0.5 : 1
-                                                            }}>
-                                                            {invoiceProcessing === inv.id ? '...' : 'Cobrar'}
-                                                        </button>
-                                                    )}
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: fechaCierre ? '#10B981' : 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                                                        {fechaCierre ? new Date(fechaCierre).toLocaleDateString('es-PE') : 'Abierto'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>
+                                                        S/ {fmt(montoSinIGV)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                        S/ {fmt(montoConIGV)}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -2712,6 +2767,102 @@ export default function AdminDashboard() {
                             )}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            {/* MODAL FLOTANTE DE TICKET WINDOW */}
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            {showFloatingTicket && floatingTicket && (
+                <div style={{
+                    position: 'fixed',
+                    top: isMinimized ? 'calc(100vh - 60px)' : '20px',
+                    right: '20px',
+                    width: isMinimized ? '280px' : '520px',
+                    height: isMinimized ? '60px' : 'calc(100vh - 40px)',
+                    background: 'linear-gradient(135deg,#0F0F1A 0%,#1A0F2A 100%)',
+                    border: '1px solid rgba(139,92,246,0.4)',
+                    borderRadius: isMinimized ? '16px 16px 0 0' : '20px',
+                    boxShadow: '0 25px 80px rgba(139,92,246,0.25)',
+                    zIndex: 10002,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s ease',
+                    backdropFilter: 'blur(20px)',
+                }}>
+                    {/* Barra de título con controles */}
+                    <div style={{
+                        padding: '12px 16px',
+                        background: 'rgba(139,92,246,0.1)',
+                        borderBottom: '1px solid rgba(139,92,246,0.2)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                    }} onClick={() => setIsMinimized(!isMinimized)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Ticket size={18} color="#8B5CF6" />
+                            <span style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem' }}>
+                                {isMinimized 
+                                    ? `📋 ${floatingTicket.client_ticket_number || floatingTicket.numeroTicketCliente || 'Ticket'} (clic para expandir)` 
+                                    : 'Detalle de Ticket'}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
+                                style={{
+                                    background: 'rgba(139,92,246,0.2)',
+                                    border: 'none',
+                                    color: 'white',
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.75rem',
+                                }}
+                                title={isMinimized ? 'Expandir' : 'Minimizar'}
+                            >
+                                {isMinimized ? '⬆️' : '⬇️'}
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowFloatingTicket(false); setFloatingTicket(null); }}
+                                style={{
+                                    background: 'rgba(239,68,68,0.2)',
+                                    border: 'none',
+                                    color: 'white',
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.75rem',
+                                }}
+                                title="Cerrar"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Contenido del TicketWindow */}
+                    {!isMinimized && (
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <TicketWindow
+                                ticket={floatingTicket}
+                                index={floatingIndex}
+                                onClose={() => { setShowFloatingTicket(false); setFloatingTicket(null); }}
+                                onUpdate={handleUpdateTicket}
+                            />
+                        </div>
+                    )}
                 </div>
             )}
         </div>
