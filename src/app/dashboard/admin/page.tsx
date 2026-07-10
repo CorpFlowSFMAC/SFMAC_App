@@ -521,7 +521,8 @@ export default function AdminDashboard() {
     };
 
     // Identificar si un ticket es de arrastre (abierto de periodos anteriores)
-    // Usa comparación robusta por año/mes para evitar desfases UTC
+    // Un ticket es arrastrado si: fue creado en un periodo anterior Y está ABIERTO
+    // Si está cerrado (sin importar el periodo), NO es arrastrado
     const isRolledOver = (t: any) => {
         const created = t.original_created_at ?? t.created_at ?? t.createdAt ?? t.fechaCreacion;
         if (!created) return false;
@@ -533,13 +534,10 @@ export default function AdminDashboard() {
         const sid = normalizeStateId(t.status_id ?? t.estadoId);
         const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
         
+        // 🔧 CORRECCIÓN: Si está cerrado (sin importar el periodo de cierre), NO es arrastrado
+        // Solo son arrastrados los tickets ABIERTOS de meses anteriores
         if (isClosed) {
-            const closureDate = t.closure_date ?? t.updated_at;
-            // Si está cerrado pero el closure_date está fuera del periodo actual
-            // (o no existe), no lo consideramos arrastre activo
-            if (!closureDate || !isDateInPeriod(closureDate, periodInfo, dateRange)) {
-                return false;
-            }
+            return false;
         }
 
         return true;
