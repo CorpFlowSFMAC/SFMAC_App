@@ -399,12 +399,10 @@ export default function AdminDashboard() {
             // Cargar invoices existentes
             const { data: invData } = await supabase.from('invoices').select('*');
             
-            // Tickets que están cerrados o liquidados y tienen ingresos_reales > 0
+            // ★ MODIFICADO: Todos los tickets con monto > 0, sin importar el estado
             const ticketsFacturables = (activeTickets || []).filter((t: any) => {
-                const statusId = t.status_id || t.status;
-                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'por_liquidar';
                 const hasRevenue = (t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) > 0;
-                return isClosed && hasRevenue;
+                return hasRevenue;
             });
 
             // Enriquecer tickets con datos de invoice
@@ -2561,11 +2559,11 @@ export default function AdminDashboard() {
                                     <thead>
                                         <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
                                             <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
-                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
-                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Estado Ticket</th>
                                             <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto C/IGV</th>
                                             <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° OC</th>
-                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Estado</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cobranza</th>
                                             <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Acción</th>
                                         </tr>
                                     </thead>
@@ -2574,6 +2572,10 @@ export default function AdminDashboard() {
                                             const ticketNum = t.client_ticket_number || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
                                             const isCobrado = t._hasInvoice && t._invoiceStatus === 'cobrada';
                                             const isConOC = t._hasInvoice && !isCobrado;
+                                            const ticketStatus = t.status_id || t.status || 'desconocido';
+                                            
+                                            // Color según estado del ticket
+                                            const estadoColor = ticketStatus === 'ticket_cerrado' || ticketStatus === 'liquidado' ? '#10B981' : '#F59E0B';
                                             
                                             return (
                                                 <tr key={t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
@@ -2587,9 +2589,12 @@ export default function AdminDashboard() {
                                                         {t._agencia && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>📍 {t._agencia}</div>}
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
-                                                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}>
-                                                            {t.closure_date ? new Date(t.closure_date).toLocaleDateString('es-PE') : '-'}
-                                                        </div>
+                                                        <span style={{
+                                                            padding: '4px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 700,
+                                                            background: `${estadoColor}20`, color: estadoColor
+                                                        }}>
+                                                            {ticketStatus === 'ticket_cerrado' ? 'CERRADO' : ticketStatus === 'liquidado' ? 'LIQUIDADO' : ticketStatus.toUpperCase()}
+                                                        </span>
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
                                                         <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>S/ {fmt(t._montoConIGV)}</div>
