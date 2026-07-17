@@ -462,7 +462,16 @@ export default function AdminDashboard() {
                 invoice_number: newInvoiceOc.trim()
             }).select().single();
             
-            if (error) throw error;
+            if (error) {
+                console.error("Error creando invoice:", error);
+                triggerToast("Error", error.message || "No se pudo registrar la OC.");
+                // Cerrar modal incluso si hay error
+                setShowCreateInvoiceModal(false);
+                setSelectedTicketForInvoice(null);
+                setNewInvoiceOc('');
+                setNewInvoiceAmount('');
+                return;
+            }
             
             triggerToast("OC Registrada", `Orden de compra ${newInvoiceOc} asociada al ticket.`);
             
@@ -476,6 +485,11 @@ export default function AdminDashboard() {
         } catch (error: any) {
             console.error("Error creando invoice:", error);
             triggerToast("Error", error.message || "No se pudo registrar la OC.");
+            // Cerrar modal en caso de error
+            setShowCreateInvoiceModal(false);
+            setSelectedTicketForInvoice(null);
+            setNewInvoiceOc('');
+            setNewInvoiceAmount('');
         } finally {
             setInvoiceProcessing(null);
         }
