@@ -400,13 +400,16 @@ export default function AdminDashboard() {
             // Cargar invoices existentes
             const { data: invData } = await supabase.from('invoices').select('*');
             
-            // ★ SOLO tickets cerrados con monto > 0
+            // ★ SOLO tickets cerrados con monto > 0 (incluye 'cerrado' también)
             const ticketsFacturables = (activeTickets || []).filter((t: any) => {
-                const statusId = t.status_id || t.status;
-                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado';
+                const statusId = (t.status_id || t.status || '').toLowerCase();
+                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'cerrado';
                 const hasRevenue = (t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) > 0;
                 return isClosed && hasRevenue;
             });
+
+            console.log('[COBRANZA] Total tickets activos:', activeTickets?.length);
+            console.log('[COBRANZA] Tickets cerrados/encontrados:', ticketsFacturables.length);
 
             // Enriquecer tickets con datos de invoice
             const ticketsConFacturas = ticketsFacturables.map((t: any) => {
