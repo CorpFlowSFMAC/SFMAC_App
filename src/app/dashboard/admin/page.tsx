@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import * as XLSX from "xlsx";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths } from "date-fns";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 import {
     DollarSign, TrendingUp, AlertTriangle, Users, CheckCircle2,
@@ -188,6 +188,14 @@ export default function AdminDashboard() {
     const [cfoDetailModal, setCfoDetailModal] = useState<'receivable' | 'invoiced' | 'wip' | 'ebitda' | null>(null);
     const [invoiceProcessing, setInvoiceProcessing] = useState<string | null>(null);
     const [invoiceOcNumber, setInvoiceOcNumber] = useState<Record<string, string>>({});
+
+    // ── COBRANZAS: Estados para el modal de administración ──
+    const [cobranzaTickets, setCobranzaTickets] = useState<any[]>([]);
+    const [loadingCobranza, setLoadingCobranza] = useState(false);
+    const [selectedTicketForInvoice, setSelectedTicketForInvoice] = useState<any | null>(null);
+    const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
+    const [newInvoiceOc, setNewInvoiceOc] = useState('');
+    const [newInvoiceAmount, setNewInvoiceAmount] = useState('');
 
     const triggerToast = (title: string, desc: string) => {
         setToast({ title, desc });
@@ -383,6 +391,127 @@ export default function AdminDashboard() {
             setInvoiceProcessing(null);
         }
     };
+
+    // ── COBRANZAS: Cargar tickets para administración ──
+    const loadCobranzaTickets = useCallback(async () => {
+        setLoadingCobranza(true);
+        try {
+            // Cargar invoices existentes
+            const { data: invData } = await supabase.from('invoices').select('*');
+            
+            // Tickets que están cerrados o liquidados y tienen ingresos_reales > 0
+            const ticketsFacturables = (activeTickets || []).filter((t: any) => {
+                const statusId = t.status_id || t.status;
+                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'por_liquidar';
+                const hasRevenue = (t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) > 0;
+                return isClosed && hasRevenue;
+            });
+
+            // Enriquecer tickets con datos de invoice
+            const ticketsConFacturas = ticketsFacturables.map((t: any) => {
+                const invoice = (invData || []).find((inv: any) => inv.ticket_id === t.id);
+                const clientName = t.cliente?.nombre || t.cliente?.name || t.metadata?.cliente_nombre || 'N/A';
+                const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
+                const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                return {
+                    ...t,
+                    _clientName: clientName,
+                    _agencia: agencia,
+                    _montoSinIGV: montoBase,
+                    _montoConIGV: montoBase * 1.18,
+                    _invoice: invoice || null,
+                    _hasInvoice: !!invoice,
+                    _invoiceStatus: invoice?.status || null,
+                    _invoiceOc: invoice?.invoice_number || null
+                };
+            });
+
+            setCobranzaTickets(ticketsConFacturas);
+            
+            // También actualizar invoices globally si cambió algo
+            if (invData) setInvoices(invData);
+            
+        } catch (error) {
+            console.error("Error cargando tickets de cobranza:", error);
+            triggerToast("Error", "No se pudieron cargar los tickets para cobranza.");
+        } finally {
+            setLoadingCobranza(false);
+        }
+    }, [activeTickets, supabase]);
+
+    // ── COBRANZAS: Crear invoice desde ticket ──
+    const handleCreateInvoice = async () => {
+        if (!selectedTicketForInvoice || !newInvoiceOc.trim()) {
+            triggerToast("Error", "Ingrese el número de OC.");
+            return;
+        }
+        
+        setInvoiceProcessing(selectedTicketForInvoice.id);
+        try {
+            const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
+            
+            const { data, error } = await supabase.from('invoices').insert({
+                ticket_id: selectedTicketForInvoice.id,
+                amount_total: monto,
+                status: 'emitida',
+                issued_date: new Date().toISOString(),
+                invoice_number: newInvoiceOc.trim()
+            }).select().single();
+            
+            if (error) throw error;
+            
+            triggerToast("OC Registrada", `Orden de compra ${newInvoiceOc} asociada al ticket.`);
+            
+            // Reset y recargar
+            setShowCreateInvoiceModal(false);
+            setSelectedTicketForInvoice(null);
+            setNewInvoiceOc('');
+            setNewInvoiceAmount('');
+            await loadCobranzaTickets();
+            
+        } catch (error: any) {
+            console.error("Error creando invoice:", error);
+            triggerToast("Error", error.message || "No se pudo registrar la OC.");
+        } finally {
+            setInvoiceProcessing(null);
+        }
+    };
+
+    // ── COBRANZAS: Marcar invoice como cobrado ──
+    const handleMarkInvoiceAsPaid = async (ticketId: string, invoiceId: string) => {
+        const oc = invoiceOcNumber[invoiceId];
+        if (!oc || !oc.trim()) {
+            triggerToast("Error", "Ingrese el número de OC antes de marcar como cobrado.");
+            return;
+        }
+        
+        setInvoiceProcessing(invoiceId);
+        try {
+            const { error } = await supabase.from('invoices').update({
+                status: 'cobrada',
+                paid_date: new Date().toISOString(),
+                invoice_number: oc.trim()
+            }).eq('id', invoiceId);
+            
+            if (error) throw error;
+            
+            triggerToast("Cobranza Registrada", `El pago de ${selectedTicketForInvoice?._invoiceOc || oc} ha sido registrado.`);
+            await loadCobranzaTickets();
+            
+        } catch (error: any) {
+            console.error("Error marcando invoice como pagado:", error);
+            triggerToast("Error", error.message || "No se pudo registrar el pago.");
+        } finally {
+            setInvoiceProcessing(null);
+        }
+    };
+
+    // ── COBRANZAS: Cuando se abre el modal ──
+    useEffect(() => {
+        if (showInvoicesModal) {
+            loadCobranzaTickets();
+        }
+    }, [showInvoicesModal, loadCobranzaTickets]);
 
     // ── Rango de Fechas para Métricas Globales (Cash Flow) ──
     const rangeDates = useMemo(() => {
@@ -2370,7 +2499,7 @@ export default function AdminDashboard() {
                 }} onClick={() => setShowInvoicesModal(false)}>
                     <div style={{
                         background: '#0F0F1A', border: '1px solid rgba(255,255,255,0.1)',
-                        width: '100%', maxWidth: '900px', maxHeight: '85vh',
+                        width: '100%', maxWidth: '1100px', maxHeight: '85vh',
                         borderRadius: '24px', display: 'flex', flexDirection: 'column',
                         overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
                         position: 'relative'
@@ -2379,10 +2508,10 @@ export default function AdminDashboard() {
                         <div style={{ padding: '1.5rem 2rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <BanknoteIcon size={20} color="#EF4444" /> Cuentas por Cobrar & Facturación
+                                    <BanknoteIcon size={20} color="#EF4444" /> Administración de Cobranzas
                                 </h3>
                                 <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
-                                    Asigne OC o registre pagos para aumentar su Tasa de Recaudación (Cash-In)
+                                    Gestione sus órdenes de compra y registre los pagos recibidos
                                 </p>
                             </div>
                             <button onClick={() => setShowInvoicesModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2390,90 +2519,230 @@ export default function AdminDashboard() {
                             </button>
                         </div>
                         
+                        {/* Resumen de cobranzas */}
+                        <div style={{ display: 'flex', gap: '1rem', padding: '1rem 2rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ flex: 1, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Por Cobrar</div>
+                                <div style={{ fontSize: '1.2rem', color: '#EF4444', fontWeight: 900 }}>
+                                    S/ {fmt(cobranzaTickets.filter(t => !t._hasInvoice || t._invoiceStatus !== 'cobrada').reduce((acc, t) => acc + t._montoConIGV, 0))}
+                                </div>
+                            </div>
+                            <div style={{ flex: 1, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Cobrado</div>
+                                <div style={{ fontSize: '1.2rem', color: '#10B981', fontWeight: 900 }}>
+                                    S/ {fmt(cobranzaTickets.filter(t => t._hasInvoice && t._invoiceStatus === 'cobrada').reduce((acc, t) => acc + t._montoConIGV, 0))}
+                                </div>
+                            </div>
+                            <div style={{ flex: 1, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Sin OC</div>
+                                <div style={{ fontSize: '1.2rem', color: '#F59E0B', fontWeight: 900 }}>
+                                    {cobranzaTickets.filter(t => !t._hasInvoice).length} tickets
+                                </div>
+                            </div>
+                            <div style={{ flex: 1, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Total</div>
+                                <div style={{ fontSize: '1.2rem', color: '#8B5CF6', fontWeight: 900 }}>
+                                    {cobranzaTickets.length} tickets
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 2rem' }}>
-                                                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
-                                <thead>
-                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
-                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
-                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Detalle Servicio</th>
-                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Creación</th>
-                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
-                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ Sin IGV</th>
-                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ C/IGV</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {modalTickets.map((t: any, idx: number) => {
-                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
-                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
-                                        const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
-                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
-                                        const fechaCreacion = t.created_at || t.createdAt || t.fechaCreacion || '';
-                                        const fechaCierre = t.closure_date || '';
-                                        const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
-                                        const montoSinIGV = montoBase > 0 ? montoBase : (t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0);
-                                        const montoConIGV = montoSinIGV * 1.18;
-
-                                        return (
-                                            <tr
-                                                key={(t.id || idx) + '-' + idx}
-                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.1)'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                                onClick={() => t.id && openFloatingTicket(t.id)}
-                                            >
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'monospace', cursor: 'pointer' }}>
-                                                        {ticketNum}
-                                                        <span style={{ marginLeft: '6px', fontSize: '0.6rem', opacity: 0.6 }}>🔗</span>
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>
-                                                        {clientName}
-                                                    </div>
-                                                    {agencia && (
-                                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', marginTop: '2px' }}>
-                                                            📍 {agencia}
+                            {loadingCobranza ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.5)' }}>
+                                    Cargando tickets...
+                                </div>
+                            ) : cobranzaTickets.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.5)' }}>
+                                    No hay tickets cerrados con montos para facturar.
+                                </div>
+                            ) : (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
+                                    <thead>
+                                        <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto C/IGV</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° OC</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Estado</th>
+                                            <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {cobranzaTickets.map((t: any, idx: number) => {
+                                            const ticketNum = t.client_ticket_number || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                            const statusColor = !t._hasInvoice ? '#F59E0B' : t._invoiceStatus === 'cobrada' ? '#10B981' : '#3B82F6';
+                                            const statusLabel = !t._hasInvoice ? 'Sin OC' : t._invoiceStatus === 'cobrada' ? 'Cobrado' : 'Emitida';
+                                            
+                                            return (
+                                                <tr key={t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer' }} onClick={() => t.id && openFloatingTicket(t.id)}>
+                                                            {ticketNum}
                                                         </div>
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <span style={{
-                                                        padding: '3px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
-                                                        background: 'rgba(139,92,246,0.15)',
-                                                        color: '#A78BFA',
-                                                        border: '1px solid rgba(139,92,246,0.3)'
-                                                    }}>
-                                                        {servicio.toUpperCase()}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
-                                                        {fechaCreacion ? new Date(fechaCreacion).toLocaleDateString('es-PE') : 'N/A'}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ color: fechaCierre ? '#10B981' : 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
-                                                        {fechaCierre ? new Date(fechaCierre).toLocaleDateString('es-PE') : 'Abierto'}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>
-                                                        S/ {fmt(montoSinIGV)}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem' }}>
-                                                        S/ {fmt(montoConIGV)}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>{t._clientName}</div>
+                                                        {t._agencia && <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}>📍 {t._agencia}</div>}
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem' }}>
+                                                            {t.closure_date ? new Date(t.closure_date).toLocaleDateString('es-PE') : '-'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>S/ {fmt(t._montoConIGV)}</div>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        {t._hasInvoice ? (
+                                                            <div style={{ color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{t._invoiceOc || '-'}</div>
+                                                        ) : (
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Ej: OC-2026-001"
+                                                                value={invoiceOcNumber[t._invoice?.id] || ''}
+                                                                onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [t._invoice?.id]: e.target.value }))}
+                                                                style={{
+                                                                    background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
+                                                                    borderRadius: '6px', padding: '4px 8px', color: 'white',
+                                                                    fontSize: '0.75rem', width: '120px'
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <span style={{
+                                                            padding: '4px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 700,
+                                                            background: `${statusColor}20`, color: statusColor, border: `1px solid ${statusColor}40`
+                                                        }}>
+                                                            {statusLabel}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        {!t._hasInvoice ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    const oc = invoiceOcNumber[t._invoice?.id];
+                                                                    if (oc && oc.trim()) {
+                                                                        // Crear invoice con OC
+                                                                        setSelectedTicketForInvoice(t);
+                                                                        setNewInvoiceOc(oc);
+                                                                        setNewInvoiceAmount(t._montoSinIGV.toString());
+                                                                        setShowCreateInvoiceModal(true);
+                                                                    } else {
+                                                                        triggerToast("Error", "Ingrese el número de OC primero.");
+                                                                    }
+                                                                }}
+                                                                disabled={invoiceProcessing === t.id}
+                                                                style={{
+                                                                    background: '#F59E0B', border: 'none', color: 'white',
+                                                                    padding: '6px 12px', borderRadius: '6px', fontSize: '0.7rem',
+                                                                    fontWeight: 700, cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                {invoiceProcessing === t.id ? '...' : 'Crear OC'}
+                                                            </button>
+                                                        ) : t._invoiceStatus !== 'cobrada' ? (
+                                                            <button
+                                                                onClick={() => handleMarkInvoiceAsPaid(t.id, t._invoice.id)}
+                                                                disabled={invoiceProcessing === t._invoice.id}
+                                                                style={{
+                                                                    background: '#10B981', border: 'none', color: 'white',
+                                                                    padding: '6px 12px', borderRadius: '6px', fontSize: '0.7rem',
+                                                                    fontWeight: 700, cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                {invoiceProcessing === t._invoice.id ? '...' : 'Marcar Cobrado'}
+                                                            </button>
+                                                        ) : (
+                                                            <span style={{ color: '#10B981', fontSize: '0.7rem', fontWeight: 700 }}>✓ Pagado</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* ── MODAL PARA CREAR INVOICE ── */}
+            {showCreateInvoiceModal && selectedTicketForInvoice && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 11000
+                }} onClick={() => setShowCreateInvoiceModal(false)}>
+                    <div style={{
+                        background: '#0F0F1A', border: '1px solid rgba(255,255,255,0.15)',
+                        width: '100%', maxWidth: '450px', borderRadius: '20px', padding: '2rem',
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+                    }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ margin: '0 0 1.5rem 0', color: 'white', fontWeight: 900, fontSize: '1.1rem' }}>
+                            Registrar Orden de Compra
+                        </h3>
+                        
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>Ticket</label>
+                            <div style={{ color: '#60A5FA', fontWeight: 700 }}>{selectedTicketForInvoice.client_ticket_number || selectedTicketForInvoice.id}</div>
+                        </div>
+                        
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>Número de OC *</label>
+                            <input
+                                type="text"
+                                value={newInvoiceOc}
+                                onChange={e => setNewInvoiceOc(e.target.value)}
+                                placeholder="Ej: OC-2026-001"
+                                style={{
+                                    width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)',
+                                    borderRadius: '10px', padding: '10px 14px', color: 'white', fontSize: '0.9rem', boxSizing: 'border-box'
+                                }}
+                            />
+                        </div>
+                        
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>Monto (S/)</label>
+                            <input
+                                type="number"
+                                value={newInvoiceAmount}
+                                onChange={e => setNewInvoiceAmount(e.target.value)}
+                                placeholder={`Default: S/ ${fmt(selectedTicketForInvoice._montoSinIGV)}`}
+                                style={{
+                                    width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)',
+                                    borderRadius: '10px', padding: '10px 14px', color: 'white', fontSize: '0.9rem', boxSizing: 'border-box'
+                                }}
+                            />
+                            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+                                Monto del ticket: S/ {fmt(selectedTicketForInvoice._montoSinIGV)} (sin IGV)
+                            </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button
+                                onClick={() => setShowCreateInvoiceModal(false)}
+                                style={{
+                                    flex: 1, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
+                                    padding: '10px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleCreateInvoice}
+                                disabled={invoiceProcessing === selectedTicketForInvoice.id}
+                                style={{
+                                    flex: 1, background: '#10B981', border: 'none', color: 'white',
+                                    padding: '10px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer'
+                                }}
+                            >
+                                {invoiceProcessing === selectedTicketForInvoice.id ? 'Guardando...' : 'Registrar OC'}
+                            </button>
                         </div>
                     </div>
                 </div>
