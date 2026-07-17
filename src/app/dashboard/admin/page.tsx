@@ -23,6 +23,7 @@ import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { supabase } from "@/lib/supabase";
 import TicketWindow from "./tickets/TicketWindow";
 import { calculateTicketFinances, calculateAccountsReceivable, calculateWIP, calculateEBITDA } from "@/lib/calculations";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ── Helpers ──────────────────────────────────
 const SLA_HOURS = 72;
@@ -2202,14 +2203,19 @@ export default function AdminDashboard() {
                                     ) : invoices.sort((a,b) => (a.status === 'emitida' ? -1 : 1)).map(inv => {
                                         const isPaid = inv.status === 'cobrada';
                                         const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
-                                        const ticketCode = tk?.client_ticket_number || (tk?.id || inv.ticket_id).split('-')[0];
+                                        const rawId = tk?.id ?? inv.ticket_id ?? '';
+                                        const ticketCode = tk?.client_ticket_number || (typeof rawId === 'string' ? rawId.split('-')[0] : 'SIN-TICKET');
                                         const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
                                         return (
-                                            <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                                <td style={{ padding: '12px 8px' }}>
-                                                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'white' }}>{ticketCode}</div>
-                                                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{new Date(inv.issued_date || inv.created_at).toLocaleDateString()}</div>
-                                                </td>
+                                            <ErrorBoundary 
+                                                key={`eb-${inv.id || Math.random()}`} 
+                                                fallback={<tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td colSpan={6} style={{ color: '#EF4444', padding: '12px 8px', fontSize: '0.8rem' }}>Error cargando registro (OC huérfana o datos corruptos)</td></tr>}
+                                            >
+                                                <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'white' }}>{ticketCode}</div>
+                                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{new Date(inv.issued_date || inv.created_at || new Date()).toLocaleDateString()}</div>
+                                                    </td>
                                                 <td style={{ padding: '12px 8px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>{clientName}</td>
                                                 <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(inv.amount_total)}</td>
                                                 <td style={{ padding: '12px 8px', textAlign: 'center' }}>
@@ -2254,6 +2260,7 @@ export default function AdminDashboard() {
                                                     )}
                                                 </td>
                                             </tr>
+                                            </ErrorBoundary>
                                         );
                                     })}
                                 </tbody>
