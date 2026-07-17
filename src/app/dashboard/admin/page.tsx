@@ -2572,8 +2572,8 @@ export default function AdminDashboard() {
                                     <tbody>
                                         {cobranzaTickets.map((t: any, idx: number) => {
                                             const ticketNum = t.client_ticket_number || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
-                                            const statusColor = !t._hasInvoice ? '#F59E0B' : t._invoiceStatus === 'cobrada' ? '#10B981' : '#3B82F6';
-                                            const statusLabel = !t._hasInvoice ? 'Sin OC' : t._invoiceStatus === 'cobrada' ? 'Cobrado' : 'Emitida';
+                                            const isCobrado = t._hasInvoice && t._invoiceStatus === 'cobrada';
+                                            const isConOC = t._hasInvoice && !isCobrado;
                                             
                                             return (
                                                 <tr key={t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
@@ -2595,14 +2595,16 @@ export default function AdminDashboard() {
                                                         <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>S/ {fmt(t._montoConIGV)}</div>
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
-                                                        {t._hasInvoice ? (
-                                                            <div style={{ color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{t._invoiceOc || '-'}</div>
+                                                        {isConOC ? (
+                                                            <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: '0.8rem' }}>{t._invoiceOc}</span>
+                                                        ) : isCobrado ? (
+                                                            <span style={{ color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>✓ Cobrado</span>
                                                         ) : (
                                                             <input
                                                                 type="text"
-                                                                placeholder="Ej: OC-2026-001"
-                                                                value={invoiceOcNumber[t._invoice?.id] || ''}
-                                                                onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [t._invoice?.id]: e.target.value }))}
+                                                                placeholder="N° OC"
+                                                                value={invoiceOcNumber[t.id] || ''}
+                                                                onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [t.id]: e.target.value }))}
                                                                 style={{
                                                                     background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
                                                                     borderRadius: '6px', padding: '4px 8px', color: 'white',
@@ -2612,38 +2614,36 @@ export default function AdminDashboard() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
-                                                        <span style={{
-                                                            padding: '4px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 700,
-                                                            background: `${statusColor}20`, color: statusColor, border: `1px solid ${statusColor}40`
-                                                        }}>
-                                                            {statusLabel}
-                                                        </span>
+                                                        {isCobrado ? (
+                                                            <span style={{ color: '#10B981', fontSize: '0.7rem', fontWeight: 700 }}>✓ Cobrado</span>
+                                                        ) : (
+                                                            <span style={{ color: '#F59E0B', fontSize: '0.7rem', fontWeight: 700 }}>Pendiente</span>
+                                                        )}
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
                                                         {!t._hasInvoice ? (
                                                             <button
                                                                 onClick={() => {
-                                                                    const oc = invoiceOcNumber[t._invoice?.id];
+                                                                    const oc = invoiceOcNumber[t.id];
                                                                     if (oc && oc.trim()) {
-                                                                        // Crear invoice con OC
                                                                         setSelectedTicketForInvoice(t);
                                                                         setNewInvoiceOc(oc);
                                                                         setNewInvoiceAmount(t._montoSinIGV.toString());
                                                                         setShowCreateInvoiceModal(true);
                                                                     } else {
-                                                                        triggerToast("Error", "Ingrese el número de OC primero.");
+                                                                        triggerToast("Error", "Ingrese el número de OC.");
                                                                     }
                                                                 }}
                                                                 disabled={invoiceProcessing === t.id}
                                                                 style={{
-                                                                    background: '#F59E0B', border: 'none', color: 'white',
+                                                                    background: '#3B82F6', border: 'none', color: 'white',
                                                                     padding: '6px 12px', borderRadius: '6px', fontSize: '0.7rem',
                                                                     fontWeight: 700, cursor: 'pointer'
                                                                 }}
                                                             >
-                                                                {invoiceProcessing === t.id ? '...' : 'Crear OC'}
+                                                                {invoiceProcessing === t.id ? '...' : 'Guardar OC'}
                                                             </button>
-                                                        ) : t._invoiceStatus !== 'cobrada' ? (
+                                                        ) : !isCobrado ? (
                                                             <button
                                                                 onClick={() => handleMarkInvoiceAsPaid(t.id, t._invoice.id)}
                                                                 disabled={invoiceProcessing === t._invoice.id}
@@ -2653,11 +2653,9 @@ export default function AdminDashboard() {
                                                                     fontWeight: 700, cursor: 'pointer'
                                                                 }}
                                                             >
-                                                                {invoiceProcessing === t._invoice.id ? '...' : 'Marcar Cobrado'}
+                                                                {invoiceProcessing === t._invoice.id ? '...' : 'Cobrado'}
                                                             </button>
-                                                        ) : (
-                                                            <span style={{ color: '#10B981', fontSize: '0.7rem', fontWeight: 700 }}>✓ Pagado</span>
-                                                        )}
+                                                        ) : null}
                                                     </td>
                                                 </tr>
                                             );
