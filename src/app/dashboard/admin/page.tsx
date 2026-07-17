@@ -400,10 +400,12 @@ export default function AdminDashboard() {
             // Cargar invoices existentes
             const { data: invData } = await supabase.from('invoices').select('*');
             
-            // ★ MODIFICADO: Todos los tickets con monto > 0, sin importar el estado
+            // ★ SOLO tickets cerrados con monto > 0
             const ticketsFacturables = (activeTickets || []).filter((t: any) => {
+                const statusId = t.status_id || t.status;
+                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado';
                 const hasRevenue = (t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) > 0;
-                return hasRevenue;
+                return isClosed && hasRevenue;
             });
 
             // Enriquecer tickets con datos de invoice
@@ -2610,11 +2612,8 @@ export default function AdminDashboard() {
                                         {cobranzaFiltered.map((t: any, idx: number) => {
                                             const ticketNum = t.client_ticket_number || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
                                             const isCobrado = t._hasInvoice && t._invoiceStatus === 'cobrada';
-                                            const isConOC = t._hasInvoice && !isCobrado;
-                                            const ticketStatus = t.status_id || t.status || 'desconocido';
-                                            
-                                            // Color según estado del ticket
-                                            const estadoColor = ticketStatus === 'ticket_cerrado' || ticketStatus === 'liquidado' ? '#10B981' : '#F59E0B';
+                                            const isEP = t._hasInvoice && t._invoiceOc?.toUpperCase() === 'EP';
+                                            const isConOC = t._hasInvoice && !isCobrado && !isEP;
                                             
                                             return (
                                                 <tr key={t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
@@ -2630,9 +2629,9 @@ export default function AdminDashboard() {
                                                     <td style={{ padding: '12px 8px' }}>
                                                         <span style={{
                                                             padding: '4px 8px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 700,
-                                                            background: `${estadoColor}20`, color: estadoColor
+                                                            background: '#10B98120', color: '#10B981'
                                                         }}>
-                                                            {ticketStatus === 'ticket_cerrado' ? 'CERRADO' : ticketStatus === 'liquidado' ? 'LIQUIDADO' : ticketStatus.toUpperCase()}
+                                                            CERRADO
                                                         </span>
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
@@ -2641,18 +2640,20 @@ export default function AdminDashboard() {
                                                     <td style={{ padding: '12px 8px' }}>
                                                         {isConOC ? (
                                                             <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: '0.8rem' }}>{t._invoiceOc}</span>
+                                                        ) : isEP ? (
+                                                            <span style={{ color: '#EF4444', fontWeight: 700, fontSize: '0.8rem' }}>EP</span>
                                                         ) : isCobrado ? (
                                                             <span style={{ color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>✓ Cobrado</span>
                                                         ) : (
                                                             <input
                                                                 type="text"
-                                                                placeholder="N° OC"
+                                                                placeholder="OC o EP"
                                                                 value={invoiceOcNumber[t.id] || ''}
-                                                                onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [t.id]: e.target.value }))}
+                                                                onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [t.id]: e.target.value.toUpperCase() }))}
                                                                 style={{
                                                                     background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
                                                                     borderRadius: '6px', padding: '4px 8px', color: 'white',
-                                                                    fontSize: '0.75rem', width: '120px'
+                                                                    fontSize: '0.75rem', width: '100px', textTransform: 'uppercase'
                                                                 }}
                                                             />
                                                         )}
@@ -2660,6 +2661,8 @@ export default function AdminDashboard() {
                                                     <td style={{ padding: '12px 8px' }}>
                                                         {isCobrado ? (
                                                             <span style={{ color: '#10B981', fontSize: '0.7rem', fontWeight: 700 }}>✓ Cobrado</span>
+                                                        ) : isEP ? (
+                                                            <span style={{ color: '#EF4444', fontSize: '0.7rem', fontWeight: 700 }}>EP</span>
                                                         ) : (
                                                             <span style={{ color: '#F59E0B', fontSize: '0.7rem', fontWeight: 700 }}>Pendiente</span>
                                                         )}
@@ -2668,15 +2671,19 @@ export default function AdminDashboard() {
                                                         {!t._hasInvoice ? (
                                                             <button
                                                                 onClick={() => {
-                                                                    const oc = invoiceOcNumber[t.id];
-                                                                    if (oc && oc.trim()) {
-                                                                        setSelectedTicketForInvoice(t);
-                                                                        setNewInvoiceOc(oc);
-                                                                        setNewInvoiceAmount(t._montoSinIGV.toString());
-                                                                        setShowCreateInvoiceModal(true);
-                                                                    } else {
-                                                                        triggerToast("Error", "Ingrese el número de OC.");
+                                                                    const oc = invoiceOcNumber[t.id]?.trim().toUpperCase();
+                                                                    if (!oc) {
+                                                                        triggerToast("Error", "Ingrese OC o EP.");
+                                                                        return;
                                                                     }
+                                                                    if (oc !== 'EP' && !oc.startsWith('OC')) {
+                                                                        triggerToast("Error", "Use formato: OC-XXX o EP");
+                                                                        return;
+                                                                    }
+                                                                    setSelectedTicketForInvoice(t);
+                                                                    setNewInvoiceOc(oc);
+                                                                    setNewInvoiceAmount(t._montoSinIGV.toString());
+                                                                    setShowCreateInvoiceModal(true);
                                                                 }}
                                                                 disabled={invoiceProcessing === t.id}
                                                                 style={{
@@ -2685,9 +2692,9 @@ export default function AdminDashboard() {
                                                                     fontWeight: 700, cursor: 'pointer'
                                                                 }}
                                                             >
-                                                                {invoiceProcessing === t.id ? '...' : 'Guardar OC'}
+                                                                {invoiceProcessing === t.id ? '...' : 'Guardar'}
                                                             </button>
-                                                        ) : !isCobrado ? (
+                                                        ) : !isCobrado && !isEP ? (
                                                             <button
                                                                 onClick={() => handleMarkInvoiceAsPaid(t.id, t._invoice.id)}
                                                                 disabled={invoiceProcessing === t._invoice.id}
