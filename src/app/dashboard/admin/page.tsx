@@ -2641,22 +2641,20 @@ export default function AdminDashboard() {
                                                         <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>S/ {fmt(t._montoConIGV)}</div>
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
-                                                        {isConOC ? (
-                                                            <span style={{ color: '#3B82F6', fontWeight: 700, fontSize: '0.8rem' }}>{t._invoiceOc}</span>
+                                                        {isCobrado ? (
+                                                            <span style={{ color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>✓ Cobrado</span>
                                                         ) : isEP ? (
                                                             <span style={{ color: '#EF4444', fontWeight: 700, fontSize: '0.8rem' }}>EP</span>
-                                                        ) : isCobrado ? (
-                                                            <span style={{ color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>✓ Cobrado</span>
                                                         ) : (
                                                             <input
                                                                 type="text"
-                                                                placeholder="OC o EP"
-                                                                value={invoiceOcNumber[t.id] || ''}
+                                                                placeholder="Ingrese N° OC o EP"
+                                                                value={invoiceOcNumber[t.id] || t._invoiceOc || ''}
                                                                 onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [t.id]: e.target.value.toUpperCase() }))}
                                                                 style={{
-                                                                    background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
-                                                                    borderRadius: '6px', padding: '4px 8px', color: 'white',
-                                                                    fontSize: '0.75rem', width: '100px', textTransform: 'uppercase'
+                                                                    background: 'rgba(0,0,0,0.3)', border: '2px solid #3B82F6',
+                                                                    borderRadius: '6px', padding: '6px 10px', color: 'white',
+                                                                    fontSize: '0.8rem', width: '140px', textTransform: 'uppercase'
                                                                 }}
                                                             />
                                                         )}
@@ -2671,15 +2669,14 @@ export default function AdminDashboard() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
-                                                        {!t._hasInvoice ? (
+                                                        {!isCobrado && !isEP && (
                                                             <button
                                                                 onClick={() => {
-                                                                    const oc = invoiceOcNumber[t.id]?.trim().toUpperCase();
+                                                                    const oc = invoiceOcNumber[t.id]?.trim().toUpperCase() || t._invoiceOc?.toUpperCase();
                                                                     if (!oc) {
-                                                                        triggerToast("Error", "Ingrese OC o EP.");
+                                                                        triggerToast("Error", "Ingrese N° OC o EP.");
                                                                         return;
                                                                     }
-                                                                    // EP es caso especial, cualquier otro valor es una OC
                                                                     setSelectedTicketForInvoice(t);
                                                                     setNewInvoiceOc(oc);
                                                                     setNewInvoiceAmount(t._montoSinIGV.toString());
@@ -2694,19 +2691,10 @@ export default function AdminDashboard() {
                                                             >
                                                                 {invoiceProcessing === t.id ? '...' : 'Guardar'}
                                                             </button>
-                                                        ) : !isCobrado && !isEP ? (
-                                                            <button
-                                                                onClick={() => handleMarkInvoiceAsPaid(t.id, t._invoice.id)}
-                                                                disabled={invoiceProcessing === t._invoice.id}
-                                                                style={{
-                                                                    background: '#10B981', border: 'none', color: 'white',
-                                                                    padding: '6px 12px', borderRadius: '6px', fontSize: '0.7rem',
-                                                                    fontWeight: 700, cursor: 'pointer'
-                                                                }}
-                                                            >
-                                                                {invoiceProcessing === t._invoice.id ? '...' : 'Cobrado'}
-                                                            </button>
-                                                        ) : null}
+                                                        )}
+                                                        {isCobrado && (
+                                                            <span style={{ color: '#10B981', fontSize: '0.7rem', fontWeight: 700 }}>✓ Listo</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );
