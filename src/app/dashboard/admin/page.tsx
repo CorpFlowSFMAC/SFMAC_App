@@ -2679,10 +2679,7 @@ export default function AdminDashboard() {
                                                                         triggerToast("Error", "Ingrese OC o EP.");
                                                                         return;
                                                                     }
-                                                                    if (oc !== 'EP' && !oc.startsWith('OC')) {
-                                                                        triggerToast("Error", "Use formato: OC-XXX o EP");
-                                                                        return;
-                                                                    }
+                                                                    // EP es caso especial, cualquier otro valor es una OC
                                                                     setSelectedTicketForInvoice(t);
                                                                     setNewInvoiceOc(oc);
                                                                     setNewInvoiceAmount(t._montoSinIGV.toString());
