@@ -196,6 +196,7 @@ export default function AdminDashboard() {
     const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
     const [newInvoiceOc, setNewInvoiceOc] = useState('');
     const [newInvoiceAmount, setNewInvoiceAmount] = useState('');
+    const [cobranzaSearch, setCobranzaSearch] = useState(''); // ★ Búsqueda por ticket
 
     const triggerToast = (title: string, desc: string) => {
         setToast({ title, desc });
@@ -510,6 +511,18 @@ export default function AdminDashboard() {
             loadCobranzaTickets();
         }
     }, [showInvoicesModal, loadCobranzaTickets]);
+
+    // ── COBRANZAS: Filtrar tickets según búsqueda ──
+    const cobranzaFiltered = useMemo(() => {
+        if (!cobranzaSearch.trim()) return cobranzaTickets;
+        const search = cobranzaSearch.toLowerCase().trim();
+        return cobranzaTickets.filter((t: any) => {
+            const ticketNum = (t.client_ticket_number || '').toLowerCase();
+            const clientName = (t._clientName || '').toLowerCase();
+            const oc = (t._invoiceOc || '').toLowerCase();
+            return ticketNum.includes(search) || clientName.includes(search) || oc.includes(search);
+        });
+    }, [cobranzaTickets, cobranzaSearch]);
 
     // ── Rango de Fechas para Métricas Globales (Cash Flow) ──
     const rangeDates = useMemo(() => {
@@ -2545,14 +2558,40 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                         
+                        {/* ★ Búsqueda por ticket */}
+                        <div style={{ padding: '1rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                <input
+                                    type="text"
+                                    placeholder="🔍 Buscar por N° Ticket, Cliente o N° OC..."
+                                    value={cobranzaSearch}
+                                    onChange={e => setCobranzaSearch(e.target.value)}
+                                    style={{
+                                        flex: 1,
+                                        background: 'rgba(0,0,0,0.3)',
+                                        border: '1px solid rgba(255,255,255,0.15)',
+                                        borderRadius: '10px',
+                                        padding: '10px 14px',
+                                        color: 'white',
+                                        fontSize: '0.85rem'
+                                    }}
+                                />
+                                {cobranzaSearch && (
+                                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
+                                        {cobranzaFiltered.length} resultado{cobranzaFiltered.length !== 1 ? 's' : ''}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                        
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 2rem' }}>
                             {loadingCobranza ? (
                                 <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.5)' }}>
                                     Cargando tickets...
                                 </div>
-                            ) : cobranzaTickets.length === 0 ? (
+                            ) : cobranzaFiltered.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.5)' }}>
-                                    No hay tickets cerrados con montos para facturar.
+                                    {cobranzaSearch ? 'No se encontraron tickets con esa búsqueda.' : 'No hay tickets con montos para facturar.'}
                                 </div>
                             ) : (
                                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
@@ -2568,7 +2607,7 @@ export default function AdminDashboard() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {cobranzaTickets.map((t: any, idx: number) => {
+                                        {cobranzaFiltered.map((t: any, idx: number) => {
                                             const ticketNum = t.client_ticket_number || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
                                             const isCobrado = t._hasInvoice && t._invoiceStatus === 'cobrada';
                                             const isConOC = t._hasInvoice && !isCobrado;
