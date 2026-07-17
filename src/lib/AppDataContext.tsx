@@ -204,9 +204,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     // ── Refresh = invalidar caché → TanStack refetch automáticamente ──
     const refreshTickets = useCallback(async () => {
         // Invalidar todas las queries de tickets incluyendo pagos
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
     }, [queryClient]);
 
     const refreshClients = useCallback(async () => {
@@ -861,7 +861,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             const created = await ticketsAPI.create(data);
             const normalized = normalizeTicket(created);
             // 🚀 OPTIMIZACIÓN: insertamos directo en cache + invalidamos summary para asegurar sync
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             
             // También insertar directo para respuesta instantánea
             queryClient.setQueryData(
@@ -875,8 +875,33 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     const updateTicket = useCallback(
         async (id: string, updates: any) => {
-            const updated = await ticketsAPI.update(id, updates);
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // NUEVO EJE CONTABLE: Si se cierra un ticket sin closure_date, asignar updated_at
+            // Esto asegura que todo ticket cerrado sea visible contablemente en el mes actual
+            // ═══════════════════════════════════════════════════════════════════════════════
+            const newStatusId = updates?.status_id;
+            const isClosureEvent = newStatusId && 
+                (newStatusId.toLowerCase() === 'ticket_cerrado' || 
+                 newStatusId.toLowerCase() === 'liquidado');
+            
+            let finalUpdates = { ...updates };
+            if (isClosureEvent && !updates.closure_date) {
+                // Asignar updated_at como closure_date por defecto
+                finalUpdates.closure_date = new Date().toISOString();
+                console.log('[AppDataContext] 📅 closure_date asignado automáticamente al cerrar ticket');
+            }
+
+            const updated = await ticketsAPI.update(id, finalUpdates);
             const normalized = normalizeTicket(updated);
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // FIX: Invalidar SIEMPRE después de un update para garantizar datos frescos
+            // Anteriormente solo se invalidaba en cierre de tickets, causando que la
+            // reasignación de técnicos mostrara el valor antiguo al reabrir la ventana.
+            // ═══════════════════════════════════════════════════════════════════════════════
+            console.log('[AppDataContext] 🔄 Invalidando caché después de update ticket...');
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+
             // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
             // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()
             queryClient.setQueryData(
@@ -916,10 +941,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                 ...t,
                                 ...normalized,
                                 metadata: mergedMeta,
+                                // Campos críticos siempre del normalized si existen, sino del update o del cache
+                                technician_id: finalUpdates.technician_id !== undefined 
+                                    ? finalUpdates.technician_id 
+                                    : (normalized?.technician_id || t.technician_id),
                                 tecnico: normalized?.tecnico || t.tecnico,
-                                gestora: normalized?.gestora || t.gestora,
+                                technicians: normalized?.technicians || t.technicians,
+                                gesteora: normalized?.gestora || t.gestora,
                                 cliente: normalized?.cliente || t.cliente,
                                 sede: normalized?.sede || t.sede,
+                                status_id: finalUpdates.status_id || normalized?.status_id || t.status_id,
                                 solicitudAdelanto: mergedMeta.solicitudAdelanto,
                                 solicitudPago: mergedMeta.solicitudPago,
                                 solicitudLiquidacion: mergedMeta.solicitudLiquidacion,

@@ -151,6 +151,11 @@ export const normalizeTicket = (t: any) => {
         ...(t.gastos_flujo_a !== undefined ? { gastos_flujo_a: t.gastos_flujo_a } : {}),
         ...(t.adelantos_flujo_b !== undefined ? { adelantos_flujo_b: t.adelantos_flujo_b } : {}),
 
+        // --- EJE CONTABLE: closure_date (CRÍTICO PARA MÉTRICAS) ---
+        // El campo closure_date es la única fuente de verdad para calcular
+        // ingresos y utilidad del mes actual. Sin este campo, las métricas muestran 0.
+        closure_date: t.closure_date || realMetadata.closure_date || null,
+
         metadata: realMetadata, // Objeto de metadata limpio (sin anidamiento excesivo)
         
         // --- PROPAGACIÓN DE SOLICITUDES A LA RAÍZ ---
@@ -651,7 +656,7 @@ export function useCreateTicket() {
         onSettled: () => {
             // Se asume que el WebSocket o el onMutate actualizarán el summary
             // o se invalida solo el summary si es creación
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
         },
     });
 }
@@ -686,7 +691,7 @@ export function useDeleteTicket() {
             }
         },
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
         },
     });
 }

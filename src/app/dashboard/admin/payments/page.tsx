@@ -463,7 +463,7 @@ export default function PaymentsPage() {
 
                         if (payload.eventType === 'INSERT' && newTicket) {
                             // Nuevo ticket - invalidar caché de payments para que se刷新 en próximo acceso
-                            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                            queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
                             return prev;
                         } else if (payload.eventType === 'UPDATE' && newTicket) {
                             return prev.map(t => t.id === newTicket.id ? { ...t, ...newTicket } : t);
@@ -480,7 +480,7 @@ export default function PaymentsPage() {
                     console.log('[Payments Realtime] Cambio en ticket_costs:', payload.eventType);
                     // Invalidar SOLO la query de payments, no todas las queries de tickets
                     // Esto evita el bucle infinito entre ticket-costs y strategic views
-                    queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
+                    queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
                 }
             )
             .subscribe();
@@ -494,7 +494,7 @@ export default function PaymentsPage() {
     // refresh: recarga bandeja local + invalida cache global de TanStack Query
     const refresh = React.useCallback(async (silent = true) => {
         await fetchPaymentTickets(silent);
-        queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+        queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
     }, [fetchPaymentTickets, queryClient]);
 
     const [paymentGroups, setPaymentGroups] = useState<PaymentTicketGroup[]>([]);
@@ -692,15 +692,35 @@ export default function PaymentsPage() {
                 // 🚀 MOTOR FINANCIERO V3: Fuente de Verdad Inmutable
                 const finances = calculateTicketFinances(t, t.ticket_costs);
                 const {
-                    pactedMO,
+                    pactedMO: calcPactedMO,
                     totalLaborConfirmed,
                     totalOpConfirmed,
-                    netLaborBalance,
+                    netLaborBalance: calcNetLaborBalance,
                     laborItems,
                     operatingItems,
                     realProfitability,
-                    margenReal
+                    margenReal,
+                    totalVenta
                 } = finances;
+                
+                // 🔧 BLINDAJE: Si pactedMO es 0 pero hay costos pendientes de MO, calcular desde costos
+                const pendingLaborCosts = (t.ticket_costs || []).filter((c: any) => {
+                    const cat = (c.categoria || '').toLowerCase();
+                    const estado = (c.estado_pago || '').toUpperCase();
+                    return (cat.includes('mano') || cat.includes('labor')) && 
+                           (estado === 'PENDIENTE' || estado === 'REQUIERE_APROBACION_ADMIN');
+                });
+                const pendingLaborSum = pendingLaborCosts.reduce((sum: number, c: any) => sum + (c.monto || 0), 0);
+                
+                // Usar pactedMO del cálculo o calcular desde costos pendientes
+                const pactedMO = (calcPactedMO > 0) ? calcPactedMO : (totalLaborConfirmed + pendingLaborSum);
+                const netLaborBalance = (calcPactedMO > 0) ? calcNetLaborBalance : pendingLaborSum;
+                
+                // 🔧 BLINDAJE UTILIDAD: Recalcular si pactedMO fue corregido
+                const ventaTotal = totalVenta || t.total_quoted_amount || 0;
+                const utilidadNeta = (calcPactedMO > 0) 
+                    ? realProfitability 
+                    : Math.max(0, ventaTotal - pactedMO);
 
                 const allConfirmedHistory = [...laborItems, ...operatingItems].sort((a, b) => 
                     new Date(b.fecha || b.created_at || 0).getTime() - new Date(a.fecha || a.created_at || 0).getTime()
@@ -878,7 +898,7 @@ export default function PaymentsPage() {
                         items: techItems,
                         historialDepositos: allConfirmedHistory,
                         montoFacturado: t.total_quoted_amount || 0,
-                        utilidad: realProfitability,
+                        utilidad: utilidadNeta,
                         margen: margenReal,
                         gastosOperativos: totalOpConfirmed,
                         descripcion: t.descripcionServicio || t.description || '',
@@ -1053,9 +1073,9 @@ export default function PaymentsPage() {
                 showToast('❌ Pago denegado y estado del ticket revertido.');
                 
                 // Invalidación inmediata para sincronización admin ↔ gestor
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
                 
                 refresh();
                 return;
@@ -1154,9 +1174,9 @@ export default function PaymentsPage() {
             showToast(`❌ Solicitud de pago denegada. El ticket ha vuelto a su estado anterior.`);
             
             // Invalidación inmediata para sincronización admin ↔ gestor
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             
             refresh();
         } catch (err: any) {
@@ -1201,9 +1221,9 @@ export default function PaymentsPage() {
 
             showToast('🗑️ Registro de pago eliminado');
             
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             
             refresh();
         } catch (err) {
@@ -1325,8 +1345,8 @@ export default function PaymentsPage() {
             // Forzamos invalidación ANTES de cualquier mutación para evitar
             // race conditions donde el frontend lee datos stale.
             // ==============================================================
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             
             // Fetch fresh ticket data with ALL financial columns to ensure accurate balance calculations
             const { data: currentTicket, error: fetchErr } = await supabase
@@ -1697,9 +1717,9 @@ export default function PaymentsPage() {
                 }));
 
                 // Invalidación inmediata de todas las queries de tickets
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-                await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
                 await queryClient.invalidateQueries({ queryKey: ['payments'] });
                 await queryClient.invalidateQueries({ queryKey: ['tickets'] });
                 
@@ -1909,9 +1929,9 @@ export default function PaymentsPage() {
             }));
 
             // Invalidación inmediata de todas las queries de tickets
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.payments() });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.tickets.summary() });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             await queryClient.invalidateQueries({ queryKey: ['payments'] });
             await queryClient.invalidateQueries({ queryKey: ['tickets'] });
             

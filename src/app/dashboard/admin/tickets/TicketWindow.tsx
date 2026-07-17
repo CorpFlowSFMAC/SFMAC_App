@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys, normalizeTicket } from "@/lib/useQueryHooks";
 import * as XLSX from 'xlsx';
-import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, TrendingUp, Pencil } from "lucide-react";
+import { X, Minimize2, Maximize2, Square, FileText, ArrowRight, Calendar, Camera, ClipboardCheck, DollarSign, Percent, Package, Split, Coins, FileSpreadsheet, Download, Send, Upload, Clock, CheckCircle, CheckCircle2, ThumbsUp, Hammer, Wallet, Plus, Calculator, Receipt, Sparkles, AlertTriangle, Trash2, User, UserPlus, Ban, CreditCard, Lock, Edit3, ArrowDownLeft, Stethoscope, ShieldAlert, AlertCircle, RefreshCw, XCircle, Truck, TrendingUp } from "lucide-react";
 import TechnicianDrawer from "./TechnicianDrawer";
 import TicketStateNavigator from "./TicketStateNavigator";
 import { TicketSummary, InfoBarBase, TechnicianSchedulingBar, DiagnosisInfoBar, QuotationInfoBar, FinancialLiquidationBar, UnifiedEvidenceBar, DocumentationSummaryBar, QuoteAssistantBar, PaymentHistoryBar, GestoraAssignmentBar } from "./TicketSummary";
@@ -2183,7 +2183,31 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             const isExceeding = (finances.totalLaborConfirmed + amount > costRef + 1);
             const newState = isExceeding ? "requiere_revision_admin" : "por_liquidar";
             const currentTicketId = ticketData.id;
-            const technicianId = ticketData.technician?.id || ticketData.technician_id || ticket.technician_id;
+            
+            // =====================================================================
+            // 🔒 BLINDAJE DE LIQUIDACIÓN: Regla de Negocio
+            // La liquidación SIEMPRE va al técnico ORIGINAL (metadata.technician_id)
+            // =====================================================================
+            const originalTechnicianId = ticket.metadata?.technician_id;
+            const currentTechnicianId = ticketData.technician?.id || ticketData.technician_id || ticket.technician_id;
+            
+            // Si hay discrepancia, alertar y usar el original
+            if (originalTechnicianId && originalTechnicianId !== currentTechnicianId) {
+                console.warn('[BLINDAJE LIQUIDACIÓN] ⚠️ DISCREPANCIA DETECTADA:', {
+                    originalTechnicianId,
+                    currentTechnicianId,
+                    ticketNumber: ticketData.client_ticket_number
+                });
+                showToast(
+                    '⚠️ ALERTA DE SEGURIDAD',
+                    `Discrepancia detectada: El técnico original (${ticket.metadata?.technician?.name || originalTechnicianId}) es diferente del actual. La liquidación se generará a nombre del técnico ORIGINAL.`,
+                    'warning'
+                );
+            }
+            
+            // ✅ Siempre usar el technician_id ORIGINAL de la metadata para liquidación
+            const technicianId = originalTechnicianId || currentTechnicianId;
+            
             let costCreated = false;
             try {
                 if (amount > 0.01 && technicianId) {
@@ -2246,6 +2270,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 totalVenta: freshFinances.totalVenta,
                 utilidad_neta: freshFinances.realProfitability,
                 margen_real: freshFinances.margenReal,
+                // 🔒 BLINDAJE DE CIERRE: Usar fechaFinEjecucion si existe para closure_date
+                // Esto evita que el trigger de BD asigne la fecha actual en lugar de la real
+                closure_date: ticketData.metadata?.fechaFinEjecucion || null
             };
             
             // =====================================================================
@@ -2260,6 +2287,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 status_id: newState,
                 final_balance: guaranteedNetBalance,  // Usar el saldo garantizado, no 'amount'
                 solicitudLiquidacion: solicitudLiquidacionMeta,
+                closure_date: ticketData.metadata?.fechaFinEjecucion || undefined, // 🔒 Pre-asignar closure_date
                 metadata: finalMetadata
             };
             
@@ -2655,17 +2683,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         setIsSaving(true);
         try {
             // PASO 2: Mutación y Payload de Cierre Real
+            // REGLA DE NEGOCIO: closure_date SIEMPRE se asigna al cerrar
+            // - Cierre normal: fecha actual del sistema
+            // - Cierre retroactivo: fecha seleccionada por el usuario
+            const closureDateValue = isRetroactiveClosure 
+                ? new Date(retroactiveDate + "-05:00").toISOString() 
+                : new Date().toISOString();
+            
             const updatedTicketData = {
                 ...ticketData,
                 estadoId: "ticket_cerrado",
                 status_id: "ticket_cerrado",
                 fechaCierre: new Date().toISOString(),
-                closure_date: isRetroactiveClosure ? new Date(retroactiveDate + "-05:00").toISOString() : (ticketData.closure_date || new Date().toISOString()),
+                closure_date: closureDateValue,
                 saldo_tecnico: 0,
                 metadata: {
                     ...(ticketData.metadata || {}),
                     saldo_tecnico: 0,
-                    netLaborBalance: 0
+                    netLaborBalance: 0,
+                    fechaCierreReal: closureDateValue,
+                    cierreRetroactivo: isRetroactiveClosure
                 }
             };
             localStorage.removeItem(`ticket_state_${ticketData.id}`);
@@ -4283,7 +4320,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                                     padding: '4px 10px', borderRadius: '6px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', alignSelf: 'center'
                                                                 }}
                                                             >
-                                                                {isEditingClosedData ? <CheckCircle2 size={12}/> : <Pencil size={12}/>}
+                                                                {isEditingClosedData ? <CheckCircle2 size={12}/> : <Edit3 size={12}/>}
                                                                 {isEditingClosedData ? "GUARDAR" : "EDITAR MÉTRICAS"}
                                                             </button>
                                                         )}

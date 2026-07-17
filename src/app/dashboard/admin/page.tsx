@@ -160,9 +160,20 @@ function GestoraBar({ name, count, max, color }: any) {
 export default function AdminDashboard() {
     const { tickets = [], loadingTickets, technicians, gestoras = [], updateTicket, refreshTickets } = useAppData();
     const [dateRange, setDateRange] = useState<"today" | "week" | "month" | "all">("month");
-    const [now] = useState(() => new Date());
+    const [now, setNow] = useState(() => new Date());
     const [isMounted, setIsMounted] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    
+    // ── Actualizar 'now' cada 5 minutos para asegurar que las métricas del mes actual ──
+    // se recalculen correctamente cuando cambie el día/mes sin necesidad de recargar la página
+    useEffect(() => {
+        const FIVE_MINUTES = 5 * 60 * 1000;
+        const interval = setInterval(() => {
+            setNow(new Date());
+        }, FIVE_MINUTES);
+        return () => clearInterval(interval);
+    }, []);
+
     const [toast, setToast] = useState<{ title: string; desc: string } | null>(null);
     const [realtimeOverrides, setRealtimeOverrides] = useState<Record<string, any>>({});
     
@@ -291,6 +302,23 @@ export default function AdminDashboard() {
     const [modalTitle, setModalTitle] = useState("");
     const [modalTickets, setModalTickets] = useState<any[]>([]);
 
+    // Estados para el Modal Flotante de TicketWindow
+    const [showFloatingTicket, setShowFloatingTicket] = useState(false);
+    const [floatingTicket, setFloatingTicket] = useState<any>(null);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [floatingIndex, setFloatingIndex] = useState(0);
+
+    // Función para abrir el TicketWindow flotante
+    const openFloatingTicket = (ticketId: string) => {
+        const ticket = activeTickets.find((t: any) => t.id === ticketId) || tickets.find((t: any) => t.id === ticketId);
+        if (ticket) {
+            setFloatingTicket(ticket);
+            setFloatingIndex(0);
+            setShowFloatingTicket(true);
+            setIsMinimized(false);
+        }
+    };
+
     // Estado para el Modal de Capital Expuesto
     const [showCapitalModal, setShowCapitalModal] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<any>(null);
@@ -376,29 +404,98 @@ export default function AdminDashboard() {
     }, [dateRange]);
 
 
-    const getStartOfPeriod = (range: string, baseDate: Date): Date => {
-        // Aseguramos que la fecha base se procese en huso horario de Perú (UTC-5)
-        // para evitar falsos positivos por desfases en servidores (ej. Hetzner)
+    // ─── Helpers Robustos de Fecha (sin problemas de zona horaria) ───────────────
+    // Extraemos año/mes directamente de la fecha para evitar desfases UTC
+    
+    const getPeriodYearMonth = (range: string, baseDate: Date): { year: number; month: number; day?: number } => {
+        // Extraer año y mes en huso horario de Perú
         const formatter = new Intl.DateTimeFormat("en-US", {
             timeZone: "America/Lima",
             year: "numeric", month: "2-digit", day: "2-digit"
         });
         const parts = formatter.formatToParts(baseDate);
-        const y = parts.find(p => p.type === "year")!.value;
-        const m = parts.find(p => p.type === "month")!.value;
-        const d = parts.find(p => p.type === "day")!.value;
-
+        const y = parseInt(parts.find(p => p.type === "year")!.value, 10);
+        const m = parseInt(parts.find(p => p.type === "month")!.value, 10);
+        
         if (range === "today") {
-            return new Date(`${y}-${m}-${d}T00:00:00.000-05:00`);
+            const d = parseInt(parts.find(p => p.type === "day")!.value, 10);
+            return { year: y, month: m, day: d };
         }
         if (range === "week") {
-            const startOfWeek = new Date(`${y}-${m}-${d}T00:00:00.000-05:00`);
-            const day = startOfWeek.getDay() || 7;
-            startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
-            return startOfWeek;
+            const d = parseInt(parts.find(p => p.type === "day")!.value, 10);
+            const startOfWeekDay = baseDate.getDay() || 7;
+            const startDay = d - (startOfWeekDay - 1);
+            if (startDay >= 1) {
+                return { year: y, month: m, day: startDay };
+            }
+            // Si empezamos en mes anterior
+            const prevDate = new Date(baseDate);
+            prevDate.setDate(startDay);
+            const formatterPrev = new Intl.DateTimeFormat("en-US", {
+                timeZone: "America/Lima",
+                year: "numeric", month: "2-digit", day: "2-digit"
+            });
+            const partsPrev = formatterPrev.formatToParts(prevDate);
+            return {
+                year: parseInt(partsPrev.find(p => p.type === "year")!.value, 10),
+                month: parseInt(partsPrev.find(p => p.type === "month")!.value, 10),
+                day: parseInt(partsPrev.find(p => p.type === "day")!.value, 10)
+            };
         }
         if (range === "month") {
-            return new Date(`${y}-${m}-01T00:00:00.000-05:00`);
+            return { year: y, month: m };
+        }
+        return { year: 2020, month: 1 };
+    };
+
+    // Comparar si una fecha ISO está dentro del periodo (por año/mes, robusto a UTC)
+    const isDateInPeriod = (dateStr: string | null | undefined, period: { year: number; month: number; day?: number }, range: string): boolean => {
+        if (!dateStr) return false;
+        if (range === "all") return true;
+        
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return false;
+        
+        // Extraer año/mes de la fecha en huso horario de Perú
+        const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/Lima",
+            year: "numeric", month: "2-digit", day: "2-digit"
+        });
+        const parts = formatter.formatToParts(d);
+        const dateYear = parseInt(parts.find(p => p.type === "year")!.value, 10);
+        const dateMonth = parseInt(parts.find(p => p.type === "month")!.value, 10);
+        const dateDay = parseInt(parts.find(p => p.type === "day")!.value, 10);
+        
+        if (range === "month") {
+            return dateYear === period.year && dateMonth === period.month;
+        }
+        if (range === "week") {
+            const targetDate = new Date(period.year, period.month - 1, period.day || 1);
+            const endOfWeek = new Date(targetDate);
+            endOfWeek.setDate(endOfWeek.getDate() + 6);
+            
+            const ticketDate = new Date(dateYear, dateMonth - 1, dateDay);
+            return ticketDate >= targetDate && ticketDate <= endOfWeek;
+        }
+        if (range === "today") {
+            return dateYear === period.year && dateMonth === period.month && dateDay === period.day;
+        }
+        return true;
+    };
+
+    const periodInfo = useMemo(() => getPeriodYearMonth(dateRange, now), [dateRange, now]);
+
+    // Mantenemos startOfPeriod por compatibilidad (legacy) pero ahora con el helper robusto
+    const getStartOfPeriod = (range: string, baseDate: Date): Date => {
+        const period = getPeriodYearMonth(range, baseDate);
+        if (range === "month") {
+            return new Date(`${period.year}-${String(period.month).padStart(2, '0')}-01T00:00:00.000-05:00`);
+        }
+        if (range === "week" && period.day) {
+            return new Date(`${period.year}-${String(period.month).padStart(2, '0')}-${String(period.day).padStart(2, '0')}T00:00:00.000-05:00`);
+        }
+        if (range === "today" && period.day) {
+            return new Date(`${period.year}-${String(period.month).padStart(2, '0')}-${String(period.day).padStart(2, '0')}T00:00:00.000-05:00`);
         }
         return new Date("2020-01-01T00:00:00.000-05:00");
     };
@@ -406,11 +503,7 @@ export default function AdminDashboard() {
     const startOfPeriod = useMemo(() => getStartOfPeriod(dateRange, now), [dateRange, now]);
 
     const isInRange = (dateStr: string | null | undefined) => {
-        if (!dateStr) return false;
-        if (dateRange === "all") return true;
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return false;
-        return d >= startOfPeriod;
+        return isDateInPeriod(dateStr, periodInfo, dateRange);
     };
 
     // ─── Helper puro: inversión confirmada de un ticket ──────────────────────
@@ -425,44 +518,107 @@ export default function AdminDashboard() {
 
     const ticketUtilidad = (t: any): number => {
         const costs: any[] = Array.isArray(t.ticket_costs) ? t.ticket_costs : [];
-        if (costs.length === 0)
-            return parseFloat(t.rentabilidad ?? 0);
+        if (costs.length === 0) {
+            // Fallback: calcular utilidad directamente de campos del ticket
+            // Utilidad = Ingresos (sin IGV) - Costos (labor + materials + visit)
+            // NOTA: ingresos_reales YA ES la base sin IGV (total_quoted_amount / 1.18)
+            // Solo dividir por 1.18 si usamos total_quoted_amount
+            const tieneIngresosReales = t.ingresos_reales && parseFloat(t.ingresos_reales) > 0;
+            const ingresosRaw = tieneIngresosReales 
+                ? parseFloat(t.ingresos_reales) 
+                : parseFloat(t.total_quoted_amount ?? t.montoFinal ?? 0) / 1.18;
+            const ingresosBase = Math.round(ingresosRaw * 100) / 100;
+            const laborCost = parseFloat(t.labor_cost ?? 0);
+            const materialsCost = parseFloat(t.materials_cost ?? 0);
+            const visitCost = parseFloat(t.visit_cost ?? 0);
+            const totalCostos = laborCost + materialsCost + visitCost;
+            return Math.round((ingresosBase - totalCostos) * 100) / 100;
+        }
         // Retorna el Accrual Basis (Toma en cuenta la deuda con el técnico)
         return calculateTicketFinances(t, costs).realProfitability;
     };
 
     // Identificar si un ticket es de arrastre (abierto de periodos anteriores)
+    // Un ticket es arrastrado si: fue creado en un periodo anterior Y está ABIERTO
+    // Si está cerrado (sin importar el periodo), NO es arrastrado
     const isRolledOver = (t: any) => {
         const created = t.original_created_at ?? t.created_at ?? t.createdAt ?? t.fechaCreacion;
         if (!created) return false;
         
-        const origDate = new Date(created);
-        if (origDate >= startOfPeriod) return false;
+        // Si fue creado EN el periodo actual, NO es arrastre
+        if (isDateInPeriod(created, periodInfo, dateRange)) return false;
 
+        // Verificar si es un ticket cerrado
         const sid = normalizeStateId(t.status_id ?? t.estadoId);
         const isClosed = ["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(sid);
         
+        // 🔧 CORRECCIÓN: Si está cerrado (sin importar el periodo de cierre), NO es arrastrado
+        // Solo son arrastrados los tickets ABIERTOS de meses anteriores
         if (isClosed) {
-            const closureDate = t.closure_date ?? t.updated_at;
-            if (closureDate) {
-                const cDate = new Date(closureDate);
-                if (cDate < startOfPeriod) return false;
-            } else {
-                return false;
-            }
+            return false;
         }
 
         return true;
     };
 
-    // Filtro de periodo robusto que incluye los tickets en rango y los arrastrados
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // NUEVO EJE CONTABLE: closure_date como ÚNICA fuente de verdad
+    // Regla: Solo los tickets con estado 'ticket_cerrado' o 'liquidado' Y closure_date
+    // dentro del periodo actual se incluyen en las métricas de ingresos/utilidad.
+    // ═══════════════════════════════════════════════════════════════════════════════
+    
+    // ── Definición estricta de estados de cierre real ─────────────────────────────
+    const REAL_CLOSURE_STATES = ["ticket_cerrado", "liquidado"];
+    
+    const isRealClosureState = (t: any): boolean => {
+        const sid = normalizeStateId(t.status_id ?? t.estadoId);
+        return REAL_CLOSURE_STATES.includes(sid);
+    };
+
+    // ── Estados que representan ingresos generados (no solo ticket_cerrado) ───────
+    const REVENUE_STATES = ["ticket_cerrado", "por_liquidar", "cotizacion_aprobada", "documentacion_enviada", "requiere_revision_admin", "liquidado"];
+    
+    const isRevenueState = (t: any): boolean => {
+        const sid = normalizeStateId(t.status_id ?? t.estadoId);
+        return REVENUE_STATES.includes(sid);
+    };
+
+    // Filtro de periodo basado EXCLUSIVAMENTE en closure_date (eje contable)
+    // Un ticket se considera "en el periodo" solo si:
+    // 1. Tiene estado de cierre real (ticket_cerrado o liquidado)
+    // 2. Su closure_date cae dentro del periodo actual
+    const isClosedInPeriod = (t: any): boolean => {
+        if (!isRealClosureState(t)) return false;
+        if (!t.closure_date) return false;
+        return isDateInPeriod(t.closure_date, periodInfo, dateRange);
+    };
+
+    // Helper: obtener fecha de cierre efectiva (closure_date > updated_at > created_at)
+    const getEffectiveClosureDate = (t: any) => {
+        if (t.closure_date) return new Date(t.closure_date);
+        if (normalizeStateId(t.status_id) === 'ticket_cerrado') {
+            return new Date(t.updated_at || t.created_at);
+        }
+        return null;
+    };
+
+    // Filtro legacy: mantener compatibilidad pero usar closure_date como prioritario
+    // NOTA: Para métricas de INGRESOS y UTILIDAD usar isClosedInPeriod()
+    // Para métricas OPERATIVAS (SLA, tickets en proceso) usar isTicketInPeriod()
     const isTicketInPeriod = (t: any) => {
-        if (isInRange(t.created_at ?? t.createdAt ?? t.fechaCreacion)) return true;
-        if (t.closure_date && isInRange(t.closure_date)) return true;
-        return isRolledOver(t);
+        // Si es un ticket con cierre real en este periodo → incluir
+        if (isClosedInPeriod(t)) return true;
+        // Tickets arrastrados de periodos anteriores (abiertos que vienen del mes pasado)
+        if (isRolledOver(t)) return true;
+        // Tickets creados en el periodo actual (sin cierre aún)
+        if (isDateInPeriod(t.created_at ?? t.createdAt ?? t.fechaCreacion, periodInfo, dateRange)) return true;
+        return false;
     };
 
     // ── MÓDULO 1: Rentabilidad / ROI (SIN IGV) ───────────────────────────────
+    // IMPORTANTE: Este módulo ahora usa EXCLUSIVAMENTE closure_date como eje contable.
+    // Solo los tickets con estado 'ticket_cerrado' o 'liquidado' Y closure_date en el
+    // periodo actual se incluyen en los cálculos de ingresos y utilidad.
     const roi = useMemo(() => {
         const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
 
@@ -478,14 +634,20 @@ export default function AdminDashboard() {
             const inv = ticketInversion(t);
             inversionSum += inv;
 
-            const isClosed = normalizeStateId(t.status_id ?? t.estadoId) === "ticket_cerrado";
-            const displayClosureDate = t.closure_date || t.fechaCierre || t.updated_at;
-            const closedInCurrentPeriod = isClosed && displayClosureDate && isInRange(displayClosureDate);
+            // NUEVO EJE CONTABLE: Usar isClosedInPeriod() que filtra por:
+            // 1. Estado: ticket_cerrado o liquidado
+            // 2. closure_date dentro del periodo actual
+            const closedInCurrentPeriod = isClosedInPeriod(t);
 
             if (closedInCurrentPeriod) {
                 closed.push(t);
-                ingresosSum += parseFloat(t.ingresos_reales ?? 0);
-                utilidadSum += ticketUtilidad(t);
+                // Usar ingresos_reales (sin IGV) o fallback a total_quoted_amount / 1.18
+                const rawIngresos = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+                // Solo sumar si hay monto válido
+                if (rawIngresos > 0) {
+                    ingresosSum += rawIngresos;
+                    utilidadSum += ticketUtilidad(t);
+                }
             }
 
             if (isRolledOver(t)) {
@@ -505,7 +667,8 @@ export default function AdminDashboard() {
             .map(s => {
                 const stTotal = inPeriod.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
                 const stClosed = closed.filter((t: any) => t.service_type === s.id || t.tipoServicio === s.id);
-                const ing  = stClosed.reduce((a, t) => a + parseFloat(t.ingresos_reales ?? 0), 0);
+                // Usar ingresos_reales (sin IGV) o fallback a total_quoted_amount / 1.18
+                const ing  = stClosed.reduce((a, t) => a + (parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18)), 0);
                 const cost = stTotal.reduce((a, t) => a + ticketInversion(t), 0);
                 const util = stClosed.reduce((a, t) => a + ticketUtilidad(t), 0);
                 return { ...s, tickets: stTotal.length, ingresos: ing, margen: ing > 0 ? (util / ing) * 100 : 0 };
@@ -513,8 +676,11 @@ export default function AdminDashboard() {
             .filter(s => s.tickets > 0)
             .sort((a, b) => b.ingresos - a.ingresos);
 
+        // Helper: obtener ingresos base sin IGV con fallback completo
+        const getIngresosBase = (t: any) => parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || t.montoFinal || 0) / 1.18);
+
         const ingresosItems = closed
-            .filter(t => parseFloat(t.ingresos_reales ?? 0) > 0)
+            .filter(t => getIngresosBase(t) > 0)
             .sort((a, b) =>
                 new Date(b.closure_date ?? b.updated_at ?? b.created_at ?? 0).getTime() -
                 new Date(a.closure_date ?? a.updated_at ?? a.created_at ?? 0).getTime()
@@ -599,7 +765,8 @@ export default function AdminDashboard() {
         activeTickets.forEach((t: any) => {
             if (!isTicketInPeriod(t)) return;
             totalAdvances += parseFloat(t.adelantos_flujo_b || t.metadata?.adelantos_flujo_b || 0);
-            totalBudget += parseFloat(t.ingresos_reales || 0);
+            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+            totalBudget += parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
         });
 
         return {
@@ -1089,7 +1256,8 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Ingresos Generados: Aprobados & Facturados (SIN IGV)");
                         setModalTickets(roi.ingresosItems.map((t: any) => {
-                            const ingresoReal = parseFloat(t.ingresos_reales || 0);
+                            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                            const ingresoReal = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
                             return {
                                 ...t,
                                 cliente: t.cliente?.nombre || t.clients?.name || 'Cliente',
@@ -1126,7 +1294,8 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Análisis de Utilidad Neta (Profitability) - SIN IGV");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const ing  = parseFloat(t.ingresos_reales ?? 0);
+                            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                            const ing  = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
                             const cost = ticketInversion(t);
                             const util = ticketUtilidad(t);
                             return { ...t,
@@ -1146,7 +1315,8 @@ export default function AdminDashboard() {
                     onClick={() => {
                         setModalTitle("Eficiencia Operativa / ROI");
                         setModalTickets(roi.ingresosItems.map(t => {
-                            const ing  = parseFloat(t.ingresos_reales ?? 0);
+                            // Fix: Use fallback to total_quoted_amount when ingresos_reales doesn't exist
+                            const ing  = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount || 0) / 1.18);
                             const cost = ticketInversion(t);
                             const util = ticketUtilidad(t);
                             return { ...t,
@@ -1964,66 +2134,96 @@ export default function AdminDashboard() {
                                     📊 Exportar CSV
                                 </button>
                             </div>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
                                 <thead>
                                     <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Servicio</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Monto (S/)</th>
-                                        <th style={{ padding: '12px 10px', fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Fecha</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Detalle Servicio</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Creación</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ Sin IGV</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ C/IGV</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {modalTickets.map((t: any, idx: number) => {
-                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.numeroTicket || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
-                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
-                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
-                                        const fecha = t._fecha || t.created_at || t.createdAt || t.updated_at || '';
-                                        const monto = t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0;
-                                        
+                                     {(modalTickets ?? []).map((t: any, idx: number) => {
+                                        const ticketNum = t?.client_ticket_number || t?.numeroTicketCliente || t?.ticket_number || t?.ticketNum || (t?.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                        const clientName = t?.cliente?.nombre || t?.cliente?.name || (typeof t?.cliente === 'string' ? t.cliente : null) || t?.clients?.name || t?.client_name || t?.clienteNombre || 'N/A';
+                                        const agencia = t?.sede?.nombre || t?.sede?.name || t?.branch_offices?.name || t?.branch?.name || t?.metadata?.sede?.nombre || '';
+                                        const servicio = t?.servicio || t?.service_type || t?.tipo_servicio || 'N/A';
+                                        const fechaCreacion = t?.created_at || t?.createdAt || t?.fechaCreacion || '';
+                                        const fechaCierre = t?.closure_date || '';
+                                        const montoBase = t?.ingresos_reales || t?.total_quoted_amount || t?.montoFinal || 0;
+                                        const montoSinIGV = montoBase > 0 ? montoBase : (t?._monto || t?._investmentTotalReal || t?._utilidadPendiente || t?.amount || 0);
+                                        const montoConIGV = montoSinIGV * 1.18;
+
                                         return (
-                                            <tr 
-                                                key={(t.id || idx) + '-' + idx} 
-                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            <ErrorBoundary
+                                                key={`eb-${(t?.id ?? idx)}-${idx}`}
+                                                fallback={<tr style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}><td colSpan={7} style={{ color: '#EF4444', padding: '12px 8px', fontSize: '0.8rem' }}>⚠ Error al cargar registro (OC huérfana o datos corruptos)</td></tr>}
                                             >
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem', fontFamily: 'monospace' }}>
-                                                        {ticketNum}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.8rem', fontWeight: 600 }}>
-                                                        {clientName}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <span style={{ 
-                                                        padding: '4px 8px', borderRadius: '6px', fontSize: '0.65rem', fontWeight: 800, 
-                                                        background: 'rgba(139,92,246,0.15)', 
-                                                        color: '#A78BFA', 
-                                                        border: '1px solid rgba(139,92,246,0.3)'
-                                                    }}>
-                                                        {servicio.toUpperCase()}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.9rem' }}>
-                                                        S/ {fmt(monto)}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '14px 10px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem' }}>
-                                                        {fecha ? new Date(fecha).toLocaleDateString('es-PE') : 'N/A'}
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                                <tr
+                                                    key={(t?.id || idx) + '-' + idx}
+                                                    style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.1)'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    onClick={() => t?.id && openFloatingTicket(t.id)}
+                                                >
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'monospace', cursor: 'pointer' }}>
+                                                            {ticketNum}
+                                                            <span style={{ marginLeft: '6px', fontSize: '0.6rem', opacity: 0.6 }}>🔗</span>
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                            {clientName}
+                                                        </div>
+                                                        {agencia && (
+                                                            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', marginTop: '2px' }}>
+                                                                📍 {agencia}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <span style={{
+                                                            padding: '3px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
+                                                            background: 'rgba(139,92,246,0.15)',
+                                                            color: '#A78BFA',
+                                                            border: '1px solid rgba(139,92,246,0.3)'
+                                                        }}>
+                                                            {(servicio ?? 'N/A').toString().toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                                                            {fechaCreacion ? new Date(fechaCreacion).toLocaleDateString('es-PE') : 'N/A'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: fechaCierre ? '#10B981' : 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                                                            {fechaCierre ? new Date(fechaCierre).toLocaleDateString('es-PE') : 'Abierto'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>
+                                                            S/ {fmt(montoSinIGV)}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '12px 8px' }}>
+                                                        <div style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                            S/ {fmt(montoConIGV)}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </ErrorBoundary>
                                         );
                                     })}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2071,84 +2271,89 @@ export default function AdminDashboard() {
                                     <div style={{ fontSize: '0.8rem', marginTop: '0.3rem' }}>No hay adelantos en tickets activos.</div>
                                 </div>
                             ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                                        <tr style={{ background: '#0F0F1A', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
-                                            {['ID Ticket', 'Gestora', 'Agencia / Sede', 'Especialista', 'Monto Adelantado', 'Estado', 'Aging'].map(h => (
-                                                <th key={h} style={{ padding: '14px 12px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', textAlign: 'left', letterSpacing: '0.05em' }}>{h}</th>
-                                            ))}
-                                            <th style={{ padding: '14px 4px' }}></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {capitalExpuesto.tickets.map((t: any) => {
-                                            const agingHours = Math.floor(t._ageH);
-                                            const agingDays = Math.floor(t._ageH / 24);
-                                            const agingLabel = agingDays >= 1 ? `${agingDays}d ${agingHours % 24}h` : `${agingHours}h`;
-                                            const agingCol = t._ageH >= 72 ? '#EF4444' : t._ageH >= 48 ? '#F59E0B' : '#10B981';
-                                            const rowBg = t._isRiesgo ? 'rgba(239,68,68,0.04)' : 'transparent';
-                                            const rowBorder = t._isRiesgo ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.03)';
-                                            const estadoLabel = (t.estadoId || 'nuevo').replace(/_/g, ' ').toUpperCase();
-                                            return (
-                                                <tr 
-                                                    key={t.id} 
-                                                    onClick={() => setSelectedTicket(t)}
-                                                    style={{ borderBottom: `1px solid ${rowBorder}`, background: rowBg, cursor: 'pointer' }}
-                                                    onMouseEnter={e => e.currentTarget.style.background = t._isRiesgo ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.02)'}
-                                                    onMouseLeave={e => e.currentTarget.style.background = rowBg}
-                                                >
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontWeight: 800, fontSize: '0.82rem', color: t._isRiesgo ? '#FCA5A5' : 'white', fontFamily: 'monospace' }}>
-                                                            {t.numeroTicketCliente || String(t.id || '').substring(0, 8).toUpperCase()}
+                                                            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Detalle Servicio</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Creación</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ Sin IGV</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ C/IGV</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {modalTickets.map((t: any, idx: number) => {
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
+                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
+                                        const fechaCreacion = t.created_at || t.createdAt || t.fechaCreacion || '';
+                                        const fechaCierre = t.closure_date || '';
+                                        const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                                        const montoSinIGV = montoBase > 0 ? montoBase : (t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0);
+                                        const montoConIGV = montoSinIGV * 1.18;
+
+                                        return (
+                                            <tr
+                                                key={(t.id || idx) + '-' + idx}
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.1)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                onClick={() => t.id && openFloatingTicket(t.id)}
+                                            >
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'monospace', cursor: 'pointer' }}>
+                                                        {ticketNum}
+                                                        <span style={{ marginLeft: '6px', fontSize: '0.6rem', opacity: 0.6 }}>🔗</span>
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                        {clientName}
+                                                    </div>
+                                                    {agencia && (
+                                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', marginTop: '2px' }}>
+                                                            📍 {agencia}
                                                         </div>
-                                                        <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>
-                                                            {new Date(t.createdAt || t.created_at).toLocaleDateString('es-PE')}
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg,#8B5CF6,#6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 900, color: 'white', flexShrink: 0 }}>
-                                                                {(t._gestoraName || '?').substring(0, 2).toUpperCase()}
-                                                            </div>
-                                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>{t._gestoraName}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>{t.cliente?.nombre || String.fromCharCode(8212)}</div>
-                                                        <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>{t._sede}</div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{t._especialista}</span>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontSize: '1rem', fontWeight: 900, color: t._isRiesgo ? '#EF4444' : '#F59E0B' }}>S/ {fmt(t._totalAdelantado)}</div>
-                                                        <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>{t._pagos.length} pago{t._pagos.length !== 1 ? 's' : ''}</div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '0.62rem', fontWeight: 800, background: t._isRiesgo ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)', color: t._isRiesgo ? '#FCA5A5' : 'rgba(255,255,255,0.6)', border: t._isRiesgo ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)', whiteSpace: 'nowrap' }}>
-                                                            {estadoLabel}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '14px 12px' }}>
-                                                        <div style={{ fontWeight: 900, fontSize: '0.88rem', color: agingCol }}>{agingLabel}</div>
-                                                        <div style={{ width: '50px', height: '3px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', marginTop: '4px' }}>
-                                                            <div style={{ width: `${Math.min(t._ageH / 72 * 100, 100)}%`, height: '100%', background: agingCol, borderRadius: '2px' }} />
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '14px 8px' }}>
-                                                        <Link prefetch={false} href={`/dashboard/admin/tickets?ticketId=${t.id}`} onClick={() => setShowCapitalModal(false)}
-                                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'white', transition: 'all 0.2s' }}
-                                                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.2)'}
-                                                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'}
-                                                        >
-                                                            <ChevronRight size={14} />
-                                                        </Link>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <span style={{
+                                                        padding: '3px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
+                                                        background: 'rgba(139,92,246,0.15)',
+                                                        color: '#A78BFA',
+                                                        border: '1px solid rgba(139,92,246,0.3)'
+                                                    }}>
+                                                        {servicio.toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                                                        {fechaCreacion ? new Date(fechaCreacion).toLocaleDateString('es-PE') : 'N/A'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: fechaCierre ? '#10B981' : 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                                                        {fechaCierre ? new Date(fechaCierre).toLocaleDateString('es-PE') : 'Abierto'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>
+                                                        S/ {fmt(montoSinIGV)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                        S/ {fmt(montoConIGV)}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                             )}
                         </div>
                     </div>
@@ -2186,81 +2391,85 @@ export default function AdminDashboard() {
                         </div>
                         
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 2rem' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '950px' }}>
                                 <thead>
-                                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                        <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Ticket / Factura</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Cliente</th>
-                                        <th style={{ textAlign: 'right', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Monto (S/)</th>
-                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Estado</th>
-                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>OC / Referencia</th>
-                                        <th style={{ textAlign: 'center', padding: '12px 8px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Acción</th>
+                                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(255,255,255,0.05)' }}>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>N° Ticket</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Cliente / Agencia</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Detalle Servicio</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Creación</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>F. Cierre</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ Sin IGV</th>
+                                        <th style={{ padding: '12px 8px', fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>S/ C/IGV</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {invoices.length === 0 ? (
-                                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay facturas emitidas.</td></tr>
-                                    ) : invoices.sort((a,b) => (a.status === 'emitida' ? -1 : 1)).map(inv => {
-                                        const isPaid = inv.status === 'cobrada';
-                                        const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
-                                        const rawId = tk?.id ?? inv.ticket_id ?? '';
-                                        const ticketCode = tk?.client_ticket_number || (typeof rawId === 'string' ? rawId.split('-')[0] : 'SIN-TICKET');
-                                        const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
+                                    {modalTickets.map((t: any, idx: number) => {
+                                        const ticketNum = t.client_ticket_number || t.numeroTicketCliente || t.ticket_number || t.ticketNum || (t.id ? String(t.id).substring(0, 8).toUpperCase() : 'N/A');
+                                        const clientName = t.cliente?.nombre || t.cliente?.name || (typeof t.cliente === 'string' ? t.cliente : null) || t.clients?.name || t.client_name || t.clienteNombre || 'N/A';
+                                        const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
+                                        const servicio = t.servicio || t.service_type || t.tipo_servicio || 'N/A';
+                                        const fechaCreacion = t.created_at || t.createdAt || t.fechaCreacion || '';
+                                        const fechaCierre = t.closure_date || '';
+                                        const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                                        const montoSinIGV = montoBase > 0 ? montoBase : (t._monto || t._investmentTotalReal || t._utilidadPendiente || t.amount || 0);
+                                        const montoConIGV = montoSinIGV * 1.18;
+
                                         return (
-                                            <ErrorBoundary 
-                                                key={`eb-${inv.id || Math.random()}`} 
-                                                fallback={<tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}><td colSpan={6} style={{ color: '#EF4444', padding: '12px 8px', fontSize: '0.8rem' }}>Error cargando registro (OC huérfana o datos corruptos)</td></tr>}
+                                            <tr
+                                                key={(t.id || idx) + '-' + idx}
+                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s', cursor: 'pointer' }}
+                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.1)'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                onClick={() => t.id && openFloatingTicket(t.id)}
                                             >
-                                                <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                                    <td style={{ padding: '12px 8px' }}>
-                                                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'white' }}>{ticketCode}</div>
-                                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>{new Date(inv.issued_date || inv.created_at || new Date()).toLocaleDateString()}</div>
-                                                    </td>
-                                                <td style={{ padding: '12px 8px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)' }}>{clientName}</td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(inv.amount_total)}</td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.8rem', fontFamily: 'monospace', cursor: 'pointer' }}>
+                                                        {ticketNum}
+                                                        <span style={{ marginLeft: '6px', fontSize: '0.6rem', opacity: 0.6 }}>🔗</span>
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', fontWeight: 600 }}>
+                                                        {clientName}
+                                                    </div>
+                                                    {agencia && (
+                                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem', marginTop: '2px' }}>
+                                                            📍 {agencia}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
                                                     <span style={{
-                                                        background: isPaid ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-                                                        color: isPaid ? '#10B981' : '#F59E0B',
-                                                        padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800
+                                                        padding: '3px 6px', borderRadius: '4px', fontSize: '0.6rem', fontWeight: 800,
+                                                        background: 'rgba(139,92,246,0.15)',
+                                                        color: '#A78BFA',
+                                                        border: '1px solid rgba(139,92,246,0.3)'
                                                     }}>
-                                                        {isPaid ? 'PAGADO' : 'PENDIENTE'}
+                                                        {servicio.toUpperCase()}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                                    {isPaid ? (
-                                                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>{inv.invoice_number || 'N/A'}</span>
-                                                    ) : (
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="Opcional OC"
-                                                            value={invoiceOcNumber[inv.id] || ''}
-                                                            onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [inv.id]: e.target.value }))}
-                                                            style={{
-                                                                background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
-                                                                color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem',
-                                                                width: '100px', textAlign: 'center'
-                                                            }}
-                                                        />
-                                                    )}
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem' }}>
+                                                        {fechaCreacion ? new Date(fechaCreacion).toLocaleDateString('es-PE') : 'N/A'}
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                                                    {!isPaid && (
-                                                        <button 
-                                                            disabled={invoiceProcessing === inv.id}
-                                                            onClick={() => handleMarkAsPaid(inv.id)}
-                                                            style={{
-                                                                background: '#3B82F6', color: 'white', border: 'none',
-                                                                padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
-                                                                cursor: invoiceProcessing === inv.id ? 'wait' : 'pointer',
-                                                                opacity: invoiceProcessing === inv.id ? 0.5 : 1
-                                                            }}>
-                                                            {invoiceProcessing === inv.id ? '...' : 'Cobrar'}
-                                                        </button>
-                                                    )}
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: fechaCierre ? '#10B981' : 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
+                                                        {fechaCierre ? new Date(fechaCierre).toLocaleDateString('es-PE') : 'Abierto'}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: '#60A5FA', fontWeight: 900, fontSize: '0.85rem' }}>
+                                                        S/ {fmt(montoSinIGV)}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px 8px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.8rem' }}>
+                                                        S/ {fmt(montoConIGV)}
+                                                    </div>
                                                 </td>
                                             </tr>
-                                            </ErrorBoundary>
                                         );
                                     })}
                                 </tbody>
@@ -2417,7 +2626,8 @@ export default function AdminDashboard() {
                                             <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay cuentas por cobrar.</td></tr>
                                         ) : cfoAccountsReceivable.pendingInvoices.map((inv: any) => {
                                             const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
-                                            const ticketCode = tk?.client_ticket_number || (tk?.id || inv.ticket_id).split('-')[0];
+                                            const _rawId1 = tk?.id ?? inv.ticket_id ?? '';
+                                            const ticketCode = tk?.client_ticket_number || (typeof _rawId1 === 'string' ? _rawId1.split('-')[0] : 'SIN-TICKET');
                                             const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
                                             return (
                                                 <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
@@ -2449,7 +2659,8 @@ export default function AdminDashboard() {
                                             <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>No hay facturas registradas.</td></tr>
                                         ) : invoices.sort((a,b) => (a.status === 'emitida' ? -1 : 1)).map((inv: any) => {
                                             const tk = activeTickets.find((t: any) => t.id === inv.ticket_id);
-                                            const ticketCode = tk?.client_ticket_number || (tk?.id || inv.ticket_id).split('-')[0];
+                                            const _rawId2 = tk?.id ?? inv.ticket_id ?? '';
+                                            const ticketCode = tk?.client_ticket_number || (typeof _rawId2 === 'string' ? _rawId2.split('-')[0] : 'SIN-TICKET');
                                             const clientName = tk?.cliente?.nombre || tk?.cliente?.name || tk?.metadata?.cliente_nombre || 'Cliente Desconocido';
                                             return (
                                                 <tr key={inv.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'white', fontSize: '0.85rem' }}>
@@ -2566,6 +2777,102 @@ export default function AdminDashboard() {
                             )}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            {/* MODAL FLOTANTE DE TICKET WINDOW */}
+            {/* ═══════════════════════════════════════════════════════════════════════ */}
+            {showFloatingTicket && floatingTicket && (
+                <div style={{
+                    position: 'fixed',
+                    top: isMinimized ? 'calc(100vh - 60px)' : '20px',
+                    right: '20px',
+                    width: isMinimized ? '280px' : '520px',
+                    height: isMinimized ? '60px' : 'calc(100vh - 40px)',
+                    background: 'linear-gradient(135deg,#0F0F1A 0%,#1A0F2A 100%)',
+                    border: '1px solid rgba(139,92,246,0.4)',
+                    borderRadius: isMinimized ? '16px 16px 0 0' : '20px',
+                    boxShadow: '0 25px 80px rgba(139,92,246,0.25)',
+                    zIndex: 10002,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s ease',
+                    backdropFilter: 'blur(20px)',
+                }}>
+                    {/* Barra de título con controles */}
+                    <div style={{
+                        padding: '12px 16px',
+                        background: 'rgba(139,92,246,0.1)',
+                        borderBottom: '1px solid rgba(139,92,246,0.2)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                    }} onClick={() => setIsMinimized(!isMinimized)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Ticket size={18} color="#8B5CF6" />
+                            <span style={{ color: 'white', fontWeight: 800, fontSize: '0.85rem' }}>
+                                {isMinimized 
+                                    ? `📋 ${floatingTicket.client_ticket_number || floatingTicket.numeroTicketCliente || 'Ticket'} (clic para expandir)` 
+                                    : 'Detalle de Ticket'}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
+                                style={{
+                                    background: 'rgba(139,92,246,0.2)',
+                                    border: 'none',
+                                    color: 'white',
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.75rem',
+                                }}
+                                title={isMinimized ? 'Expandir' : 'Minimizar'}
+                            >
+                                {isMinimized ? '⬆️' : '⬇️'}
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowFloatingTicket(false); setFloatingTicket(null); }}
+                                style={{
+                                    background: 'rgba(239,68,68,0.2)',
+                                    border: 'none',
+                                    color: 'white',
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.75rem',
+                                }}
+                                title="Cerrar"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Contenido del TicketWindow */}
+                    {!isMinimized && (
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <TicketWindow
+                                ticket={floatingTicket}
+                                index={floatingIndex}
+                                onClose={() => { setShowFloatingTicket(false); setFloatingTicket(null); }}
+                                onUpdate={handleUpdateTicket}
+                            />
+                        </div>
+                    )}
                 </div>
             )}
         </div>
