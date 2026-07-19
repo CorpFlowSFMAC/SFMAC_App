@@ -395,18 +395,32 @@ export default function AdminDashboard() {
     };
 
     // ── COBRANZAS: Cargar tickets para administración ──
+    // ★ IMPORTANTE: No depende de 'invoices' para evitar loop infinito
+    // Siempre carga datos frescos de la BD directamente
     const loadCobranzaTickets = useCallback(async () => {
         setLoadingCobranza(true);
         try {
-            // Cargar invoices existentes
+            // Cargar invoices existentes directamente de BD
             const { data: invData, error: invError } = await supabase.from('invoices').select('*');
             
             if (invError) {
                 console.error('[COBRANZA] Error cargando invoices:', invError);
+                triggerToast("Error", "No se pudieron cargar las facturas.");
+                setCobranzaTickets([]);
+                setLoadingCobranza(false);
+                return;
             }
             
             console.log('[COBRANZA] Invoices cargados:', invData?.length);
             console.log('[COBRANZA] Active tickets:', activeTickets?.length);
+            
+            // Verificar que activeTickets existe
+            if (!activeTickets || activeTickets.length === 0) {
+                console.log('[COBRANZA] No hay tickets activos para filtrar');
+                setCobranzaTickets([]);
+                setLoadingCobranza(false);
+                return;
+            }
             
             // ★ SOLO tickets cerrados con monto > 0 que NO están cobrados (BANDEJA ZERO)
             const ticketsFacturables = (activeTickets || []).filter((t: any) => {
@@ -448,19 +462,13 @@ export default function AdminDashboard() {
 
             setCobranzaTickets(ticketsConFacturas);
             
-            // También actualizar invoices globally si cambió algo
-            if (invData) {
-                console.log('[COBRANZA] Actualizando invoices global:', invData.length);
-                setInvoices(invData);
-            }
-            
         } catch (error) {
-            console.error("Error cargando tickets de cobranza:", error);
+            console.error("[COBRANZA] Error cargando tickets de cobranza:", error);
             triggerToast("Error", "No se pudieron cargar los tickets para cobranza.");
         } finally {
             setLoadingCobranza(false);
         }
-    }, [activeTickets, invoices, supabase]);
+    }, [activeTickets, supabase]);
 
     // ── COBRANZAS: Crear invoice desde ticket y marcar como cobrado ──
     const handleCreateInvoice = async () => {
