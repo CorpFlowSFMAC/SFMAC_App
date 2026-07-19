@@ -443,7 +443,7 @@ export default function AdminDashboard() {
         }
     }, [activeTickets, supabase]);
 
-    // ── COBRANZAS: Crear invoice desde ticket ──
+    // ── COBRANZAS: Crear invoice desde ticket y marcar como cobrado ──
     const handleCreateInvoice = async () => {
         if (!selectedTicketForInvoice || !newInvoiceOc.trim()) {
             triggerToast("Error", "Ingrese el número de OC.");
@@ -451,21 +451,24 @@ export default function AdminDashboard() {
         }
         
         setInvoiceProcessing(selectedTicketForInvoice.id);
+        
         try {
             const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
+            const ocNumber = newInvoiceOc.trim().toUpperCase();
             
+            // ★ REGLA DE NEGOCIO: Al registrar OC, automáticamente es COBRADO
             const { data, error } = await supabase.from('invoices').insert({
                 ticket_id: selectedTicketForInvoice.id,
                 amount_total: monto,
-                status: 'emitida',
+                status: 'cobrada', // ★ Estado directo: cobrado
                 issued_date: new Date().toISOString(),
-                invoice_number: newInvoiceOc.trim()
+                paid_date: new Date().toISOString(), // ★ Fecha de pago = hoy
+                invoice_number: ocNumber
             }).select().single();
             
             if (error) {
                 console.error("Error creando invoice:", error);
-                triggerToast("Error", error.message || "No se pudo registrar la OC.");
-                // Cerrar modal incluso si hay error
+                triggerToast("Error", error.message || "No se pudo registrar la cobranza.");
                 setShowCreateInvoiceModal(false);
                 setSelectedTicketForInvoice(null);
                 setNewInvoiceOc('');
@@ -473,19 +476,36 @@ export default function AdminDashboard() {
                 return;
             }
             
-            triggerToast("OC Registrada", `Orden de compra ${newInvoiceOc} asociada al ticket.`);
+            // ★ OPTIMISTIC UI: Actualizar estado local inmediatamente
+            const updatedTickets = cobranzaTickets.map(t => {
+                if (t.id === selectedTicketForInvoice.id) {
+                    return {
+                        ...t,
+                        _hasInvoice: true,
+                        _invoice: data,
+                        _invoiceOc: ocNumber,
+                        _invoiceStatus: 'cobrada'
+                    };
+                }
+                return t;
+            });
+            setCobranzaTickets(updatedTickets);
             
-            // Reset y recargar
+            // Limpiar input local
+            setInvoiceOcNumber(prev => ({ ...prev, [selectedTicketForInvoice.id]: '' }));
+            
+            // ★ FEEDBACK VISUAL: Toast de éxito
+            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || selectedTicketForInvoice.id} marcado como COBRADO.`);
+            
+            // Reset modal
             setShowCreateInvoiceModal(false);
             setSelectedTicketForInvoice(null);
             setNewInvoiceOc('');
             setNewInvoiceAmount('');
-            await loadCobranzaTickets();
             
         } catch (error: any) {
             console.error("Error creando invoice:", error);
-            triggerToast("Error", error.message || "No se pudo registrar la OC.");
-            // Cerrar modal en caso de error
+            triggerToast("Error", error.message || "No se pudo registrar la cobranza.");
             setShowCreateInvoiceModal(false);
             setSelectedTicketForInvoice(null);
             setNewInvoiceOc('');
@@ -505,16 +525,34 @@ export default function AdminDashboard() {
         
         setInvoiceProcessing(invoiceId);
         try {
+            const ocNumber = oc.trim().toUpperCase();
+            
             const { error } = await supabase.from('invoices').update({
                 status: 'cobrada',
                 paid_date: new Date().toISOString(),
-                invoice_number: oc.trim()
+                invoice_number: ocNumber
             }).eq('id', invoiceId);
             
             if (error) throw error;
             
-            triggerToast("Cobranza Registrada", `El pago de ${selectedTicketForInvoice?._invoiceOc || oc} ha sido registrado.`);
-            await loadCobranzaTickets();
+            // ★ OPTIMISTIC UI: Actualizar estado local inmediatamente
+            const updatedTickets = cobranzaTickets.map(t => {
+                if (t.id === ticketId) {
+                    return {
+                        ...t,
+                        _hasInvoice: true,
+                        _invoiceOc: ocNumber,
+                        _invoiceStatus: 'cobrada'
+                    };
+                }
+                return t;
+            });
+            setCobranzaTickets(updatedTickets);
+            
+            // Limpiar input local
+            setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
+            
+            triggerToast("✓ Cobranza Registrada", `Ticket marcado como COBRADO.`);
             
         } catch (error: any) {
             console.error("Error marcando invoice como pagado:", error);
@@ -2774,12 +2812,32 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                         
+                        {/* ★ Indicador de acción */}
+                        <div style={{ 
+                            background: '#10B98120', 
+                            border: '1px solid #10B98140', 
+                            borderRadius: '8px', 
+                            padding: '10px 14px', 
+                            marginBottom: '1rem',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px'
+                        }}>
+                            <span style={{ fontSize: '1.2rem' }}>💰</span>
+                            <div>
+                                <div style={{ color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>Al registrar, el ticket se marcará como COBRADO</div>
+                                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>La métrica se actualizará instantáneamente</div>
+                            </div>
+                        </div>
+                        
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button
                                 onClick={() => setShowCreateInvoiceModal(false)}
+                                disabled={invoiceProcessing === selectedTicketForInvoice.id}
                                 style={{
                                     flex: 1, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white',
-                                    padding: '10px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer'
+                                    padding: '10px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 600, cursor: invoiceProcessing === selectedTicketForInvoice.id ? 'not-allowed' : 'pointer',
+                                    opacity: invoiceProcessing === selectedTicketForInvoice.id ? 0.5 : 1
                                 }}
                             >
                                 Cancelar
@@ -2788,13 +2846,35 @@ export default function AdminDashboard() {
                                 onClick={handleCreateInvoice}
                                 disabled={invoiceProcessing === selectedTicketForInvoice.id}
                                 style={{
-                                    flex: 1, background: '#10B981', border: 'none', color: 'white',
-                                    padding: '10px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer'
+                                    flex: 1, 
+                                    background: invoiceProcessing === selectedTicketForInvoice.id ? '#0d8a5a' : '#10B981', 
+                                    border: 'none', 
+                                    color: 'white',
+                                    padding: '10px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, 
+                                    cursor: invoiceProcessing === selectedTicketForInvoice.id ? 'not-allowed' : 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                                 }}
                             >
-                                {invoiceProcessing === selectedTicketForInvoice.id ? 'Guardando...' : 'Registrar OC'}
+                                {invoiceProcessing === selectedTicketForInvoice.id ? (
+                                    <>
+                                        <span style={{ 
+                                            display: 'inline-block', 
+                                            width: '14px', height: '14px', 
+                                            border: '2px solid white', 
+                                            borderTopColor: 'transparent',
+                                            borderRadius: '50%',
+                                            animation: 'spin 1s linear infinite'
+                                        }} />
+                                        Procesando...
+                                    </>
+                                ) : '✓ Registrar y Cobrar'}
                             </button>
                         </div>
+                        <style>{`
+                            @keyframes spin {
+                                to { transform: rotate(360deg); }
+                            }
+                        `}</style>
                     </div>
                 </div>
             )}
