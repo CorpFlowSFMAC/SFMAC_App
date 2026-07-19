@@ -330,7 +330,7 @@ export function sanitizeTicketMetadata(metadata: any): any {
 // ─────────────────────────────────────────────────────────────────────────────
 // CFO METRICS: Cuentas por Cobrar (Aging)
 // ─────────────────────────────────────────────────────────────────────────────
-export function calculateAccountsReceivable(invoices: any[]) {
+export function calculateAccountsReceivable(invoices: any[], activeTickets?: any[]) {
     const today = new Date();
     
     let totalInvoiced = 0;
@@ -346,6 +346,17 @@ export function calculateAccountsReceivable(invoices: any[]) {
 
     (invoices || []).forEach(inv => {
         if (inv.status === 'anulada') return;
+        
+        // ★ FILTRO: Solo incluir facturas de tickets cerrados con monto > 0 (CONGRUENTE con cobranzas)
+        if (activeTickets) {
+            const ticket = (activeTickets || []).find((t: any) => t.id === inv.ticket_id);
+            if (ticket) {
+                const statusId = (ticket.status_id || ticket.status || '').toLowerCase();
+                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'cerrado';
+                const hasRevenue = (ticket.ingresos_reales || ticket.total_quoted_amount || ticket.montoFinal || 0) > 0;
+                if (!isClosed || !hasRevenue) return; // Saltar si ticket no cerrado o sin monto
+            }
+        }
         
         const amount = toNum(inv.amount_total);
         totalInvoiced += amount;

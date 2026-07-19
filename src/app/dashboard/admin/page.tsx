@@ -1152,7 +1152,7 @@ export default function AdminDashboard() {
     }, [activeTickets, gestoras, dateRange, now]);
 
     // ── CFO METRICS (STANDARD) ──────────────────────────────────────────
-    const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices), [invoices]);
+    const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices, activeTickets), [invoices, activeTickets]);
     const cfoWip = useMemo(() => calculateWIP(activeTickets), [activeTickets]);
     // Usa la utilidad total del mes (cerrados + en ejecución) para el EBITDA real
     const cfoEbitda = useMemo(() => {
