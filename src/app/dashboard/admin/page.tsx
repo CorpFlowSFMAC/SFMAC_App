@@ -455,46 +455,35 @@ export default function AdminDashboard() {
         setInvoiceProcessing(selectedTicketForInvoice.id);
         
         try {
+            // El monto que ingresa el usuario es el monto TOTAL (sin IGV según esquema)
             const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
-            const montoConIGV = monto * 1.18;
-            const montoBase = monto;
-            const montoIGV = monto * 0.18;
             const ocNumber = newInvoiceOc.trim().toUpperCase();
             const ticketId = selectedTicketForInvoice.id;
-            const clientId = selectedTicketForInvoice.client_id || selectedTicketForInvoice.cliente?.id || null;
             const now = new Date().toISOString();
             
-            // Términos de pago del cliente (por defecto 30 días)
-            const paymentTerms = selectedTicketForInvoice.cliente?.default_payment_terms || 30;
-            const dueDate = new Date();
-            dueDate.setDate(dueDate.getDate() + paymentTerms);
-            
-            // ★ PAYLOAD COMPLETO: Incluye todos los campos requeridos por la tabla invoices
+            // ★ PAYLOAD EXACTO según esquema de Supabase:
+            // Schema: invoices(id, ticket_id, amount_total, status, issued_date, paid_date, invoice_number)
             const invoicePayload = {
                 ticket_id: ticketId,
-                client_id: clientId,
-                amount_base: montoBase,
-                amount_total: montoConIGV,
-                amount_igv: montoIGV,
+                amount_total: monto,
                 status: 'cobrada',
                 issued_date: now,
                 paid_date: now,
-                due_date: dueDate.toISOString(),
                 invoice_number: ocNumber
             };
             
-            console.log('[COBRANZA] Payload a enviar:', invoicePayload);
+            console.log('[COBRANZA] Payload correcto:', JSON.stringify(invoicePayload, null, 2));
             
             const { data, error } = await supabase.from('invoices').insert(invoicePayload).select().single();
             
             if (error) {
-                console.error("[COBRANZA] ❌ Error 400 de Supabase:", {
+                console.error("[COBRANZA] ❌ Error Supabase:", {
                     message: error.message,
                     details: error.details,
                     hint: error.hint,
                     code: error.code
                 });
-                triggerToast("Error", `No se pudo registrar: ${error.message || 'Error 400'}`);
+                triggerToast("Error", `No se pudo registrar: ${error.message}`);
                 setShowCreateInvoiceModal(false);
                 setSelectedTicketForInvoice(null);
                 setNewInvoiceOc('');
@@ -502,7 +491,7 @@ export default function AdminDashboard() {
                 return;
             }
             
-            console.log('[COBRANZA] ✅ Invoice creada exitosamente:', data);
+            console.log('[COBRANZA] ✅ Invoice creada:', data);
             
             // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
             setInvoices(prev => [...prev, data]);
@@ -537,7 +526,7 @@ export default function AdminDashboard() {
             
         } catch (err: any) {
             console.error("[COBRANZA] ❌ Excepción:", err);
-            triggerToast("Error", `Excepción: ${err.message || 'Error desconocido'}`);
+            triggerToast("Error", `Error: ${err.message || 'Error desconocido'}`);
             setShowCreateInvoiceModal(false);
             setSelectedTicketForInvoice(null);
             setNewInvoiceOc('');
