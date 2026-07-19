@@ -509,10 +509,24 @@ export default function AdminDashboard() {
             
             console.log('[COBRANZA] ✅ Invoice creada:', invoiceData);
             
-            // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
+            // ★ PASO 1: ACTUALIZACIÓN OPTIMISTA - Eliminar de pendientes inmediatamente
+            setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
+            
+            // ★ PASO 2: AGREGAR A HISTORIAL LOCALMENTE
+            const ticketProcesado = {
+                ...selectedTicketForInvoice,
+                _hasInvoice: true,
+                _invoice: invoiceData,
+                _invoiceOc: ocNumber,
+                _invoiceStatus: 'cobrada',
+                _paidDate: now
+            };
+            setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
+            
+            // ★ PASO 3: ACTUALIZAR ARRAY DE INVOICES (para métricas CFO)
             setInvoices(prev => [...prev, invoiceData]);
             
-            // ★ ACTUALIZAR TICKET EN BD: Marcar como cobrado para sincronización
+            // ★ PASO 4: ACTUALIZAR TICKET EN BD
             await supabase.from('tickets').update({
                 metadata: {
                     ...(selectedTicketForInvoice.metadata || {}),
@@ -524,35 +538,23 @@ export default function AdminDashboard() {
                 }
             }).eq('id', ticketId);
             
-            // ★ BANDEJA ZERO: Eliminar de pendientes y mover a historial
-            const ticketProcesado = {
-                ...selectedTicketForInvoice,
-                _hasInvoice: true,
-                _invoice: invoiceData,
-                _invoiceOc: ocNumber,
-                _invoiceStatus: 'cobrada',
-                _paidDate: now
-            };
-            
-            // Eliminar de la lista de pendientes
-            setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
-            
-            // Agregar al historial
-            setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
-            
-            // Limpiar input local
-            setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
-            
-            // ★ FEEDBACK VISUAL: Toast de éxito
+            // ★ PASO 5: FEEDBACK VISUAL
             triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || ticketId} se movió al historial.`);
             
-            // ★ RECARGAR DATOS: Para actualizar métricas y lista de pendientes
-            console.log('[COBRANZA] Recargando datos después de crear invoice...');
-            await loadCobranzaTickets();
-            await loadHistorialCobranza();
-            console.log('[COBRANZA] Datos recargados. Invoices:', invoices.length);
+            // ★ PASO 6: RE-FETCH DE SEGURIDAD - Garantizar sincronización con BD
+            console.log('[COBRANZA] Re-fetching invoices desde BD...');
+            const { data: freshInvoices } = await supabase.from('invoices').select('*');
+            if (freshInvoices) {
+                console.log('[COBRANZA] Invoices frescos:', freshInvoices.length);
+                setInvoices(freshInvoices); // Actualizar con datos reales de BD
+            }
             
-            // Reset modal
+            // ★ PASO 7: Recargar listas
+            loadCobranzaTickets();
+            loadHistorialCobranza();
+            
+            // ★ PASO 8: Limpiar UI
+            setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
             setShowCreateInvoiceModal(false);
             setSelectedTicketForInvoice(null);
             setNewInvoiceOc('');
