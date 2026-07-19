@@ -456,27 +456,53 @@ export default function AdminDashboard() {
         
         try {
             const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
+            const montoConIGV = monto * 1.18;
+            const montoBase = monto;
+            const montoIGV = monto * 0.18;
             const ocNumber = newInvoiceOc.trim().toUpperCase();
+            const ticketId = selectedTicketForInvoice.id;
+            const clientId = selectedTicketForInvoice.client_id || selectedTicketForInvoice.cliente?.id || null;
+            const now = new Date().toISOString();
             
-            // ★ REGLA DE NEGOCIO: Al registrar OC, automáticamente es COBRADO
-            const { data, error } = await supabase.from('invoices').insert({
-                ticket_id: selectedTicketForInvoice.id,
-                amount_total: monto,
-                status: 'cobrada', // ★ Estado directo: cobrado
-                issued_date: new Date().toISOString(),
-                paid_date: new Date().toISOString(), // ★ Fecha de pago = hoy
+            // Términos de pago del cliente (por defecto 30 días)
+            const paymentTerms = selectedTicketForInvoice.cliente?.default_payment_terms || 30;
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + paymentTerms);
+            
+            // ★ PAYLOAD COMPLETO: Incluye todos los campos requeridos por la tabla invoices
+            const invoicePayload = {
+                ticket_id: ticketId,
+                client_id: clientId,
+                amount_base: montoBase,
+                amount_total: montoConIGV,
+                amount_igv: montoIGV,
+                status: 'cobrada',
+                issued_date: now,
+                paid_date: now,
+                due_date: dueDate.toISOString(),
                 invoice_number: ocNumber
-            }).select().single();
+            };
+            
+            console.log('[COBRANZA] Payload a enviar:', invoicePayload);
+            
+            const { data, error } = await supabase.from('invoices').insert(invoicePayload).select().single();
             
             if (error) {
-                console.error("Error creando invoice:", error);
-                triggerToast("Error", error.message || "No se pudo registrar la cobranza.");
+                console.error("[COBRANZA] ❌ Error 400 de Supabase:", {
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    code: error.code
+                });
+                triggerToast("Error", `No se pudo registrar: ${error.message || 'Error 400'}`);
                 setShowCreateInvoiceModal(false);
                 setSelectedTicketForInvoice(null);
                 setNewInvoiceOc('');
                 setNewInvoiceAmount('');
                 return;
             }
+            
+            console.log('[COBRANZA] ✅ Invoice creada exitosamente:', data);
             
             // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
             setInvoices(prev => [...prev, data]);
@@ -488,20 +514,20 @@ export default function AdminDashboard() {
                 _invoice: data,
                 _invoiceOc: ocNumber,
                 _invoiceStatus: 'cobrada',
-                _paidDate: new Date().toISOString()
+                _paidDate: now
             };
             
             // Eliminar de la lista de pendientes
-            setCobranzaTickets(prev => prev.filter(t => t.id !== selectedTicketForInvoice.id));
+            setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
             
             // Agregar al historial
             setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
             
             // Limpiar input local
-            setInvoiceOcNumber(prev => ({ ...prev, [selectedTicketForInvoice.id]: '' }));
+            setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
             
             // ★ FEEDBACK VISUAL: Toast de éxito
-            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || selectedTicketForInvoice.id} se movió al historial.`);
+            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || ticketId} se movió al historial.`);
             
             // Reset modal
             setShowCreateInvoiceModal(false);
@@ -509,9 +535,9 @@ export default function AdminDashboard() {
             setNewInvoiceOc('');
             setNewInvoiceAmount('');
             
-        } catch (error: any) {
-            console.error("Error creando invoice:", error);
-            triggerToast("Error", error.message || "No se pudo registrar la cobranza.");
+        } catch (err: any) {
+            console.error("[COBRANZA] ❌ Excepción:", err);
+            triggerToast("Error", `Excepción: ${err.message || 'Error desconocido'}`);
             setShowCreateInvoiceModal(false);
             setSelectedTicketForInvoice(null);
             setNewInvoiceOc('');
