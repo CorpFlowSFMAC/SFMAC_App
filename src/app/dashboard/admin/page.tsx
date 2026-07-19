@@ -374,9 +374,9 @@ export default function AdminDashboard() {
         setInvoiceProcessing(invoiceId);
         try {
             const oc = invoiceOcNumber[invoiceId] || null;
+            const now = new Date().toISOString();
             const { error } = await supabase.from('invoices').update({
                 status: 'cobrada',
-                paid_date: new Date().toISOString(),
                 invoice_number: oc
             }).eq('id', invoiceId);
             
@@ -384,7 +384,7 @@ export default function AdminDashboard() {
             
             triggerToast("Factura Pagada", "El estado de la factura ha sido actualizado exitosamente.");
             
-            setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: 'cobrada', paid_date: new Date().toISOString(), invoice_number: oc } : inv));
+            setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: 'cobrada', paid_date: now, invoice_number: oc } : inv));
             
         } catch (error) {
             console.error("Error al marcar como pagada:", error);
@@ -455,39 +455,27 @@ export default function AdminDashboard() {
         setInvoiceProcessing(selectedTicketForInvoice.id);
         
         try {
-            // El monto que ingresa el usuario es el monto TOTAL (sin IGV según esquema)
             const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
             const ocNumber = newInvoiceOc.trim().toUpperCase();
             const ticketId = selectedTicketForInvoice.id;
             const now = new Date().toISOString();
             
-            // ★ PAYLOAD EXACTO según esquema de Supabase:
+            // ★ PAYLOAD VERIFICADO: Solo campos que existen en la BD
             const invoicePayload = {
                 ticket_id: ticketId,
                 amount_total: monto,
                 status: 'cobrada',
-                issued_date: now,
-                paid_date: now,
                 invoice_number: ocNumber
             };
             
-            console.log('═══════════════════════════════════════════');
-            console.log('[COBRANZA] Payload:', JSON.stringify(invoicePayload, null, 2));
-            console.log('[COBRANZA] Tipo de ticket_id:', typeof ticketId, ticketId);
-            console.log('═══════════════════════════════════════════');
+            console.log('[COBRANZA] Payload:', JSON.stringify(invoicePayload));
             
             const { data, error } = await supabase.from('invoices').insert(invoicePayload).select().single();
             
-            // ★ DEBUGGING ESTRICTO: Extraer mensaje real de PostgreSQL
             if (error) {
-                console.error('❌❌❌ ERROR 400 DE SUPABASE ❌❌❌');
-                console.error('MESSAGE:', error.message);
-                console.error('DETAILS:', error.details);
-                console.error('HINT:', error.hint);
-                console.error('CODE:', error.code);
-                console.error('FULL ERROR:', JSON.stringify(error, null, 2));
-                alert(`ERROR DE BASE DE DATOS:\n\n${error.message}\n\nDetails: ${error.details}\nHint: ${error.hint}`);
-                triggerToast("Error DB", error.message);
+                console.error('❌ ERROR:', error.message);
+                alert(`ERROR: ${error.message}`);
+                triggerToast("Error", error.message);
                 setShowCreateInvoiceModal(false);
                 setSelectedTicketForInvoice(null);
                 setNewInvoiceOc('');
@@ -529,9 +517,9 @@ export default function AdminDashboard() {
             setNewInvoiceAmount('');
             
         } catch (err: any) {
-            console.error('[COBRANZA] ❌ Excepción no capturada:', err);
-            alert(`EXCEPCION:\n\n${err.message}`);
-            triggerToast("Error", `Error: ${err.message}`);
+            console.error('[COBRANZA] ❌ Excepción:', err);
+            alert(`ERROR: ${err.message}`);
+            triggerToast("Error", err.message);
             setShowCreateInvoiceModal(false);
             setSelectedTicketForInvoice(null);
             setNewInvoiceOc('');
@@ -552,11 +540,11 @@ export default function AdminDashboard() {
         setInvoiceProcessing(invoiceId);
         try {
             const ocNumber = oc.trim().toUpperCase();
-            const paidDate = new Date().toISOString();
+            const now = new Date().toISOString();
             
+            // ★ UPDATE sin paid_date (no existe en la BD)
             const { error } = await supabase.from('invoices').update({
                 status: 'cobrada',
-                paid_date: paidDate,
                 invoice_number: ocNumber
             }).eq('id', invoiceId);
             
@@ -565,7 +553,7 @@ export default function AdminDashboard() {
             // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
             setInvoices(prev => prev.map(inv => 
                 inv.id === invoiceId 
-                    ? { ...inv, status: 'cobrada', paid_date: paidDate, invoice_number: ocNumber }
+                    ? { ...inv, status: 'cobrada', paid_date: now, invoice_number: ocNumber }
                     : inv
             ));
             
