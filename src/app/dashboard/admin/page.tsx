@@ -1724,6 +1724,33 @@ export default function AdminDashboard() {
                     <span>Riesgo (61-90): S/ {fmt(cfoAccountsReceivable.aging?.['61_90'] || 0)}</span>
                     <span>Crítico (90+): S/ {fmt(cfoAccountsReceivable.aging?.['90_plus'] || 0)}</span>
                 </div>
+                
+                {/* ★ DESGLOSE: Deuda Operativa vs Deuda por Adelantos */}
+                {(cfoAccountsReceivable.totalPending || 0) > 0 && (
+                    <div style={{
+                        marginTop: '0.75rem', padding: '0.75rem 1rem',
+                        background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
+                        borderRadius: '8px'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Composición de la Deuda:</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '12px', height: '12px', background: '#10B981', borderRadius: '3px' }} />
+                                <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)' }}>
+                                    Deuda Operativa (Cierres): <strong style={{ color: '#10B981' }}>S/ {fmt(cfoAccountsReceivable.deudaOperativa || 0)}</strong>
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '12px', height: '12px', background: '#F59E0B', borderRadius: '3px' }} />
+                                <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)' }}>
+                                    Deuda por Adelantos (Activos): <strong style={{ color: '#F59E0B' }}>S/ {fmt(cfoAccountsReceivable.deudaAdelantos || 0)}</strong>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <SectionHeader icon={<Layers size={16} />} title="Tesorería & Flujo de Caja" color="#F59E0B" />

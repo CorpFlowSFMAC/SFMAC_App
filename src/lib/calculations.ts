@@ -328,13 +328,17 @@ export function sanitizeTicketMetadata(metadata: any): any {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CFO METRICS: Cuentas por Cobrar (Aging)
+// CFO METRICS: Cuentas por Cobrar (Aging) - VERDAD FINANCIERA ÚNICA
 // ─────────────────────────────────────────────────────────────────────────────
 export function calculateAccountsReceivable(invoices: any[], activeTickets?: any[]) {
     const today = new Date();
     
     let totalInvoiced = 0;
     let totalCollected = 0;
+    
+    // ★ DESGLOSE: Deuda Operativa (Cierres) vs Deuda por Adelantos (Activos)
+    let deudaOperativa = 0;      // Tickets cerrados
+    let deudaAdelantos = 0;       // Tickets activos/en proceso
     
     let aging0_30 = 0;
     let aging31_60 = 0;
@@ -343,20 +347,11 @@ export function calculateAccountsReceivable(invoices: any[], activeTickets?: any
     
     let collectedInvoices = [];
     let pendingInvoices = [];
+    let cierresPendientes: any[] = [];   // Facturas de tickets cerrados
+    let adelantosPendientes: any[] = [];  // Facturas de tickets activos
 
     (invoices || []).forEach(inv => {
         if (inv.status === 'anulada') return;
-        
-        // ★ FILTRO: Solo incluir facturas de tickets cerrados con monto > 0 (CONGRUENTE con cobranzas)
-        if (activeTickets) {
-            const ticket = (activeTickets || []).find((t: any) => t.id === inv.ticket_id);
-            if (ticket) {
-                const statusId = (ticket.status_id || ticket.status || '').toLowerCase();
-                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'cerrado';
-                const hasRevenue = (ticket.ingresos_reales || ticket.total_quoted_amount || ticket.montoFinal || 0) > 0;
-                if (!isClosed || !hasRevenue) return; // Saltar si ticket no cerrado o sin monto
-            }
-        }
         
         const amount = toNum(inv.amount_total);
         totalInvoiced += amount;
@@ -366,6 +361,33 @@ export function calculateAccountsReceivable(invoices: any[], activeTickets?: any
             collectedInvoices.push(inv);
         } else {
             pendingInvoices.push(inv);
+            
+            // ★ CLASIFICACIÓN: Determinar si es cierre o adelanto
+            let esAdelanto = false;
+            if (activeTickets) {
+                const ticket = (activeTickets || []).find((t: any) => t.id === inv.ticket_id);
+                if (ticket) {
+                    const statusId = (ticket.status_id || ticket.status || '').toLowerCase();
+                    const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'cerrado';
+                    if (isClosed) {
+                        deudaOperativa += amount;
+                        cierresPendientes.push(inv);
+                    } else {
+                        deudaAdelantos += amount;
+                        adelantosPendientes.push(inv);
+                        esAdelanto = true;
+                    }
+                } else {
+                    // Factura sin ticket asociado = Adelanto por defecto
+                    deudaAdelantos += amount;
+                    adelantosPendientes.push(inv);
+                    esAdelanto = true;
+                }
+            } else {
+                // Sin tickets disponibles, clasificar por issued_date
+                deudaOperativa += amount;
+                cierresPendientes.push(inv);
+            }
             
             // Calculate aging based on issued_date or due_date
             const baseDate = new Date(inv.issued_date || inv.created_at);
@@ -387,6 +409,11 @@ export function calculateAccountsReceivable(invoices: any[], activeTickets?: any
         totalCollected,
         totalPending,
         collectionRate,
+        // ★ DESGLOSE FINANCIERO
+        deudaOperativa,      // De tickets cerrados
+        deudaAdelantos,       // De tickets activos/en proceso
+        cierresPendientes,    // Array de facturas de cierres
+        adelantosPendientes,  // Array de facturas de adelantos
         aging: {
             '0_30': aging0_30,
             '31_60': aging31_60,
