@@ -460,7 +460,7 @@ export default function AdminDashboard() {
         } finally {
             setLoadingCobranza(false);
         }
-    }, [activeTickets, supabase]);
+    }, [activeTickets, invoices, supabase]);
 
     // ── COBRANZAS: Crear invoice desde ticket y marcar como cobrado ──
     const handleCreateInvoice = async () => {
