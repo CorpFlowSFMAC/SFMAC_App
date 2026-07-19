@@ -8,7 +8,8 @@
 CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id UUID REFERENCES tickets(id) ON DELETE CASCADE,
-    amount_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    amount_base NUMERIC(12, 2) NOT NULL,           -- Monto base sin IGV (NOT NULL)
+    amount_total NUMERIC(12, 2) NOT NULL,          -- Monto total con IGV (NOT NULL)
     status TEXT NOT NULL DEFAULT 'emitida' CHECK (status IN ('emitida', 'cobrada', 'anulada')),
     issued_date TIMESTAMPTZ DEFAULT NOW(),
     paid_date TIMESTAMPTZ,
@@ -25,8 +26,9 @@ CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_numbe
 -- Comentarios para documentación
 COMMENT ON TABLE invoices IS 'Tabla para gestionar facturas/órdenes de compra de tickets. Usada para el módulo de cobranzas.';
 COMMENT ON COLUMN invoices.ticket_id IS 'ID del ticket asociado a la factura';
-COMMENT ON COLUMN invoices.amount_total IS 'Monto total de la factura (en soles, sin IGV)';
-COMMENT ON COLUMN invoices.status IS 'Estado: emitada (pendiente de pago), cobrada (pagada), anulada';
+COMMENT ON COLUMN invoices.amount_base IS 'Monto base de la factura (sin IGV)';
+COMMENT ON COLUMN invoices.amount_total IS 'Monto total de la factura (con IGV)';
+COMMENT ON COLUMN invoices.status IS 'Estado: emitida (pendiente de pago), cobrada (pagada), anulada';
 COMMENT ON COLUMN invoices.invoice_number IS 'Número de orden de compra o factura del cliente';
 
 -- Trigger para actualizar updated_at

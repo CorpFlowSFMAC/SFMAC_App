@@ -460,10 +460,11 @@ export default function AdminDashboard() {
             const ticketId = selectedTicketForInvoice.id;
             const now = new Date().toISOString();
             
-            // ★ PAYLOAD VERIFICADO: Solo campos que existen en la BD
+            // ★ PAYLOAD COMPLETO con amount_base (NOT NULL en BD)
             const invoicePayload = {
                 ticket_id: ticketId,
-                amount_total: monto,
+                amount_base: monto,           // Monto sin IGV (requerido NOT NULL)
+                amount_total: monto * 1.18,  // Monto con IGV
                 status: 'cobrada',
                 invoice_number: ocNumber
             };
