@@ -1235,6 +1235,24 @@ export default function AdminDashboard() {
 
     // ── CFO METRICS (STANDARD) ──────────────────────────────────────────
     const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices, activeTickets), [invoices, activeTickets]);
+    
+    // ── MONTO POR COBRAR (Deriva directamente de tickets pendientes) ──
+    // ★ CRÍTICO: Este useMemo garantiza que el monto se actualice cuando cobranzaTickets cambia
+    const montoPorCobrar = useMemo(() => {
+        return (cobranzaTickets || []).reduce((acc, ticket) => {
+            const monto = ticket._montoConIGV || (ticket.ingresos_reales || ticket.total_quoted_amount || ticket.montoFinal || 0) * 1.18;
+            return acc + monto;
+        }, 0);
+    }, [cobranzaTickets]);
+    
+    // Total cobrado del historial
+    const totalCobrado = useMemo(() => {
+        return (cobranzaHistorial || []).reduce((acc, ticket) => {
+            const monto = ticket._montoConIGV || (ticket.ingresos_reales || ticket.total_quoted_amount || ticket.montoFinal || 0) * 1.18;
+            return acc + monto;
+        }, 0);
+    }, [cobranzaHistorial]);
+    
     const cfoWip = useMemo(() => calculateWIP(activeTickets), [activeTickets]);
     // Usa la utilidad total del mes (cerrados + en ejecución) para el EBITDA real
     const cfoEbitda = useMemo(() => {
@@ -1753,10 +1771,10 @@ export default function AdminDashboard() {
             )}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
-                <RoiCard label="Cuentas por Cobrar" value={`S/ ${fmt(cfoAccountsReceivable.totalPending || 0)}`}
-                    sub={`Cash-In: S/ ${fmt(cfoAccountsReceivable.totalCollected || 0)} (${Math.round(cfoAccountsReceivable.collectionRate || 0)}%)`} color="#EF4444"
+                <RoiCard label="Cuentas por Cobrar" value={`S/ ${fmt(montoPorCobrar)}`}
+                    sub={`Cobrado: S/ ${fmt(totalCobrado)} (${cobranzaHistorial?.length || 0} tickets)`} color="#EF4444"
                     icon={BanknoteIcon}
-                    light={(cfoAccountsReceivable.collectionRate || 0) >= 80 ? "VERDE" : (cfoAccountsReceivable.collectionRate || 0) >= 50 ? "AMBAR" : "ROJO"}
+                    light={cobranzaHistorial?.length > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => setCfoDetailModal('receivable')}
                 />
                 <RoiCard label="Facturación Emitida" value={`S/ ${fmt(cfoAccountsReceivable.totalInvoiced || 0)}`}
