@@ -452,6 +452,12 @@ export default function AdminDashboard() {
             return;
         }
         
+        // ★ VERIFICAR: Si el ticket ya tiene invoice cobrado, no permitir duplicar
+        if (selectedTicketForInvoice._hasInvoice && selectedTicketForInvoice._invoiceStatus === 'cobrada') {
+            triggerToast("Info", "Este ticket ya tiene una cobranza registrada.");
+            return;
+        }
+        
         setInvoiceProcessing(selectedTicketForInvoice.id);
         
         try {
@@ -471,7 +477,7 @@ export default function AdminDashboard() {
             
             console.log('[COBRANZA] Payload:', JSON.stringify(invoicePayload));
             
-            const { data, error } = await supabase.from('invoices').insert(invoicePayload).select().single();
+            const { data: invoiceData, error } = await supabase.from('invoices').insert(invoicePayload).select().single();
             
             if (error) {
                 console.error('❌ ERROR:', error.message);
@@ -484,16 +490,28 @@ export default function AdminDashboard() {
                 return;
             }
             
-            console.log('[COBRANZA] ✅ Invoice creada:', data);
+            console.log('[COBRANZA] ✅ Invoice creada:', invoiceData);
             
             // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
-            setInvoices(prev => [...prev, data]);
+            setInvoices(prev => [...prev, invoiceData]);
+            
+            // ★ ACTUALIZAR TICKET EN BD: Marcar como cobrado para sincronización
+            await supabase.from('tickets').update({
+                metadata: {
+                    ...(selectedTicketForInvoice.metadata || {}),
+                    _hasInvoice: true,
+                    _invoiceId: invoiceData.id,
+                    _invoiceOc: ocNumber,
+                    _invoiceStatus: 'cobrada',
+                    _invoicePaidDate: now
+                }
+            }).eq('id', ticketId);
             
             // ★ BANDEJA ZERO: Eliminar de pendientes y mover a historial
             const ticketProcesado = {
                 ...selectedTicketForInvoice,
                 _hasInvoice: true,
-                _invoice: data,
+                _invoice: invoiceData,
                 _invoiceOc: ocNumber,
                 _invoiceStatus: 'cobrada',
                 _paidDate: now
@@ -510,6 +528,10 @@ export default function AdminDashboard() {
             
             // ★ FEEDBACK VISUAL: Toast de éxito
             triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || ticketId} se movió al historial.`);
+            
+            // ★ RECARGAR DATOS: Para actualizar métricas y lista de pendientes
+            loadCobranzaTickets();
+            loadHistorialCobranza();
             
             // Reset modal
             setShowCreateInvoiceModal(false);
