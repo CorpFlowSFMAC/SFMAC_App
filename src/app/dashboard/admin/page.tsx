@@ -399,7 +399,14 @@ export default function AdminDashboard() {
         setLoadingCobranza(true);
         try {
             // Cargar invoices existentes
-            const { data: invData } = await supabase.from('invoices').select('*');
+            const { data: invData, error: invError } = await supabase.from('invoices').select('*');
+            
+            if (invError) {
+                console.error('[COBRANZA] Error cargando invoices:', invError);
+            }
+            
+            console.log('[COBRANZA] Invoices cargados:', invData?.length);
+            console.log('[COBRANZA] Active tickets:', activeTickets?.length);
             
             // ★ SOLO tickets cerrados con monto > 0 que NO están cobrados (BANDEJA ZERO)
             const ticketsFacturables = (activeTickets || []).filter((t: any) => {
@@ -408,7 +415,14 @@ export default function AdminDashboard() {
                 const hasRevenue = (t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) > 0;
                 const invoice = (invData || []).find((inv: any) => inv.ticket_id === t.id);
                 const isCobrado = invoice?.status === 'cobrada';
-                return isClosed && hasRevenue && !isCobrado; // ★ Excluir cobrados
+                
+                if (!isClosed) return false;
+                if (!hasRevenue) return false;
+                if (isCobrado) {
+                    console.log('[COBRANZA] Excluyendo ticket cobrado:', t.id, 'invoice status:', invoice?.status);
+                    return false;
+                }
+                return true;
             });
 
             console.log('[COBRANZA] Tickets PENDIENTES (no cobrados):', ticketsFacturables.length);
@@ -435,7 +449,10 @@ export default function AdminDashboard() {
             setCobranzaTickets(ticketsConFacturas);
             
             // También actualizar invoices globally si cambió algo
-            if (invData) setInvoices(invData);
+            if (invData) {
+                console.log('[COBRANZA] Actualizando invoices global:', invData.length);
+                setInvoices(invData);
+            }
             
         } catch (error) {
             console.error("Error cargando tickets de cobranza:", error);
@@ -530,8 +547,10 @@ export default function AdminDashboard() {
             triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || ticketId} se movió al historial.`);
             
             // ★ RECARGAR DATOS: Para actualizar métricas y lista de pendientes
-            loadCobranzaTickets();
-            loadHistorialCobranza();
+            console.log('[COBRANZA] Recargando datos después de crear invoice...');
+            await loadCobranzaTickets();
+            await loadHistorialCobranza();
+            console.log('[COBRANZA] Datos recargados. Invoices:', invoices.length);
             
             // Reset modal
             setShowCreateInvoiceModal(false);
@@ -2785,6 +2804,7 @@ export default function AdminDashboard() {
                                             const isCobrado = t._hasInvoice && t._invoiceStatus === 'cobrada';
                                             const isEP = t._hasInvoice && t._invoiceOc?.toUpperCase() === 'EP';
                                             const isConOC = t._hasInvoice && !isCobrado && !isEP;
+                                            const isPendiente = !isCobrado && !isEP;
                                             
                                             return (
                                                 <tr key={t.id || idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
@@ -2816,8 +2836,8 @@ export default function AdminDashboard() {
                                                         ) : (
                                                             <input
                                                                 type="text"
-                                                                placeholder="Ingrese N° OC o EP"
-                                                                value={invoiceOcNumber[t.id] || t._invoiceOc || ''}
+                                                                placeholder="Ingrese N° OC"
+                                                                value={invoiceOcNumber[t.id] || ''}
                                                                 onChange={e => setInvoiceOcNumber(prev => ({ ...prev, [t.id]: e.target.value.toUpperCase() }))}
                                                                 style={{
                                                                     background: 'rgba(0,0,0,0.3)', border: '2px solid #3B82F6',
@@ -2837,12 +2857,16 @@ export default function AdminDashboard() {
                                                         )}
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
-                                                        {!isCobrado && !isEP && (
+                                                        {isCobrado ? (
+                                                            <span style={{ color: '#10B981', fontSize: '0.7rem', fontWeight: 700 }}>✓</span>
+                                                        ) : isEP ? (
+                                                            <span style={{ color: '#EF4444', fontSize: '0.7rem', fontWeight: 700 }}>EP</span>
+                                                        ) : (
                                                             <button
                                                                 onClick={() => {
-                                                                    const oc = invoiceOcNumber[t.id]?.trim().toUpperCase() || t._invoiceOc?.toUpperCase();
+                                                                    const oc = invoiceOcNumber[t.id]?.trim().toUpperCase();
                                                                     if (!oc) {
-                                                                        triggerToast("Error", "Ingrese N° OC o EP.");
+                                                                        triggerToast("Error", "Ingrese N° OC.");
                                                                         return;
                                                                     }
                                                                     setSelectedTicketForInvoice(t);
@@ -2854,7 +2878,8 @@ export default function AdminDashboard() {
                                                                 style={{
                                                                     background: '#3B82F6', border: 'none', color: 'white',
                                                                     padding: '6px 12px', borderRadius: '6px', fontSize: '0.7rem',
-                                                                    fontWeight: 700, cursor: 'pointer'
+                                                                    fontWeight: 700, cursor: invoiceProcessing === t.id ? 'not-allowed' : 'pointer',
+                                                                    opacity: invoiceProcessing === t.id ? 0.5 : 1
                                                                 }}
                                                             >
                                                                 {invoiceProcessing === t.id ? '...' : 'Guardar'}
