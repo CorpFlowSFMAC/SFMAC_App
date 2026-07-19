@@ -462,7 +462,6 @@ export default function AdminDashboard() {
             const now = new Date().toISOString();
             
             // ★ PAYLOAD EXACTO según esquema de Supabase:
-            // Schema: invoices(id, ticket_id, amount_total, status, issued_date, paid_date, invoice_number)
             const invoicePayload = {
                 ticket_id: ticketId,
                 amount_total: monto,
@@ -472,18 +471,23 @@ export default function AdminDashboard() {
                 invoice_number: ocNumber
             };
             
-            console.log('[COBRANZA] Payload correcto:', JSON.stringify(invoicePayload, null, 2));
+            console.log('═══════════════════════════════════════════');
+            console.log('[COBRANZA] Payload:', JSON.stringify(invoicePayload, null, 2));
+            console.log('[COBRANZA] Tipo de ticket_id:', typeof ticketId, ticketId);
+            console.log('═══════════════════════════════════════════');
             
             const { data, error } = await supabase.from('invoices').insert(invoicePayload).select().single();
             
+            // ★ DEBUGGING ESTRICTO: Extraer mensaje real de PostgreSQL
             if (error) {
-                console.error("[COBRANZA] ❌ Error Supabase:", {
-                    message: error.message,
-                    details: error.details,
-                    hint: error.hint,
-                    code: error.code
-                });
-                triggerToast("Error", `No se pudo registrar: ${error.message}`);
+                console.error('❌❌❌ ERROR 400 DE SUPABASE ❌❌❌');
+                console.error('MESSAGE:', error.message);
+                console.error('DETAILS:', error.details);
+                console.error('HINT:', error.hint);
+                console.error('CODE:', error.code);
+                console.error('FULL ERROR:', JSON.stringify(error, null, 2));
+                alert(`ERROR DE BASE DE DATOS:\n\n${error.message}\n\nDetails: ${error.details}\nHint: ${error.hint}`);
+                triggerToast("Error DB", error.message);
                 setShowCreateInvoiceModal(false);
                 setSelectedTicketForInvoice(null);
                 setNewInvoiceOc('');
@@ -525,8 +529,9 @@ export default function AdminDashboard() {
             setNewInvoiceAmount('');
             
         } catch (err: any) {
-            console.error("[COBRANZA] ❌ Excepción:", err);
-            triggerToast("Error", `Error: ${err.message || 'Error desconocido'}`);
+            console.error('[COBRANZA] ❌ Excepción no capturada:', err);
+            alert(`EXCEPCION:\n\n${err.message}`);
+            triggerToast("Error", `Error: ${err.message}`);
             setShowCreateInvoiceModal(false);
             setSelectedTicketForInvoice(null);
             setNewInvoiceOc('');
