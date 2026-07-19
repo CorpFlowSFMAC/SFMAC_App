@@ -478,6 +478,9 @@ export default function AdminDashboard() {
                 return;
             }
             
+            // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
+            setInvoices(prev => [...prev, data]);
+            
             // ★ BANDEJA ZERO: Eliminar de pendientes y mover a historial
             const ticketProcesado = {
                 ...selectedTicketForInvoice,
@@ -529,14 +532,22 @@ export default function AdminDashboard() {
         setInvoiceProcessing(invoiceId);
         try {
             const ocNumber = oc.trim().toUpperCase();
+            const paidDate = new Date().toISOString();
             
             const { error } = await supabase.from('invoices').update({
                 status: 'cobrada',
-                paid_date: new Date().toISOString(),
+                paid_date: paidDate,
                 invoice_number: ocNumber
             }).eq('id', invoiceId);
             
             if (error) throw error;
+            
+            // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
+            setInvoices(prev => prev.map(inv => 
+                inv.id === invoiceId 
+                    ? { ...inv, status: 'cobrada', paid_date: paidDate, invoice_number: ocNumber }
+                    : inv
+            ));
             
             // ★ OPTIMISTIC UI: Actualizar estado local inmediatamente
             const updatedTickets = cobranzaTickets.map(t => {
