@@ -191,6 +191,7 @@ export default function AdminDashboard() {
 
     // ── COBRANZAS: Estados para el modal de administración ──
     const [cobranzaTickets, setCobranzaTickets] = useState<any[]>([]);
+    const [cobranzaHistorial, setCobranzaHistorial] = useState<any[]>([]); // ★ Tickets cobrados
     const [loadingCobranza, setLoadingCobranza] = useState(false);
     const [selectedTicketForInvoice, setSelectedTicketForInvoice] = useState<any | null>(null);
     const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
@@ -400,16 +401,17 @@ export default function AdminDashboard() {
             // Cargar invoices existentes
             const { data: invData } = await supabase.from('invoices').select('*');
             
-            // ★ SOLO tickets cerrados con monto > 0 (incluye 'cerrado' también)
+            // ★ SOLO tickets cerrados con monto > 0 que NO están cobrados (BANDEJA ZERO)
             const ticketsFacturables = (activeTickets || []).filter((t: any) => {
                 const statusId = (t.status_id || t.status || '').toLowerCase();
                 const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'cerrado';
                 const hasRevenue = (t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) > 0;
-                return isClosed && hasRevenue;
+                const invoice = (invData || []).find((inv: any) => inv.ticket_id === t.id);
+                const isCobrado = invoice?.status === 'cobrada';
+                return isClosed && hasRevenue && !isCobrado; // ★ Excluir cobrados
             });
 
-            console.log('[COBRANZA] Total tickets activos:', activeTickets?.length);
-            console.log('[COBRANZA] Tickets cerrados/encontrados:', ticketsFacturables.length);
+            console.log('[COBRANZA] Tickets PENDIENTES (no cobrados):', ticketsFacturables.length);
 
             // Enriquecer tickets con datos de invoice
             const ticketsConFacturas = ticketsFacturables.map((t: any) => {
@@ -476,26 +478,27 @@ export default function AdminDashboard() {
                 return;
             }
             
-            // ★ OPTIMISTIC UI: Actualizar estado local inmediatamente
-            const updatedTickets = cobranzaTickets.map(t => {
-                if (t.id === selectedTicketForInvoice.id) {
-                    return {
-                        ...t,
-                        _hasInvoice: true,
-                        _invoice: data,
-                        _invoiceOc: ocNumber,
-                        _invoiceStatus: 'cobrada'
-                    };
-                }
-                return t;
-            });
-            setCobranzaTickets(updatedTickets);
+            // ★ BANDEJA ZERO: Eliminar de pendientes y mover a historial
+            const ticketProcesado = {
+                ...selectedTicketForInvoice,
+                _hasInvoice: true,
+                _invoice: data,
+                _invoiceOc: ocNumber,
+                _invoiceStatus: 'cobrada',
+                _paidDate: new Date().toISOString()
+            };
+            
+            // Eliminar de la lista de pendientes
+            setCobranzaTickets(prev => prev.filter(t => t.id !== selectedTicketForInvoice.id));
+            
+            // Agregar al historial
+            setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
             
             // Limpiar input local
             setInvoiceOcNumber(prev => ({ ...prev, [selectedTicketForInvoice.id]: '' }));
             
             // ★ FEEDBACK VISUAL: Toast de éxito
-            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || selectedTicketForInvoice.id} marcado como COBRADO.`);
+            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || selectedTicketForInvoice.id} se movió al historial.`);
             
             // Reset modal
             setShowCreateInvoiceModal(false);
@@ -566,8 +569,52 @@ export default function AdminDashboard() {
     useEffect(() => {
         if (showInvoicesModal) {
             loadCobranzaTickets();
+            // ★ Cargar historial de tickets cobrados
+            loadHistorialCobranza();
         }
     }, [showInvoicesModal, loadCobranzaTickets]);
+
+    // ── COBRANZAS: Cargar historial de cobranza ──
+    const loadHistorialCobranza = useCallback(async () => {
+        try {
+            const { data: invCobrados } = await supabase
+                .from('invoices')
+                .select('*')
+                .eq('status', 'cobrada');
+            
+            if (!invCobrados || invCobrados.length === 0) {
+                setCobranzaHistorial([]);
+                return;
+            }
+
+            const ticketIds = invCobrados.map((inv: any) => inv.ticket_id);
+            const { data: ticketsData } = await supabase
+                .from('tickets')
+                .select('*')
+                .in('id', ticketIds);
+
+            const ticketsHistorial = (ticketsData || []).map((t: any) => {
+                const invoice = invCobrados.find((inv: any) => inv.ticket_id === t.id);
+                const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                return {
+                    ...t,
+                    _clientName: t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A',
+                    _agencia: t.sede?.nombre || t.metadata?.sede?.nombre || '',
+                    _montoSinIGV: montoBase,
+                    _montoConIGV: montoBase * 1.18,
+                    _invoice: invoice || null,
+                    _invoiceOc: invoice?.invoice_number || null,
+                    _invoiceStatus: invoice?.status || null,
+                    _paidDate: invoice?.paid_date || null
+                };
+            });
+
+            setCobranzaHistorial(ticketsHistorial);
+            console.log('[COBRANZA] Historial cargado:', ticketsHistorial.length, 'tickets');
+        } catch (error) {
+            console.error("Error cargando historial:", error);
+        }
+    }, [supabase]);
 
     // ── COBRANZAS: Filtrar tickets según búsqueda ──
     const cobranzaFiltered = useMemo(() => {
@@ -2592,13 +2639,13 @@ export default function AdminDashboard() {
                             <div style={{ flex: 1, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
                                 <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Por Cobrar</div>
                                 <div style={{ fontSize: '1.2rem', color: '#EF4444', fontWeight: 900 }}>
-                                    S/ {fmt(cobranzaTickets.filter(t => !t._hasInvoice || t._invoiceStatus !== 'cobrada').reduce((acc, t) => acc + t._montoConIGV, 0))}
+                                    S/ {fmt(cobranzaTickets.reduce((acc, t) => acc + t._montoConIGV, 0))}
                                 </div>
                             </div>
                             <div style={{ flex: 1, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Cobrado</div>
+                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Historial</div>
                                 <div style={{ fontSize: '1.2rem', color: '#10B981', fontWeight: 900 }}>
-                                    S/ {fmt(cobranzaTickets.filter(t => t._hasInvoice && t._invoiceStatus === 'cobrada').reduce((acc, t) => acc + t._montoConIGV, 0))}
+                                    S/ {fmt(cobranzaHistorial.reduce((acc, t) => acc + t._montoConIGV, 0))}
                                 </div>
                             </div>
                             <div style={{ flex: 1, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
@@ -2608,7 +2655,7 @@ export default function AdminDashboard() {
                                 </div>
                             </div>
                             <div style={{ flex: 1, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Total</div>
+                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Total Pendientes</div>
                                 <div style={{ fontSize: '1.2rem', color: '#8B5CF6', fontWeight: 900 }}>
                                     {cobranzaTickets.length} tickets
                                 </div>
