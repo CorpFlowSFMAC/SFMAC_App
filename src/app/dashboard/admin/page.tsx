@@ -2816,20 +2816,20 @@ export default function AdminDashboard() {
                             
                             {/* ★ 2 Tarjetas de Métricas */}
                             <div style={{ display: 'flex', gap: '1rem' }}>
-                                {/* Tarjeta 1: Total por Cobrar */}
+                                {/* Tarjeta 1: Total por Cobrar (SOLO pendientes, NO incluye cobrados) */}
                                 <div style={{ flex: 1, background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600, textTransform: 'uppercase' }}>Total por Cobrar</div>
                                             <div style={{ fontSize: '1.3rem', color: '#EF4444', fontWeight: 900 }}>
-                                                S/ {fmt(cobranzaTickets.reduce((acc, t) => acc + t._montoConIGV, 0) + cobranzaHistorial.reduce((acc, t) => acc + t._montoConIGV, 0))}
+                                                S/ {fmt(cobranzaTickets.reduce((acc, t) => acc + t._montoConIGV, 0))}
                                             </div>
                                         </div>
                                         <BanknoteIcon size={24} color="#EF4444" style={{ opacity: 0.6 }} />
                                     </div>
                                 </div>
                                 
-                                {/* Tarjeta 2: Total Cobrado */}
+                                {/* Tarjeta 2: Total Cobrado (historial de cobranza) */}
                                 <div style={{ flex: 1, background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
