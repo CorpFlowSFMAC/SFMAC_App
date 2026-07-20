@@ -237,7 +237,7 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
      * - Revertir cambios en caso de error
      * - Sin transacción real
      * 
-     * AHORA: Función clara con 5 pasos lineales
+     * AHORA: Función clara con 6 pasos lineales
      */
     const handleCreateInvoice = async () => {
         // PASO 1: Validación de inputs
@@ -259,9 +259,11 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
         }
 
         const ticketId = selectedTicket.id;
+        const ticketNum = selectedTicket.client_ticket_number || ticketId;
         const ocNumber = invoiceOc.trim().toUpperCase();
         const now = new Date().toISOString();
         const montoTotal = round2(montoBase * IGV_MULTIPLIER);
+        const igvAmount = round2(montoBase * IGV_RATE);
 
         // PASO 2: Preparar payload
         const invoicePayload = {
@@ -279,20 +281,17 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
         onToast('Procesando...', `Registrando cobranza`);
 
         // PASO 3: Actualización optimista de UI (sin esperar BD)
-        // Solo si NO usamos invoicesProp (el componente maneja su propio estado)
         const isStandalone = !invoicesProp;
         const tempInvoiceId = 'temp_' + Date.now();
         const tempInvoice: Invoice = { ...invoicePayload, id: tempInvoiceId, created_at: now };
         
         if (isStandalone) {
-            setInvoices(prev => [...prev.filter(inv => inv.ticket_id !== ticketId), tempInvoice]);
+            // Agregar invoice temporal, removiendo cualquier invoice anterior del mismo ticket
+            setInvoices(prev => {
+                const withoutDuplicates = prev.filter(inv => inv.ticket_id !== ticketId);
+                return [...withoutDuplicates, tempInvoice];
+            });
         }
-
-        // Cerrar modal inmediatamente
-        setShowCreateModal(false);
-        setSelectedTicket(null);
-        setInvoiceOc('');
-        setInvoiceAmountBase('');
 
         try {
             // PASO 4: INSERT en invoices (única llamada esencial a BD)
@@ -317,14 +316,22 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
                 setInvoices(prev => prev.map(inv => inv.id === tempInvoiceId ? createdInvoice : inv));
             }
 
-            onToast('✓ Cobranza Registrada', `Ticket ${selectedTicket.client_ticket_number || ticketId} cobrado exitosamente`);
+            // PASO 6: Cerrar modal y limpiar estados SOLO después de éxito
+            setShowCreateModal(false);
+            setSelectedTicket(null);
+            setInvoiceOc('');
+            setInvoiceAmountBase('');
+
+            onToast('✓ Cobranza Registrada', `Ticket ${ticketNum} cobrado: S/ ${fmt(montoTotal)}`);
 
         } catch (err: any) {
             console.error('[CobranzaManager] Error creando invoice:', err);
+            
             // Revertir cambios optimistas solo si manejamos nuestro propio estado
             if (isStandalone) {
                 setInvoices(prev => prev.filter(inv => inv.id !== tempInvoiceId));
             }
+            
             onToast('Error', err.message || 'No se pudo registrar la cobranza');
         } finally {
             setProcessing(null);
@@ -334,7 +341,8 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
     const handleOpenCreateModal = (ticket: typeof pendingTickets[0]) => {
         setSelectedTicket(ticket);
         setInvoiceOc('');
-        setInvoiceAmountBase('');
+        // Pre-llenar con el monto base calculado
+        setInvoiceAmountBase(ticket._montoBase ? String(ticket._montoBase) : '');
         setShowCreateModal(true);
     };
 
@@ -593,9 +601,36 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
                             <input type="number" value={invoiceAmountBase} onChange={e => setInvoiceAmountBase(e.target.value)}
                                 placeholder={`Default: S/ ${fmt(selectedTicket._montoBase)}`}
                                 style={{ width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', padding: '10px 14px', color: 'white', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-                            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
-                                Monto del ticket: S/ {fmt(selectedTicket._montoBase)} (sin IGV) → Total: S/ {fmt(selectedTicket._montoConIGV)}
-                            </div>
+                            
+                            {/* Desglose de IGV en tiempo real */}
+                            {(() => {
+                                const base = parseFloat(invoiceAmountBase) || selectedTicket._montoBase || 0;
+                                const igv = round2(base * IGV_RATE);
+                                const total = round2(base * IGV_MULTIPLIER);
+                                return (
+                                    <div style={{ 
+                                        marginTop: '8px', 
+                                        padding: '10px 12px', 
+                                        background: 'rgba(16,185,129,0.1)', 
+                                        border: '1px solid rgba(16,185,129,0.2)', 
+                                        borderRadius: '8px',
+                                        fontSize: '0.75rem'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                            <span style={{ color: 'rgba(255,255,255,0.5)' }}>Base Imponible:</span>
+                                            <span style={{ color: 'white', fontWeight: 600 }}>S/ {fmt(base)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                            <span style={{ color: 'rgba(255,255,255,0.5)' }}>IGV (18%):</span>
+                                            <span style={{ color: 'white', fontWeight: 600 }}>S/ {fmt(igv)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(16,185,129,0.3)', paddingTop: '4px' }}>
+                                            <span style={{ color: '#10B981', fontWeight: 700 }}>TOTAL:</span>
+                                            <span style={{ color: '#10B981', fontWeight: 900, fontSize: '1rem' }}>S/ {fmt(total)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         <div style={{ display: 'flex', gap: '1rem' }}>
