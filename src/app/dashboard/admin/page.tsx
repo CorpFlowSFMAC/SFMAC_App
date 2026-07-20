@@ -2761,107 +2761,92 @@ export default function AdminDashboard() {
                         position: 'relative'
                     }} onClick={e => e.stopPropagation()}>
                         
-                        <div style={{ padding: '1.5rem 2rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                                <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <BanknoteIcon size={20} color="#EF4444" /> Administración de Cobranzas
-                                </h3>
-                                <p style={{ margin: '6px 0 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
-                                    Gestione sus órdenes de compra y registre los pagos recibidos
-                                </p>
-                            </div>
-                            <button onClick={() => setShowInvoicesModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                X
-                            </button>
-                        </div>
-                        
-                        {/* Resumen de cobranzas */}
-                        <div style={{ display: 'flex', gap: '1rem', padding: '1rem 2rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ flex: 1, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Total por Cobrar</div>
-                                <div style={{ fontSize: '1.2rem', color: '#EF4444', fontWeight: 900 }}>
-                                    S/ {fmt(cobranzaTickets.reduce((acc, t) => acc + t._montoConIGV, 0) + cobranzaHistorial.reduce((acc, t) => acc + t._montoConIGV, 0))}
+                        {/* ★ HEADER COMPACTO: Título + Pestañas + Búsqueda */}
+                        <div style={{ padding: '1rem 1.5rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {/* Fila 1: Título + Métricas rápidas + Cerrar */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <BanknoteIcon size={20} color="#EF4444" />
+                                    <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1rem' }}>
+                                        Administración de Cobranzas
+                                    </h3>
+                                    {/* ★ Métricas rápidas inline */}
+                                    <div style={{ display: 'flex', gap: '1rem', marginLeft: '1rem' }}>
+                                        <span style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: 700 }}>
+                                            📋 {cobranzaTickets.length} pendientes
+                                        </span>
+                                        <span style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: 700 }}>
+                                            ✓ {cobranzaHistorial.length} cobrados
+                                        </span>
+                                        <span style={{ fontSize: '0.7rem', color: '#8B5CF6', fontWeight: 700 }}>
+                                            S/ {fmt(cobranzaTickets.reduce((acc, t) => acc + t._montoConIGV, 0))}
+                                        </span>
+                                    </div>
                                 </div>
+                                <button onClick={() => setShowInvoicesModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', width: '28px', height: '28px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem' }}>
+                                    ✕
+                                </button>
                             </div>
-                            <div style={{ flex: 1, background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Cobrado</div>
-                                <div style={{ fontSize: '1.2rem', color: '#10B981', fontWeight: 900 }}>
-                                    S/ {fmt(cobranzaHistorial.reduce((acc, t) => acc + t._montoConIGV, 0))}
-                                </div>
-                            </div>
-                            <div style={{ flex: 1, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Sin OC</div>
-                                <div style={{ fontSize: '1.2rem', color: '#F59E0B', fontWeight: 900 }}>
-                                    {cobranzaTickets.filter(t => !t._hasInvoice).length} tickets
-                                </div>
-                            </div>
-                            <div style={{ flex: 1, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px', padding: '0.75rem 1rem' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textTransform: 'uppercase' }}>Pendiente</div>
-                                <div style={{ fontSize: '1.2rem', color: '#8B5CF6', fontWeight: 900 }}>
-                                    S/ {fmt(cobranzaTickets.reduce((acc, t) => acc + t._montoConIGV, 0))}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* ★ Pestañas Pendientes / Historial */}
-                        <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <button
-                                onClick={() => setCobranzaActiveTab('pendientes')}
-                                style={{
-                                    background: cobranzaActiveTab === 'pendientes' ? '#3B82F6' : 'rgba(255,255,255,0.05)',
-                                    border: 'none',
-                                    color: 'white',
-                                    padding: '8px 20px',
-                                    borderRadius: '8px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                📋 Pendientes ({cobranzaTickets.length})
-                            </button>
-                            <button
-                                onClick={() => setCobranzaActiveTab('historial')}
-                                style={{
-                                    background: cobranzaActiveTab === 'historial' ? '#10B981' : 'rgba(255,255,255,0.05)',
-                                    border: 'none',
-                                    color: 'white',
-                                    padding: '8px 20px',
-                                    borderRadius: '8px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                ✓ Historial ({cobranzaHistorial.length})
-                            </button>
-                        </div>
-                        
-                        {/* ★ Búsqueda por ticket */}
-                        <div style={{ padding: '1rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            
+                            {/* Fila 2: Pestañas + Búsqueda */}
                             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                                <input
-                                    type="text"
-                                    placeholder="🔍 Buscar por N° Ticket, Cliente o N° OC..."
-                                    value={cobranzaSearch}
-                                    onChange={e => setCobranzaSearch(e.target.value)}
-                                    style={{
-                                        flex: 1,
-                                        background: 'rgba(0,0,0,0.3)',
-                                        border: '1px solid rgba(255,255,255,0.15)',
-                                        borderRadius: '10px',
-                                        padding: '10px 14px',
-                                        color: 'white',
-                                        fontSize: '0.85rem'
-                                    }}
-                                />
-                                {cobranzaSearch && (
-                                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
-                                        {(cobranzaActiveTab === 'pendientes' ? cobranzaFiltered : historialFiltered).length} resultado{(cobranzaActiveTab === 'pendientes' ? cobranzaFiltered : historialFiltered).length !== 1 ? 's' : ''}
-                                    </span>
-                                )}
+                                {/* ★ Pestañas */}
+                                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                    <button
+                                        onClick={() => setCobranzaActiveTab('pendientes')}
+                                        style={{
+                                            background: cobranzaActiveTab === 'pendientes' ? '#3B82F6' : 'rgba(255,255,255,0.05)',
+                                            border: 'none',
+                                            color: 'white',
+                                            padding: '6px 14px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        📋 Pendientes
+                                    </button>
+                                    <button
+                                        onClick={() => setCobranzaActiveTab('historial')}
+                                        style={{
+                                            background: cobranzaActiveTab === 'historial' ? '#10B981' : 'rgba(255,255,255,0.05)',
+                                            border: 'none',
+                                            color: 'white',
+                                            padding: '6px 14px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        ✓ Historial
+                                    </button>
+                                </div>
+                                
+                                {/* ★ Búsqueda */}
+                                <div style={{ flex: 1, display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                    <input
+                                        type="text"
+                                        placeholder="🔍 Buscar ticket, cliente u OC..."
+                                        value={cobranzaSearch}
+                                        onChange={e => setCobranzaSearch(e.target.value)}
+                                        style={{
+                                            flex: 1,
+                                            background: 'rgba(0,0,0,0.3)',
+                                            border: '1px solid rgba(255,255,255,0.15)',
+                                            borderRadius: '8px',
+                                            padding: '8px 12px',
+                                            color: 'white',
+                                            fontSize: '0.8rem'
+                                        }}
+                                    />
+                                    {cobranzaSearch && (
+                                        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
+                                            {(cobranzaActiveTab === 'pendientes' ? cobranzaFiltered : historialFiltered).length} resultados
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         
