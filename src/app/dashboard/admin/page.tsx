@@ -471,7 +471,7 @@ export default function AdminDashboard() {
         }
     }, [activeTickets, supabase]);
 
-    // ── COBRANZAS: Crear invoice desde ticket y marcar como cobrado ──
+    // ── COBRANZAS: Crear invoice desde ticket y marcar como cobrado (INSTANTÁNEO) ──
     const handleCreateInvoice = async () => {
         if (!selectedTicketForInvoice || !newInvoiceOc.trim()) {
             triggerToast("Error", "Ingrese el número de OC.");
@@ -484,131 +484,102 @@ export default function AdminDashboard() {
             return;
         }
         
-        setInvoiceProcessing(selectedTicketForInvoice.id);
+        const ticketId = selectedTicketForInvoice.id;
+        const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
+        const ocNumber = newInvoiceOc.trim().toUpperCase();
+        const now = new Date().toISOString();
+        
+        // ★ PAYLOAD COMPLETO con amount_base (NOT NULL en BD)
+        const invoicePayload = {
+            ticket_id: ticketId,
+            amount_base: monto,
+            amount_total: monto * 1.18,
+            status: 'cobrada',
+            invoice_number: ocNumber
+        };
+        
+        // ★ PASO 1: CERRAR MODAL INMEDIATAMENTE (feedback instantáneo)
+        setShowCreateInvoiceModal(false);
+        setNewInvoiceOc('');
+        setNewInvoiceAmount('');
+        setSelectedTicketForInvoice(null);
+        setInvoiceProcessing(ticketId);
+        
+        // ★ PASO 2: FEEDBACK VISUAL INMEDIATO
+        triggerToast("✓ Procesando...", `Registrando cobranza del ticket ${selectedTicketForInvoice.client_ticket_number || ticketId}...`);
+        
+        // ★ PASO 3: ACTUALIZACIÓN OPTIMISTA UI (sin esperar BD)
+        const ticketProcesado = {
+            ...selectedTicketForInvoice,
+            _hasInvoice: true,
+            _invoiceOc: ocNumber,
+            _invoiceStatus: 'cobrada',
+            _paidDate: now
+        };
+        
+        // Eliminar de pendientes y agregar a historial INMEDIATAMENTE
+        setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
+        setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
+        
+        // Actualizar array de invoices localmente
+        setInvoices(prev => {
+            const updated = prev.map(inv => {
+                if (inv.ticket_id === ticketId) {
+                    return { ...inv, status: 'anulada' };
+                }
+                return inv;
+            });
+            return [...updated, { ...invoicePayload, id: 'temp_' + Date.now(), created_at: now }];
+        });
         
         try {
-            const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
-            const ocNumber = newInvoiceOc.trim().toUpperCase();
-            const ticketId = selectedTicketForInvoice.id;
-            const now = new Date().toISOString();
+            // ★ PASO 4: INSERTAR INVOICE EN BD (única llamada esencial)
+            const { data: invoiceData, error } = await supabase
+                .from('invoices')
+                .insert(invoicePayload)
+                .select()
+                .single();
             
-            // ★ PAYLOAD COMPLETO con amount_base (NOT NULL en BD)
-            const invoicePayload = {
-                ticket_id: ticketId,
-                amount_base: monto,           // Monto sin IGV (requerido NOT NULL)
-                amount_total: monto * 1.18,  // Monto con IGV
-                status: 'cobrada',
-                invoice_number: ocNumber
-            };
+            if (error) throw error;
             
-            console.log('[COBRANZA] Payload:', JSON.stringify(invoicePayload));
-            
-            const { data: invoiceData, error } = await supabase.from('invoices').insert(invoicePayload).select().single();
-            
-            if (error) {
-                console.error('❌ ERROR:', error.message);
-                alert(`ERROR: ${error.message}`);
-                triggerToast("Error", error.message);
-                setShowCreateInvoiceModal(false);
-                setSelectedTicketForInvoice(null);
-                setNewInvoiceOc('');
-                setNewInvoiceAmount('');
-                return;
-            }
-            
-            console.log('[COBRANZA] ✅ Invoice creada:', invoiceData);
-            
-            // ★ PASO 1: INVALIDAR INVOICES ANTERIORES DEL MISMO TICKET
-            // Si el ticket ya tenía un invoice 'emitida', marcarlo como 'anulada'
-            const existingInvoices = await supabase.from('invoices').select('*').eq('ticket_id', ticketId).neq('id', invoiceData.id);
-            if (existingInvoices.data && existingInvoices.data.length > 0) {
-                console.log('[COBRANZA] Invalidando invoices anteriores:', existingInvoices.data.length);
-                for (const oldInv of existingInvoices.data) {
-                    await supabase.from('invoices').update({ status: 'anulada' }).eq('id', oldInv.id);
-                }
-            }
-            
-            // ★ PASO 2: ACTUALIZACIÓN OPTIMISTA - Eliminar de pendientes inmediatamente
-            setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
-            
-            // ★ PASO 3: AGREGAR A HISTORIAL LOCALMENTE
-            const ticketProcesado = {
-                ...selectedTicketForInvoice,
-                _hasInvoice: true,
-                _invoice: invoiceData,
-                _invoiceOc: ocNumber,
-                _invoiceStatus: 'cobrada',
-                _paidDate: now
-            };
-            setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
-            
-            // ★ PASO 4: ACTUALIZAR ARRAY DE INVOICES (para métricas CFO)
-            // Primero marcar los antiguos como anulados localmente
-            setInvoices(prev => {
-                const updated = prev.map(inv => {
-                    if (inv.ticket_id === ticketId && inv.id !== invoiceData.id) {
-                        return { ...inv, status: 'anulada' };
+            // ★ PASO 5: ACTUALIZACIONES EN PARALELO (más rápido)
+            await Promise.all([
+                // Invalidar invoices anteriores
+                supabase.from('invoices')
+                    .update({ status: 'anulada' })
+                    .eq('ticket_id', ticketId)
+                    .neq('id', invoiceData.id),
+                // Actualizar metadata del ticket
+                supabase.from('tickets').update({
+                    metadata: {
+                        ...(selectedTicketForInvoice.metadata || {}),
+                        _hasInvoice: true,
+                        _invoiceId: invoiceData.id,
+                        _invoiceOc: ocNumber,
+                        _invoiceStatus: 'cobrada',
+                        _invoicePaidDate: now
                     }
-                    return inv;
-                });
-                return [...updated, invoiceData];
-            });
+                }).eq('id', ticketId)
+            ]);
             
-            // ★ PASO 5: ACTUALIZAR TICKET EN BD
-            await supabase.from('tickets').update({
-                metadata: {
-                    ...(selectedTicketForInvoice.metadata || {}),
-                    _hasInvoice: true,
-                    _invoiceId: invoiceData.id,
-                    _invoiceOc: ocNumber,
-                    _invoiceStatus: 'cobrada',
-                    _invoicePaidDate: now
-                }
-            }).eq('id', ticketId);
+            // ★ FEEDBACK FINAL
+            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || ticketId} cobrado exitosamente.`);
             
-            // ★ PASO 6: FEEDBACK VISUAL
-            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || ticketId} se movió al historial.`);
-            
-            // ★ PASO 7: RE-FETCH DE SEGURIDAD - Garantizar sincronización con BD
-            console.log('[COBRANZA] Re-fetching invoices desde BD...');
-            const { data: freshInvoices } = await supabase.from('invoices').select('*');
-            if (freshInvoices) {
-                console.log('[COBRANZA] Invoices frescos:', freshInvoices.length);
-                setInvoices(freshInvoices); // Actualizar con datos reales de BD
-            }
-            
-            // ★ PASO 8: Recargar listas
-            loadCobranzaTickets();
-            loadHistorialCobranza();
-            
-            // ★ PASO 9: Actualizar métricas del dashboard instantáneamente
-            try {
-                await refreshTickets();
-            } catch (e) {
-                console.log('[COBRANZA] refreshTickets no disponible, omitiendo...');
-            }
-            
-            // ★ PASO 10: Limpiar UI
+            // ★ PASO 6: LIMPIAR UI
             setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
-            setShowCreateInvoiceModal(false);
-            setSelectedTicketForInvoice(null);
-            setNewInvoiceOc('');
-            setNewInvoiceAmount('');
             
         } catch (err: any) {
             console.error('[COBRANZA] ❌ Excepción:', err);
-            alert(`ERROR: ${err.message}`);
-            triggerToast("Error", err.message);
-            setShowCreateInvoiceModal(false);
-            setSelectedTicketForInvoice(null);
-            setNewInvoiceOc('');
-            setNewInvoiceAmount('');
+            // Revertir cambios optimistas en caso de error
+            setCobranzaTickets(prev => [ticketProcesado, ...prev]);
+            setCobranzaHistorial(prev => prev.filter(t => t.id !== ticketId));
+            triggerToast("Error", err.message || "No se pudo registrar la cobranza.");
         } finally {
             setInvoiceProcessing(null);
         }
     };
 
-    // ── COBRANZAS: Marcar invoice como cobrado ──
+    // ── COBRANZAS: Marcar invoice como cobrado (INSTANTÁNEO) ──
     const handleMarkInvoiceAsPaid = async (ticketId: string, invoiceId: string) => {
         const oc = invoiceOcNumber[invoiceId];
         if (!oc || !oc.trim()) {
@@ -616,12 +587,43 @@ export default function AdminDashboard() {
             return;
         }
         
+        const ocNumber = oc.trim().toUpperCase();
+        const now = new Date().toISOString();
+        
+        // ★ PASO 1: ACTUALIZACIÓN OPTIMISTA UI INMEDIATA
         setInvoiceProcessing(invoiceId);
+        
+        // Encontrar ticket para agregarlo al historial
+        const ticket = cobranzaTickets.find(t => t.id === ticketId);
+        const ticketProcesado = ticket ? {
+            ...ticket,
+            _hasInvoice: true,
+            _invoiceOc: ocNumber,
+            _invoiceStatus: 'cobrada',
+            _paidDate: now
+        } : null;
+        
+        // Actualizaciones UI inmediatas
+        setInvoices(prev => prev.map(inv => 
+            inv.id === invoiceId 
+                ? { ...inv, status: 'cobrada', paid_date: now, invoice_number: ocNumber }
+                : inv
+        ));
+        
+        // Mover de pendientes a historial
+        if (ticketProcesado) {
+            setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
+            setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
+        }
+        
+        // Limpiar input
+        setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
+        
+        // Feedback inmediato
+        triggerToast("✓ Cobranza Registrada", `Ticket marcado como COBRADO.`);
+        
         try {
-            const ocNumber = oc.trim().toUpperCase();
-            const now = new Date().toISOString();
-            
-            // ★ UPDATE sin paid_date (no existe en la BD)
+            // ★ PASO 2: UPDATE EN BD (única llamada esencial)
             const { error } = await supabase.from('invoices').update({
                 status: 'cobrada',
                 invoice_number: ocNumber
@@ -629,44 +631,18 @@ export default function AdminDashboard() {
             
             if (error) throw error;
             
-            // ★ ACTUALIZAR ARRAY GLOBAL DE INVOICES (para métricas CFO)
-            setInvoices(prev => prev.map(inv => 
-                inv.id === invoiceId 
-                    ? { ...inv, status: 'cobrada', paid_date: now, invoice_number: ocNumber }
-                    : inv
-            ));
-            
-            // ★ OPTIMISTIC UI: Actualizar estado local inmediatamente
-            const updatedTickets = cobranzaTickets.map(t => {
-                if (t.id === ticketId) {
-                    return {
-                        ...t,
-                        _hasInvoice: true,
-                        _invoiceOc: ocNumber,
-                        _invoiceStatus: 'cobrada'
-                    };
-                }
-                return t;
-            });
-            setCobranzaTickets(updatedTickets);
-            
-            // Limpiar input local
-            setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
-            
-            triggerToast("✓ Cobranza Registrada", `Ticket marcado como COBRADO.`);
-            
-            // ★ Actualizar métricas del dashboard instantáneamente
-            try {
-                await refreshTickets();
-            } catch (e) {
-                console.log('[COBRANZA] refreshTickets no disponible, omitiendo...');
-            }
-            
-            // ★ Recargar historial para sincronizar
-            loadHistorialCobranza();
-            
         } catch (error: any) {
             console.error("Error marcando invoice como pagado:", error);
+            // Revertir cambios optimistas
+            if (ticketProcesado) {
+                setCobranzaTickets(prev => [ticketProcesado, ...prev]);
+                setCobranzaHistorial(prev => prev.filter(t => t.id !== ticketId));
+            }
+            setInvoices(prev => prev.map(inv => 
+                inv.id === invoiceId 
+                    ? { ...inv, status: 'emitida', invoice_number: '' }
+                    : inv
+            ));
             triggerToast("Error", error.message || "No se pudo registrar el pago.");
         } finally {
             setInvoiceProcessing(null);
