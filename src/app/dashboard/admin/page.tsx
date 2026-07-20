@@ -443,11 +443,29 @@ export default function AdminDashboard() {
             console.log('[COBRANZA] Tickets PENDIENTES (no cobrados):', ticketsFacturables.length);
 
             // Enriquecer tickets con datos de invoice
+            // ★ FIX: Usar la misma lógica de calculateTicketFinances para evitar doble IGV
             const ticketsConFacturas = ticketsFacturables.map((t: any) => {
                 const invoice = (invData || []).find((inv: any) => inv.ticket_id === t.id);
                 const clientName = t.cliente?.nombre || t.cliente?.name || t.metadata?.cliente_nombre || 'N/A';
                 const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
-                const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                
+                // ★ Usar ingresos_reales si existe (ya viene calculado correctamente de calculateTicketFinances)
+                // Si no existe, usar total_quoted_amount / montoFinal y aplicar lógica de IGV
+                const rawAmount = t.total_quoted_amount || t.montoFinal || 0;
+                const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
+                
+                let montoBase;
+                if (t.ingresos_reales && parseFloat(t.ingresos_reales) > 0) {
+                    // Ya tenemos el monto base sin IGV de calculateTicketFinances
+                    montoBase = parseFloat(t.ingresos_reales);
+                } else if (esMasIGV) {
+                    // El monto es base sin IGV
+                    montoBase = rawAmount;
+                } else {
+                    // El monto rawAmount YA incluye IGV, dividir para obtener base
+                    montoBase = rawAmount / 1.18;
+                }
+                
                 return {
                     ...t,
                     _clientName: clientName,
@@ -681,7 +699,20 @@ export default function AdminDashboard() {
 
             const ticketsHistorial = (ticketsData || []).map((t: any) => {
                 const invoice = invCobrados.find((inv: any) => inv.ticket_id === t.id);
-                const montoBase = t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0;
+                
+                // ★ FIX: Usar la misma lógica de calculateTicketFinances para evitar doble IGV
+                const rawAmount = t.total_quoted_amount || t.montoFinal || 0;
+                const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
+                
+                let montoBase;
+                if (t.ingresos_reales && parseFloat(t.ingresos_reales) > 0) {
+                    montoBase = parseFloat(t.ingresos_reales);
+                } else if (esMasIGV) {
+                    montoBase = rawAmount;
+                } else {
+                    montoBase = rawAmount / 1.18;
+                }
+                
                 return {
                     ...t,
                     _clientName: t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A',
