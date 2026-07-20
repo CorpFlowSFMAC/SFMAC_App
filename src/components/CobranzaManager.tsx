@@ -81,19 +81,23 @@ interface Ticket {
 // ─────────────────────────────────────────────────────────────────────────────
 interface CobranzaManagerProps {
     tickets: Ticket[];
+    invoices?: Invoice[];  // Opcional: si se pasa, usa esta fuente en vez de cargar internamente
     onToast: (title: string, desc: string) => void;
+    onInvoiceCreated?: (invoice: Invoice) => void;  // Callback cuando se crea invoice (para sincronizar con padre)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CobranzaManager({ tickets, onToast }: CobranzaManagerProps) {
+export default function CobranzaManager({ tickets, invoices: invoicesProp, onToast, onInvoiceCreated }: CobranzaManagerProps) {
     const queryClient = useQueryClient();
 
     // ── ESTADOS ÚNICOS (FASE 2: Purga de código muerto) ──
-    // ANTES: Teníamos cobranzaTickets, cobranzaHistorial, rawTickets, invoices separados
-    // AHORA: Un único array maestro invoices que es la fuente de verdad
-    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    // Si se pasa invoices como prop, usa esa fuente; si no, carga internamente
+    const [internalInvoices, setInternalInvoices] = useState<Invoice[]>([]);
+    const invoices = invoicesProp || internalInvoices;
+    const setInvoices = invoicesProp ? () => {} : setInternalInvoices;
+    
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'pendientes' | 'historial'>('pendientes');
     const [searchTerm, setSearchTerm] = useState('');
@@ -194,7 +198,12 @@ export default function CobranzaManager({ tickets, onToast }: CobranzaManagerPro
     }, [collectedInvoices, searchTerm]);
 
     // ── CARGA DE DATOS ──
+    // Solo cargar invoices internamente si NO se pasan como prop
     const loadInvoices = useCallback(async () => {
+        if (invoicesProp) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const { data, error } = await supabase
@@ -210,7 +219,7 @@ export default function CobranzaManager({ tickets, onToast }: CobranzaManagerPro
         } finally {
             setLoading(false);
         }
-    }, [onToast]);
+    }, [onToast, invoicesProp]);
 
     useEffect(() => {
         loadInvoices();
@@ -270,9 +279,14 @@ export default function CobranzaManager({ tickets, onToast }: CobranzaManagerPro
         onToast('Procesando...', `Registrando cobranza`);
 
         // PASO 3: Actualización optimista de UI (sin esperar BD)
-        // Crear invoice temporal para UI
-        const tempInvoice: Invoice = { ...invoicePayload, id: 'temp_' + Date.now(), created_at: now };
-        setInvoices(prev => [...prev.filter(inv => inv.ticket_id !== ticketId), tempInvoice]);
+        // Solo si NO usamos invoicesProp (el componente maneja su propio estado)
+        const isStandalone = !invoicesProp;
+        const tempInvoiceId = 'temp_' + Date.now();
+        const tempInvoice: Invoice = { ...invoicePayload, id: tempInvoiceId, created_at: now };
+        
+        if (isStandalone) {
+            setInvoices(prev => [...prev.filter(inv => inv.ticket_id !== ticketId), tempInvoice]);
+        }
 
         // Cerrar modal inmediatamente
         setShowCreateModal(false);
@@ -293,19 +307,24 @@ export default function CobranzaManager({ tickets, onToast }: CobranzaManagerPro
             // PASO 5: Actualizar cache de React Query
             queryClient.invalidateQueries({ queryKey: queryKeys.tickets });
 
-            // Reemplazar invoice temporal con el real
-            setInvoices(prev => prev.map(inv => 
-                inv.id === 'temp_' + ticketId.replace(/-/g, '').slice(0, 13) 
-                    ? createdInvoice 
-                    : inv
-            ));
+            // Notificar al padre si hay callback
+            if (onInvoiceCreated) {
+                onInvoiceCreated(createdInvoice);
+            }
+
+            // Reemplazar invoice temporal con el real (solo si manejamos nuestro propio estado)
+            if (isStandalone) {
+                setInvoices(prev => prev.map(inv => inv.id === tempInvoiceId ? createdInvoice : inv));
+            }
 
             onToast('✓ Cobranza Registrada', `Ticket ${selectedTicket.client_ticket_number || ticketId} cobrado exitosamente`);
 
         } catch (err: any) {
             console.error('[CobranzaManager] Error creando invoice:', err);
-            // Revertir cambios optimistas
-            setInvoices(prev => prev.filter(inv => inv.id !== 'temp_' + ticketId.replace(/-/g, '').slice(0, 13)));
+            // Revertir cambios optimistas solo si manejamos nuestro propio estado
+            if (isStandalone) {
+                setInvoices(prev => prev.filter(inv => inv.id !== tempInvoiceId));
+            }
             onToast('Error', err.message || 'No se pudo registrar la cobranza');
         } finally {
             setProcessing(null);
