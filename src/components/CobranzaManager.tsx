@@ -221,9 +221,16 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
         }
     }, [onToast, invoicesProp]);
 
+    // useEffect para cargar invoices - solo se ejecuta cuando es standalone
     useEffect(() => {
+        // Si tenemos invoicesProp, no necesitamos cargar internamente
+        if (invoicesProp) {
+            setLoading(false);
+            return;
+        }
+        // Solo cargar si somos standalone
         loadInvoices();
-    }, [loadInvoices]);
+    }, [invoicesProp]);
 
     // ── HANDLERS ──
 
@@ -353,14 +360,17 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
         }
 
         const now = new Date().toISOString();
+        const isStandalone = !invoicesProp;
         setProcessing(invoiceId);
 
-        // Actualización optimista
-        setInvoices(prev => prev.map(inv => 
-            inv.id === invoiceId 
-                ? { ...inv, status: 'cobrada' as const, invoice_number: ocNumber.trim().toUpperCase(), paid_date: now }
-                : inv
-        ));
+        // Actualización optimista (solo si manejamos nuestro propio estado)
+        if (isStandalone) {
+            setInvoices(prev => prev.map(inv => 
+                inv.id === invoiceId 
+                    ? { ...inv, status: 'cobrada' as const, invoice_number: ocNumber.trim().toUpperCase(), paid_date: now }
+                    : inv
+            ));
+        }
 
         try {
             const { error } = await supabase
@@ -379,10 +389,12 @@ export default function CobranzaManager({ tickets, invoices: invoicesProp, onToa
 
         } catch (err: any) {
             console.error('[CobranzaManager] Error marcando como pagado:', err);
-            // Revertir
-            setInvoices(prev => prev.map(inv => 
-                inv.id === invoiceId ? { ...inv, status: 'emitida' as const } : inv
-            ));
+            // Revertir (solo si manejamos nuestro propio estado)
+            if (isStandalone) {
+                setInvoices(prev => prev.map(inv => 
+                    inv.id === invoiceId ? { ...inv, status: 'emitida' as const } : inv
+                ));
+            }
             onToast('Error', err.message || 'No se pudo actualizar');
         } finally {
             setProcessing(null);
