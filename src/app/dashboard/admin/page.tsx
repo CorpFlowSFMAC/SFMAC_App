@@ -495,7 +495,8 @@ export default function AdminDashboard() {
             amount_base: monto,
             amount_total: monto * 1.18,
             status: 'cobrada',
-            invoice_number: ocNumber
+            invoice_number: ocNumber,
+            paid_date: now  // ★ Guardar fecha de cobro en BD
         };
         
         // ★ PASO 1: CERRAR MODAL INMEDIATAMENTE (feedback instantáneo)
@@ -626,7 +627,8 @@ export default function AdminDashboard() {
             // ★ PASO 2: UPDATE EN BD (única llamada esencial)
             const { error } = await supabase.from('invoices').update({
                 status: 'cobrada',
-                invoice_number: ocNumber
+                invoice_number: ocNumber,
+                paid_date: now  // ★ Guardar fecha de cobro en BD
             }).eq('id', invoiceId);
             
             if (error) throw error;
