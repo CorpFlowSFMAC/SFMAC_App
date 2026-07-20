@@ -1287,16 +1287,33 @@ export default function AdminDashboard() {
     // ★ CRÍTICO: Este useMemo garantiza que el monto se actualice cuando cobranzaTickets cambia
     const montoPorCobrar = useMemo(() => {
         return (cobranzaTickets || []).reduce((acc, ticket) => {
-            const monto = ticket._montoConIGV || (ticket.ingresos_reales || ticket.total_quoted_amount || ticket.montoFinal || 0) * 1.18;
-            return acc + monto;
+            // ★ FIX: Usar _montoConIGV que ya viene calculado correctamente
+            // Si no existe, calcular correctamente evitando doble IGV
+            if (ticket._montoConIGV) {
+                return acc + ticket._montoConIGV;
+            }
+            const rawAmount = ticket.total_quoted_amount || ticket.montoFinal || 0;
+            const tieneIngresosReales = ticket.ingresos_reales && parseFloat(ticket.ingresos_reales) > 0;
+            const montoBase = tieneIngresosReales 
+                ? parseFloat(ticket.ingresos_reales)
+                : (ticket.mas_igv ? rawAmount : rawAmount / 1.18);
+            return acc + (montoBase * 1.18);
         }, 0);
     }, [cobranzaTickets]);
     
     // Total cobrado del historial
     const totalCobrado = useMemo(() => {
         return (cobranzaHistorial || []).reduce((acc, ticket) => {
-            const monto = ticket._montoConIGV || (ticket.ingresos_reales || ticket.total_quoted_amount || ticket.montoFinal || 0) * 1.18;
-            return acc + monto;
+            // ★ FIX: Usar _montoConIGV que ya viene calculado correctamente
+            if (ticket._montoConIGV) {
+                return acc + ticket._montoConIGV;
+            }
+            const rawAmount = ticket.total_quoted_amount || ticket.montoFinal || 0;
+            const tieneIngresosReales = ticket.ingresos_reales && parseFloat(ticket.ingresos_reales) > 0;
+            const montoBase = tieneIngresosReales 
+                ? parseFloat(ticket.ingresos_reales)
+                : (ticket.mas_igv ? rawAmount : rawAmount / 1.18);
+            return acc + (montoBase * 1.18);
         }, 0);
     }, [cobranzaHistorial]);
     
