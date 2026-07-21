@@ -190,16 +190,17 @@ export default function AdminDashboard() {
     const [invoiceProcessing, setInvoiceProcessing] = useState<string | null>(null);
     const [invoiceOcNumber, setInvoiceOcNumber] = useState<Record<string, string>>({});
 
-    // ── COBRANZAS: Estados para el modal de administración ──
-    const [cobranzaTickets, setCobranzaTickets] = useState<any[]>([]);
-    const [cobranzaHistorial, setCobranzaHistorial] = useState<any[]>([]); // ★ Tickets cobrados
-    const [loadingCobranza, setLoadingCobranza] = useState(false);
-    const [selectedTicketForInvoice, setSelectedTicketForInvoice] = useState<any | null>(null);
-    const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
-    const [newInvoiceOc, setNewInvoiceOc] = useState('');
-    const [newInvoiceAmount, setNewInvoiceAmount] = useState('');
-    const [cobranzaSearch, setCobranzaSearch] = useState(''); // ★ Búsqueda por ticket
-    const [cobranzaActiveTab, setCobranzaActiveTab] = useState<'pendientes' | 'historial'>('pendientes'); // ★ Tab activa en modal cobranza
+    // ═══════════════════════════════════════════════════════════════════════════════
+// COBRANZA MANAGER: Estados de cobranza ELIMINADOS (refactorizado a CobranzaManager)
+//
+// ELIMINADO (FASE 2):
+// - cobranzaTickets, cobranzaHistorial, loadingCobranza (redundantes)
+// - selectedTicketForInvoice, showCreateInvoiceModal, newInvoiceOc, newInvoiceAmount
+// - cobranzaSearch, cobranzaActiveTab
+//
+// FUNCIÓN: Toda la lógica de cobranza ahora está en CobranzaManager.tsx
+// que recibe tickets via props y gestiona su propio estado internamente.
+// ═══════════════════════════════════════════════════════════════════════════════
 
     const triggerToast = (title: string, desc: string) => {
         setToast({ title, desc });
@@ -396,367 +397,20 @@ export default function AdminDashboard() {
         }
     };
 
-    // ── COBRANZAS: Cargar tickets para administración ──
-    // ★ IMPORTANTE: No depende de 'invoices' para evitar loop infinito
-    // Siempre carga datos frescos de la BD directamente
-    const loadCobranzaTickets = useCallback(async () => {
-        setLoadingCobranza(true);
-        try {
-            // Cargar invoices existentes directamente de BD
-            const { data: invData, error: invError } = await supabase.from('invoices').select('*');
-            
-            if (invError) {
-                console.error('[COBRANZA] Error cargando invoices:', invError);
-                triggerToast("Error", "No se pudieron cargar las facturas.");
-                setCobranzaTickets([]);
-                setLoadingCobranza(false);
-                return;
-            }
-            
-            console.log('[COBRANZA] Invoices cargados:', invData?.length);
-            console.log('[COBRANZA] Active tickets:', activeTickets?.length);
-            
-            // Verificar que activeTickets existe
-            if (!activeTickets || activeTickets.length === 0) {
-                console.log('[COBRANZA] No hay tickets activos para filtrar');
-                setCobranzaTickets([]);
-                setLoadingCobranza(false);
-                return;
-            }
-            
-            // ★ SOLO tickets cerrados con monto > 0 que NO están cobrados (BANDEJA ZERO)
-            const ticketsFacturables = (activeTickets || []).filter((t: any) => {
-                const statusId = (t.status_id || t.status || '').toLowerCase();
-                const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'cerrado';
-                const hasRevenue = (t.ingresos_reales || t.total_quoted_amount || t.montoFinal || 0) > 0;
-                const invoice = (invData || []).find((inv: any) => inv.ticket_id === t.id);
-                const isCobrado = invoice?.status === 'cobrada';
-                
-                if (!isClosed) return false;
-                if (!hasRevenue) return false;
-                if (isCobrado) {
-                    console.log('[COBRANZA] Excluyendo ticket cobrado:', t.id, 'invoice status:', invoice?.status);
-                    return false;
-                }
-                return true;
-            });
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // COBRANZA: Funciones de cobranza ELIMINADAS (refactorizado a CobranzaManager)
+    //
+    // ELIMINADO (FASE 2):
+    // - loadCobranzaTickets() - Redundante, CobranzaManager tiene su propia carga
+    // - handleCreateInvoice() - Ya no se usa, CobranzaManager.handleCreateInvoice
+    // - handleMarkInvoiceAsPaid() - Ya no se usa
+    // - loadHistorialCobranza() - Redundante
+    // - cobranzaFiltered, historialFiltered - Redundantes, CobranzaManager filtra internamente
+    // - useEffect de cobranza (showInvoicesModal) - Ya no necesario
+    //
+    // El componente CobranzaManager recibe tickets y gestiona su propio estado.
+    // ═══════════════════════════════════════════════════════════════════════════════
 
-            console.log('[COBRANZA] Tickets PENDIENTES (no cobrados):', ticketsFacturables.length);
-
-            // Enriquecer tickets con datos de invoice
-            // ★ FIX: Usar la misma lógica de calculateTicketFinances para evitar doble IGV
-            const ticketsConFacturas = ticketsFacturables.map((t: any) => {
-                const invoice = (invData || []).find((inv: any) => inv.ticket_id === t.id);
-                const clientName = t.cliente?.nombre || t.cliente?.name || t.metadata?.cliente_nombre || 'N/A';
-                const agencia = t.sede?.nombre || t.sede?.name || t.branch_offices?.name || t.branch?.name || t.metadata?.sede?.nombre || '';
-                
-                // ★ Usar ingresos_reales si existe (ya viene calculado correctamente de calculateTicketFinances)
-                // Si no existe, usar total_quoted_amount / montoFinal y aplicar lógica de IGV
-                const rawAmount = t.total_quoted_amount || t.montoFinal || 0;
-                const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
-                
-                let montoBase;
-                if (t.ingresos_reales && parseFloat(t.ingresos_reales) > 0) {
-                    // Ya tenemos el monto base sin IGV de calculateTicketFinances
-                    montoBase = parseFloat(t.ingresos_reales);
-                } else if (esMasIGV) {
-                    // El monto es base sin IGV
-                    montoBase = rawAmount;
-                } else {
-                    // El monto rawAmount YA incluye IGV, dividir para obtener base
-                    montoBase = rawAmount / 1.18;
-                }
-                
-                return {
-                    ...t,
-                    _clientName: clientName,
-                    _agencia: agencia,
-                    _montoSinIGV: montoBase,
-                    _montoConIGV: montoBase * 1.18,
-                    _invoice: invoice || null,
-                    _hasInvoice: !!invoice,
-                    _invoiceStatus: invoice?.status || null,
-                    _invoiceOc: invoice?.invoice_number || null
-                };
-            });
-
-            setCobranzaTickets(ticketsConFacturas);
-            
-        } catch (error) {
-            console.error("[COBRANZA] Error cargando tickets de cobranza:", error);
-            triggerToast("Error", "No se pudieron cargar los tickets para cobranza.");
-        } finally {
-            setLoadingCobranza(false);
-        }
-    }, [activeTickets, supabase]);
-
-    // ── COBRANZAS: Crear invoice desde ticket y marcar como cobrado (INSTANTÁNEO) ──
-    const handleCreateInvoice = async () => {
-        if (!selectedTicketForInvoice || !newInvoiceOc.trim()) {
-            triggerToast("Error", "Ingrese el número de OC.");
-            return;
-        }
-        
-        // ★ VERIFICAR: Si el ticket ya tiene invoice cobrado, no permitir duplicar
-        if (selectedTicketForInvoice._hasInvoice && selectedTicketForInvoice._invoiceStatus === 'cobrada') {
-            triggerToast("Info", "Este ticket ya tiene una cobranza registrada.");
-            return;
-        }
-        
-        const ticketId = selectedTicketForInvoice.id;
-        const monto = parseFloat(newInvoiceAmount) || selectedTicketForInvoice._montoSinIGV;
-        const ocNumber = newInvoiceOc.trim().toUpperCase();
-        const now = new Date().toISOString();
-        
-        // ★ PAYLOAD COMPLETO con amount_base (NOT NULL en BD)
-        const invoicePayload = {
-            ticket_id: ticketId,
-            amount_base: monto,
-            amount_total: monto * 1.18,
-            status: 'cobrada',
-            invoice_number: ocNumber,
-            paid_date: now  // ★ Guardar fecha de cobro en BD
-        };
-        
-        // ★ PASO 1: CERRAR MODAL INMEDIATAMENTE (feedback instantáneo)
-        setShowCreateInvoiceModal(false);
-        setNewInvoiceOc('');
-        setNewInvoiceAmount('');
-        setSelectedTicketForInvoice(null);
-        setInvoiceProcessing(ticketId);
-        
-        // ★ PASO 2: FEEDBACK VISUAL INMEDIATO
-        triggerToast("✓ Procesando...", `Registrando cobranza del ticket ${selectedTicketForInvoice.client_ticket_number || ticketId}...`);
-        
-        // ★ PASO 3: ACTUALIZACIÓN OPTIMISTA UI (sin esperar BD)
-        const ticketProcesado = {
-            ...selectedTicketForInvoice,
-            _hasInvoice: true,
-            _invoiceOc: ocNumber,
-            _invoiceStatus: 'cobrada',
-            _paidDate: now
-        };
-        
-        // Eliminar de pendientes y agregar a historial INMEDIATAMENTE
-        setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
-        setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
-        
-        // Actualizar array de invoices localmente
-        setInvoices(prev => {
-            const updated = prev.map(inv => {
-                if (inv.ticket_id === ticketId) {
-                    return { ...inv, status: 'anulada' };
-                }
-                return inv;
-            });
-            return [...updated, { ...invoicePayload, id: 'temp_' + Date.now(), created_at: now }];
-        });
-        
-        try {
-            // ★ PASO 4: INSERTAR INVOICE EN BD (única llamada esencial)
-            const { data: invoiceData, error } = await supabase
-                .from('invoices')
-                .insert(invoicePayload)
-                .select()
-                .single();
-            
-            if (error) throw error;
-            
-            // ★ PASO 5: ACTUALIZACIONES EN PARALELO (más rápido)
-            await Promise.all([
-                // Invalidar invoices anteriores
-                supabase.from('invoices')
-                    .update({ status: 'anulada' })
-                    .eq('ticket_id', ticketId)
-                    .neq('id', invoiceData.id),
-                // Actualizar metadata del ticket
-                supabase.from('tickets').update({
-                    metadata: {
-                        ...(selectedTicketForInvoice.metadata || {}),
-                        _hasInvoice: true,
-                        _invoiceId: invoiceData.id,
-                        _invoiceOc: ocNumber,
-                        _invoiceStatus: 'cobrada',
-                        _invoicePaidDate: now
-                    }
-                }).eq('id', ticketId)
-            ]);
-            
-            // ★ FEEDBACK FINAL
-            triggerToast("✓ Cobranza Registrada", `Ticket ${selectedTicketForInvoice.client_ticket_number || ticketId} cobrado exitosamente.`);
-            
-            // ★ PASO 6: LIMPIAR UI
-            setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
-            
-        } catch (err: any) {
-            console.error('[COBRANZA] ❌ Excepción:', err);
-            // Revertir cambios optimistas en caso de error
-            setCobranzaTickets(prev => [ticketProcesado, ...prev]);
-            setCobranzaHistorial(prev => prev.filter(t => t.id !== ticketId));
-            triggerToast("Error", err.message || "No se pudo registrar la cobranza.");
-        } finally {
-            setInvoiceProcessing(null);
-        }
-    };
-
-    // ── COBRANZAS: Marcar invoice como cobrado (INSTANTÁNEO) ──
-    const handleMarkInvoiceAsPaid = async (ticketId: string, invoiceId: string) => {
-        const oc = invoiceOcNumber[invoiceId];
-        if (!oc || !oc.trim()) {
-            triggerToast("Error", "Ingrese el número de OC antes de marcar como cobrado.");
-            return;
-        }
-        
-        const ocNumber = oc.trim().toUpperCase();
-        const now = new Date().toISOString();
-        
-        // ★ PASO 1: ACTUALIZACIÓN OPTIMISTA UI INMEDIATA
-        setInvoiceProcessing(invoiceId);
-        
-        // Encontrar ticket para agregarlo al historial
-        const ticket = cobranzaTickets.find(t => t.id === ticketId);
-        const ticketProcesado = ticket ? {
-            ...ticket,
-            _hasInvoice: true,
-            _invoiceOc: ocNumber,
-            _invoiceStatus: 'cobrada',
-            _paidDate: now
-        } : null;
-        
-        // Actualizaciones UI inmediatas
-        setInvoices(prev => prev.map(inv => 
-            inv.id === invoiceId 
-                ? { ...inv, status: 'cobrada', paid_date: now, invoice_number: ocNumber }
-                : inv
-        ));
-        
-        // Mover de pendientes a historial
-        if (ticketProcesado) {
-            setCobranzaTickets(prev => prev.filter(t => t.id !== ticketId));
-            setCobranzaHistorial(prev => [ticketProcesado, ...prev]);
-        }
-        
-        // Limpiar input
-        setInvoiceOcNumber(prev => ({ ...prev, [ticketId]: '' }));
-        
-        // Feedback inmediato
-        triggerToast("✓ Cobranza Registrada", `Ticket marcado como COBRADO.`);
-        
-        try {
-            // ★ PASO 2: UPDATE EN BD (única llamada esencial)
-            const { error } = await supabase.from('invoices').update({
-                status: 'cobrada',
-                invoice_number: ocNumber,
-                paid_date: now  // ★ Guardar fecha de cobro en BD
-            }).eq('id', invoiceId);
-            
-            if (error) throw error;
-            
-        } catch (error: any) {
-            console.error("Error marcando invoice como pagado:", error);
-            // Revertir cambios optimistas
-            if (ticketProcesado) {
-                setCobranzaTickets(prev => [ticketProcesado, ...prev]);
-                setCobranzaHistorial(prev => prev.filter(t => t.id !== ticketId));
-            }
-            setInvoices(prev => prev.map(inv => 
-                inv.id === invoiceId 
-                    ? { ...inv, status: 'emitida', invoice_number: '' }
-                    : inv
-            ));
-            triggerToast("Error", error.message || "No se pudo registrar el pago.");
-        } finally {
-            setInvoiceProcessing(null);
-        }
-    };
-
-    // ── COBRANZAS: Cuando se abre el modal ──
-    useEffect(() => {
-        if (showInvoicesModal) {
-            loadCobranzaTickets();
-            // ★ Cargar historial de tickets cobrados
-            loadHistorialCobranza();
-        }
-    }, [showInvoicesModal, loadCobranzaTickets]);
-
-    // ── COBRANZAS: Cargar historial de cobranza ──
-    const loadHistorialCobranza = useCallback(async () => {
-        try {
-            const { data: invCobrados } = await supabase
-                .from('invoices')
-                .select('*')
-                .eq('status', 'cobrada');
-            
-            if (!invCobrados || invCobrados.length === 0) {
-                setCobranzaHistorial([]);
-                return;
-            }
-
-            const ticketIds = invCobrados.map((inv: any) => inv.ticket_id);
-            const { data: ticketsData } = await supabase
-                .from('tickets')
-                .select('*')
-                .in('id', ticketIds);
-
-            const ticketsHistorial = (ticketsData || []).map((t: any) => {
-                const invoice = invCobrados.find((inv: any) => inv.ticket_id === t.id);
-                
-                // ★ FIX: Usar la misma lógica de calculateTicketFinances para evitar doble IGV
-                const rawAmount = t.total_quoted_amount || t.montoFinal || 0;
-                const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
-                
-                let montoBase;
-                if (t.ingresos_reales && parseFloat(t.ingresos_reales) > 0) {
-                    montoBase = parseFloat(t.ingresos_reales);
-                } else if (esMasIGV) {
-                    montoBase = rawAmount;
-                } else {
-                    montoBase = rawAmount / 1.18;
-                }
-                
-                return {
-                    ...t,
-                    _clientName: t.cliente?.nombre || t.metadata?.cliente_nombre || 'N/A',
-                    _agencia: t.sede?.nombre || t.metadata?.sede?.nombre || '',
-                    _montoSinIGV: montoBase,
-                    _montoConIGV: montoBase * 1.18,
-                    _invoice: invoice || null,
-                    _invoiceOc: invoice?.invoice_number || null,
-                    _invoiceStatus: invoice?.status || null,
-                    _paidDate: invoice?.paid_date || null
-                };
-            });
-
-            setCobranzaHistorial(ticketsHistorial);
-            console.log('[COBRANZA] Historial cargado:', ticketsHistorial.length, 'tickets');
-        } catch (error) {
-            console.error("Error cargando historial:", error);
-        }
-    }, [supabase]);
-
-    // ── COBRANZAS: Filtrar tickets según búsqueda ──
-    const cobranzaFiltered = useMemo(() => {
-        if (!cobranzaSearch.trim()) return cobranzaTickets;
-        const search = cobranzaSearch.toLowerCase().trim();
-        return cobranzaTickets.filter((t: any) => {
-            const ticketNum = (t.client_ticket_number || '').toLowerCase();
-            const clientName = (t._clientName || '').toLowerCase();
-            const oc = (t._invoiceOc || '').toLowerCase();
-            return ticketNum.includes(search) || clientName.includes(search) || oc.includes(search);
-        });
-    }, [cobranzaTickets, cobranzaSearch]);
-
-    // ── COBRANZAS: Filtrar historial según búsqueda ──
-    const historialFiltered = useMemo(() => {
-        if (!cobranzaSearch.trim()) return cobranzaHistorial;
-        const search = cobranzaSearch.toLowerCase().trim();
-        return cobranzaHistorial.filter((t: any) => {
-            const ticketNum = (t.client_ticket_number || '').toLowerCase();
-            const clientName = (t._clientName || '').toLowerCase();
-            const oc = (t._invoiceOc || '').toLowerCase();
-            return ticketNum.includes(search) || clientName.includes(search) || oc.includes(search);
-        });
-    }, [cobranzaHistorial, cobranzaSearch]);
 
     // ── Rango de Fechas para Métricas Globales (Cash Flow) ──
     const rangeDates = useMemo(() => {
@@ -1282,41 +936,23 @@ export default function AdminDashboard() {
     }, [activeTickets, gestoras, dateRange, now]);
 
     // ── CFO METRICS (STANDARD) ──────────────────────────────────────────
+    // ★ REFACTORIZADO: Ahora usa calculateAccountsReceivable como única fuente de verdad
+    // para evitar estados derivados rotos. Las métricas de cobranza ahora se derivan
+    // directamente de invoices y activeTickets.
     const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices, activeTickets), [invoices, activeTickets]);
     
-    // ── MONTO POR COBRAR (Deriva directamente de tickets pendientes) ──
-    // ★ CRÍTICO: Este useMemo garantiza que el monto se actualice cuando cobranzaTickets cambia
-    const montoPorCobrar = useMemo(() => {
-        return (cobranzaTickets || []).reduce((acc, ticket) => {
-            // ★ FIX: Usar _montoConIGV que ya viene calculado correctamente
-            // Si no existe, calcular correctamente evitando doble IGV
-            if (ticket._montoConIGV) {
-                return acc + ticket._montoConIGV;
-            }
-            const rawAmount = ticket.total_quoted_amount || ticket.montoFinal || 0;
-            const tieneIngresosReales = ticket.ingresos_reales && parseFloat(ticket.ingresos_reales) > 0;
-            const montoBase = tieneIngresosReales 
-                ? parseFloat(ticket.ingresos_reales)
-                : (ticket.mas_igv ? rawAmount : rawAmount / 1.18);
-            return acc + (montoBase * 1.18);
-        }, 0);
-    }, [cobranzaTickets]);
+    // ── MONTO POR COBRAR (Deriva de cfoAccountsReceivable) ──
+    // ★ ELIMINADO: montoPorCobrar basado en cobranzaTickets (estado eliminado)
+    // AHORA: Se usa cfoAccountsReceivable.totalPending que ya calcula correctamente
+    const montoPorCobrar = useMemo(() => cfoAccountsReceivable.deudaOperativa || 0, [cfoAccountsReceivable]);
     
     // Total cobrado del historial
-    const totalCobrado = useMemo(() => {
-        return (cobranzaHistorial || []).reduce((acc, ticket) => {
-            // ★ FIX: Usar _montoConIGV que ya viene calculado correctamente
-            if (ticket._montoConIGV) {
-                return acc + ticket._montoConIGV;
-            }
-            const rawAmount = ticket.total_quoted_amount || ticket.montoFinal || 0;
-            const tieneIngresosReales = ticket.ingresos_reales && parseFloat(ticket.ingresos_reales) > 0;
-            const montoBase = tieneIngresosReales 
-                ? parseFloat(ticket.ingresos_reales)
-                : (ticket.mas_igv ? rawAmount : rawAmount / 1.18);
-            return acc + (montoBase * 1.18);
-        }, 0);
-    }, [cobranzaHistorial]);
+    // ★ ELIMINADO: totalCobrado basado en cobranzaHistorial (estado eliminado)
+    // AHORA: Se usa cfoAccountsReceivable.totalCollected
+    const totalCobrado = useMemo(() => cfoAccountsReceivable.totalCollected || 0, [cfoAccountsReceivable]);
+    
+    // Conteo de facturas cobradas para el tooltip
+    const countCobradas = useMemo(() => cfoAccountsReceivable.collectedInvoices?.length || 0, [cfoAccountsReceivable]);
     
     const cfoWip = useMemo(() => calculateWIP(activeTickets), [activeTickets]);
     // Usa la utilidad total del mes (cerrados + en ejecución) para el EBITDA real
@@ -1837,9 +1473,9 @@ export default function AdminDashboard() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.25rem" }}>
                 <RoiCard label="Cuentas por Cobrar" value={`S/ ${fmt(montoPorCobrar)}`}
-                    sub={`Cobrado: S/ ${fmt(totalCobrado)} (${cobranzaHistorial?.length || 0} tickets)`} color="#EF4444"
+                    sub={`Cobrado: S/ ${fmt(totalCobrado)} (${countCobradas} facturas)`} color="#EF4444"
                     icon={BanknoteIcon}
-                    light={cobranzaHistorial?.length > 0 ? "VERDE" : "AMBAR"}
+                    light={countCobradas > 0 ? "VERDE" : "AMBAR"}
                     onClick={() => setCfoDetailModal('receivable')}
                 />
                 <RoiCard label="Facturación Emitida" value={`S/ ${fmt(cfoAccountsReceivable.totalInvoiced || 0)}`}
