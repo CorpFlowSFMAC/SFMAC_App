@@ -2463,6 +2463,7 @@ export default function AdminDashboard() {
                 <CobranzaManager 
                     tickets={activeTickets}
                     onToast={triggerToast}
+                    onClose={() => setShowInvoicesModal(false)}
                 />
             )}
         </div>

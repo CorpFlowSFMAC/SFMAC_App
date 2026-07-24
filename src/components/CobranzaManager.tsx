@@ -89,12 +89,13 @@ interface Ticket {
 interface CobranzaManagerProps {
     tickets: Ticket[];
     onToast: (title: string, desc: string) => void;
+    onClose?: () => void; // Callback para cerrar el modal padre
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
-export default function CobranzaManager({ tickets, onToast }: CobranzaManagerProps) {
+export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaManagerProps) {
     const queryClient = useQueryClient();
 
     // ── ESTADOS LOCALES ──
@@ -472,11 +473,23 @@ export default function CobranzaManager({ tickets, onToast }: CobranzaManagerPro
                                 <Download size={12} /> Exportar
                             </button>
                             <button
-                                onClick={handleCloseModal}
+                                onClick={() => {
+                                    if (showCreateModal) {
+                                        handleCloseModal();
+                                    } else if (onClose) {
+                                        onClose();
+                                    }
+                                }}
                                 style={{
-                                    background: 'rgba(255,255,255,0.05)',
-                                    border: 'none', color: 'white', padding: '6px 12px',
-                                    borderRadius: '6px', cursor: 'pointer'
+                                    background: 'rgba(239,68,68,0.15)',
+                                    border: '1px solid rgba(239,68,68,0.3)',
+                                    color: '#EF4444',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
                                 }}
                             >
                                 <X size={16} />
@@ -604,9 +617,28 @@ export default function CobranzaManager({ tickets, onToast }: CobranzaManagerPro
                         }}
                         onClick={e => e.stopPropagation()}
                     >
-                        <h3 style={{ margin: '0 0 1.5rem 0', color: 'white', fontWeight: 900, fontSize: '1.1rem' }}>
-                            Registrar Orden de Compra
-                        </h3>
+                        {/* Header con título y botón X */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.1rem' }}>
+                                Registrar Orden de Compra
+                            </h3>
+                            <button
+                                onClick={handleCloseModal}
+                                style={{
+                                    background: 'rgba(255,255,255,0.05)',
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    color: 'rgba(255,255,255,0.7)',
+                                    padding: '6px 8px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
 
                         <div style={{ marginBottom: '1rem' }}>
                             <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
