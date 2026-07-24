@@ -80,6 +80,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
 
     // ── ESTADOS LOCALES ──
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [localTickets, setLocalTickets] = useState<Ticket[]>([]); // Copia local para optimistic updates
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'pendientes' | 'historial'>('pendientes');
     const [searchTerm, setSearchTerm] = useState('');
@@ -92,6 +93,11 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
     const [invoiceAmountBase, setInvoiceAmountBase] = useState('');
     // Tipo de cobro: 'oc' = Orden de Compra, 'evento_perdida' = Evento de Pérdida
     const [cobroTipo, setCobroTipo] = useState<'oc' | 'evento_perdida'>('oc');
+
+    // Sincronizar tickets de props con estado local
+    useEffect(() => {
+        setLocalTickets(tickets);
+    }, [tickets]);
 
     // ── CARGA DE DATOS ──
     const loadInvoices = useCallback(async () => {
@@ -134,8 +140,9 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
     }, [invoices]);
 
     // Tickets pendientes de cobrar (estado_cobranza !== 'cobrado')
+    // Usa localTickets para permitir optimistic updates instantáneos
     const pendingTickets = useMemo(() => {
-        return tickets
+        return localTickets
             .filter(t => {
                 const statusId = (t.status_id || '').toLowerCase();
                 const isClosed = statusId === 'ticket_cerrado' || statusId === 'liquidado' || statusId === 'cerrado';
@@ -156,18 +163,19 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
                     _invoices: invoicesByTicketId.get(ticket.id) || []
                 };
             });
-    }, [tickets, invoicesByTicketId]);
+    }, [localTickets, invoicesByTicketId]);
 
     // Historial de invoices cobradas
+    // Usa localTickets para permitir optimistic updates instantáneos
     const collectedInvoices = useMemo(() => {
         return invoices
             .filter(inv => inv.status === 'cobrada')
             .map(inv => {
-                const ticket = tickets.find(t => t.id === inv.ticket_id);
+                const ticket = localTickets.find(t => t.id === inv.ticket_id);
                 return { ...inv, _ticket: ticket };
             })
             .sort((a, b) => new Date(b.paid_date || b.created_at).getTime() - new Date(a.paid_date || a.created_at).getTime());
-    }, [invoices, tickets]);
+    }, [invoices, localTickets]);
 
     // Métricas calculadas
     const metrics = useMemo(() => {
@@ -285,6 +293,12 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
             // Reemplazar invoice temporal con el real
             setInvoices(prev => prev.map(inv => inv.id === tempInvoiceId ? createdInvoice : inv));
 
+            // ACTUALIZACIÓN INSTANTÁNEA: Marcar ticket como cobrado en localTickets
+            // Esto recalcula inmediatamente pendingTickets y collectedInvoices
+            setLocalTickets(prev => prev.map(t => 
+                t.id === ticketId ? { ...t, estado_cobranza: 'cobrado' as const } : t
+            ));
+
             // PASO 4: Cerrar modal y limpiar estados
             setShowCreateModal(false);
             setSelectedTicket(null);
@@ -298,6 +312,11 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
 
             // Revertir: quitar invoice temporal
             setInvoices(prev => prev.filter(inv => inv.id !== tempInvoiceId));
+
+            // Revertir: restaurar estado_cobranza del ticket
+            setLocalTickets(prev => prev.map(t => 
+                t.id === ticketId ? { ...t, estado_cobranza: 'pendiente' as const } : t
+            ));
 
             onToast('Error', err.message || 'No se pudo registrar la cobranza');
         } finally {
