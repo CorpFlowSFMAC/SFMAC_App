@@ -2,7 +2,7 @@
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * COBRANZA MANAGER - MÓDULO REFACTORIZADO V3 (Clean Architecture)
+ * COBRANZA MANAGER - V4 (Eventos de Pérdida + Sincronización Instantánea)
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * ARQUITECTURA: Single Source of Truth
@@ -10,33 +10,13 @@
  * - Invoices: Estado de la facturación/cobranza
  * - Trigger en BD: estado_cobranza se actualiza automáticamente al crear invoice
  * 
- * FASE 1: Data Layer ✅
- * - Tabla invoices: id, ticket_id, amount_base, amount_total, status, invoice_number
- * - Tickets.estado_cobranza: Consolidación automática via trigger
+ * MODALIDADES DE COBRO:
+ * 1. Con OC (Orden de Compra): Requiere número de OC
+ * 2. Con Evento de Pérdida: Sin número de OC, se marca como "EP-{timestamp}"
  * 
- * FASE 2: Código Muerto Eliminado ✅
- * - Sin estados redundantes de cobranzaTickets/cobranzaHistorial
- * - Sin useEffect de sincronización manual de arrays
- * - Flujo de datos unificado desde props + fetch
- * 
- * FASE 3: Lógica de Interfaz - Single Source of Truth ✅
- * - Pendientes: tickets.filter(t => t.estado_cobranza !== 'cobrado')
- * - Por Cobrar: Suma iterativa de invoices emitidas
- * - Historial: Invoices con status 'cobrada' del período seleccionado
- * 
- * FASE 4: Transacción Atómica ✅
- * 1. Validar inputs (Monto base obligatorio, N° OC obligatorio)
- * 2. Calcular IGV y Monto Total
- * 3. INSERT en invoices (status: 'cobrada')
- * 4. Trigger BD actualiza tickets.estado_cobranza automáticamente
- * 5. Actualización optimista de React (remueve ticket del array)
- * 6. Notificación y cierre de modal
- * 
- * MEJORAS V3:
- * - Fetch optimizado con query de Supabase más eficiente
- * - Cálculos simplificados usando estado_cobranza como fuente única
- * - Sin enriquecimiento manual innecesario de datos
- * - Código reduccion de ~50% vs versión anterior
+ * SINCRONIZACIÓN INSTANTÁNEA:
+ * - Optimistic updates: UI se actualiza inmediatamente
+ * - paid_date: Se asigna automáticamente al registrar
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -46,7 +26,7 @@ import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/useQueryHooks";
 import { round2 } from "@/lib/formatters";
-import { CheckCircle2, Search, X, RefreshCw, Download, Loader2 } from "lucide-react";
+import { CheckCircle2, X, RefreshCw, Download, Loader2, AlertTriangle, FileText } from "lucide-react";
 import * as XLSX from "xlsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,6 +90,8 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [invoiceOc, setInvoiceOc] = useState('');
     const [invoiceAmountBase, setInvoiceAmountBase] = useState('');
+    // Tipo de cobro: 'oc' = Orden de Compra, 'evento_perdida' = Evento de Pérdida
+    const [cobroTipo, setCobroTipo] = useState<'oc' | 'evento_perdida'>('oc');
 
     // ── CARGA DE DATOS ──
     const loadInvoices = useCallback(async () => {
@@ -235,10 +217,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
      */
     const handleCreateInvoice = async () => {
         // PASO 1: Validación de inputs
-        if (!selectedTicket || !invoiceOc.trim()) {
-            onToast('Error', 'Ingrese el número de OC');
-            return;
-        }
+        if (!selectedTicket) return;
 
         const montoBase = parseFloat(invoiceAmountBase) || selectedTicket._montoBase;
         if (isNaN(montoBase) || montoBase <= 0) {
@@ -252,11 +231,25 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
             return;
         }
 
+        // Determinar el número de documento según el tipo de cobro
+        let docNumber: string;
         const ticketId = selectedTicket.id;
         const ticketNum = selectedTicket.client_ticket_number || ticketId;
-        const ocNumber = invoiceOc.trim().toUpperCase();
         const now = new Date().toISOString();
         const montoTotal = round2(montoBase * IGV_MULTIPLIER);
+
+        if (cobroTipo === 'evento_perdida') {
+            // Evento de Pérdida: Generar identificador automático
+            const timestamp = Date.now();
+            docNumber = `EP-${timestamp}`;
+        } else {
+            // Con OC: Validar que se haya ingresado el número
+            if (!invoiceOc.trim()) {
+                onToast('Error', 'Ingrese el número de OC');
+                return;
+            }
+            docNumber = invoiceOc.trim().toUpperCase();
+        }
 
         // Payload para INSERT
         const invoicePayload = {
@@ -264,7 +257,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
             amount_base: round2(montoBase),
             amount_total: montoTotal,
             status: 'cobrada' as const,
-            invoice_number: ocNumber,
+            invoice_number: docNumber,
             paid_date: now
         };
 
@@ -316,6 +309,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
         setSelectedTicket(ticket);
         setInvoiceOc('');
         setInvoiceAmountBase(ticket._montoBase ? String(ticket._montoBase) : '');
+        setCobroTipo('oc'); // Por defecto, tipo OC
         setShowCreateModal(true);
     };
 
@@ -324,6 +318,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
         setSelectedTicket(null);
         setInvoiceOc('');
         setInvoiceAmountBase('');
+        setCobroTipo('oc');
     };
 
     // Exportar a Excel
@@ -620,7 +615,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
                         {/* Header con título y botón X */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                             <h3 style={{ margin: 0, color: 'white', fontWeight: 900, fontSize: '1.1rem' }}>
-                                Registrar Orden de Compra
+                                {cobroTipo === 'evento_perdida' ? 'Registrar Evento de Pérdida' : 'Registrar Cobro / OC'}
                             </h3>
                             <button
                                 onClick={handleCloseModal}
@@ -649,22 +644,110 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
                             </div>
                         </div>
 
+                        {/* Selector de tipo de cobro */}
+                        <div style={{ marginBottom: '1rem' }}>
+                            <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '8px' }}>
+                                Tipo de Cobro
+                            </label>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setCobroTipo('oc')}
+                                    style={{
+                                        flex: 1,
+                                        background: cobroTipo === 'oc' ? 'rgba(16,185,129,0.2)' : 'rgba(0,0,0,0.3)',
+                                        border: `1px solid ${cobroTipo === 'oc' ? '#10B981' : 'rgba(255,255,255,0.15)'}`,
+                                        color: cobroTipo === 'oc' ? '#10B981' : 'rgba(255,255,255,0.7)',
+                                        padding: '10px 12px',
+                                        borderRadius: '10px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        fontWeight: 700,
+                                        fontSize: '0.8rem'
+                                    }}
+                                >
+                                    <FileText size={14} /> Con OC
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCobroTipo('evento_perdida')}
+                                    style={{
+                                        flex: 1,
+                                        background: cobroTipo === 'evento_perdida' ? 'rgba(239,68,68,0.2)' : 'rgba(0,0,0,0.3)',
+                                        border: `1px solid ${cobroTipo === 'evento_perdida' ? '#EF4444' : 'rgba(255,255,255,0.15)'}`,
+                                        color: cobroTipo === 'evento_perdida' ? '#EF4444' : 'rgba(255,255,255,0.7)',
+                                        padding: '10px 12px',
+                                        borderRadius: '10px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        fontWeight: 700,
+                                        fontSize: '0.8rem'
+                                    }}
+                                >
+                                    <AlertTriangle size={14} /> Evento de Pérdida
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Campo N° OC (solo visible si es tipo OC) */}
+                        {cobroTipo === 'oc' && (
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
+                                    Número de OC *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={invoiceOc}
+                                    onChange={e => setInvoiceOc(e.target.value)}
+                                    placeholder="Ej: OC-2026-001"
+                                    style={{
+                                        width: '100%', background: 'rgba(0,0,0,0.3)',
+                                        border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px',
+                                        padding: '10px 14px', color: 'white', fontSize: '0.9rem',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        {/* Aviso de Evento de Pérdida */}
+                        {cobroTipo === 'evento_perdida' && (
+                            <div style={{
+                                marginBottom: '1rem',
+                                padding: '10px 12px',
+                                background: 'rgba(239,68,68,0.1)',
+                                border: '1px solid rgba(239,68,68,0.3)',
+                                borderRadius: '8px',
+                                fontSize: '0.75rem',
+                                color: 'rgba(255,255,255,0.7)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                    <AlertTriangle size={14} color="#EF4444" />
+                                    <span style={{ color: '#EF4444', fontWeight: 700 }}>Evento de Pérdida</span>
+                                </div>
+                                El cobro se registrará sin número de OC. La fecha de cobro se asignará automáticamente.
+                            </div>
+                        )}
+
+                        {/* Fecha de cobro (solo lectura, automática) */}
                         <div style={{ marginBottom: '1rem' }}>
                             <label style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '4px' }}>
-                                Número de OC *
+                                Fecha de Cobro
                             </label>
-                            <input
-                                type="text"
-                                value={invoiceOc}
-                                onChange={e => setInvoiceOc(e.target.value)}
-                                placeholder="Ej: OC-2026-001"
-                                style={{
-                                    width: '100%', background: 'rgba(0,0,0,0.3)',
-                                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px',
-                                    padding: '10px 14px', color: 'white', fontSize: '0.9rem',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
+                            <div style={{
+                                width: '100%', background: 'rgba(16,185,129,0.1)',
+                                border: '1px solid rgba(16,185,129,0.3)', borderRadius: '10px',
+                                padding: '10px 14px', color: '#10B981', fontSize: '0.9rem',
+                                fontWeight: 600
+                            }}>
+                                📅 {new Date().toLocaleString('es-PE')}
+                            </div>
                         </div>
 
                         <div style={{ marginBottom: '1.5rem' }}>
