@@ -181,11 +181,54 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
     const metrics = useMemo(() => {
         const totalPendiente = pendingTickets.reduce((acc, t) => acc + (t._montoConIGV || 0), 0);
         const totalCobrado = collectedInvoices.reduce((acc, inv) => acc + (inv.amount_total || 0), 0);
+        
+        // Métricas mensuales basadas en paid_date
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth(); // 0-11
+        
+        // Helper para formatear mes en español
+        const getMonthName = (month: number) => {
+            const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                           'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            return months[month];
+        };
+        
+        // Cobros del mes actual
+        const cobrosMesActual = collectedInvoices
+            .filter(inv => {
+                if (!inv.paid_date) return false;
+                const paidDate = new Date(inv.paid_date);
+                return paidDate.getFullYear() === currentYear && paidDate.getMonth() === currentMonth;
+            });
+        
+        const totalMesActual = cobrosMesActual.reduce((acc, inv) => acc + (inv.amount_total || 0), 0);
+        
+        // Cobros del mes anterior (para referencia)
+        const mesAnterior = currentMonth === 0 ? 11 : currentMonth - 1;
+        const añoMesAnterior = currentMonth === 0 ? currentYear - 1 : currentYear;
+        
+        const cobrosMesAnterior = collectedInvoices
+            .filter(inv => {
+                if (!inv.paid_date) return false;
+                const paidDate = new Date(inv.paid_date);
+                return paidDate.getFullYear() === añoMesAnterior && paidDate.getMonth() === mesAnterior;
+            });
+        
+        const totalMesAnterior = cobrosMesAnterior.reduce((acc, inv) => acc + (inv.amount_total || 0), 0);
+        
         return {
             totalPendiente: round2(totalPendiente),
             totalCobrado: round2(totalCobrado),
             countPending: pendingTickets.length,
-            countCollected: collectedInvoices.length
+            countCollected: collectedInvoices.length,
+            // Métricas mensuales
+            mesActualNombre: getMonthName(currentMonth),
+            mesAnteriorNombre: getMonthName(mesAnterior),
+            totalMesActual: round2(totalMesActual),
+            countMesActual: cobrosMesActual.length,
+            totalMesAnterior: round2(totalMesAnterior),
+            countMesAnterior: cobrosMesAnterior.length,
         };
     }, [pendingTickets, collectedInvoices]);
 
@@ -418,6 +461,21 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
                             </div>
                             <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
                                 {metrics.countCollected} facturas
+                            </div>
+                        </div>
+                        <div style={{
+                            flex: 1, background: 'rgba(59,130,246,0.15)',
+                            border: '1px solid rgba(59,130,246,0.3)',
+                            borderRadius: '12px', padding: '0.75rem 1rem'
+                        }}>
+                            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600, textTransform: 'uppercase' }}>
+                                Cobrado {metrics.mesActualNombre}
+                            </div>
+                            <div style={{ fontSize: '1.3rem', color: '#3B82F6', fontWeight: 900 }}>
+                                S/ {fmt(metrics.totalMesActual)}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                                {metrics.countMesActual} cobros este mes
                             </div>
                         </div>
                     </div>
