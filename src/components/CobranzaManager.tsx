@@ -174,32 +174,31 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
                 const ticket = localTickets.find(t => t.id === inv.ticket_id);
                 return { ...inv, _ticket: ticket };
             })
-            .sort((a, b) => new Date(b.paid_date || b.created_at).getTime() - new Date(a.paid_date || a.created_at).getTime());
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }, [invoices, localTickets]);
+
+    // Helper para formatear mes en español
+    const getMonthName = (month: number) => {
+        const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                       'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        return months[month];
+    };
 
     // Métricas calculadas
     const metrics = useMemo(() => {
         const totalPendiente = pendingTickets.reduce((acc, t) => acc + (t._montoConIGV || 0), 0);
         const totalCobrado = collectedInvoices.reduce((acc, inv) => acc + (inv.amount_total || 0), 0);
         
-        // Métricas mensuales basadas en paid_date
+        // Métricas mensuales basadas en created_at (fecha de registro de OC)
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth(); // 0-11
         
-        // Helper para formatear mes en español
-        const getMonthName = (month: number) => {
-            const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                           'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-            return months[month];
-        };
-        
-        // Cobros del mes actual
+        // Cobros del mes actual (usando created_at como fecha de registro)
         const cobrosMesActual = collectedInvoices
             .filter(inv => {
-                if (!inv.paid_date) return false;
-                const paidDate = new Date(inv.paid_date);
-                return paidDate.getFullYear() === currentYear && paidDate.getMonth() === currentMonth;
+                const regDate = new Date(inv.created_at);
+                return regDate.getFullYear() === currentYear && regDate.getMonth() === currentMonth;
             });
         
         const totalMesActual = cobrosMesActual.reduce((acc, inv) => acc + (inv.amount_total || 0), 0);
@@ -210,9 +209,8 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
         
         const cobrosMesAnterior = collectedInvoices
             .filter(inv => {
-                if (!inv.paid_date) return false;
-                const paidDate = new Date(inv.paid_date);
-                return paidDate.getFullYear() === añoMesAnterior && paidDate.getMonth() === mesAnterior;
+                const regDate = new Date(inv.created_at);
+                return regDate.getFullYear() === añoMesAnterior && regDate.getMonth() === mesAnterior;
             });
         
         const totalMesAnterior = cobrosMesAnterior.reduce((acc, inv) => acc + (inv.amount_total || 0), 0);
