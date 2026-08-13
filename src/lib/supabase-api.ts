@@ -23,7 +23,7 @@ const getZonaCodigo = (zonasRelation: any): string | null => {
 
 export class DuplicateTicketCostError extends Error {
     constructor() {
-        super('Ya existe un pago confirmado con el mismo ticket, monto y concepto.');
+        super('Error: Intento de pago duplicado detectado. Ya existe un pago confirmado idéntico en los últimos 10 minutos.');
         this.name = 'DuplicateTicketCostError';
     }
 }

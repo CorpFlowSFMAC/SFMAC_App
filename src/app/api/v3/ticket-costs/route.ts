@@ -5,7 +5,7 @@ import { normalizeTicketCostCategory } from '@/lib/ticketCostCategories';
 
 class DuplicateTicketCostError extends Error {
     constructor() {
-        super('Ya existe un pago confirmado con el mismo ticket, monto y concepto.');
+        super('Error: Intento de pago duplicado detectado. Ya existe un pago confirmado idéntico en los últimos 10 minutos.');
         this.name = 'DuplicateTicketCostError';
     }
 }
@@ -84,20 +84,31 @@ const assertUniqueConfirmedTicketCost = async (
 
     const { data, error } = await client
         .from('ticket_costs')
-        .select('id, concepto, estado_pago')
+        .select('id, concepto, estado_pago, updated_at, created_at')
         .eq('ticket_id', ticketId)
         .eq('monto', monto);
 
     if (error) throw error;
 
     const targetConcept = normalizeCostConcept(concepto);
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+
     const exists = (data || []).some((cost: any) => {
         if (ignoredId && cost.id === ignoredId) return false;
-        return isConfirmedTicketCostStatus(cost.estado_pago) && normalizeCostConcept(cost.concepto || '') === targetConcept;
+        
+        // Verifica si el registro fue creado o actualizado en los últimos 10 minutos
+        const recordDate = new Date(cost.updated_at || cost.created_at || Date.now());
+        const isRecent = recordDate > tenMinutesAgo;
+
+        return isConfirmedTicketCostStatus(cost.estado_pago) && 
+               normalizeCostConcept(cost.concepto || '') === targetConcept &&
+               isRecent;
     });
 
     if (exists) throw new DuplicateTicketCostError();
 };
+
+
 
 export async function GET(request: NextRequest) {
     try {
@@ -239,6 +250,8 @@ export async function PUT(request: NextRequest) {
                 id
             );
         }
+
+
 
         const { data, error } = await client
             .from('ticket_costs')
