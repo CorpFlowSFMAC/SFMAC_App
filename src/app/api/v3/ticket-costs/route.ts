@@ -15,7 +15,7 @@ const TICKET_COST_SELECT = `
     technicians(id, name, first_name, last_name, document_number, phone, bank_name, account_number, cci, yape_number, plin_number)
 `;
 
-const normalizeCostConcept = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+const normalizeCostConcept = (value: string | null | undefined) => (value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
 const cleanCostPayload = (cost: Record<string, any>) => {
     const payload: Record<string, any> = {};
@@ -84,7 +84,7 @@ const assertUniqueConfirmedTicketCost = async (
 
     const { data, error } = await client
         .from('ticket_costs')
-        .select('id, concepto, estado_pago, updated_at, created_at')
+        .select('id, concepto, estado_pago, created_at')
         .eq('ticket_id', ticketId)
         .eq('monto', monto);
 
@@ -97,7 +97,7 @@ const assertUniqueConfirmedTicketCost = async (
         if (ignoredId && cost.id === ignoredId) return false;
         
         // Verifica si el registro fue creado o actualizado en los últimos 10 minutos
-        const recordDate = new Date(cost.updated_at || cost.created_at || Date.now());
+        const recordDate = new Date(cost.created_at || Date.now());
         const isRecent = recordDate > tenMinutesAgo;
 
         return isConfirmedTicketCostStatus(cost.estado_pago) && 
