@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, MapPin, User, UserPlus, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package, Truck, ShieldAlert } from "lucide-react";
+import { FileText, MapPin, User, UserPlus, ArrowRight, Calendar, RefreshCw, Edit2, Stethoscope, CreditCard, Image as ImageIcon, Clock, DollarSign, Scale, CheckCircle2, Wallet, Coins, ClipboardCheck, ShieldCheck, FileSpreadsheet, Bot, Sparkles, Lightbulb, AlertTriangle, Eye, X, Banknote, TrendingUp, Settings, ChevronRight, Package, Truck, ShieldAlert, ArrowRightLeft } from "lucide-react";
 import { getServiceById } from "@/lib/serviceTypes";
 import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { supabase } from "@/lib/supabase";
@@ -1481,6 +1481,52 @@ export const FinancialLiquidationBar = memo(function FinancialLiquidationBar({ t
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export const PaymentHistoryBar = memo(function PaymentHistoryBar({ ticket, costos }: { ticket: any, costos?: any[] }) {
     const [viewingVoucher, setViewingVoucher] = useState<string | null>(null);
+    const [transferModalOpen, setTransferModalOpen] = useState(false);
+    const [selectedPaymentForTransfer, setSelectedPaymentForTransfer] = useState<any>(null);
+    const [targetTicketNumber, setTargetTicketNumber] = useState("");
+    const [isTransferring, setIsTransferring] = useState(false);
+    const [transferError, setTransferError] = useState("");
+
+    const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+    const isAdmin = userRole === 'admin' || userRole === 'superadmin' || userRole === 'ADMIN' || userRole === 'SUPERADMIN';
+
+    const handleTransferPayment = async () => {
+        if (!selectedPaymentForTransfer || !targetTicketNumber.trim()) return;
+        setIsTransferring(true);
+        setTransferError("");
+        try {
+            // Find target ticket by client_ticket_number
+            const { data: targetTicket, error: searchError } = await supabase
+                .from('tickets')
+                .select('id, client_ticket_number')
+                .eq('client_ticket_number', targetTicketNumber.trim().toUpperCase())
+                .single();
+
+            if (searchError || !targetTicket) {
+                setTransferError("No se encontró un ticket con ese número (ej. TCK-00123).");
+                setIsTransferring(false);
+                return;
+            }
+
+            // Update ticket_cost with new ticket_id
+            const { error: updateError } = await supabase
+                .from('ticket_costs')
+                .update({ ticket_id: targetTicket.id })
+                .eq('id', selectedPaymentForTransfer.id);
+
+            if (updateError) throw updateError;
+
+            alert(`Pago trasladado exitosamente al ticket ${targetTicket.client_ticket_number}.`);
+            setTransferModalOpen(false);
+            window.location.reload(); // Recargar para reflejar cambios
+        } catch (err: any) {
+            console.error('Error al trasladar pago:', err);
+            setTransferError("Ocurrió un error al trasladar el pago.");
+        } finally {
+            setIsTransferring(false);
+        }
+    };
+
 
     const finances = calculateTicketFinances(ticket, costos);
     const combinedPagos = [...finances.laborItems, ...finances.operatingItems].sort((a, b) => {
@@ -1649,6 +1695,37 @@ export const PaymentHistoryBar = memo(function PaymentHistoryBar({ ticket, costo
                             )}
 
                             {st === 'pagado' && <CheckCircle2 size={12} color="#10B981" style={{ flexShrink: 0 }} />}
+                            
+                            {/* Botón Trasladar Pago (Solo Admin) */}
+                            {isAdmin && (
+                                <button
+                                    onClick={() => {
+                                        setSelectedPaymentForTransfer(p);
+                                        setTargetTicketNumber("");
+                                        setTransferError("");
+                                        setTransferModalOpen(true);
+                                    }}
+                                    title="Trasladar/Reasignar pago a otro ticket"
+                                    style={{
+                                        background: '#FFF7ED',
+                                        border: '1px solid #FED7AA',
+                                        borderRadius: '6px',
+                                        padding: '3px 8px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        color: '#EA580C',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        flexShrink: 0,
+                                        marginLeft: '4px'
+                                    }}
+                                >
+                                    <ArrowRightLeft size={11} />
+                                    <span>Trasladar</span>
+                                </button>
+                            )}
                         </div>
                     );
                 })}
@@ -1705,6 +1782,103 @@ export const PaymentHistoryBar = memo(function PaymentHistoryBar({ ticket, costo
                         >
                             <X size={22} color="#1E293B" />
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Traslado de Pago */}
+            {transferModalOpen && (
+                <div
+                    style={{
+                        position: 'fixed', inset: 0,
+                        background: 'rgba(0,0,0,0.6)',
+                        zIndex: 1000000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        backdropFilter: 'blur(4px)',
+                    }}
+                >
+                    <div
+                        style={{
+                            background: 'white',
+                            padding: '24px',
+                            borderRadius: '12px',
+                            width: '400px',
+                            maxWidth: '90vw',
+                            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)'
+                        }}
+                    >
+                        <h3 style={{ margin: '0 0 16px 0', color: '#1E293B', fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <ArrowRightLeft size={20} color="#EA580C" />
+                            Trasladar Pago
+                        </h3>
+                        
+                        <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '16px', lineHeight: 1.5 }}>
+                            Estás a punto de reasignar el pago de <strong>S/ {selectedPaymentForTransfer?.monto}</strong> (
+                            {selectedPaymentForTransfer?.tipo || selectedPaymentForTransfer?.categoria}) a otro ticket.
+                        </p>
+                        
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                                Número de Ticket de Destino (Ej. TCK-00123)
+                            </label>
+                            <input
+                                type="text"
+                                value={targetTicketNumber}
+                                onChange={(e) => setTargetTicketNumber(e.target.value)}
+                                placeholder="TCK-..."
+                                style={{
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #CBD5E1',
+                                    fontSize: '14px',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+
+                        {transferError && (
+                            <div style={{ color: '#EF4444', fontSize: '12px', marginBottom: '16px', padding: '8px', background: '#FEF2F2', borderRadius: '6px' }}>
+                                {transferError}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button
+                                onClick={() => setTransferModalOpen(false)}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #E2E8F0',
+                                    background: 'white',
+                                    color: '#64748B',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                                disabled={isTransferring}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleTransferPayment}
+                                disabled={isTransferring || !targetTicketNumber.trim()}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: '#EA580C',
+                                    color: 'white',
+                                    fontWeight: 600,
+                                    cursor: isTransferring || !targetTicketNumber.trim() ? 'not-allowed' : 'pointer',
+                                    opacity: isTransferring || !targetTicketNumber.trim() ? 0.6 : 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                {isTransferring ? 'Trasladando...' : 'Confirmar Traslado'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
