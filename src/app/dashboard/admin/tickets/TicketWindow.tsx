@@ -733,6 +733,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                           || (prevStatusOrder < serverStatusOrder && isIntentionalRollback.current);
             const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada ?? safeMeta.modificacionAutorizada ?? prev.modificacionAutorizada ?? false);
             const finalSolicitudModificacion = ticket.solicitudModificacion ?? safeMeta.solicitudModificacion ?? prev.solicitudModificacion ?? false;
+            const finalSolicitud = safeMeta.solicitudAdelanto !== undefined ? safeMeta.solicitudAdelanto : (ticket.solicitudAdelanto ?? null);
             
             const finalStatusId = shouldPreservePrevState ? prev.status_id : corregidoEstadoId;
             return {
