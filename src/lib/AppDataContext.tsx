@@ -458,6 +458,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             pagoRechazado: incomingMeta.pagoRechazado !== undefined 
                                                 ? incomingMeta.pagoRechazado 
                                                 : existingMeta.pagoRechazado,
+                                            // Proteger aprobación de modificación: si el servidor no incluye
+                                            // estos campos en el payload, conservar el valor existente en caché
+                                            modificacionAutorizada: incomingMeta.modificacionAutorizada !== undefined
+                                                ? incomingMeta.modificacionAutorizada
+                                                : existingMeta.modificacionAutorizada,
+                                            solicitudModificacion: incomingMeta.solicitudModificacion !== undefined
+                                                ? incomingMeta.solicitudModificacion
+                                                : existingMeta.solicitudModificacion,
                                         };
                                         return {
                                             ...t,
@@ -476,6 +484,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                             pagoRechazado: mergedMeta.pagoRechazado,
                                             solicitudesDeposito: mergedMeta.solicitudesDeposito,
                                             adelantoPagado: mergedMeta.adelantoPagado,
+                                            modificacionAutorizada: mergedMeta.modificacionAutorizada,
+                                            solicitudModificacion: mergedMeta.solicitudModificacion,
                                         };
                                     })
                                     : old
