@@ -731,8 +731,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             const hasRejection = !!safeMeta.pagoRechazado;
             const shouldPreservePrevState = (prevStatusOrder > serverStatusOrder && !hasRejection && !isProcessingAdvance.current && !isIntentionalRollback.current)
                                           || (prevStatusOrder < serverStatusOrder && isIntentionalRollback.current);
-            const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada || safeMeta.modificacionAutorizada || prev.modificacionAutorizada);
-            const finalSolicitud = safeMeta.solicitudAdelanto !== undefined ? safeMeta.solicitudAdelanto : (ticket.solicitudAdelanto ?? null);
+            const finalModificacionAutorizada = isIntentionalRollback.current ? true : (ticket.modificacionAutorizada ?? safeMeta.modificacionAutorizada ?? prev.modificacionAutorizada ?? false);
+            const finalSolicitudModificacion = ticket.solicitudModificacion ?? safeMeta.solicitudModificacion ?? prev.solicitudModificacion ?? false;
+            
             const finalStatusId = shouldPreservePrevState ? prev.status_id : corregidoEstadoId;
             return {
                 ...prev,
@@ -787,6 +788,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                     solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago ?? prev.metadata?.solicitudPago ?? null),
                     solicitudLiquidacion: safeMeta.solicitudLiquidacion !== undefined ? safeMeta.solicitudLiquidacion : (prev.solicitudLiquidacion ?? prev.metadata?.solicitudLiquidacion ?? null),
                     solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
+                    modificacionAutorizada: finalModificacionAutorizada,
+                    solicitudModificacion: finalSolicitudModificacion,
                 },
                 solicitudAdelanto: finalSolicitud,
                 solicitudPago: safeMeta.solicitudPago !== undefined ? safeMeta.solicitudPago : (prev.solicitudPago ?? prev.metadata?.solicitudPago ?? null),
@@ -794,7 +797,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 solicitudesDeposito: safeMeta.solicitudesDeposito !== undefined ? safeMeta.solicitudesDeposito : (prev.solicitudesDeposito ?? prev.metadata?.solicitudesDeposito ?? null),
                 pagoRechazado: safeMeta.pagoRechazado !== undefined ? safeMeta.pagoRechazado : prev.pagoRechazado,
                 modificacionAutorizada: finalModificacionAutorizada,
-                solicitudModificacion: ticket.solicitudModificacion || safeMeta.solicitudModificacion || prev.solicitudModificacion,
+                solicitudModificacion: finalSolicitudModificacion,
                 visitPaymentConfirmed: visitConfirmed,
                 adelantoPagado: advanceConfirmed,
             };

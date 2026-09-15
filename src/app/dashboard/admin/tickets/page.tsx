@@ -936,7 +936,7 @@ function TicketCard({ ticket, onTicketClick, isDraggable, provided }: any) {
                     </span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    {ticket.metadata?.solicitudModificacion?.pendiente && (
+                    {(ticket.metadata?.solicitudModificacion === true || ticket.metadata?.solicitudModificacion?.pendiente) && (
                         <FileEdit size={14} color="#8B5CF6" />
                     )}
                     {ticket.estadoId === 'requiere_revision_admin' && (
