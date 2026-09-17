@@ -915,7 +915,8 @@ export default function AdminDashboard() {
     }, [activeTickets, gestoras, dateRange, now]);
 
     // ── CFO METRICS (STANDARD) ──────────────────────────────────────────
-    const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices), [invoices]);
+    // FIX H1: Pasar activeTickets para clasificar correctamente deudaOperativa (cierres) vs deudaAdelantos (activos)
+    const cfoAccountsReceivable = useMemo(() => calculateAccountsReceivable(invoices, activeTickets), [invoices, activeTickets]);
 
     // ── MÓDULO UNIFICADO DE ADMINISTRACIÓN DE COBRANZAS ────────────────
     const cobranzaItems = useMemo(() => {
@@ -972,9 +973,15 @@ export default function AdminDashboard() {
                 const servicio = tk.servicio || tk.service_type || tk.tipo_servicio || 'Servicio';
                 const fechaCreacion = tk.created_at || tk.createdAt || '';
                 const fechaCierre = tk.closure_date || '';
-                const monto = Number(tk.ingresos_reales || tk.total_quoted_amount || tk.montoFinal || tk.presupuesto_aprobado || tk._monto || 0);
+                
+                // Normalización rigurosa de base e IGV
+                const rawAmount = Number(tk.total_quoted_amount || tk.montoFinal || tk.monto_presupuesto || tk.ingresos_reales || tk._monto || 0);
+                const esMasIGV = tk.mas_igv === true || tk.incluye_igv === false;
+                const montoSinIGV = esMasIGV ? rawAmount : (rawAmount > 0 ? rawAmount / 1.18 : 0);
+                const montoConIGV = esMasIGV ? rawAmount * 1.18 : rawAmount;
 
-                const isCobrado = Boolean(tk.is_cobrado || tk.status === 'cobrado' || tk.metadata?.is_cobrado);
+                // FIX H2: Fuente canónica de estado de cobranza (estado_cobranza de BD + metadatos)
+                const isCobrado = tk.estado_cobranza === 'cobrado' || tk.metadata?.estado_cobranza === 'cobrado' || Boolean(tk.is_cobrado || tk.status === 'cobrado' || tk.metadata?.is_cobrado);
                 const ocNumber = tk.oc_number || tk.metadata?.oc_number || '';
                 const paidDate = tk.paid_date || tk.metadata?.fecha_cobro || null;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk.metadata?.tipo_cobro === 'evento_perdida';
@@ -988,8 +995,8 @@ export default function AdminDashboard() {
                     servicio,
                     fechaCreacion,
                     fechaCierre,
-                    monto,
-                    montoSinIGV: monto / 1.18,
+                    monto: round2(montoConIGV),
+                    montoSinIGV: round2(montoSinIGV),
                     status: isCobrado ? 'cobrada' : 'pendiente',
                     ocNumber: isEventoPerdida ? '' : ocNumber,
                     isEventoPerdida,
@@ -1008,6 +1015,17 @@ export default function AdminDashboard() {
 
     const cobranzaCountPendientes = useMemo(() => {
         return cobranzaItems.filter(i => i.status !== 'cobrada').length;
+    }, [cobranzaItems]);
+
+    // FIX H6: Contadores dedicados para tickets pendientes Sin Orden de Compra (Sin OC)
+    const cobranzaCountSinOC = useMemo(() => {
+        return cobranzaItems.filter(i => i.status !== 'cobrada' && !i.isEventoPerdida && (!i.ocNumber || !i.ocNumber.trim())).length;
+    }, [cobranzaItems]);
+
+    const cobranzaTotalSinOC = useMemo(() => {
+        return cobranzaItems
+            .filter(i => i.status !== 'cobrada' && !i.isEventoPerdida && (!i.ocNumber || !i.ocNumber.trim()))
+            .reduce((acc, i) => acc + i.monto, 0);
     }, [cobranzaItems]);
 
     const cobranzaTotalCobrado = useMemo(() => {
@@ -1113,15 +1131,13 @@ export default function AdminDashboard() {
         }
     };
     const cfoWip = useMemo(() => calculateWIP(activeTickets), [activeTickets]);
-    // Usa la utilidad total del mes (cerrados + en ejecución) para el EBITDA real
+    // FIX H8: EBITDA basado exclusivamente en la utilidad devengada real de tickets cerrados en el período
+    // (consistente con roi.utilidad), en lugar de sumar utilidad proyectada de tickets en curso.
     const cfoEbitda = useMemo(() => {
-        const inPeriod = activeTickets.filter((t: any) => {
-            const sid = normalizeStateId(t.status_id ?? t.estadoId);
-            return isTicketInPeriod(t) && !["ticket_rechazado", "ticket_cancelado", "anulado"].includes(sid);
-        });
-        const totalGrossProfit = inPeriod.reduce((sum: number, t: any) => sum + ticketUtilidad(t), 0);
+        const closedInPeriod = activeTickets.filter((t: any) => isClosedInPeriod(t));
+        const totalGrossProfit = closedInPeriod.reduce((sum: number, t: any) => sum + ticketUtilidad(t), 0);
         return calculateEBITDA(totalGrossProfit, expenses);
-    }, [activeTickets, expenses, isTicketInPeriod]);
+    }, [activeTickets, expenses, periodInfo, dateRange]);
 
     // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
     const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
@@ -1216,7 +1232,8 @@ export default function AdminDashboard() {
                 return;
             }
 
-            const amount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0);
+            // FIX H4: Usar base sin IGV consistente con roi.ingresos para evitar inflación del 18%
+            const amount = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0) / 1.18);
             if (amount > 0) {
                 if (!totalsMap[gestoraName]) {
                     totalsMap[gestoraName] = { name: gestoraName, value: 0 };
@@ -1262,20 +1279,23 @@ export default function AdminDashboard() {
                 return;
             }
 
-            const amount = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0);
-            if (amount <= 0) return;
+            const raw = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0);
+            const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
+            // FIX H4/H5: Normalización de base e IGV consistente
+            const neto = parseFloat(t.ingresos_reales ?? 0) || (esMasIGV ? raw : (raw > 0 ? raw / 1.18 : 0));
+            const total = esMasIGV ? raw * 1.18 : (raw || neto * 1.18);
+            const igv = total - neto;
+            if (total <= 0) return;
 
             if (!gestoresMapData[gestoraName]) {
                 gestoresMapData[gestoraName] = { gestor: gestoraName, netoCerrado: 0, igvCerrado: 0, montoActivos: 0 };
             }
 
             if (state === "ticket_cerrado") {
-                const neto = amount / 1.18;
-                const igv = amount - neto;
                 gestoresMapData[gestoraName].netoCerrado += neto;
                 gestoresMapData[gestoraName].igvCerrado += igv;
             } else {
-                gestoresMapData[gestoraName].montoActivos += amount;
+                gestoresMapData[gestoraName].montoActivos += neto;
             }
         });
 
@@ -2579,8 +2599,8 @@ export default function AdminDashboard() {
                         position: 'relative'
                     }} onClick={e => e.stopPropagation()}>
 
-                        {/* Top Indicator Cards (TOTAL POR COBRAR & TOTAL COBRADO) */}
-                        <div style={{ padding: '1.25rem 1.5rem 0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        {/* Top Indicator Cards (TOTAL POR COBRAR, PENDIENTES SIN OC, TOTAL COBRADO) */}
+                        <div style={{ padding: '1.25rem 1.5rem 0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                             {/* Card Total Por Cobrar */}
                             <div style={{
                                 background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.03) 100%)',
@@ -2589,11 +2609,27 @@ export default function AdminDashboard() {
                                 <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'rgba(239,68,68,0.8)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                                     TOTAL POR COBRAR
                                 </div>
-                                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#EF4444', marginTop: '0.2rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+                                <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#EF4444', marginTop: '0.2rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
                                     S/ {fmt(cobranzaTotalPorCobrar)}
                                 </div>
                                 <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.2rem', fontWeight: 600 }}>
                                     {cobranzaCountPendientes} ticket{cobranzaCountPendientes !== 1 ? 's' : ''}
+                                </div>
+                            </div>
+
+                            {/* Card Pendientes Sin OC (Eje 3 de Auditoría) */}
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.03) 100%)',
+                                border: '1px solid rgba(245,158,11,0.25)', borderRadius: '16px', padding: '1rem 1.25rem'
+                            }}>
+                                <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'rgba(245,158,11,0.8)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                                    PENDIENTES SIN OC
+                                </div>
+                                <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#F59E0B', marginTop: '0.2rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+                                    S/ {fmt(cobranzaTotalSinOC)}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.2rem', fontWeight: 600 }}>
+                                    {cobranzaCountSinOC} ticket{cobranzaCountSinOC !== 1 ? 's' : ''} sin OC
                                 </div>
                             </div>
 
@@ -2605,7 +2641,7 @@ export default function AdminDashboard() {
                                 <div style={{ fontSize: '0.68rem', fontWeight: 900, color: 'rgba(16,185,129,0.8)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                                     TOTAL COBRADO
                                 </div>
-                                <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#10B981', marginTop: '0.2rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+                                <div style={{ fontSize: '1.65rem', fontWeight: 900, color: '#10B981', marginTop: '0.2rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
                                     S/ {fmt(cobranzaTotalCobrado)}
                                 </div>
                                 <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.2rem', fontWeight: 600 }}>
@@ -2631,7 +2667,7 @@ export default function AdminDashboard() {
                                             fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer',
                                             transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px'
                                         }}>
-                                        📋 Pendientes ({cobranzaCountPendientes})
+                                        📋 Pendientes ({cobranzasSearch.trim() ? `${cobranzaFilteredList.length} de ${cobranzaCountPendientes}` : cobranzaCountPendientes})
                                     </button>
 
                                     <button
@@ -2643,7 +2679,7 @@ export default function AdminDashboard() {
                                             fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer',
                                             transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px'
                                         }}>
-                                        ✓ Historial ({cobranzaCountHistorial})
+                                        ✓ Historial ({cobranzasSearch.trim() ? `${cobranzaFilteredList.length} de ${cobranzaCountHistorial}` : cobranzaCountHistorial})
                                     </button>
                                 </div>
                             </div>

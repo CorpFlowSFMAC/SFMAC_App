@@ -21,7 +21,7 @@ describe('calculateTicketFinances', () => {
 
   test('Adelanto Operativo al MISMO tecnico del ticket se clasifica como LABOR (MO advance)', () => {
     const TECH_ID = 'tech-123';
-    const ticket: any = { labor_cost: 500, total_quoted_amount: 1500, technician_id: TECH_ID };
+    const ticket: any = { labor_cost: 500, total_quoted_amount: 1500, technician_id: TECH_ID, mas_igv: true };
     const costs: any[] = [
       // Adelanto al mismo tecnico → LABOR
       { id: 'a1', monto: 200, estado_pago: 'pagado', concepto: 'Adelanto Operativo (MANO DE OBRA)', categoria: 'Adelanto Operativo', specialist_id: TECH_ID },
@@ -41,7 +41,7 @@ describe('calculateTicketFinances', () => {
   test('Adelanto a tecnico DIFERENTE (externo) se clasifica como OPERATING', () => {
     const MAIN_TECH = 'tech-main';
     const EXT_TECH  = 'tech-ext';
-    const ticket: any = { labor_cost: 500, total_quoted_amount: 1500, technician_id: MAIN_TECH };
+    const ticket: any = { labor_cost: 500, total_quoted_amount: 1500, technician_id: MAIN_TECH, mas_igv: true };
     const costs: any[] = [
       // Adelanto a tecnico externo → OPERATING
       { id: 'b1', monto: 200, estado_pago: 'pagado', concepto: 'Adelanto externo', categoria: 'Adelanto Operativo', specialist_id: EXT_TECH },
@@ -70,5 +70,35 @@ describe('calculateTicketFinances', () => {
     expect(res.totalOpConfirmed).toBe(150);
     // netLaborBalance = pactedMO - totalLaborConfirmed (pactedMO defaults to labor_cost 1000)
     expect(res.netLaborBalance).toBe(600);
+  });
+});
+
+describe('Auditoria de Métricas - Reglas Financieras', () => {
+  test('isConfirmedTicketCostStatus excludes "aprobado" from confirmed cash-outs (H7)', () => {
+    const { isConfirmedTicketCostStatus, APPROVED_PENDING_STATUSES } = require('../calculations');
+    expect(isConfirmedTicketCostStatus('pagado')).toBe(true);
+    expect(isConfirmedTicketCostStatus('transferido')).toBe(true);
+    expect(isConfirmedTicketCostStatus('abonado')).toBe(true);
+    // "aprobado" no debe ser considerado pago completado/dinero girado
+    expect(isConfirmedTicketCostStatus('aprobado')).toBe(false);
+    expect(APPROVED_PENDING_STATUSES.has('aprobado')).toBe(true);
+  });
+
+  test('calculateAccountsReceivable classifies deudaOperativa vs deudaAdelantos using activeTickets (H1)', () => {
+    const { calculateAccountsReceivable } = require('../calculations');
+    const invoices = [
+      { id: 'inv-1', ticket_id: 't-closed', amount_total: 1000, status: 'emitida', created_at: new Date().toISOString() },
+      { id: 'inv-2', ticket_id: 't-active', amount_total: 500, status: 'emitida', created_at: new Date().toISOString() },
+    ];
+    const activeTickets = [
+      { id: 't-closed', status_id: 'ticket_cerrado' },
+      { id: 't-active', status_id: 'en_ejecucion' },
+    ];
+
+    const res = calculateAccountsReceivable(invoices, activeTickets);
+    expect(res.deudaOperativa).toBe(1000);
+    expect(res.deudaAdelantos).toBe(500);
+    expect(res.cierresPendientes.length).toBe(1);
+    expect(res.adelantosPendientes.length).toBe(1);
   });
 });

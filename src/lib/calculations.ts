@@ -32,11 +32,17 @@ export const extractIGV = (ticket: any): number => {
 // ESTADO DE PAGO CONFIRMADO
 // ─────────────────────────────────────────────────────────────────────────────
 
+// FIX H7: "aprobado" ELIMINADO — aprobado = solicitud aceptada por admin, NO dinero girado.
+// Un ticket_cost con estado_pago='aprobado' aún está pendiente en Tesorería.
+// Incluirlo como cash-out confirmado reducía artificialmente el margen operativo ~10-15%.
 const CONFIRMED_STATUSES = new Set([
     "pagado", "abonado", "confirmado", "auditado",
-    "ejecutado", "autorizado admin", "autorizado", "aprobado",
+    "ejecutado", "autorizado admin", "autorizado",
     "transferido", "completado", "depósito", "deposito",
 ]);
+
+/** Costos aprobados por admin pero pendientes de pago físico en Tesorería. */
+export const APPROVED_PENDING_STATUSES = new Set(["aprobado", "requiere_aprobacion_admin"]);
 
 export const isConfirmedTicketCostStatus = (status: string | null | undefined): boolean => {
     const s = (status || "").toLowerCase().trim();
@@ -156,15 +162,19 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
 
     const commercialRound = (val: number) => Math.round(val * 100) / 100;
 
-    // Regla de Oro Inmutable: TODO TICKET aplica IGV matemáticamente hacia adelante, SIN EXCEPCIÓN.
-    // Se elimina la dependencia de flags legacy como 'has_igv' o 'aplicaIGV'.
+    // Regla de Oro: Si trae IGV explícito en campos de ticket, respetarlo; de lo contrario aplicar cálculo por flag
+    const explicitIGV = extractIGV(ticket);
     const esMasIGV = ticket.mas_igv === true || ticket.incluye_igv === false;
 
     let montoBase = 0;
     let igvCalculado = 0;
     let totalGeneral = 0;
 
-    if (esMasIGV) {
+    if (explicitIGV > 0 && explicitIGV < rawAmount) {
+        montoBase = commercialRound(rawAmount - explicitIGV);
+        igvCalculado = explicitIGV;
+        totalGeneral = rawAmount;
+    } else if (esMasIGV) {
         // SI EL PRECIO ES MÁS IGV
         montoBase = rawAmount;
         igvCalculado = commercialRound(montoBase * 0.18);

@@ -194,10 +194,10 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth(); // 0-11
         
-        // Cobros del mes actual (usando created_at como fecha de registro)
+        // Cobros del mes actual (usando paid_date como fecha real de cobro, fallback created_at)
         const cobrosMesActual = collectedInvoices
             .filter(inv => {
-                const regDate = new Date(inv.created_at);
+                const regDate = new Date(inv.paid_date ?? inv.created_at);
                 return regDate.getFullYear() === currentYear && regDate.getMonth() === currentMonth;
             });
         
@@ -209,7 +209,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
         
         const cobrosMesAnterior = collectedInvoices
             .filter(inv => {
-                const regDate = new Date(inv.created_at);
+                const regDate = new Date(inv.paid_date ?? inv.created_at);
                 return regDate.getFullYear() === añoMesAnterior && regDate.getMonth() === mesAnterior;
             });
         
