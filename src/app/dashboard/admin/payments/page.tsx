@@ -1074,9 +1074,7 @@ export default function PaymentsPage() {
                 
                 showToast('❌ Pago denegado y estado del ticket revertido.');
                 
-                // Invalidación inmediata para sincronización admin ↔ gestor
-                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+                // Invalidación para sincronización admin ↔ gestor
                 await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
                 
                 refresh();
@@ -1175,9 +1173,7 @@ export default function PaymentsPage() {
             // ★ NUEVO: Notificación Realtime para la gestora
             showToast(`❌ Solicitud de pago denegada. El ticket ha vuelto a su estado anterior.`);
             
-            // Invalidación inmediata para sincronización admin ↔ gestor
-            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+            // Invalidación para sincronización admin ↔ gestor
             await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             
             refresh();
@@ -1223,8 +1219,6 @@ export default function PaymentsPage() {
 
             showToast('🗑️ Registro de pago eliminado');
             
-            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
             
             refresh();
@@ -1718,12 +1712,8 @@ export default function PaymentsPage() {
                     return g;
                 }));
 
-                // Invalidación inmediata de todas las queries de tickets
+                // Invalidación para sincronización instantánea
                 await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-                await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-                await queryClient.invalidateQueries({ queryKey: ['payments'] });
-                await queryClient.invalidateQueries({ queryKey: ['tickets'] });
                 
                 refresh();
                 return;
@@ -1930,12 +1920,8 @@ export default function PaymentsPage() {
                 return g;
             }));
 
-            // Invalidación inmediata de todas las queries de tickets
+            // Invalidación para sincronización instantánea post-pago
             await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-            await queryClient.invalidateQueries({ queryKey: ['payments'] });
-            await queryClient.invalidateQueries({ queryKey: ['tickets'] });
             
             refresh();
         } catch (err: any) {

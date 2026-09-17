@@ -328,8 +328,8 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
 
             if (insertError) throw insertError;
 
-            // PASO 3: Invalidar caché de React Query para forzar re-fetch
-            queryClient.invalidateQueries({ queryKey: queryKeys.tickets });
+            // Invalidar caché de React Query para forzar re-fetch
+            queryClient.invalidateQueries({ queryKey: queryKeys.tickets.all });
 
             // Reemplazar invoice temporal con el real
             setInvoices(prev => prev.map(inv => inv.id === tempInvoiceId ? createdInvoice : inv));

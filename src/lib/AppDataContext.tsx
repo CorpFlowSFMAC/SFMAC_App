@@ -22,8 +22,63 @@ import {
 } from "@/lib/useQueryHooks";
 
 // ─────────────────────────────────────────────
-// TIPOS DEL CONTEXTO (misma interfaz pública de siempre)
+// mergeTicketMetadata — Función pura reutilizable
+// Fusiona metadata existente con metadata entrante del servidor,
+// preservando campos críticos (solicitudes, pagos) y respetando
+// limpiezas intencionales (server envia null para limpiar).
+// Se usa en el canal WebSocket UPDATE y en updateTicket para
+// evitar tener la misma lógica triplicada.
 // ─────────────────────────────────────────────
+function mergeTicketMetadata(existingMeta: any, incomingMeta: any): any {
+    const incoming = incomingMeta || {};
+    const existing = existingMeta || {};
+
+    // Detectar si el servidor limpia un campo (envia null o explícitamente lo incluye como null)
+    const serverClearedAdelanto = incoming.solicitudAdelanto === null || (
+        'solicitudAdelanto' in incoming && !incoming.solicitudAdelanto
+    );
+    const serverClearedPagoVista = incoming.solicitudPago === null || (
+        'solicitudPago' in incoming && !incoming.solicitudPago
+    );
+
+    return {
+        ...existing,
+        ...incoming,
+        // Adelanto: si el servidor limpia (null), respetar; si incluye valor, usar ese; sino conservar existente
+        solicitudAdelanto: serverClearedAdelanto
+            ? null
+            : ('solicitudAdelanto' in incoming ? incoming.solicitudAdelanto : existing.solicitudAdelanto),
+        // Pago de Visita: misma lógica
+        solicitudPago: serverClearedPagoVista
+            ? null
+            : ('solicitudPago' in incoming ? incoming.solicitudPago : existing.solicitudPago),
+        // Liquidación: incoming gana, sino conservar existente
+        solicitudLiquidacion: 'solicitudLiquidacion' in incoming
+            ? incoming.solicitudLiquidacion
+            : existing.solicitudLiquidacion,
+        // Solicitudes de depósito
+        solicitudesDeposito: 'solicitudesDeposito' in incoming
+            ? incoming.solicitudesDeposito
+            : existing.solicitudesDeposito,
+        // Adelanto pagado
+        adelantoPagado: 'adelantoPagado' in incoming
+            ? incoming.adelantoPagado
+            : existing.adelantoPagado,
+        // Pago rechazado
+        pagoRechazado: 'pagoRechazado' in incoming
+            ? incoming.pagoRechazado
+            : existing.pagoRechazado,
+        // Modificación autorizada — conservar si el servidor no lo incluye
+        modificacionAutorizada: 'modificacionAutorizada' in incoming
+            ? incoming.modificacionAutorizada
+            : existing.modificacionAutorizada,
+        solicitudModificacion: 'solicitudModificacion' in incoming
+            ? incoming.solicitudModificacion
+            : existing.solicitudModificacion,
+    };
+}
+
+
 interface AppDataContextType {
     // Clients
     clients: any[];
@@ -203,9 +258,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     // ── Refresh = invalidar caché → TanStack refetch automáticamente ──
     const refreshTickets = useCallback(async () => {
-        // Invalidar todas las queries de tickets incluyendo pagos
-        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
-        await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+        // Invalidar todas las queries de tickets en una sola llamada (TanStack Query agrupa internamente)
         await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
     }, [queryClient]);
 
@@ -419,54 +472,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                         }
 
                                         const statusId = pNew.status_id || t.status_id;
-                                        const incomingMeta = pNew.metadata || {};
-                                        const existingMeta = t.metadata || {};
-                                        
-                                        // ★ FIX: Merge metadata con protección contra null del servidor
-                                        // Si el servidor tiene null (rechazado/limpio), ese null debe win sobre valores stale
-                                        const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
-                                        const incomingHasPagoVista = incomingMeta.solicitudPago !== undefined;
-                                        const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
-                                        const existingHasPagoVista = existingMeta.solicitudPago !== undefined;
-                                        
-                                        // Si el servidor tiene null (rechazado), ese null wins
-                                        const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
-                                        const serverClearedPagoVista = incomingMeta.solicitudPago === null || (incomingHasPagoVista && !incomingMeta.solicitudPago);
-                                        
-                                        const mergedMeta = {
-                                            ...existingMeta,
-                                            ...incomingMeta,
-                                            // Si el servidor tiene null (rechazado), usar null del servidor
-                                            solicitudAdelanto: serverClearedAdelanto 
-                                                ? null 
-                                                : (incomingHasAdelanto 
-                                                    ? incomingMeta.solicitudAdelanto 
-                                                    : (existingHasAdelanto 
-                                                        ? existingMeta.solicitudAdelanto 
-                                                        : undefined)),
-                                            solicitudPago: serverClearedPagoVista 
-                                                ? null 
-                                                : (incomingHasPagoVista 
-                                                    ? incomingMeta.solicitudPago 
-                                                    : (existingHasPagoVista 
-                                                        ? existingMeta.solicitudPago 
-                                                        : undefined)),
-                                            solicitudLiquidacion: incomingMeta.solicitudLiquidacion !== undefined
-                                                ? incomingMeta.solicitudLiquidacion
-                                                : existingMeta.solicitudLiquidacion,
-                                            // Otros campos del incoming siempre ganan
-                                            pagoRechazado: incomingMeta.pagoRechazado !== undefined 
-                                                ? incomingMeta.pagoRechazado 
-                                                : existingMeta.pagoRechazado,
-                                            // Proteger aprobación de modificación: si el servidor no incluye
-                                            // estos campos en el payload, conservar el valor existente en caché
-                                            modificacionAutorizada: incomingMeta.modificacionAutorizada !== undefined
-                                                ? incomingMeta.modificacionAutorizada
-                                                : existingMeta.modificacionAutorizada,
-                                            solicitudModificacion: incomingMeta.solicitudModificacion !== undefined
-                                                ? incomingMeta.solicitudModificacion
-                                                : existingMeta.solicitudModificacion,
-                                        };
+                                        // ★ Usar función centralizada de merge (elimina duplicación)
+                                        const mergedMeta = mergeTicketMetadata(t.metadata, pNew.metadata);
                                         return {
                                             ...t,
                                             ...pNew,
@@ -537,48 +544,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     }
                                 }
 
-                                const incomingMeta = pNew.metadata || {};
-                                const existingMeta = old.metadata || {};
-                                
-                                // ★ FIX: Segunda ubicación - misma lógica de protección
-                                const incomingHasAdelanto = incomingMeta.solicitudAdelanto !== undefined;
-                                const incomingHasPagoVista = incomingMeta.solicitudPago !== undefined;
-                                const existingHasAdelanto = existingMeta.solicitudAdelanto !== undefined;
-                                const existingHasPagoVista = existingMeta.solicitudPago !== undefined;
-                                
-                                const serverClearedAdelanto = incomingMeta.solicitudAdelanto === null || (incomingHasAdelanto && !incomingMeta.solicitudAdelanto);
-                                const serverClearedPagoVista = incomingMeta.solicitudPago === null || (incomingHasPagoVista && !incomingMeta.solicitudPago);
-                                
-                                const mergedMeta = {
-                                    ...existingMeta,
-                                    ...incomingMeta,
-                                    solicitudAdelanto: serverClearedAdelanto 
-                                        ? null 
-                                        : (incomingHasAdelanto 
-                                            ? incomingMeta.solicitudAdelanto 
-                                            : (existingHasAdelanto 
-                                                ? existingMeta.solicitudAdelanto 
-                                                : undefined)),
-                                    solicitudPago: serverClearedPagoVista 
-                                        ? null 
-                                        : (incomingHasPagoVista 
-                                            ? incomingMeta.solicitudPago 
-                                            : (existingHasPagoVista 
-                                                ? existingMeta.solicitudPago 
-                                                : undefined)),
-                                    solicitudLiquidacion: incomingMeta.solicitudLiquidacion !== undefined
-                                        ? incomingMeta.solicitudLiquidacion
-                                        : existingMeta.solicitudLiquidacion,
-                                    solicitudesDeposito: incomingMeta.solicitudesDeposito !== undefined
-                                        ? incomingMeta.solicitudesDeposito
-                                        : existingMeta.solicitudesDeposito,
-                                    adelantoPagado: incomingMeta.adelantoPagado !== undefined
-                                        ? incomingMeta.adelantoPagado
-                                        : existingMeta.adelantoPagado,
-                                    pagoRechazado: incomingMeta.pagoRechazado !== undefined 
-                                        ? incomingMeta.pagoRechazado 
-                                        : existingMeta.pagoRechazado,
-                                };
+                                // ★ Usar función centralizada de merge (elimina duplicación)
+                                const mergedMeta = mergeTicketMetadata(old.metadata, pNew.metadata);
                                 return {
                                     ...old,
                                     ...pNew,
@@ -638,7 +605,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     const payloadCost = payload.new as any;
                                     
                                     if (payload.eventType === 'DELETE') {
-                                        return { ...t, costos: currentCosts.filter(c => c.id !== (payload.old as any).id) };
+                                        return { ...t, ticket_costs: currentCosts.filter(c => c.id !== (payload.old as any).id) };
                                     }
                                     
                                     const existingIdx = currentCosts.findIndex(c => c.id === payloadCost.id);
@@ -647,7 +614,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     } else if (payloadCost.id) {
                                         currentCosts.push(payloadCost);
                                     }
-                                    return { ...t, costos: currentCosts };
+                                    return { ...t, ticket_costs: currentCosts };
                                 }
                                 return t;
                             });
@@ -920,33 +887,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                     old
                         ? old.map((t) => {
                             if (t.id !== id) return t;
-                            // Merge: preservar metadata critica del cache que el API no devuelve
-                            const existingMeta = t.metadata || {};
-                            const newMeta = normalized?.metadata || {};
-                            const mergedMeta = {
-                                ...existingMeta,
-                                ...newMeta,
-                                // Campos criticos: si el nuevo valor es null/undefined, y no es una limpieza intencional, conservar el existente.
-                                // Pero si el admin está limpiando (set a null), debemos respetarlo.
-                                solicitudAdelanto: newMeta.solicitudAdelanto !== undefined
-                                    ? newMeta.solicitudAdelanto
-                                    : existingMeta.solicitudAdelanto,
-                                solicitudPago: newMeta.solicitudPago !== undefined
-                                    ? newMeta.solicitudPago
-                                    : existingMeta.solicitudPago,
-                                solicitudLiquidacion: newMeta.solicitudLiquidacion !== undefined
-                                    ? newMeta.solicitudLiquidacion
-                                    : existingMeta.solicitudLiquidacion,
-                                pagoRechazado: newMeta.pagoRechazado !== undefined
-                                    ? newMeta.pagoRechazado
-                                    : existingMeta.pagoRechazado,
-                                solicitudesDeposito: newMeta.solicitudesDeposito !== undefined
-                                    ? newMeta.solicitudesDeposito
-                                    : existingMeta.solicitudesDeposito,
-                                adelantoPagado: newMeta.adelantoPagado !== undefined
-                                    ? newMeta.adelantoPagado
-                                    : existingMeta.adelantoPagado,
-                            };
+                            // ★ Usar función centralizada de merge (elimina duplicación)
+                            const mergedMeta = mergeTicketMetadata(t.metadata, normalized?.metadata);
                             return {
                                 ...t,
                                 ...normalized,
@@ -957,7 +899,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                                     : (normalized?.technician_id || t.technician_id),
                                 tecnico: normalized?.tecnico || t.tecnico,
                                 technicians: normalized?.technicians || t.technicians,
-                                gesteora: normalized?.gestora || t.gestora,
+                                gestora: normalized?.gestora || t.gestora,
                                 cliente: normalized?.cliente || t.cliente,
                                 sede: normalized?.sede || t.sede,
                                 status_id: finalUpdates.status_id || normalized?.status_id || t.status_id,
