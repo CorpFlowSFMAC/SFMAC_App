@@ -111,6 +111,11 @@ function classifyItem(item: any): CostClass {
     // ── Regla 2: Categoría laboral + regla relacional ────────────────────────
     // Solo 'Mano de Obra', 'Rescate Financiero', etc. se resuelven por relación
     if (LABOR_CATEGORIES.has(cat)) {
+        // Blindaje contra errores humanos de tipificación: Si el concepto dice explícitamente compra/materiales
+        // (ej. "COMPRA DE BOMBA", "COMPRA DE MATERIALES", "COMPRA MAT"), es gasto operativo, no mano de obra del técnico.
+        const isPurchaseConcept = OPERATING_KEYWORDS.some(k => con.includes(k)) && !LABOR_KEYWORDS.some(k => con.includes(k));
+        if (isPurchaseConcept) return "operating";
+
         if (sid && mid) return sid === mid ? "labor" : "operating";
         // Fallback por keyword si no hay IDs
         if (LABOR_KEYWORDS.some(k => text.includes(k))) return "labor";
