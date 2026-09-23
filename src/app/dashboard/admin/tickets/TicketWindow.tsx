@@ -873,6 +873,11 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
     const lastSyncData = useRef<string>("");
     const advanceTransactionToken = useRef<string | null>(null);
     const liquidationTransactionToken = useRef<string | null>(null);
+    // FIX [MB011913.26]: Candado sincrónico anti doble-submit.
+    // React setState es asíncrono — dos clics rápidos pueden pasar la guardia
+    // de isSubmittingLiquidation antes del re-render. Un useRef es sincrónico
+    // y se establece en el mismo tick del event loop, previniendo la carrera.
+    const isLiquidationInFlight = useRef(false);
     const confirmAdvanceRef = useRef(false); // sigue siendo bool; solo para admin confirm
     const [isSubmittingAdvance, setIsSubmittingAdvance] = useState(false);
     const [isSubmittingLiquidation, setIsSubmittingLiquidation] = useState(false);
@@ -2155,13 +2160,17 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
     };
     const handleActualLiquidation = async () => {
         // =====================================================================
-        // 🔐 RACE CONDITION GUARD: Disable button IMMEDIATELY to prevent double-clicks
+        // 🔐 RACE CONDITION GUARD — FIX [MB011913.26]
+        // Candado SINCRÓNICO (useRef) como primera línea de defensa.
+        // React setState es asíncrono: dos clics rápidos pueden pasar
+        // isSubmittingLiquidation antes del re-render. El ref es inmediato.
         // =====================================================================
-        if (isSubmittingLiquidation || isSavingNegotiation) {
-            console.warn('[handleActualLiquidation] Doble clic detectado. Abortando.');
+        if (isLiquidationInFlight.current || isSubmittingLiquidation || isSavingNegotiation) {
+            console.warn('[handleActualLiquidation] Doble clic detectado (candado sincrónico). Abortando.');
             return;
         }
-        
+        isLiquidationInFlight.current = true; // ← candado atómico sincrónico
+
         // ✅ CANDADO 2 (Server-side): segunda línea de defensa por si el modal se abrió por otro flujo.
         if (!isSantander && !isClientTicketFormatValid(ticketData.client_ticket_number)) {
             showToast(
@@ -2170,6 +2179,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 "error"
             );
             setShowLiquidationConfirm(false);
+            isLiquidationInFlight.current = false; // liberar candado en salida anticipada
             return;
         }
         const txToken = generateTransactionToken();
@@ -2223,9 +2233,16 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                     const tokenAlreadyProcessed = (existingCosts || []).some(
                         (c: any) => c.transaction_token === txToken
                     );
-                    if (tokenAlreadyProcessed) {
+                    // 🛡️ ANTI-DUPLICADO ESTRICTO: Si ya existe un costo de liquidación pendiente con monto idéntico, reutilizarlo
+                    const existingPendingLiquidation = (existingCosts || []).some(
+                        (c: any) => (c.estado_pago || '').toLowerCase() === 'pendiente' &&
+                                    (c.categoria || '').toLowerCase().includes('mano de obra') &&
+                                    (c.concepto || '').toLowerCase().includes('liquidación') &&
+                                    Math.abs(Number(c.monto) - Number(amount)) < 0.01
+                    );
+                    if (tokenAlreadyProcessed || existingPendingLiquidation) {
                         costCreated = true;
-                        console.warn('[handleActualLiquidation] Token ya procesado (idempotente):', txToken);
+                        console.warn('[handleActualLiquidation] Costo de liquidación ya existente o token procesado:', { txToken, existingPendingLiquidation });
                     } else {
                         await ticketCostsAPI.create({
                             ticket_id: currentTicketId,
@@ -2321,6 +2338,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             console.error("Error in liquidation request:", err);
             showToast("Error", "No se pudo procesar la liquidación. Intente nuevamente.", "error");
         } finally {
+            isLiquidationInFlight.current = false;
             setIsSavingNegotiation(false);
             setIsSubmittingLiquidation(false);
             liquidationTransactionToken.current = null;
