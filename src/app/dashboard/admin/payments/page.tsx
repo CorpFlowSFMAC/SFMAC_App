@@ -742,9 +742,34 @@ export default function PaymentsPage() {
                 // 1. Identificar ítems PENDIENTES (No están en finances.laborItems ni finances.operatingItems porque no están confirmados)
                 
                 // A. Costos de Tabla Pendientes
+                // ─────────────────────────────────────────────────────────────
+                // FIX [STD0011.26]: GUARDIA ANTI-ZOMBIE DE SALDO MO
+                // Si un costo pendiente es de categoría Mano de Obra / Rescate
+                // y el netLaborBalance calculado por el motor financiero ya es ≤ 0,
+                // el costo es un duplicado zombie (el saldo ya fue cubierto por
+                // otro mecanismo de pago). NO se agrega a pendingItems.
+                // ⚠ Sincronizado con LABOR_CATEGORIES en @/lib/calculations.ts
+                // ─────────────────────────────────────────────────────────────
+                const LABOR_CATS_LC = [
+                    'mano de obra', 'rescate financiero', 'rescate',
+                    'honorarios', 'bono', 'adelanto', 'adelanto operativo',
+                ];
                 (t.ticket_costs || []).forEach((c: any) => {
                     const st = (c.estado_pago || '').toUpperCase();
                     if (st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN') {
+                        const catLC = (c.categoria || '').toLowerCase().trim();
+                        const isLaborCost = LABOR_CATS_LC.some(lc => catLC.includes(lc));
+
+                        // GUARDIA: omitir costos de MO cuando el saldo ya está cubierto
+                        if (isLaborCost && netLaborBalance <= 0) {
+                            console.warn(
+                                `[Tesorería] GUARDIA SALDO: Costo pendiente de MO omitido (zombie). ` +
+                                `Ticket=${t.client_ticket_number || t.id} | CostID=${c.id} | ` +
+                                `Monto=S/${c.monto} | netLaborBalance=${netLaborBalance}`
+                            );
+                            return; // skip — saldo ya cubierto
+                        }
+
                         const isSpecialist = c.specialist_id && c.specialist_id !== t.technician_id;
                         const specialistName = isSpecialist ? (c.technicians?.name || c.proveedor || 'Especialista') : undefined;
 
@@ -830,9 +855,15 @@ export default function PaymentsPage() {
                 const liqInHistory = liqMonto > 0 && laborItems.some(i => (i.concepto || i.tipo || '').toLowerCase().includes('liquidación') && Math.abs(i.monto - liqMonto) < 1);
 
                 // V3: detectar solicitudes pendientes — solo fuentes oficiales (ticket_costs + metadata estructurada)
+                // FIX [STD0011.26]: excluye costos MO zombie para no bloquear la liquidación automática.
                 const hasCostPending = (t.ticket_costs || []).some((c: any) => {
                     const st = (c.estado_pago || '').toUpperCase();
-                    return st === 'PENDIENTE' || st === 'REQUIERE_APROBACION_ADMIN';
+                    if (st !== 'PENDIENTE' && st !== 'REQUIERE_APROBACION_ADMIN') return false;
+                    // Excluir costos MO zombie (saldo ya cubierto por el motor financiero)
+                    const catLC = (c.categoria || '').toLowerCase().trim();
+                    const isLaborCost = LABOR_CATS_LC.some(lc => catLC.includes(lc));
+                    if (isLaborCost && netLaborBalance <= 0) return false;
+                    return true;
                 });
                 const hasPendingRequests = (meta.solicitudAdelanto && !adelantoInHistory) || 
                                            (meta.solicitudPago && !pagoInHistory) || 
@@ -2556,74 +2587,101 @@ export default function PaymentsPage() {
                                         </div>
 
                                         {/* SOLICITUDES ACTUALES (BOTONES REDUCIDOS) */}
-                                        <div style={{ padding: '12px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            {group.items.length === 0 ? (
-                                                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>No hay solicitudes de pago actuales</p>
-                                            ) : (
-                                                group.items.map((item, idx) => {
-                                                    const isPending = item.estado === 'pendiente';
-                                                    const typeCfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F1F5F9', label: item.tipo };
-                                                    
-                                                    return (
-                                                        <div key={idx} style={{ 
-                                                            background: isPending ? '#FFFBEB' : '#FFFFFF',
-                                                            border: isPending ? '1px solid #FCD34D' : '1px solid #F1F5F9',
-                                                            borderRadius: '8px', padding: '8px 12px',
-                                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                                        }}>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                <span style={{ 
-                                                                    fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
-                                                                    background: typeCfg.bg, color: typeCfg.color, width: 'fit-content'
+                                        {(() => {
+                                            // ── Hoisted: constantes fuera del map() para evitar recreación por ítem ──
+                                            // FIX [STD0011.26]: sincronizado con LABOR_CATS_LC del backend
+                                            const MO_TIPO_KEYS_RENDER = [
+                                                'liquidación', 'liquidacion', 'mano de obra',
+                                                'rescate', 'honorarios', 'bono', 'adelanto',
+                                            ];
+                                            const saldoManoDeObra = group.saldoPendiente ?? 0;
+                                            return (
+                                                <div style={{ padding: '12px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    {group.items.length === 0 ? (
+                                                        <p style={{ margin: 0, fontSize: '0.75rem', color: '#94A3B8', fontStyle: 'italic', textAlign: 'center' }}>No hay solicitudes de pago actuales</p>
+                                                    ) : (
+                                                        group.items.map((item, idx) => {
+                                                            const isPending = item.estado === 'pendiente';
+                                                            const typeCfg = TIPO_CONFIG[item.tipo] || { color: '#64748B', bg: '#F1F5F9', label: item.tipo };
+
+                                                            // GUARDIA ESTRICTA DE RENDERIZADO MO [STD0011.26]
+                                                            // Última línea de defensa en la capa UI:
+                                                            // si saldoPendiente ≤ 0, el ítem de MO es zombie — no mostrar botones.
+                                                            const isMOItem = MO_TIPO_KEYS_RENDER.some(k =>
+                                                                (item.tipo || '').toLowerCase().includes(k) ||
+                                                                (item.categoria || '').toLowerCase().includes(k) ||
+                                                                (item.concepto || '').toLowerCase().includes(k)
+                                                            );
+                                                            const isZombieMOItem = isPending && isMOItem && saldoManoDeObra <= 0;
+
+                                                            return (
+                                                                <div key={idx} style={{ 
+                                                                    background: isZombieMOItem ? '#F0FDF4' : (isPending ? '#FFFBEB' : '#FFFFFF'),
+                                                                    border: isZombieMOItem ? '1px solid #BBF7D0' : (isPending ? '1px solid #FCD34D' : '1px solid #F1F5F9'),
+                                                                    borderRadius: '8px', padding: '8px 12px',
+                                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                                                 }}>
-                                                                    {typeCfg.label}
-                                                                </span>
-                                                                <span style={{ fontSize: '1rem', fontWeight: 800, color: '#1E293B' }}>S/ {formatSoles(item.monto)}</span>
-                                                                {item.concepto && <span style={{ fontSize: '0.65rem', color: '#64748B', fontStyle: 'italic' }}>{item.concepto}</span>}
-                                                            </div>
-                                                            
-                                                            <div style={{ display: 'flex', gap: '6px' }}>
-                                                                {isPending ? (
-                                                                    <>
-                                                                        <button 
-                                                                            onClick={() => handleSmartPayment(group, item)}
-                                                                            style={{ 
-                                                                                background: '#10B981', color: 'white', border: 'none', 
-                                                                                borderRadius: '6px', padding: '6px 12px', fontWeight: 700,
-                                                                                fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
-                                                                            }}
-                                                                        >
-                                                                            <CheckCircle2 size={12} /> Pagar
-                                                                        </button>
-                                                                        <button 
-                                                                            onClick={() => handleDenyPayment(group, item)}
-                                                                            style={{ 
-                                                                                background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', 
-                                                                                borderRadius: '6px', padding: '6px 8px', fontWeight: 700,
-                                                                                fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center'
-                                                                            }}
-                                                                        >
-                                                                            Denegar
-                                                                        </button>
-                                                                    </>
-                                                                ) : (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                                                                        <div style={{ color: '#10B981' }}><CheckCircle2 size={16} /></div>
-                                                                        <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
-                                                                        {item.voucherRef && (
-                                                                            <button onClick={() => setShowVoucher(item.voucherRef || null)}
-                                                                                style={{ fontSize: '0.6rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
-                                                                                VOUCHER
-                                                                            </button>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                        <span style={{ 
+                                                                            fontSize: '0.6rem', fontWeight: 800, padding: '1px 6px', borderRadius: '4px',
+                                                                            background: typeCfg.bg, color: typeCfg.color, width: 'fit-content'
+                                                                        }}>
+                                                                            {typeCfg.label}
+                                                                        </span>
+                                                                        <span style={{ fontSize: '1rem', fontWeight: 800, color: '#1E293B' }}>S/ {formatSoles(item.monto)}</span>
+                                                                        {item.concepto && <span style={{ fontSize: '0.65rem', color: '#64748B', fontStyle: 'italic' }}>{item.concepto}</span>}
+                                                                    </div>
+                                                                    
+                                                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                                                        {isZombieMOItem ? (
+                                                                            /* Saldo MO ya cubierto — no se puede volver a pagar */
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                                                                <div style={{ color: '#10B981' }}><CheckCircle2 size={16} /></div>
+                                                                                <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#059669' }}>SALDO CUBIERTO</span>
+                                                                            </div>
+                                                                        ) : isPending ? (
+                                                                            <>
+                                                                                <button 
+                                                                                    onClick={() => handleSmartPayment(group, item)}
+                                                                                    style={{ 
+                                                                                        background: '#10B981', color: 'white', border: 'none', 
+                                                                                        borderRadius: '6px', padding: '6px 12px', fontWeight: 700,
+                                                                                        fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                                                                                    }}
+                                                                                >
+                                                                                    <CheckCircle2 size={12} /> Pagar
+                                                                                </button>
+                                                                                <button 
+                                                                                    onClick={() => handleDenyPayment(group, item)}
+                                                                                    style={{ 
+                                                                                        background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', 
+                                                                                        borderRadius: '6px', padding: '6px 8px', fontWeight: 700,
+                                                                                        fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center'
+                                                                                    }}
+                                                                                >
+                                                                                    Denegar
+                                                                                </button>
+                                                                            </>
+                                                                        ) : (
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                                                                <div style={{ color: '#10B981' }}><CheckCircle2 size={16} /></div>
+                                                                                <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#059669' }}>ABONADO</span>
+                                                                                {item.voucherRef && (
+                                                                                    <button onClick={() => setShowVoucher(item.voucherRef || null)}
+                                                                                        style={{ fontSize: '0.6rem', color: '#3B82F6', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}>
+                                                                                        VOUCHER
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
                                                                         )}
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })
-                                            )}
-                                        </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
 
                                         {/* FOOTER - HISTORIAL RÁPIDO */}
                                         <div style={{ 
