@@ -1080,20 +1080,23 @@ export default function PaymentsPage() {
                             solicitudLiquidacion: nextStatus === 'documentacion_enviada' ? null : meta.solicitudLiquidacion,
                             solicitudPago: nextStatus === 'tecnico_asignado' ? null : meta.solicitudPago,
                             solicitudAdelanto: null, 
-                            // Registrar rechazo
+                            // ★ FIX: Incluir motivo del rechazo (antes se omitía, causando "No se especificó un motivo")
                             pagoRechazado: {
                                 fecha: new Date().toISOString(),
                                 monto: item.monto,
                                 tipo: item.tipo,
-                                concepto: item.concepto || 'Denegado por Tesorería'
+                                concepto: item.concepto || 'Denegado por Tesorería',
+                                motivo: motivoRechazo || 'Denegado por Tesorería',
+                                mensajeRechazo: motivoRechazo || 'Denegado por Tesorería'
                             },
-                            // Guardar en historial
+                            // Guardar en historial (también con motivo)
                             historialRechazos: [...(meta.historialRechazos || []), {
                                 fecha: new Date().toISOString(),
                                 monto: item.monto,
                                 tipo: item.tipo,
                                 categoria: item.categoria,
-                                concepto: item.concepto || 'Denegado por Tesorería'
+                                concepto: item.concepto || 'Denegado por Tesorería',
+                                motivo: motivoRechazo || 'Denegado por Tesorería'
                             }]
                         };
                         await supabase.from('tickets').update({ 
