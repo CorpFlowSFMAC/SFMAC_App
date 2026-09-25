@@ -1040,11 +1040,19 @@ export const ticketsAPI = {
         // ════════════════════════════════════════════════════════════════════
         // MOTOR PRINCIPAL V3: Consulta directa JS con Joins (SINFIMAC V3)
         // Esta consulta es la fuente de verdad para la Bandeja de Tesorería/Pagos.
+        //
+        // OPTIMIZACIONES:
+        // - ESTADOS_EXCLUIDOS ampliado: excluye estados terminales sin movimiento
+        //   de dinero, reduciendo el volumen de tickets cargados.
+        // - tickets + costs lanzados en PARALELO para minimizar latencia total.
         // ════════════════════════════════════════════════════════════════════
+
+        // Excluir estados donde ya no hay actividad financiera pendiente
+        // (reducción de volumen → menos datos → menor latencia)
         const ESTADOS_EXCLUIDOS = [
             'borrador',
-            // NO excluir estados terminales aquí, ya que se necesitan para el historial (PAGADOS)
-            // y para el cálculo de estadísticas globales.
+            'ticket_cancelado',
+            'ticket_rechazado',
         ];
 
         const { data: ticketsData, error: tErr } = await supabase

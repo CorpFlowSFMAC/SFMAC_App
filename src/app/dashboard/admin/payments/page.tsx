@@ -370,42 +370,54 @@ export default function PaymentsPage() {
     }, [rawTickets, loadedMetadata]);
 
     const fetchPaymentTickets = React.useCallback(async (isSilent = false) => {
+        const t0 = performance.now();
         try {
             if (!isSilent) setLoading(true);
             setFetchError(null);
 
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout de conexión')), 60000)
-            );
+            // ⚡ PARALELO: tickets + notification_logs se lanzan simultáneamente
+            // Antes eran secuenciales → 2× RTT. Ahora es 1× RTT (el más lento gana).
+            const timeoutMs = 15_000; // 15s — suficiente para Hetzner LAN; antes era 60s
+            const withTimeout = <T>(p: Promise<T>): Promise<T> =>
+                Promise.race([
+                    p,
+                    new Promise<T>((_, rej) =>
+                        setTimeout(() => rej(new Error('Timeout de conexión')), timeoutMs)
+                    ),
+                ]);
 
-            const fetchPromise = (async () => {
-                const data = await ticketsAPI.getForPayments();
-                return data || [];
-            })();
+            const [data, logsResult] = await Promise.allSettled([
+                withTimeout(ticketsAPI.getForPayments()),
+                withTimeout(
+                    supabase
+                        .from('notification_logs')
+                        .select('id, ticket_code, tipo, mensaje, created_at')
+                        .order('created_at', { ascending: false })
+                        .limit(300)
+                        .then(({ data: logs }) => logs || [])
+                ),
+            ]);
 
-            const data = await Promise.race([fetchPromise, timeoutPromise]) as any[];
-            
-            setRawTickets(data || []);
-
-            try {
-                // ★ FIX (URI too long): Antes se filtraba con .in('ticket_code', ticketCodes)
-                // que con 500 tickets generaba una URL de varios KB → HTTP 414.
-                // Ahora traemos los últimos 300 logs recientes sin filtro de IDs;
-                // el filtrado por ticket se hace en memoria al renderizar.
-                const { data: logs, error: logsErr } = await supabase
-                    .from('notification_logs')
-                    .select('*')
-                    .order('created_at', { ascending: false })
-                    .limit(300);
-                if (!logsErr && logs) {
-                    setNotificationLogs(logs);
-                }
-            } catch (logsErr) {
-                console.error('[Payments] Error fetching notification logs:', logsErr);
+            // Procesar tickets
+            const tickets = data.status === 'fulfilled' ? (data.value || []) : [];
+            if (data.status === 'rejected') {
+                throw data.reason;
             }
+            setRawTickets(tickets);
+
+            // Procesar logs (no bloqueante — fallo silencioso)
+            if (logsResult.status === 'fulfilled') {
+                setNotificationLogs(logsResult.value as any[]);
+            } else {
+                console.warn('[Payments] Error fetching notification logs (no bloqueante):', logsResult.reason);
+            }
+
+            const ms = Math.round(performance.now() - t0);
+            console.log(`[Payments] Carga completa: ${tickets.length} tickets en ${ms}ms`);
+
         } catch (err: any) {
             console.error('[Payments] Fetch Error:', err);
-            setFetchError(err.message || "Error de conexión");
+            setFetchError(err.message || 'Error de conexión');
         } finally {
             setLoading(false);
         }

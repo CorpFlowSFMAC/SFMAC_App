@@ -57,11 +57,14 @@ export default function TesoreriaPage() {
     // Fetch pending costs directly from ticket_costs joined with tickets
     const fetchCosts = async () => {
         setLoading(true);
+        const t0 = performance.now();
         try {
+            // ⚡ OPTIMIZADO: select lean + filtro en DB (no traer toda la tabla)
             const { data, error } = await supabase
                 .from('ticket_costs')
                 .select(`
-                    *,
+                    id, ticket_id, concepto, categoria, monto, estado_pago,
+                    created_at, specialist_id, motivo, solicitado_por,
                     tickets!ticket_costs_ticket_id_fkey (
                         ticket_number,
                         client_ticket_number,
@@ -72,26 +75,29 @@ export default function TesoreriaPage() {
                         name
                     )
                 `)
-                .order('created_at', { ascending: false });
+                .not('estado_pago', 'in', '(pagado,RECHAZADO)')
+                .order('created_at', { ascending: false })
+                .limit(500);
 
             if (error) throw error;
 
             const mapped: PendingCost[] = (data || []).map(c => ({
                 id: c.id,
                 ticket_id: c.ticket_id,
-                ticket_number: c.tickets?.ticket_number,
-                client_ticket_number: c.tickets?.client_ticket_number,
+                ticket_number: (c.tickets as any)?.ticket_number,
+                client_ticket_number: (c.tickets as any)?.client_ticket_number,
                 concepto: c.concepto,
                 categoria: c.categoria,
                 monto: parseFloat(c.monto),
                 estado_pago: c.estado_pago,
                 created_at: c.created_at,
                 specialist_id: c.specialist_id,
-                specialist_name: c.technicians?.name || 'Sin asignar',
+                specialist_name: (c.technicians as any)?.name || 'Sin asignar',
                 motivo: c.motivo
             }));
 
             setPendingCosts(mapped);
+            console.log(`[Tesorería] ${mapped.length} costos cargados en ${Math.round(performance.now() - t0)}ms`);
         } catch (err) {
             console.error("Error fetching costs:", err);
             showToast("Error al cargar la bandeja", "error");
