@@ -388,16 +388,17 @@ export default function PaymentsPage() {
             setRawTickets(data || []);
 
             try {
-                const ticketCodes = (data || []).map(t => t.client_ticket_number || t.id).filter(Boolean);
-                if (ticketCodes.length > 0) {
-                    const { data: logs, error: logsErr } = await supabase
-                        .from('notification_logs')
-                        .select('*')
-                        .in('ticket_code', ticketCodes)
-                        .order('created_at', { ascending: false });
-                    if (!logsErr && logs) {
-                        setNotificationLogs(logs);
-                    }
+                // ★ FIX (URI too long): Antes se filtraba con .in('ticket_code', ticketCodes)
+                // que con 500 tickets generaba una URL de varios KB → HTTP 414.
+                // Ahora traemos los últimos 300 logs recientes sin filtro de IDs;
+                // el filtrado por ticket se hace en memoria al renderizar.
+                const { data: logs, error: logsErr } = await supabase
+                    .from('notification_logs')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(300);
+                if (!logsErr && logs) {
+                    setNotificationLogs(logs);
                 }
             } catch (logsErr) {
                 console.error('[Payments] Error fetching notification logs:', logsErr);

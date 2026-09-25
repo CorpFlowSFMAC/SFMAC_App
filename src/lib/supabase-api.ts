@@ -54,16 +54,16 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
         return tickets.map((ticket) => ({ ...ticket, ticket_costs: [] }));
     }
 
-    const response = await fetch(`/api/v3/ticket-costs?ticket_ids=${encodeURIComponent(ticketIds.join(','))}`, {
-        // ⚡ PERF FIX (2026-06-13): Cambiado de cache:'no-store' a una caché HTTP corta.
-        // 'no-store' obligaba al navegador a hacer un GET de red en CADA llamada a
-        // getSummaryAll() / getForPayments(), incluso cuando TanStack Query ya tenía
-        // los datos en memoria. Con staleTime=5min en TanStack, esta caché HTTP de 30s
-        // actua como segunda defensa contra ráfagas de re-fetch durante re-renders.
-        cache: 'default',
+    // ★ FIX (URI too long / HTTP 414): Cambiado de GET ?ticket_ids=... a POST con body JSON.
+    // Con 500 tickets, los UUIDs sumaban ~18 KB en la URL → el servidor rechazaba la petición.
+    // Ahora los IDs van en el body, sin límite de tamaño.
+    const response = await fetch(`/api/v3/ticket-costs/batch`, {
+        method: 'POST',
         headers: {
+            'Content-Type': 'application/json',
             'Cache-Control': 'max-age=30, stale-while-revalidate=60',
-        }
+        },
+        body: JSON.stringify({ ticket_ids: ticketIds }),
     });
     const result = await response.json();
     if (!response.ok || !result.success) throw new Error(result.error || 'Error al obtener costos de tickets');
@@ -80,6 +80,7 @@ const attachTicketCosts = async <T extends { id?: string }>(tickets: T[]) => {
         ticket_costs: ticket.id ? (costsByTicket.get(ticket.id) || []) : [],
     }));
 };
+
 
 // ============================================
 // CLIENTS API
