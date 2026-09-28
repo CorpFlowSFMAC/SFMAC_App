@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getClient } from '@/lib/supabase-server'; // ✅ Service Role Key — bypasa RLS
 import { routingAPI } from '@/lib/routing-api';
 
-// ── Constantes ────────────────────────────────────────────────────
+// ── Cliente Supabase con Service Role (bypasa RLS para crear tickets) ──────────
+// Lazy-initialized para evitar errores de startup si la variable no está aún
+function getSupabase() {
+    const client = getClient() as any;
+    if (!client) throw new Error('[make-tickets] SUPABASE_SERVICE_ROLE_KEY no configurada en servidor');
+    return client;
+}
+
+
 const MIBANCO_ID = process.env.MIBANCO_CLIENT_ID ?? 'b65727ed-94d3-46ef-ab7d-62621ec46acb';
 
 /** Regex para parsear asuntos con formato SFMAC, incluye prefijos RV/FW/RE */
@@ -47,7 +55,7 @@ async function resolveBranch(parsed: ParsedTicket): Promise<{ branchId: string |
     const { codigoSede, cleanNombre, inmuebleRaw } = parsed;
 
     // Paso 1 — búsqueda exacta por código (ej. AG094)
-    const { data: byCode } = await supabase
+    const { data: byCode } = await getSupabase()
         .from('branch_offices')
         .select('id, client_id')
         .eq('client_id', MIBANCO_ID)
@@ -58,7 +66,7 @@ async function resolveBranch(parsed: ParsedTicket): Promise<{ branchId: string |
 
     // Paso 2 — búsqueda por nombre limpio
     if (cleanNombre.length >= 4) {
-        const { data: byName } = await supabase
+        const { data: byName } = await getSupabase()
             .from('branch_offices')
             .select('id, client_id')
             .eq('client_id', MIBANCO_ID)
@@ -69,7 +77,7 @@ async function resolveBranch(parsed: ParsedTicket): Promise<{ branchId: string |
     }
 
     // Paso 3 — fuzzy match en memoria (descarga única de sedes)
-    const { data: allBranches } = await supabase
+    const { data: allBranches } = await getSupabase()
         .from('branch_offices')
         .select('id, name, client_id, codigo_cliente')
         .eq('client_id', MIBANCO_ID);
@@ -114,7 +122,7 @@ export async function POST(req: NextRequest) {
 
         // Sin parseo — guardar como borrador para no perder el correo
         if (!parsed) {
-            const { data: draft } = await supabase.from('tickets').insert({
+            const { data: draft } = await getSupabase().from('tickets').insert({
                 client_id:            MIBANCO_ID,
                 status_id:            'borrador',
                 description:          body || `Asunto: ${subject}`,
@@ -130,7 +138,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Deduplicación
-        const { data: existing } = await supabase
+        const { data: existing } = await getSupabase()
             .from('tickets')
             .select('id')
             .eq('client_ticket_number', parsed.ticketBanco)
@@ -148,7 +156,7 @@ export async function POST(req: NextRequest) {
         const { branchId, clientId } = await resolveBranch(parsed);
         const gestoraId = branchId ? await routingAPI.resolveGestora(branchId) : null;
 
-        const { data: newTicket, error: insertError } = await supabase
+        const { data: newTicket, error: insertError } = await getSupabase()
             .from('tickets')
             .insert({
                 client_id:            clientId,

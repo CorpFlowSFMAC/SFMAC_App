@@ -1,12 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { calculateTicketFinances } from "@/lib/calculations";
-import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase-config";
+import { getClient } from "@/lib/supabase-server"; // ✅ Service Role Key — bypasa RLS
 
-const supabase = createClient(
-  getSupabaseUrl(),
-  getSupabaseAnonKey()
-);
+// Lazy client con Service Role para leer tickets/costos sin bloqueo de RLS
+function getDb() {
+    const client = getClient() as any;
+    if (!client) return null;
+    return client;
+}
+
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
 
   try {
     // 1. Fetch closed tickets in range
-    const { data: closedTickets, error: tError } = await supabase
+    const { data: closedTickets, error: tError } = await getDb()
       .from("tickets")
       .select("*, gestoras(*), costos:ticket_costs(*)")
       .gte("closure_date", startOfMonth)
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
 
     // 2. Fetch targets for that month
     const monthKey = `${year}-${month.padStart(2, '0')}`;
-    const { data: targets, error: tgError } = await supabase
+    const { data: targets, error: tgError } = await getDb()
       .from("gestor_goals")
       .select("*")
       .eq("month_key", monthKey);
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     if (tgError) throw tgError;
 
     // 3. Fetch all gestoras mentioned or registered
-    const { data: gestoras, error: gError } = await supabase
+    const { data: gestoras, error: gError } = await getDb()
       .from("gestoras")
       .select("*");
 
