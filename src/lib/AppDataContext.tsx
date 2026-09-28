@@ -872,12 +872,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             const normalized = normalizeTicket(updated);
 
             // ═══════════════════════════════════════════════════════════════════════════════
-            // FIX: Invalidar SIEMPRE después de un update para garantizar datos frescos
-            // Anteriormente solo se invalidaba en cierre de tickets, causando que la
-            // reasignación de técnicos mostrara el valor antiguo al reabrir la ventana.
+            // FIX (2026-09-28): Eliminada la llamada a invalidateQueries para evitar
+            // el re-fetch HTTP completo en cada update de ticket. El setQueryData
+            // de abajo actualiza el caché atómicamente y el canal WebSocket sincroniza
+            // el resto de clientes conectados.
             // ═══════════════════════════════════════════════════════════════════════════════
-            console.log('[AppDataContext] 🔄 Invalidando caché después de update ticket...');
-            await queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
 
             // Update en caché TanStack con MERGE PROFUNDO para no borrar campos críticos de metadata
             // (e.g. solicitudAdelanto, adelantoPagado) que no vienen en el SELECT simple de update()

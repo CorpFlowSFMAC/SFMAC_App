@@ -377,14 +377,14 @@ export function useTickets(userEmail?: string | null, isAuthReady = true) {
                 return [];
             }
         },
-        // ⚡ PERF FIX (2026-06-13): Elevado de 30s a 5 minutos para cortar el bucle
-        // de GETs repetitivos a vw_tickets_strategic y /api/v3/ticket-costs.
-        // Los cambios en tiempo real se propagan exclusivamente vía canales WebSocket
-        // de AppDataContext (setQueryData atómico), sin necesidad de re-fetches HTTP.
-        staleTime: 1000 * 60 * 5,  // 5 minutos — candado de rendimiento definitivo
-        gcTime: 1000 * 60 * 10,    // 10 min
+        // ⚡ FIX (2026-09-28): staleTime reducido a 60s y refetchOnMount habilitado
+        // para garantizar que los tickets siempre se carguen al navegar al módulo.
+        // El refetchOnMount: 'always' asegura que si los datos están stale al montar,
+        // se re-fetchen inmediatamente. Los WebSocket cubren las actualizaciones en vivo.
+        staleTime: 1000 * 60,         // 60s — balance entre frescura y rendimiento
+        gcTime: 1000 * 60 * 10,       // 10 min
         refetchOnWindowFocus: false,  // ❌ Desactivado: WebSocket cubre los cambios
-        refetchOnMount: false,        // ❌ Desactivado: datos en caché son suficientes
+        refetchOnMount: true,         // ✅ Re-fetch si datos son stale al navegar al módulo
         refetchOnReconnect: true,     // ✅ Reactivar solo al perder y recuperar conexión
         retry: 2, // Reintentar hasta 2 veces en caso de errores de red
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),

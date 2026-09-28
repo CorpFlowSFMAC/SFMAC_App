@@ -983,16 +983,34 @@ export const ticketsAPI = {
 
     async getSummaryAll() {
         // Usar la vista estratégica que ya tiene los cálculos financieros (ROI, Margen, etc.)
-        const { data, error } = await supabase
-            .from('vw_tickets_strategic')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(2000);
+        // ⚡ FIX (2026-09-28): Timeout de 8s para evitar que vw_tickets_strategic cuelgue la UI.
+        // Si la vista es lenta, cae al fallback de la tabla directa inmediatamente.
+        const TIMEOUT_MS = 8000;
+
+        let data: any[] | null = null;
+        let error: any = null;
+
+        try {
+            const queryPromise = supabase
+                .from('vw_tickets_strategic')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(2000)
+                .abortSignal(AbortSignal.timeout(TIMEOUT_MS));
+
+            const result = await queryPromise;
+            data = result.data;
+            error = result.error;
+        } catch (abortErr: any) {
+            error = { message: abortErr?.message || 'Timeout' };
+        }
 
         if (error) {
             // No hacer mucho ruido en consola si es por Auth, ya que el fallback del servidor lo resolverá
             if (error.message?.includes('Auth session')) {
                 console.warn('[ticketsAPI] Sesión Auth no lista, usando fallback del servidor para tickets...');
+            } else if (error.message?.includes('Timeout') || error.message?.includes('timeout')) {
+                console.warn('[ticketsAPI] vw_tickets_strategic timeout (>8s), usando fallback tabla directa...');
             } else {
                 console.error('[ticketsAPI] Error fetching strategic summary:', error.message);
             }

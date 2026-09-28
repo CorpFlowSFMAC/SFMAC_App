@@ -78,18 +78,27 @@ export default function TicketsPage() {
     const [showWizard, setShowWizard] = useState(false);
     const [openTickets, setOpenTickets] = useState<any[]>([]);
     
-    // 🎫 OFFLINE-FIRST: Cargar del cache primero para scroll instantáneo
-    useEffect(() => {
-        const cached = ticketsCache.get();
-        if (cached && cached.length > 0 && (!tickets || tickets.length === 0)) {
-            console.log('[TicketsPage] Loading from cache:', cached.length);
+    // 🎫 OFFLINE-FIRST: Precargar del caché para scroll instantáneo mientras TanStack fetcha
+    const [cachedTickets, setCachedTickets] = useState<any[]>(() => {
+        // Inicializar con datos del cache de localStorage (si existen)
+        if (typeof window !== 'undefined') {
+            return ticketsCache.get() || [];
         }
-    }, [tickets]);
+        return [];
+    });
     
-    // Guardar en cache cuando llegan nuevos tickets
+    // Combinar tickets del servidor con caché offline:
+    // Prioridad: tickets de TanStack Query > caché local
+    const effectiveTickets = (tickets && tickets.length > 0) ? tickets : cachedTickets;
+    
+    // Guardar en cache cuando llegan nuevos tickets del servidor
     useEffect(() => {
         if (tickets && tickets.length > 0) {
             ticketsCache.set(tickets);
+            // Limpiar caché offline local una vez que tenemos datos frescos
+            if (cachedTickets.length > 0) {
+                setCachedTickets([]);
+            }
         }
     }, [tickets]);
     // ── GESTORA RESOLUTION Y ROLES ─────────────────────────────
@@ -192,9 +201,10 @@ export default function TicketsPage() {
     // para asegurar que los datos de Supabase sean compatibles con la UI.
 
     // Eliminada la sincronización local forzada, ahora se usa normalización en el hook useTickets
+    // effectiveTickets: datos del servidor ó caché offline (offline-first)
     const ticketsForMe = React.useMemo(() => {
-        return (tickets || []).filter(isVisibleForMe);
-    }, [tickets, isVisibleForMe]);
+        return (effectiveTickets || []).filter(isVisibleForMe);
+    }, [effectiveTickets, isVisibleForMe]);
 
     // 🎯 CRÍTICO: Previene Error de Hidratación #418
     // Solo renderizar contenido dinámico después de montar en cliente
@@ -642,6 +652,22 @@ export default function TicketsPage() {
                                 </div>
                                 <h3>Cargando tus tickets…</h3>
                                 <p>Estamos sincronizando tu bandeja con el servidor.</p>
+                                <button
+                                    onClick={() => refreshTickets()}
+                                    style={{
+                                        marginTop: '1rem',
+                                        padding: '8px 20px',
+                                        background: '#8B5CF6',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600
+                                    }}
+                                >
+                                    🔄 Forzar recarga
+                                </button>
                                 <style>{`@keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }`}</style>
                             </div>
                         );
@@ -656,6 +682,23 @@ export default function TicketsPage() {
                         <h3>{isSearching ? `Sin resultados para "${searchTerm}"` : (viewMode === 'active' ? '¡Comienza tu día productivo!' : 'No hay historial acumulado')}</h3>
                         <p>{isSearching ? 'Intenta con otro término: número de ticket, cliente, sede, técnico o gestor.' : (viewMode === 'active' ? 'Crea tu primer ticket y gestiona tus servicios' : 'Los tickets aparecerán aquí una vez que sean liquidados y cerrados.')}</p>
                         {!isSearching && viewMode === 'active' && (
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '1rem' }}>
+                                <button
+                                    style={{
+                                        padding: '8px 20px',
+                                        background: 'transparent',
+                                        color: '#8B5CF6',
+                                        border: '1.5px solid #8B5CF6',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600
+                                    }}
+                                    onClick={() => refreshTickets()}
+                                >
+                                    🔄 Recargar tickets
+                                </button>
+
                             <button
                                 className={styles.createBtnEmpty}
                                 onClick={() => setShowWizard(true)}
@@ -663,6 +706,7 @@ export default function TicketsPage() {
                                 <Plus size={18} />
                                 Crear Primer Ticket
                             </button>
+                            </div>
                         )}
                     </div>
                 ) : isSearching ? (
