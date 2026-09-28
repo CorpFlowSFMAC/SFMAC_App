@@ -324,73 +324,61 @@ async function filterTicketsForActiveGestor(ticketsList: any[], userEmail: strin
 // ─────────────────────────────────────────────
 // useTickets — Hook principal para lista/kanban
 // ─────────────────────────────────────────────
-// Usa fallback: intenta primero la API, si falla usa server endpoint
+// Estrategia "Server First": el endpoint servidor usa Service Role Key
+// y no depende de la sesión auth del cliente. Esto garantiza que los
+// tickets siempre carguen aunque la sesión de Supabase esté caída.
 export function useTickets(userEmail?: string | null, isAuthReady = true) {
     return useQuery({
         queryKey: [...queryKeys.tickets.summary(), userEmail],
         queryFn: async () => {
+            // ═══════════════════════════════════════════════════════════════════
+            // MÉTODO 1 (PRINCIPAL): Endpoint del servidor con Service Role Key
+            // No depende de isSupabaseAuthenticated — siempre funciona
+            // ═══════════════════════════════════════════════════════════════════
             try {
-                // Intentar método primario: RPC de Supabase
+                const response = await fetch('/api/v3/tickets-server?summary=1', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: AbortSignal.timeout(12000)
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                        const normalized = result.data.map(normalizeTicket).filter(Boolean);
+                        return await filterTicketsForActiveGestor(normalized, userEmail || null);
+                    }
+                }
+            } catch (serverError: any) {
+                console.warn('[useTickets] Server API falló, intentando Supabase client:', serverError.message);
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
+            // MÉTODO 2 (FALLBACK): Cliente Supabase directo (requiere sesión activa)
+            // ═══════════════════════════════════════════════════════════════════
+            try {
                 const data = await ticketsAPI.getSummaryAll();
                 const normalized = (data || []).map(normalizeTicket).filter(Boolean);
                 return await filterTicketsForActiveGestor(normalized, userEmail || null);
-            } catch (primaryError: any) {
-                console.warn('[useTickets] Primary method failed, trying server fallback:', primaryError.message);
-                
-                // Si es error HTTP 400 (Bad Request), intentar con fetch directo
-                if (primaryError?.message?.includes('400') || primaryError?.status === 400) {
-                    console.warn('[useTickets] HTTP 400 detected, attempting direct fetch fallback');
-                    try {
-                        const response = await fetch('/api/v3/tickets-server?summary=1', {
-                            method: 'GET',
-                            headers: { 'Content-Type': 'application/json' },
-                            signal: AbortSignal.timeout(15000)
-                        });
-                        if (response.ok) {
-                            const result = await response.json();
-                            const normalized = (result.data || []).map(normalizeTicket).filter(Boolean);
-                            return normalized;
-                        }
-                    } catch (fetchError: any) {
-                        console.error('[useTickets] Direct fetch also failed:', fetchError.message);
-                    }
-                }
-                
-                // Segundo fallback: endpoint del servidor
-                try {
-                    const response = await fetch('/api/v3/tickets-server?summary=1', {
-                        method: 'GET',
-                        headers: { 'Content-Type': 'application/json' },
-                        signal: AbortSignal.timeout(15000)
-                    });
-                    if (response.ok) {
-                        const result = await response.json();
-                        const normalized = (result.data || []).map(normalizeTicket).filter(Boolean);
-                        return await filterTicketsForActiveGestor(normalized, userEmail || null);
-                    }
-                } catch (fallbackError: any) {
-                    console.error('[useTickets] Server fallback failed:', fallbackError.message);
-                }
-                
-                // Si todo falla, retornar array vacío (no throw para no romper la UI)
-                console.warn('[useTickets] All methods failed, returning empty array');
-                return [];
+            } catch (supabaseError: any) {
+                console.error('[useTickets] Supabase client también falló:', supabaseError.message);
             }
+
+            console.warn('[useTickets] Todos los métodos fallaron, retornando array vacío');
+            return [];
         },
-        // ⚡ FIX (2026-09-28): staleTime reducido a 60s y refetchOnMount habilitado
-        // para garantizar que los tickets siempre se carguen al navegar al módulo.
-        // El refetchOnMount: 'always' asegura que si los datos están stale al montar,
-        // se re-fetchen inmediatamente. Los WebSocket cubren las actualizaciones en vivo.
-        staleTime: 1000 * 60,         // 60s — balance entre frescura y rendimiento
-        gcTime: 1000 * 60 * 10,       // 10 min
-        refetchOnWindowFocus: false,  // ❌ Desactivado: WebSocket cubre los cambios
-        refetchOnMount: true,         // ✅ Re-fetch si datos son stale al navegar al módulo
-        refetchOnReconnect: true,     // ✅ Reactivar solo al perder y recuperar conexión
-        retry: 2, // Reintentar hasta 2 veces en caso de errores de red
-        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-        enabled: !!userEmail && isAuthReady,
+        staleTime: 1000 * 60,
+        gcTime: 1000 * 60 * 10,
+        refetchOnWindowFocus: false,
+        refetchOnMount: true,
+        refetchOnReconnect: true,
+        retry: 1,
+        retryDelay: 2000,
+        // ✅ CRÍTICO: Solo esperar authLoading=false, NO exigir isSupabaseAuthenticated
+        // El servidor funciona con Service Role Key independientemente del auth del cliente
+        enabled: isAuthReady,
     });
 }
+
 
 // ─────────────────────────────────────────────
 // useTicketDetail — Hook para cargar un ticket completo (con metadata)

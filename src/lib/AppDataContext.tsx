@@ -141,6 +141,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         let active = true;
 
         async function resolveUser() {
+            // ⚡ FIX (2026-09-28): Timeout de seguridad — si Supabase Auth tarda más de 3s,
+            // liberar authLoading igualmente para no bloquear la carga de tickets indefinidamente.
+            const authTimeoutId = setTimeout(() => {
+                if (active) {
+                    console.warn('[AppDataContext] Auth timeout (3s) — liberando authLoading para no bloquear tickets');
+                    setAuthLoading(false);
+                }
+            }, 3000);
+
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 let email = session?.user?.email || null;
@@ -177,6 +186,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 // Consideramos autenticado si logramos conseguir un email por cualquier vía
                 const isRealAuth = !!email;
 
+                clearTimeout(authTimeoutId);
                 if (active) {
                     setUserEmail(email);
                     setUserRole(role);
@@ -185,6 +195,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
                 }
             } catch (err) {
                 console.error("[AppDataContext] Error resolving auth user:", err);
+                clearTimeout(authTimeoutId);
                 if (active) {
                     setAuthLoading(false);
                 }
@@ -211,13 +222,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     // ── Queries ──────────────────────────────
-    // Solo habilitar las queries si la sesión de Supabase Auth está lista para evitar "Auth session missing!" y HTTP 400
+    // FIX (2026-09-28): useTickets ya no requiere isSupabaseAuthenticated porque
+    // usa el endpoint del servidor (Service Role Key) como fuente primaria.
+    // Solo esperar a que authLoading termine para evitar renders vacíos iniciales.
     const queriesEnabled = !authLoading && isSupabaseAuthenticated;
+    // Para tickets: solo esperar authLoading (el servidor no necesita sesión del cliente)
+    const ticketsEnabled = !authLoading;
 
     const {
         data: tickets = [],
         isLoading: queryLoadingTickets,
-    } = useTickets(userEmail, queriesEnabled);
+    } = useTickets(userEmail, ticketsEnabled);
+
 
     const {
         data: clients = [],
