@@ -54,57 +54,93 @@ export default function TesoreriaPage() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    // Fetch pending costs directly from ticket_costs joined with tickets
+    // Fetch pending costs via endpoint servidor (bypasa RLS)
     const fetchCosts = async () => {
         setLoading(true);
         const t0 = performance.now();
         try {
-            // ⚡ OPTIMIZADO: select lean + filtro en DB (no traer toda la tabla)
-            const { data, error } = await supabase
-                .from('ticket_costs')
-                .select(`
-                    id, ticket_id, concepto, categoria, monto, estado_pago,
-                    created_at, specialist_id, motivo, solicitado_por,
-                    tickets!ticket_costs_ticket_id_fkey (
-                        ticket_number,
-                        client_ticket_number,
-                        branch_id,
-                        client_id
-                    ),
-                    technicians!ticket_costs_specialist_id_fkey (
-                        name
-                    )
-                `)
-                .not('estado_pago', 'in', '(pagado,RECHAZADO)')
-                .order('created_at', { ascending: false })
-                .limit(500);
+            // ⚡ FIX (2026-09-28): Migrado a /api/v3/ticket-costs (Service Role Key).
+            // El cliente anónimo era bloqueado por RLS → datos vacíos en Tesorería.
+            const response = await fetch('/api/v3/ticket-costs?mode=treasury', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                signal: AbortSignal.timeout(12000),
+            });
 
-            if (error) throw error;
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
-            const mapped: PendingCost[] = (data || []).map(c => ({
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Error desconocido del servidor');
+
+            const data = result.data || [];
+            const mapped: PendingCost[] = data.map((c: any) => ({
                 id: c.id,
                 ticket_id: c.ticket_id,
-                ticket_number: (c.tickets as any)?.ticket_number,
-                client_ticket_number: (c.tickets as any)?.client_ticket_number,
+                ticket_number: c.tickets?.ticket_number,
+                client_ticket_number: c.tickets?.client_ticket_number,
                 concepto: c.concepto,
                 categoria: c.categoria,
                 monto: parseFloat(c.monto),
                 estado_pago: c.estado_pago,
                 created_at: c.created_at,
                 specialist_id: c.specialist_id,
-                specialist_name: (c.technicians as any)?.name || 'Sin asignar',
+                specialist_name: c.technicians?.name || 'Sin asignar',
                 motivo: c.motivo
             }));
 
             setPendingCosts(mapped);
             console.log(`[Tesorería] ${mapped.length} costos cargados en ${Math.round(performance.now() - t0)}ms`);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error fetching costs:", err);
+            // Si el endpoint del servidor falla, intentar con supabase directo como fallback
+            try {
+                const { data, error } = await supabase
+                    .from('ticket_costs')
+                    .select(`
+                        id, ticket_id, concepto, categoria, monto, estado_pago,
+                        created_at, specialist_id, motivo, solicitado_por,
+                        tickets!ticket_costs_ticket_id_fkey (
+                            ticket_number,
+                            client_ticket_number,
+                            branch_id,
+                            client_id
+                        ),
+                        technicians!ticket_costs_specialist_id_fkey (
+                            name
+                        )
+                    `)
+                    .not('estado_pago', 'in', '(pagado,RECHAZADO)')
+                    .order('created_at', { ascending: false })
+                    .limit(500);
+
+                if (!error && data) {
+                    const mapped: PendingCost[] = data.map((c: any) => ({
+                        id: c.id,
+                        ticket_id: c.ticket_id,
+                        ticket_number: (c.tickets as any)?.ticket_number,
+                        client_ticket_number: (c.tickets as any)?.client_ticket_number,
+                        concepto: c.concepto,
+                        categoria: c.categoria,
+                        monto: parseFloat(c.monto),
+                        estado_pago: c.estado_pago,
+                        created_at: c.created_at,
+                        specialist_id: c.specialist_id,
+                        specialist_name: (c.technicians as any)?.name || 'Sin asignar',
+                        motivo: c.motivo
+                    }));
+                    setPendingCosts(mapped);
+                    return;
+                }
+            } catch (_) {}
             showToast("Error al cargar la bandeja", "error");
         } finally {
             setLoading(false);
         }
     };
+
+
 
     useEffect(() => {
         fetchCosts();

@@ -51,19 +51,63 @@ const getErrorMessage = (err: unknown) => err instanceof Error ? err.message : '
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const isSummary = searchParams.get('summary') === '1';
-        const gestorId = searchParams.get('gestor_id') || undefined;
+        const isSummary  = searchParams.get('summary')  === '1';
+        const isPayments = searchParams.get('payments') === '1';
+        const gestorId   = searchParams.get('gestor_id') || undefined;
 
-        // Intentar obtener tickets via server client
+        // ── MODO PAGOS/TESORERÍA ────────────────────────────────────────────
+        // Usa Service Role Key para bypassar RLS y obtener todos los tickets
+        // con los campos financieros que necesita la bandeja de Pagos.
+        if (isPayments) {
+            const client = getClient() as any;
+            if (!client) {
+                return NextResponse.json({ success: false, error: 'Supabase server client no configurado' }, { status: 503 });
+            }
+
+            const PAYMENT_SELECT = `
+                id, ticket_number, status_id, service_type, description,
+                client_ticket_number, created_at, labor_cost, materials_cost, visit_cost,
+                total_quoted_amount, client_id, branch_id, technician_id, gestora_id,
+                diagnosis, priority, sede_reportada_cliente,
+                clients(id, name, ruc),
+                branch_offices(id, name),
+                technicians(id, name, bank_name, account_number, cci, yape_number, plin_number, phone),
+                gestoras(id, name)
+            `;
+
+            const excludeStatus = (searchParams.get('excludeStatus') || 'borrador,ticket_cancelado,ticket_rechazado').split(',');
+            const limitParam = parseInt(searchParams.get('limit') || '500', 10);
+
+            const { data, error } = await client
+                .from('tickets')
+                .select(PAYMENT_SELECT)
+                .not('status_id', 'in', `(${excludeStatus.join(',')})`)
+                .order('created_at', { ascending: false })
+                .limit(limitParam);
+
+            if (error) throw error;
+
+            const normalized = ((data || []) as TicketServerRow[]).map((t) => ({
+                ...t,
+                estadoId: normalizeStateId(t.status_id || t.estadoId || 'nuevo')
+            }));
+
+            return NextResponse.json({
+                success: true,
+                source: 'server-payments',
+                count: normalized.length,
+                data: normalized,
+            });
+        }
+
+        // ── MODO SUMMARY / DEFAULT ──────────────────────────────────────────
         let ticketsData;
-        
         if (isSummary) {
             ticketsData = await getTicketsSummary();
         } else {
             ticketsData = await getAllTicketsLite(gestorId);
         }
-        
-        // Normalizar estados para frontend
+
         const normalizedTickets = ((ticketsData || []) as TicketServerRow[]).map((t) => ({
             ...t,
             estadoId: normalizeStateId(t.status_id || t.estadoId || 'nuevo')
@@ -75,7 +119,7 @@ export async function GET(request: NextRequest) {
             count: normalizedTickets.length,
             data: normalizedTickets
         });
-        
+
     } catch (err: unknown) {
         console.error('[Tickets Server API] Error:', err);
         return NextResponse.json({
@@ -85,6 +129,7 @@ export async function GET(request: NextRequest) {
         }, { status: 500 });
     }
 }
+
 
 /**
  * POST: Keep-alive (ping a la base de datos)

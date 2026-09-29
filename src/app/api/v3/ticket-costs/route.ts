@@ -116,6 +116,26 @@ export async function GET(request: NextRequest) {
         if (!client) throw new Error('Supabase server client is not configured');
 
         const params = new URL(request.url).searchParams;
+
+        // ── MODO TESORERÍA ──────────────────────────────────────────────────
+        // Devuelve las solicitudes y costos pendientes de pago para la bandeja de Tesorería
+        if (params.get('mode') === 'treasury') {
+            const { data, error } = await client
+                .from('ticket_costs')
+                .select(`
+                    id, ticket_id, concepto, categoria, monto, estado_pago,
+                    created_at, specialist_id, motivo, solicitado_por,
+                    tickets(ticket_number, client_ticket_number, branch_id, client_id),
+                    technicians(name)
+                `)
+                .not('estado_pago', 'in', '(pagado,RECHAZADO)')
+                .order('created_at', { ascending: false })
+                .limit(500);
+
+            if (error) throw error;
+            return NextResponse.json({ success: true, data: data || [] });
+        }
+
         const ticketId = params.get('ticket_id');
         const ticketIds = (params.get('ticket_ids') || '')
             .split(',')
@@ -138,6 +158,7 @@ export async function GET(request: NextRequest) {
         if (error) throw error;
 
         return NextResponse.json({ success: true, data: data || [] });
+
     } catch (err: any) {
         console.error('[Ticket Costs API] GET Error:', err);
         return NextResponse.json({ success: false, error: err.message }, { status: 500 });
