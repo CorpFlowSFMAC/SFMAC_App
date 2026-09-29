@@ -327,8 +327,8 @@ function flattenTicketForPayments(t: any) {
             banco: t.technicians?.bank_name || '---',
             numeroCuenta: t.technicians?.account_number || '---',
             cci: t.technicians?.cci || '---',
-            yape: t.technicians?.yape_number,
-            plin: t.technicians?.plin_number,
+            yape: t.technicians?.yape_number || t.technicians?.yape || t.technicians?.phone,
+            plin: t.technicians?.plin_number || t.technicians?.plin,
         },
         cliente: { nombre: t.clients?.name || meta.cliente?.nombre || 'Cliente' },
         sede: { nombre: t.branch_offices?.name || meta.sede?.nombre || 'Sede' },
@@ -747,7 +747,7 @@ export default function PaymentsPage() {
                     numeroCuenta: techRaw.account_number || techRaw.numeroCuenta || '---',
                     cci: techRaw.cci || techRaw.cci_number || '---',
                     yape: techRaw.yape_number || techRaw.yape || techRaw.phone || techRaw.celular,
-                    plin: techRaw.plin_number || techRaw.plin || techRaw.phone || techRaw.celular
+                    plin: techRaw.plin_number || techRaw.plin
                 };
 
                 const pendingItems: PaymentItem[] = [];
@@ -2560,9 +2560,75 @@ export default function PaymentsPage() {
                                                                 </div>
                                                             )}
 
-                                                            <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-                                                                {primaryMethod === 'bank' && hasYape && <span style={{ color: '#7C3AED', fontSize: '0.65rem', fontWeight: 700, background: '#F3E8FF', padding: '2px 6px', borderRadius: '4px', border: '1px solid #E9D5FF' }}>YAPE</span>}
-                                                                {(primaryMethod === 'bank' || primaryMethod === 'yape') && hasPlin && <span style={{ color: '#0EA5E9', fontSize: '0.65rem', fontWeight: 700, background: '#E0F2FE', padding: '2px 6px', borderRadius: '4px', border: '1px solid #BAE6FD' }}>PLIN</span>}
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '3px', alignItems: 'flex-end', width: '100%' }}>
+                                                                {primaryMethod === 'bank' && hasYape && (
+                                                                    <div 
+                                                                        onClick={() => { navigator.clipboard.writeText(group.tecnico.yape!); showToast('Yape copiado'); }}
+                                                                        style={{ 
+                                                                            display: 'inline-flex', 
+                                                                            alignItems: 'center', 
+                                                                            gap: '4px', 
+                                                                            color: '#5B21B6', 
+                                                                            fontSize: '0.68rem', 
+                                                                            fontWeight: 700, 
+                                                                            background: '#F3E8FF', 
+                                                                            padding: '2px 6px', 
+                                                                            borderRadius: '5px', 
+                                                                            border: '1px solid #E9D5FF',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                        title="Copiar número de Yape"
+                                                                    >
+                                                                        <Smartphone size={10} color="#7C3AED" />
+                                                                        <span style={{ color: '#7C3AED', fontWeight: 800 }}>YAPE:</span>
+                                                                        <span>{group.tecnico.yape}</span>
+                                                                        <button 
+                                                                            onClick={(e) => { 
+                                                                                e.stopPropagation(); 
+                                                                                navigator.clipboard.writeText(group.tecnico.yape!); 
+                                                                                showToast('Yape copiado'); 
+                                                                            }}
+                                                                            style={{ background: 'none', border: 'none', padding: '1px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#7C3AED' }} 
+                                                                            title="Copiar Yape"
+                                                                        >
+                                                                            <Copy size={11} />
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                                {(primaryMethod === 'bank' || primaryMethod === 'yape') && hasPlin && group.tecnico.plin !== group.tecnico.yape && (
+                                                                    <div 
+                                                                        onClick={() => { navigator.clipboard.writeText(group.tecnico.plin!); showToast('Plin copiado'); }}
+                                                                        style={{ 
+                                                                            display: 'inline-flex', 
+                                                                            alignItems: 'center', 
+                                                                            gap: '4px', 
+                                                                            fontSize: '0.68rem', 
+                                                                            color: '#0369A1', 
+                                                                            fontWeight: 700, 
+                                                                            background: '#E0F2FE', 
+                                                                            padding: '2px 6px', 
+                                                                            borderRadius: '5px', 
+                                                                            border: '1px solid #BAE6FD',
+                                                                            cursor: 'pointer'
+                                                                        }}
+                                                                        title="Copiar número de Plin"
+                                                                    >
+                                                                        <Smartphone size={10} color="#0EA5E9" />
+                                                                        <span style={{ color: '#0EA5E9', fontWeight: 800 }}>PLIN:</span>
+                                                                        <span>{group.tecnico.plin}</span>
+                                                                        <button 
+                                                                            onClick={(e) => { 
+                                                                                e.stopPropagation(); 
+                                                                                navigator.clipboard.writeText(group.tecnico.plin!); 
+                                                                                showToast('Plin copiado'); 
+                                                                            }}
+                                                                            style={{ background: 'none', border: 'none', padding: '1px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#0EA5E9' }} 
+                                                                            title="Copiar Plin"
+                                                                        >
+                                                                            <Copy size={11} />
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </>
                                                     );
