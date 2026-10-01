@@ -2735,6 +2735,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             if (success) {
                 showToast("Ticket Cerrado", "El ticket ha sido cerrado y archivado correctamente.", "success");
                 
+                // ★ CRÍTICO: Invalidar el caché de TanStack Query para que el Kanban board
+                // muestre inmediatamente el estado ticket_cerrado sin necesitar reload.
+                // syncToSupabase escribe en Supabase pero NO actualiza el caché de TanStack.
+                // invalidateQueries con prefijo "tickets" invalida TODAS las variantes del caché
+                // incluyendo las que tienen userEmail como sufijo.
+                queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
+                
                 // PASO 2.5: Inyectar síncronamente la creación de factura (CFO)
                 try {
                     const terms = ticketData.cliente?.default_payment_terms || 30;
