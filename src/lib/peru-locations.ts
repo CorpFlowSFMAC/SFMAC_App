@@ -29,7 +29,12 @@ export const PERU_LOCATIONS: Record<string, { provinces: Record<string, string[]
         }
     },
     "Ayacucho": { provinces: { "Huamanga": ["Ayacucho", "Acocro"] } },
-    "Cajamarca": { provinces: { "Cajamarca": ["Cajamarca", "Baños del Inca"] } },
+    "Cajamarca": {
+        provinces: {
+            "Cajamarca": ["Cajamarca", "Baños del Inca"],
+            "Jaén": ["Jaén", "Bellavista", "Chontali", "Colasay", "Huabal", "Las Pirias", "Pomahuaca", "Pucara", "Sallique", "San Felipe", "San José del Alto", "Santa Rosa"]
+        }
+    },
     "Callao": { provinces: { "Callao": ["Callao", "Bellavista", "Carmen de la Legua", "La Perla", "La Punta", "Ventanilla", "Mi Perú"] } },
     "Cusco": {
         provinces: {
