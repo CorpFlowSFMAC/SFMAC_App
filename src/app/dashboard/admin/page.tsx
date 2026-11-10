@@ -412,9 +412,10 @@ export default function AdminDashboard() {
         setInvoiceProcessing(invoiceId);
         try {
             const oc = invoiceOcNumber[invoiceId] || null;
+            const nowIso = new Date().toISOString();
             const { error } = await supabase.from('invoices').update({
                 status: 'cobrada',
-                paid_date: new Date().toISOString(),
+                payment_date: nowIso,
                 invoice_number: oc
             }).eq('id', invoiceId);
             
@@ -422,7 +423,7 @@ export default function AdminDashboard() {
             
             triggerToast("Factura Pagada", "El estado de la factura ha sido actualizado exitosamente.");
             
-            setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: 'cobrada', paid_date: new Date().toISOString(), invoice_number: oc } : inv));
+            setInvoices(prev => prev.map(inv => inv.id === invoiceId ? { ...inv, status: 'cobrada', payment_date: nowIso, paid_date: nowIso, invoice_number: oc } : inv));
             
         } catch (error) {
             console.error("Error al marcar como pagada:", error);
@@ -637,13 +638,18 @@ export default function AdminDashboard() {
     // 2. Su closure_date cae dentro del periodo actual
     const isClosedInPeriod = (t: any): boolean => {
         if (!isRealClosureState(t)) return false;
-        if (!t.closure_date) return false;
-        return isDateInPeriod(t.closure_date, periodInfo, dateRange);
+        const cDate = t.closure_date || t.fechaCierre || t.metadata?.closure_date || t.metadata?.fechaCierre || t.metadata?.fecha_cobro || t.updated_at;
+        if (!cDate) return false;
+        return isDateInPeriod(cDate, periodInfo, dateRange);
     };
 
     // Helper: obtener fecha de cierre efectiva (closure_date > updated_at > created_at)
     const getEffectiveClosureDate = (t: any) => {
         if (t.closure_date) return new Date(t.closure_date);
+        if (t.fechaCierre) return new Date(t.fechaCierre);
+        if (t.metadata?.closure_date) return new Date(t.metadata.closure_date);
+        if (t.metadata?.fechaCierre) return new Date(t.metadata.fechaCierre);
+        if (t.metadata?.fecha_cobro) return new Date(t.metadata.fecha_cobro);
         if (normalizeStateId(t.status_id) === 'ticket_cerrado') {
             return new Date(t.updated_at || t.created_at);
         }
@@ -994,7 +1000,7 @@ export default function AdminDashboard() {
                 const montoBase = Number(inv.amount_base > 0 ? inv.amount_base : (montoTotal / 1.18));
 
                 const ocNumber = inv.invoice_number || tk?.metadata?.oc_number || '';
-                const paidDate = inv.paid_date || tk?.metadata?.fecha_cobro || null;
+                const paidDate = inv.payment_date || inv.paid_date || tk?.metadata?.fecha_cobro || null;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk?.metadata?.tipo_cobro === 'evento_perdida';
 
                 const item = {
@@ -1167,12 +1173,13 @@ export default function AdminDashboard() {
         const finalIgv = round2(finalTotal - finalBase);
 
         try {
+            // 1. Guardar factura en 'invoices' usando columna real 'payment_date'
             if (item.rawInvoice) {
-                const { error } = await supabase
+                const { error: invErr } = await supabase
                     .from('invoices')
                     .update({
                         status: 'cobrada',
-                        paid_date: paidDate,
+                        payment_date: paidDate,
                         invoice_number: finalOcNumber,
                         doc_number: finalDocNumber,
                         amount_base: finalBase,
@@ -1181,18 +1188,7 @@ export default function AdminDashboard() {
                     })
                     .eq('id', item.rawInvoice.id);
 
-                if (error) throw error;
-
-                setInvoices(prev => prev.map(inv => inv.id === item.rawInvoice.id ? {
-                    ...inv,
-                    status: 'cobrada',
-                    paid_date: paidDate,
-                    invoice_number: finalOcNumber,
-                    doc_number: finalDocNumber,
-                    amount_base: finalBase,
-                    amount_total: finalTotal,
-                    amount_igv: finalIgv
-                } : inv));
+                if (invErr) throw invErr;
             } else {
                 const invoicePayload = {
                     ticket_id: item.ticketId,
@@ -1201,28 +1197,26 @@ export default function AdminDashboard() {
                     amount_total: finalTotal,
                     amount_igv: finalIgv,
                     status: 'cobrada',
-                    paid_date: paidDate,
+                    payment_date: paidDate,
                     issued_date: fechaOcInput || item.fechaCreacion || paidDate,
                     invoice_number: finalOcNumber,
                     doc_number: finalDocNumber
                 };
 
-                const { data, error } = await supabase
+                const { data: invData, error: invErr } = await supabase
                     .from('invoices')
                     .insert([invoicePayload])
                     .select('*');
 
-                if (error) throw error;
-
-                if (data && data.length > 0) {
-                    setInvoices(prev => [...prev, data[0]]);
-                }
+                if (invErr) throw invErr;
             }
 
+            // 2. Actualizar ticket en la base de datos (solo columnas válidas de la tabla tickets)
             if (item.ticketId) {
                 const ticketMeta = item.rawTicket?.metadata || {};
                 await handleUpdateTicket(item.ticketId, {
-                    estado_cobranza: 'cobrado',
+                    total_quoted_amount: finalTotal,
+                    ...(item.rawTicket?.closure_date ? {} : { closure_date: paidDate }),
                     metadata: {
                         ...ticketMeta,
                         is_cobrado: true,
@@ -1234,19 +1228,79 @@ export default function AdminDashboard() {
                         tipo_cobro: type,
                         monto_cobrado: finalTotal,
                         monto_base_cobrado: finalBase,
+                        monto_igv_cobrado: finalIgv,
+                        montoFinal: finalTotal,
+                        montoSubtotal: finalBase,
+                        montoIGV: finalIgv,
+                        ingresos_reales: finalBase,
                         observaciones_cobranza: observacionesInput || null
                     }
                 });
             }
 
-            triggerToast(
-                "Cobro Registrado",
-                `Ticket ${item.ticketNum} cobrado exitosamente (${type === 'oc' ? 'OC: ' + finalOcNumber : 'Evento de Pérdida'}).`
-            );
+            // 3. Recargar inmediatamente las facturas frescas de la base de datos
+            const { data: freshInvoices } = await supabase.from('invoices').select('*');
+            if (freshInvoices) {
+                setInvoices(freshInvoices.map(inv => ({
+                    ...inv,
+                    paid_date: inv.payment_date || inv.paid_date
+                })));
+            }
+
+            // 4. Sincronizar activeTickets de forma reactiva instantánea para que las métricas de gestores recalculen de inmediato
+            setRealtimeOverrides(prev => ({
+                ...prev,
+                [item.ticketId]: {
+                    total_quoted_amount: finalTotal,
+                    montoFinal: finalTotal,
+                    ingresos_reales: finalBase,
+                    status_id: 'ticket_cerrado',
+                    estadoId: 'ticket_cerrado',
+                    closure_date: item.rawTicket?.closure_date || paidDate,
+                    fechaCierre: item.rawTicket?.closure_date || paidDate,
+                    estado_cobranza: 'cobrado',
+                    is_cobrado: true,
+                    metadata: {
+                        ...(item.rawTicket?.metadata || {}),
+                        is_cobrado: true,
+                        estado_cobranza: 'cobrado',
+                        fecha_cobro: paidDate,
+                        fecha_oc: fechaOcInput || null,
+                        oc_number: finalOcNumber,
+                        doc_number: finalDocNumber,
+                        tipo_cobro: type,
+                        monto_cobrado: finalTotal,
+                        monto_base_cobrado: finalBase,
+                        monto_igv_cobrado: finalIgv,
+                        montoFinal: finalTotal,
+                        montoSubtotal: finalBase,
+                        montoIGV: finalIgv,
+                        ingresos_reales: finalBase,
+                        observaciones_cobranza: observacionesInput || null
+                    }
+                }
+            }));
+
+            // 5. Refrescar tickets en el contexto global
+            await refreshTickets();
+            setLastRefresh(new Date());
+
+            // 6. Cerrar AMBOS modales: el modal de registro y la ventana completa de cobranzas
             setCobranzaModalTicket(null);
+            setShowInvoicesModal(false);
+
+            // 7. Limpiar inputs del modal
             setCobranzaOcInput('');
             setCobranzaDocNumber('');
+            setCobranzaFechaOC('');
+            setCobranzaMontoBase('');
+            setCobranzaMontoTotal('');
             setCobranzaObservaciones('');
+
+            triggerToast(
+                "Cobro Registrado y Métricas Actualizadas",
+                `Ticket ${item.ticketNum} cobrado exitosamente (S/ ${finalTotal.toFixed(2)}). Métricas financieras y de gestores sincronizadas.`
+            );
         } catch (err: any) {
             console.error("Error al registrar cobro:", err);
             triggerToast("Error", `No se pudo registrar el cobro: ${err?.message || 'Error del servidor'}`);
@@ -1357,7 +1411,7 @@ export default function AdminDashboard() {
             }
 
             // FIX H4: Usar base sin IGV consistente con roi.ingresos para evitar inflación del 18%
-            const amount = parseFloat(t.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0) / 1.18);
+            const amount = parseFloat(t.ingresos_reales ?? t.metadata?.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? t.metadata?.montoFinal ?? 0) / 1.18);
             if (amount > 0) {
                 if (!totalsMap[gestoraName]) {
                     totalsMap[gestoraName] = { name: gestoraName, value: 0 };
@@ -1403,10 +1457,10 @@ export default function AdminDashboard() {
                 return;
             }
 
-            const raw = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? 0);
+            const raw = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? t.metadata?.montoFinal ?? 0);
             const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
             // FIX H4/H5: Normalización de base e IGV consistente
-            const neto = parseFloat(t.ingresos_reales ?? 0) || (esMasIGV ? raw : (raw > 0 ? raw / 1.18 : 0));
+            const neto = parseFloat(t.ingresos_reales ?? t.metadata?.ingresos_reales ?? 0) || (esMasIGV ? raw : (raw > 0 ? raw / 1.18 : 0));
             const total = esMasIGV ? raw * 1.18 : (raw || neto * 1.18);
             const igv = total - neto;
             if (total <= 0) return;

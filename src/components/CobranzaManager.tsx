@@ -58,7 +58,8 @@ interface Invoice {
     status: "emitida" | "cobrada" | "anulada";
     invoice_number: string | null;   // N° OC
     doc_number: string | null;       // N° Comprobante (Factura/Boleta) — FIX #2
-    paid_date: string | null;
+    paid_date?: string | null;
+    payment_date?: string | null;
     created_at: string;
     // JOIN #3
     tickets?: {
@@ -337,7 +338,7 @@ export default function CobranzaManager({ tickets, onToast, onClose }: CobranzaM
             status: "cobrada" as const,
             invoice_number: docNumber,                // N° OC
             doc_number: invoiceDocNumber.trim() || null, // N° Comprobante
-            paid_date: paidDateISO,
+            payment_date: paidDateISO,
         };
 
         setProcessing(ticketId);

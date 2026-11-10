@@ -166,9 +166,22 @@ export async function POST(request: NextRequest) {
             if (fetchError) throw fetchError;
 
             // PASO 2: Sanitizar y Mapear Defensivamente el 'columnUpdates'
-            // No se requiere mapeo: el frontend ya envía technician_id directamente
-            const sanitizedUpdates: any = { ...columnUpdates };
-            delete sanitizedUpdates.sede;
+            // Filtro estricto de columnas válidas de la tabla tickets para evitar errores de esquema
+            const ALLOWED_TICKET_COLUMNS = new Set([
+                'client_id', 'branch_id', 'technician_id', 'status_id',
+                'description', 'client_ticket_number', 'labor_cost', 'materials_cost',
+                'visit_cost', 'total_quoted_amount', 'created_at', 'updated_at',
+                'quotation_date', 'execution_date', 'closure_date',
+                'service_type', 'created_by', 'diagnosis', 'priority',
+                'current_step', 'is_sla_paused', 'sla_pause_date', 'sla_reactivation_date',
+                'sede_reportada_cliente', 'gestora_id'
+            ]);
+            const sanitizedUpdates: any = {};
+            for (const [key, val] of Object.entries(columnUpdates)) {
+                if (ALLOWED_TICKET_COLUMNS.has(key)) {
+                    sanitizedUpdates[key] = val;
+                }
+            }
 
             const { data, error } = await client
                 .from('tickets')
