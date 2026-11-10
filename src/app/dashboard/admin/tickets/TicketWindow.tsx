@@ -289,7 +289,13 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         laborCost: "",
         materialsCost: ""
     });
+    const isTicketClosedState = normalizeStateId(ticketData.status_id) === 'ticket_cerrado' || ticketData.status_id === 'ticket_cerrado' || ticketData.estadoId === 'ticket_cerrado';
+
     const handleOpenReportUpdate = () => {
+        if (isTicketClosedState && !isAdmin) {
+            showToast("Ticket Cerrado", "Los gestores no pueden modificar el reporte de un ticket cerrado.", "error");
+            return;
+        }
         setReportForm({
             diagnosis: ticketData.diagnosis || "",
             laborCost: (ticketData.labor_cost || 0).toString(),
@@ -2742,25 +2748,33 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 // incluyendo las que tienen userEmail como sufijo.
                 queryClient.invalidateQueries({ queryKey: ["tickets"], refetchType: "active" });
                 
-                // PASO 2.5: Inyectar síncronamente la creación de factura (CFO)
+                // PASO 2.5: Inyectar síncronamente la creación de factura (CFO) con verificación anti-duplicidad
                 try {
-                    const terms = ticketData.cliente?.default_payment_terms || 30;
-                    const dueDate = new Date();
-                    dueDate.setDate(dueDate.getDate() + terms);
-                    
-                    const invoicePayload = {
-                        ticket_id: ticketData.id,
-                        client_id: ticketData.client_id,
-                        amount_base: freshFinances.totalVenta / 1.18, // Added amount_base
-                        amount_total: freshFinances.totalVenta,
-                        amount_igv: freshFinances.totalVenta * 0.18,
-                        status: 'emitida',
-                        due_date: dueDate.toISOString(),
-                        issued_date: new Date().toISOString()
-                    };
-                    
-                    const { error: invoiceErr } = await supabase.from('invoices').insert([invoicePayload]);
-                    if (invoiceErr) console.error("Error creating CFO invoice:", invoiceErr);
+                    // Verificar primero si ya existe factura para este ticket
+                    const { data: existingInvoices } = await supabase
+                        .from('invoices')
+                        .select('id')
+                        .eq('ticket_id', ticketData.id);
+
+                    if (!existingInvoices || existingInvoices.length === 0) {
+                        const terms = ticketData.cliente?.default_payment_terms || 30;
+                        const dueDate = new Date();
+                        dueDate.setDate(dueDate.getDate() + terms);
+                        
+                        const invoicePayload = {
+                            ticket_id: ticketData.id,
+                            client_id: ticketData.client_id,
+                            amount_base: round2(freshFinances.totalVenta / 1.18),
+                            amount_total: round2(freshFinances.totalVenta),
+                            amount_igv: round2(freshFinances.totalVenta - (freshFinances.totalVenta / 1.18)),
+                            status: 'emitida',
+                            due_date: dueDate.toISOString(),
+                            issued_date: new Date().toISOString()
+                        };
+                        
+                        const { error: invoiceErr } = await supabase.from('invoices').insert([invoicePayload]);
+                        if (invoiceErr) console.error("Error creating CFO invoice:", invoiceErr);
+                    }
                 } catch (e) {
                     console.error("CFO Sync Error:", e);
                 }
@@ -3091,6 +3105,37 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                 </>
                             ), [ticketData, ticketCosts, availableRescue, isQuotationCollapsed, userRole, myGestoraId, isAdmin])}
                         </div>
+                        {/* BANNER INFORMATIVO: TICKET CERRADO (SOLO LECTURA PARA GESTORES) */}
+                        {isTicketClosedState && (
+                            <div style={{
+                                background: isAdmin ? 'rgba(59,130,246,0.1)' : 'rgba(239,68,68,0.12)',
+                                border: `1px solid ${isAdmin ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.35)'}`,
+                                borderRadius: '12px', padding: '10px 16px', margin: '0 0 16px 0',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Lock size={18} color={isAdmin ? '#60A5FA' : '#EF4444'} />
+                                    <div>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: isAdmin ? '#93C5FD' : '#FCA5A5' }}>
+                                            TICKET CERRADO DEFINITIVAMENTE
+                                        </span>
+                                        <p style={{ margin: 0, fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)' }}>
+                                            {isAdmin 
+                                                ? 'Modo Administrador: Puede auditar la información financiera y operativa.' 
+                                                : 'Modo Solo Lectura: Los gestores no pueden realizar modificaciones en tickets cerrados.'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span style={{
+                                    fontSize: '0.65rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
+                                    background: isAdmin ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.2)',
+                                    color: isAdmin ? '#60A5FA' : '#EF4444'
+                                }}>
+                                    {isAdmin ? 'ADMIN' : 'BLOQUEADO'}
+                                </span>
+                            </div>
+                        )}
+
                         {/* REJECTION BANNER - MOVED ABOVE FOR VISIBILITY */}
                         {ticketData.pagoRechazado && (
                             <div className={styles.rejectionBanner}>

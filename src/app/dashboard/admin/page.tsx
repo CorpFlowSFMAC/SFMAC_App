@@ -961,26 +961,43 @@ export default function AdminDashboard() {
 
     // ── MÓDULO UNIFICADO DE ADMINISTRACIÓN DE COBRANZAS ────────────────
     const cobranzaItems = useMemo(() => {
-        const invoiceTicketIds = new Set((invoices || []).map((inv: any) => inv.ticket_id));
+        // REGLAS FUNDAMENTALES DE COBRANZA:
+        // 1. SOLO tickets CERRADOS (listos para cobrar) o facturas ya cobradas (historial).
+        // 2. CERO DUPLICIDAD: Cada ticket aparece exactamente UNA sola vez.
 
-        const itemsFromInvoices = (invoices || [])
+        const deduplicatedMap = new Map<string, any>();
+
+        // A. Procesar facturas registradas en la tabla 'invoices'
+        (invoices || [])
             .filter((inv: any) => inv.status !== 'anulada')
-            .map((inv: any) => {
+            .forEach((inv: any) => {
                 const tk = activeTickets.find((t: any) => t.id === inv.ticket_id) || tickets.find((t: any) => t.id === inv.ticket_id);
                 const ticketNum = tk?.client_ticket_number || tk?.numeroTicketCliente || tk?.ticket_number || tk?.ticketNum || (inv.ticket_id ? String(inv.ticket_id).substring(0, 8).toUpperCase() : 'N/A');
+                
+                // Determinar si el ticket está cerrado
+                const sid = tk ? normalizeStateId(tk.estadoId || tk.status_id || tk.status || '') : '';
+                const isTicketClosed = sid === 'ticket_cerrado' || sid === 'liquidado';
+                const isCobrado = inv.status === 'cobrada' || tk?.estado_cobranza === 'cobrado' || tk?.metadata?.is_cobrado;
+
+                // REGLA: Si no está cobrado, SOLO se visualiza si el ticket ya está CERRADO
+                if (!isCobrado && !isTicketClosed) {
+                    return;
+                }
+
                 const clientName = tk?.cliente?.nombre || tk?.cliente?.name || (typeof tk?.cliente === 'string' ? tk.cliente : null) || tk?.clients?.name || tk?.client_name || tk?.clienteNombre || 'N/A';
                 const agencia = tk?.sede?.nombre || tk?.sede?.name || tk?.branch_offices?.name || tk?.branch?.name || tk?.metadata?.sede?.nombre || '';
                 const servicio = tk?.servicio || tk?.service_type || tk?.tipo_servicio || 'Servicio';
                 const fechaCreacion = tk?.created_at || tk?.createdAt || inv.issued_date || inv.created_at || '';
                 const fechaCierre = tk?.closure_date || '';
-                const montoBase = inv.amount_total > 0 ? Number(inv.amount_total) : Number(tk?.ingresos_reales || tk?.total_quoted_amount || tk?.montoFinal || tk?._monto || 0);
+                
+                const montoTotal = Number(inv.amount_total > 0 ? inv.amount_total : (tk?.total_quoted_amount || tk?.ingresos_reales || 0));
+                const montoBase = Number(inv.amount_base > 0 ? inv.amount_base : (montoTotal / 1.18));
 
-                const isCobrado = inv.status === 'cobrada';
                 const ocNumber = inv.invoice_number || tk?.metadata?.oc_number || '';
                 const paidDate = inv.paid_date || tk?.metadata?.fecha_cobro || null;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk?.metadata?.tipo_cobro === 'evento_perdida';
 
-                return {
+                const item = {
                     id: inv.id,
                     ticketId: inv.ticket_id || tk?.id,
                     ticketNum,
@@ -989,8 +1006,8 @@ export default function AdminDashboard() {
                     servicio,
                     fechaCreacion,
                     fechaCierre,
-                    monto: montoBase,
-                    montoSinIGV: Number(inv.amount_base || (montoBase / 1.18)),
+                    monto: round2(montoTotal),
+                    montoSinIGV: round2(montoBase),
                     status: isCobrado ? 'cobrada' : 'pendiente',
                     ocNumber: isEventoPerdida ? '' : ocNumber,
                     isEventoPerdida,
@@ -998,16 +1015,42 @@ export default function AdminDashboard() {
                     rawTicket: tk,
                     rawInvoice: inv
                 };
+
+                const key = (item.ticketNum && item.ticketNum !== 'N/A') ? item.ticketNum : item.ticketId;
+                if (!deduplicatedMap.has(key)) {
+                    deduplicatedMap.set(key, item);
+                } else {
+                    const existing = deduplicatedMap.get(key);
+                    // Priorizar cobrada sobre pendiente
+                    if (item.status === 'cobrada' && existing.status !== 'cobrada') {
+                        deduplicatedMap.set(key, item);
+                    } else if (existing.status !== 'cobrada' && item.monto > existing.monto) {
+                        // Si ambas pendientes, conservar el monto con IGV más canónico
+                        deduplicatedMap.set(key, item);
+                    }
+                }
             });
 
-        const itemsFromTickets = activeTickets
+        // B. Procesar tickets CERRADOS que aún no tienen registro en 'invoices'
+        activeTickets
             .filter((tk: any) => {
-                if (invoiceTicketIds.has(tk.id)) return false;
                 const sid = normalizeStateId(tk.estadoId || tk.status_id || tk.status || '');
+                // REGLA: SOLO TICKETS CERRADOS
+                const isClosed = sid === 'ticket_cerrado' || sid === 'liquidado';
+                if (!isClosed) return false;
+
                 const monto = Number(tk.ingresos_reales || tk.total_quoted_amount || tk.montoFinal || tk.presupuesto_aprobado || tk._monto || 0);
-                return monto > 0 && !['ticket_rechazado', 'ticket_cancelado', 'anulado'].includes(sid);
+                if (monto <= 0) return false;
+
+                const keyNum = tk.client_ticket_number;
+                const keyId = tk.id;
+                // Si ya fue incluido en deduplicatedMap por invoices, no duplicar
+                if ((keyNum && deduplicatedMap.has(keyNum)) || (keyId && deduplicatedMap.has(keyId))) {
+                    return false;
+                }
+                return true;
             })
-            .map((tk: any) => {
+            .forEach((tk: any) => {
                 const ticketNum = tk.client_ticket_number || tk.numeroTicketCliente || tk.ticket_number || tk.ticketNum || (tk.id ? String(tk.id).substring(0, 8).toUpperCase() : 'N/A');
                 const clientName = tk.cliente?.nombre || tk.cliente?.name || (typeof tk.cliente === 'string' ? tk.cliente : null) || tk.clients?.name || tk.client_name || tk.clienteNombre || 'N/A';
                 const agencia = tk.sede?.nombre || tk.sede?.name || tk.branch_offices?.name || tk.branch?.name || tk.metadata?.sede?.nombre || '';
@@ -1015,19 +1058,17 @@ export default function AdminDashboard() {
                 const fechaCreacion = tk.created_at || tk.createdAt || '';
                 const fechaCierre = tk.closure_date || '';
                 
-                // Normalización rigurosa de base e IGV
                 const rawAmount = Number(tk.total_quoted_amount || tk.montoFinal || tk.monto_presupuesto || tk.ingresos_reales || tk._monto || 0);
                 const esMasIGV = tk.mas_igv === true || tk.incluye_igv === false;
                 const montoSinIGV = esMasIGV ? rawAmount : (rawAmount > 0 ? rawAmount / 1.18 : 0);
                 const montoConIGV = esMasIGV ? rawAmount * 1.18 : rawAmount;
 
-                // FIX H2: Fuente canónica de estado de cobranza (estado_cobranza de BD + metadatos)
                 const isCobrado = tk.estado_cobranza === 'cobrado' || tk.metadata?.estado_cobranza === 'cobrado' || Boolean(tk.is_cobrado || tk.status === 'cobrado' || tk.metadata?.is_cobrado);
                 const ocNumber = tk.oc_number || tk.metadata?.oc_number || '';
                 const paidDate = tk.paid_date || tk.metadata?.fecha_cobro || null;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk.metadata?.tipo_cobro === 'evento_perdida';
 
-                return {
+                const item = {
                     id: `tk-${tk.id}`,
                     ticketId: tk.id,
                     ticketNum,
@@ -1045,9 +1086,14 @@ export default function AdminDashboard() {
                     rawTicket: tk,
                     rawInvoice: null
                 };
+
+                const key = (item.ticketNum && item.ticketNum !== 'N/A') ? item.ticketNum : item.ticketId;
+                if (!deduplicatedMap.has(key)) {
+                    deduplicatedMap.set(key, item);
+                }
             });
 
-        return [...itemsFromInvoices, ...itemsFromTickets];
+        return Array.from(deduplicatedMap.values());
     }, [invoices, activeTickets, tickets]);
 
     const cobranzaTotalPorCobrar = useMemo(() => {
