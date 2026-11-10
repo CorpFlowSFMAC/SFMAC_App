@@ -10,7 +10,7 @@ import {
     DollarSign, TrendingUp, AlertTriangle, Users, CheckCircle2,
     Zap, ArrowRight, BarChart3, Target, Activity, Shield,
     ChevronRight, AlertCircle, Star, Layers,
-    BanknoteIcon, Award, Download, X
+    BanknoteIcon, Award, Download, X, FileText, Check
 } from "lucide-react";
 import {
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -195,6 +195,15 @@ export default function AdminDashboard() {
     const [cobranzaModalTicket, setCobranzaModalTicket] = useState<any | null>(null);
     const [cobranzaType, setCobranzaType] = useState<'oc' | 'evento_perdida'>('oc');
     const [cobranzaOcInput, setCobranzaOcInput] = useState('');
+    // Campos extendidos modelo Orden de Compra (MiBanco CAPEX / SINFIMAC)
+    const [cobranzaDocNumber, setCobranzaDocNumber] = useState('');          // N° Factura / Boleta
+    const [cobranzaFechaOC, setCobranzaFechaOC] = useState('');              // Fecha emisión de la OC
+    const [cobranzaFechaCobro, setCobranzaFechaCobro] = useState(() => new Date().toISOString().split('T')[0]); // Fecha real de cobro
+    const [cobranzaMontoBase, setCobranzaMontoBase] = useState('');          // Monto Base S/ sin IGV
+    const [cobranzaMontoTotal, setCobranzaMontoTotal] = useState('');        // Monto Total S/ con IGV
+    const [cobranzaObservaciones, setCobranzaObservaciones] = useState('');  // Observaciones / Glosa
+    // Modal de Detalle Rápido de Ticket para Cobranzas (previene pantalla negra)
+    const [cobranzaDetailTicket, setCobranzaDetailTicket] = useState<any | null>(null);
 
     const triggerToast = (title: string, desc: string) => {
         setToast({ title, desc });
@@ -315,14 +324,46 @@ export default function AdminDashboard() {
     const [isMinimized, setIsMinimized] = useState(false);
     const [floatingIndex, setFloatingIndex] = useState(0);
 
-    // Función para abrir el TicketWindow flotante
+    // Función para abrir el TicketWindow flotante de manera segura
     const openFloatingTicket = (ticketId: string) => {
-        const ticket = activeTickets.find((t: any) => t.id === ticketId) || tickets.find((t: any) => t.id === ticketId);
-        if (ticket) {
-            setFloatingTicket(ticket);
+        try {
+            const raw = activeTickets.find((t: any) => t.id === ticketId) || tickets.find((t: any) => t.id === ticketId);
+            if (!raw) {
+                supabase.from('tickets').select('*').eq('id', ticketId).single().then(({ data, error }) => {
+                    if (data && !error) {
+                        const sanitized = {
+                            ...data,
+                            fechaCreacion: data.created_at || new Date().toISOString(),
+                            costos: data.costos || [],
+                            metadata: data.metadata || {},
+                            status_id: data.status_id || 'nuevo'
+                        };
+                        setFloatingTicket(sanitized);
+                        setFloatingIndex(0);
+                        setShowFloatingTicket(true);
+                        setIsMinimized(false);
+                    } else {
+                        triggerToast("Aviso", "No se encontró el registro completo del ticket.");
+                    }
+                });
+                return;
+            }
+            const sanitizedTicket = {
+                ...raw,
+                fechaCreacion: raw.fechaCreacion || raw.created_at || raw.createdAt || new Date().toISOString(),
+                costos: raw.costos || raw.ticket_costs || [],
+                metadata: raw.metadata || {},
+                status_id: raw.status_id || raw.estadoId || 'nuevo',
+                cliente: raw.cliente || raw.clients || { nombre: raw.client_name || 'Cliente' },
+                sede: raw.sede || raw.branch_offices || { nombre: raw.agencia || 'Sede' }
+            };
+            setFloatingTicket(sanitizedTicket);
             setFloatingIndex(0);
             setShowFloatingTicket(true);
             setIsMinimized(false);
+        } catch (err: any) {
+            console.error("Error al abrir ticket flotante:", err);
+            triggerToast("Error", "No se pudo cargar la ventana del ticket.");
         }
     };
 
@@ -1048,7 +1089,17 @@ export default function AdminDashboard() {
         );
     }, [cobranzaItems, cobranzasTab, cobranzasSearch]);
 
-    const handleRegisterCobroSubmit = async (item: any, type: 'oc' | 'evento_perdida', ocNumInput: string) => {
+    const handleRegisterCobroSubmit = async (
+        item: any,
+        type: 'oc' | 'evento_perdida',
+        ocNumInput: string,
+        docNumInput?: string,
+        fechaCobroInput?: string,
+        montoBaseInput?: string,
+        montoTotalInput?: string,
+        fechaOcInput?: string,
+        observacionesInput?: string
+    ) => {
         if (!item) return;
 
         if (type === 'oc' && !ocNumInput.trim()) {
@@ -1057,8 +1108,17 @@ export default function AdminDashboard() {
         }
 
         setInvoiceProcessing(item.id);
-        const paidDate = new Date().toISOString();
+        const paidDate = fechaCobroInput ? new Date(fechaCobroInput + 'T12:00:00Z').toISOString() : new Date().toISOString();
         const finalOcNumber = type === 'evento_perdida' ? 'EVENTO_PERDIDA' : ocNumInput.trim();
+        const finalDocNumber = docNumInput && docNumInput.trim() ? docNumInput.trim() : null;
+        
+        const finalTotal = montoTotalInput && !isNaN(parseFloat(montoTotalInput)) && parseFloat(montoTotalInput) > 0
+            ? round2(parseFloat(montoTotalInput))
+            : round2(item.monto || 0);
+        const finalBase = montoBaseInput && !isNaN(parseFloat(montoBaseInput)) && parseFloat(montoBaseInput) > 0
+            ? round2(parseFloat(montoBaseInput))
+            : round2(finalTotal / 1.18);
+        const finalIgv = round2(finalTotal - finalBase);
 
         try {
             if (item.rawInvoice) {
@@ -1067,7 +1127,11 @@ export default function AdminDashboard() {
                     .update({
                         status: 'cobrada',
                         paid_date: paidDate,
-                        invoice_number: finalOcNumber
+                        invoice_number: finalOcNumber,
+                        doc_number: finalDocNumber,
+                        amount_base: finalBase,
+                        amount_total: finalTotal,
+                        amount_igv: finalIgv
                     })
                     .eq('id', item.rawInvoice.id);
 
@@ -1077,19 +1141,24 @@ export default function AdminDashboard() {
                     ...inv,
                     status: 'cobrada',
                     paid_date: paidDate,
-                    invoice_number: finalOcNumber
+                    invoice_number: finalOcNumber,
+                    doc_number: finalDocNumber,
+                    amount_base: finalBase,
+                    amount_total: finalTotal,
+                    amount_igv: finalIgv
                 } : inv));
             } else {
                 const invoicePayload = {
                     ticket_id: item.ticketId,
                     client_id: item.rawTicket?.client_id || item.rawTicket?.cliente_id || null,
-                    amount_base: item.montoSinIGV || (item.monto / 1.18),
-                    amount_total: item.monto,
-                    amount_igv: item.monto - (item.montoSinIGV || (item.monto / 1.18)),
+                    amount_base: finalBase,
+                    amount_total: finalTotal,
+                    amount_igv: finalIgv,
                     status: 'cobrada',
                     paid_date: paidDate,
-                    issued_date: item.fechaCreacion || paidDate,
-                    invoice_number: finalOcNumber
+                    issued_date: fechaOcInput || item.fechaCreacion || paidDate,
+                    invoice_number: finalOcNumber,
+                    doc_number: finalDocNumber
                 };
 
                 const { data, error } = await supabase
@@ -1107,22 +1176,31 @@ export default function AdminDashboard() {
             if (item.ticketId) {
                 const ticketMeta = item.rawTicket?.metadata || {};
                 await handleUpdateTicket(item.ticketId, {
+                    estado_cobranza: 'cobrado',
                     metadata: {
                         ...ticketMeta,
                         is_cobrado: true,
+                        estado_cobranza: 'cobrado',
                         fecha_cobro: paidDate,
+                        fecha_oc: fechaOcInput || null,
                         oc_number: finalOcNumber,
-                        tipo_cobro: type
+                        doc_number: finalDocNumber,
+                        tipo_cobro: type,
+                        monto_cobrado: finalTotal,
+                        monto_base_cobrado: finalBase,
+                        observaciones_cobranza: observacionesInput || null
                     }
                 });
             }
 
             triggerToast(
                 "Cobro Registrado",
-                `El ticket ${item.ticketNum} fue registrado como cobrado (${type === 'oc' ? 'OC: ' + finalOcNumber : 'Evento de Pérdida'}).`
+                `Ticket ${item.ticketNum} cobrado exitosamente (${type === 'oc' ? 'OC: ' + finalOcNumber : 'Evento de Pérdida'}).`
             );
             setCobranzaModalTicket(null);
             setCobranzaOcInput('');
+            setCobranzaDocNumber('');
+            setCobranzaObservaciones('');
         } catch (err: any) {
             console.error("Error al registrar cobro:", err);
             triggerToast("Error", `No se pudo registrar el cobro: ${err?.message || 'Error del servidor'}`);
@@ -2795,10 +2873,17 @@ export default function AdminDashboard() {
                                                 >
                                                     <td style={{ padding: '12px 8px' }}>
                                                         <div
-                                                            onClick={() => item.ticketId && openFloatingTicket(item.ticketId)}
-                                                            style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'monospace', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            onClick={() => {
+                                                                const fullTicket = activeTickets.find((t: any) => t.id === item.ticketId) || tickets.find((t: any) => t.id === item.ticketId) || item.rawTicket;
+                                                                setCobranzaDetailTicket({
+                                                                    ...item,
+                                                                    fullTicket
+                                                                });
+                                                            }}
+                                                            style={{ color: '#60A5FA', fontWeight: 800, fontSize: '0.82rem', fontFamily: 'monospace', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                                            title="Clic para ver detalle de este ticket">
                                                             {item.ticketNum}
-                                                            <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>🔗</span>
+                                                            <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>ℹ️</span>
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '12px 8px' }}>
@@ -2826,6 +2911,14 @@ export default function AdminDashboard() {
                                                                     setCobranzaModalTicket(item);
                                                                     setCobranzaType('oc');
                                                                     setCobranzaOcInput(item.ocNumber || '');
+                                                                    const rawTot = Number(item.monto || 0);
+                                                                    const rawBase = Number(item.montoSinIGV || (rawTot > 0 ? round2(rawTot / 1.18) : 0));
+                                                                    setCobranzaMontoBase(rawBase > 0 ? rawBase.toFixed(2) : '');
+                                                                    setCobranzaMontoTotal(rawTot > 0 ? rawTot.toFixed(2) : '');
+                                                                    setCobranzaDocNumber(item.rawInvoice?.doc_number || item.rawTicket?.metadata?.doc_number || '');
+                                                                    setCobranzaFechaOC(item.rawTicket?.metadata?.fecha_oc || new Date().toISOString().split('T')[0]);
+                                                                    setCobranzaFechaCobro(item.paidDate ? item.paidDate.split('T')[0] : new Date().toISOString().split('T')[0]);
+                                                                    setCobranzaObservaciones(item.rawTicket?.metadata?.observaciones_cobranza || '');
                                                                 }}
                                                                 disabled={invoiceProcessing === item.id}
                                                                 style={{
@@ -2868,7 +2961,155 @@ export default function AdminDashboard() {
                 </div>
             )}
 
-            {/* ── SUB-MODAL: REGISTRAR COBRO / OC / EVENTO DE PÉRDIDA ── */}
+            {/* ── MODAL DE DETALLE RÁPIDO DE TICKET (PREVIENE PANTALLA NEGRA) ── */}
+            {cobranzaDetailTicket && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 11000, padding: '1rem'
+                }} onClick={() => setCobranzaDetailTicket(null)}>
+                    <div style={{
+                        background: '#13141F', border: '1px solid rgba(255,255,255,0.15)',
+                        width: '100%', maxWidth: '580px', borderRadius: '18px',
+                        padding: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.8)',
+                        color: 'white', maxHeight: '90vh', overflowY: 'auto'
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.75rem' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#60A5FA', fontFamily: 'monospace' }}>
+                                        {cobranzaDetailTicket.ticketNum}
+                                    </h3>
+                                    <span style={{
+                                        fontSize: '0.68rem', fontWeight: 800, padding: '2px 8px', borderRadius: '6px',
+                                        background: cobranzaDetailTicket.status === 'cobrada' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
+                                        color: cobranzaDetailTicket.status === 'cobrada' ? '#10B981' : '#EF4444',
+                                        border: `1px solid ${cobranzaDetailTicket.status === 'cobrada' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`
+                                    }}>
+                                        {cobranzaDetailTicket.status === 'cobrada' ? '✓ Cobrado' : '⏳ Pendiente de Cobro'}
+                                    </span>
+                                </div>
+                                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)' }}>
+                                    Ficha de cobranza y estado operativo
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setCobranzaDetailTicket(null)}
+                                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '1.25rem', padding: '4px' }}>
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Grid de información */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '0.85rem' }}>
+                                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 700 }}>Cliente</div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', marginTop: '2px' }}>{cobranzaDetailTicket.clientName}</div>
+                            </div>
+                            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '0.85rem' }}>
+                                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 700 }}>Sede / Agencia</div>
+                                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'white', marginTop: '2px' }}>{cobranzaDetailTicket.agencia || 'No especificada'}</div>
+                            </div>
+                        </div>
+
+                        {/* Montos */}
+                        <div style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0.02) 100%)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '14px', padding: '1rem', marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', fontWeight: 800 }}>Importe Total Cotizado</div>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#10B981', marginTop: '2px' }}>
+                                        S/ {fmt(cobranzaDetailTicket.monto)}
+                                    </div>
+                                </div>
+                                <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                                    <div>Base: <strong style={{ color: 'white' }}>S/ {fmt(cobranzaDetailTicket.montoSinIGV || (cobranzaDetailTicket.monto / 1.18))}</strong></div>
+                                    <div>IGV (18%): <strong style={{ color: 'white' }}>S/ {fmt(cobranzaDetailTicket.monto - (cobranzaDetailTicket.montoSinIGV || (cobranzaDetailTicket.monto / 1.18)))}</strong></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Servicio / Descripción */}
+                        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '0.85rem 1rem', marginBottom: '1rem' }}>
+                            <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>Servicio</div>
+                            <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.9)', lineHeight: 1.4 }}>
+                                {cobranzaDetailTicket.servicio || cobranzaDetailTicket.fullTicket?.description || cobranzaDetailTicket.fullTicket?.descripcionServicio || 'Mantenimiento / Servicio Operativo'}
+                            </div>
+                        </div>
+
+                        {/* Datos de OC si existen */}
+                        {cobranzaDetailTicket.status === 'cobrada' && (
+                            <div style={{ background: 'rgba(37,99,235,0.08)', border: '1px solid rgba(37,99,235,0.25)', borderRadius: '12px', padding: '0.85rem 1rem', marginBottom: '1.25rem' }}>
+                                <div style={{ fontSize: '0.7rem', color: '#60A5FA', textTransform: 'uppercase', fontWeight: 800, marginBottom: '4px' }}>Datos de Cobranza Registrados</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.78rem' }}>
+                                    <div>N° OC: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.ocNumber || 'N/A'}</strong></div>
+                                    <div>Modalidad: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.isEventoPerdida ? 'Evento de Pérdida' : 'Con OC'}</strong></div>
+                                    {cobranzaDetailTicket.paidDate && (
+                                        <div>Fecha Cobro: <strong style={{ color: 'white' }}>{new Date(cobranzaDetailTicket.paidDate).toLocaleDateString('es-PE')}</strong></div>
+                                    )}
+                                    {cobranzaDetailTicket.rawInvoice?.doc_number && (
+                                        <div>Comprobante: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.rawInvoice.doc_number}</strong></div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Botones de acción */}
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            {cobranzaDetailTicket.status !== 'cobrada' && (
+                                <button
+                                    onClick={() => {
+                                        const t = cobranzaDetailTicket;
+                                        setCobranzaDetailTicket(null);
+                                        setCobranzaModalTicket(t);
+                                        setCobranzaType('oc');
+                                        setCobranzaOcInput(t.ocNumber || '');
+                                        const rawTot = Number(t.monto || 0);
+                                        const rawBase = Number(t.montoSinIGV || (rawTot > 0 ? round2(rawTot / 1.18) : 0));
+                                        setCobranzaMontoBase(rawBase > 0 ? rawBase.toFixed(2) : '');
+                                        setCobranzaMontoTotal(rawTot > 0 ? rawTot.toFixed(2) : '');
+                                        setCobranzaDocNumber('');
+                                        setCobranzaFechaOC(new Date().toISOString().split('T')[0]);
+                                        setCobranzaFechaCobro(new Date().toISOString().split('T')[0]);
+                                    }}
+                                    style={{
+                                        background: '#10B981', color: 'white', border: 'none',
+                                        padding: '0.6rem 1.25rem', borderRadius: '8px', fontSize: '0.8rem',
+                                        fontWeight: 800, cursor: 'pointer'
+                                    }}>
+                                    📄 Registrar OC / Cobro
+                                </button>
+                            )}
+
+                            <button
+                                onClick={() => {
+                                    const tid = cobranzaDetailTicket.ticketId;
+                                    setCobranzaDetailTicket(null);
+                                    if (tid) openFloatingTicket(tid);
+                                }}
+                                style={{
+                                    background: 'rgba(139,92,246,0.2)', border: '1px solid rgba(139,92,246,0.4)',
+                                    color: '#C4B5FD', padding: '0.6rem 1.1rem', borderRadius: '8px',
+                                    fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer'
+                                }}>
+                                📋 Abrir Ventana Operativa
+                            </button>
+
+                            <button
+                                onClick={() => setCobranzaDetailTicket(null)}
+                                style={{
+                                    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                                    color: 'white', padding: '0.6rem 1.1rem', borderRadius: '8px',
+                                    fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer'
+                                }}>
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL: REGISTRAR COBRO / ORDEN DE COMPRA (MODELO MIBANCO/CAPEX) ── */}
             {cobranzaModalTicket && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -2878,36 +3119,43 @@ export default function AdminDashboard() {
                 }} onClick={() => setCobranzaModalTicket(null)}>
                     <div style={{
                         background: '#13141F', border: '1px solid rgba(255,255,255,0.15)',
-                        width: '100%', maxWidth: '480px', borderRadius: '18px',
+                        width: '100%', maxWidth: '540px', borderRadius: '18px',
                         padding: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.8)',
-                        color: 'white'
+                        color: 'white', maxHeight: '92vh', overflowY: 'auto'
                     }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                             <div>
-                                <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: 'white' }}>
-                                    Registrar Cobro
+                                <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: 'white' }}>
+                                    Registrar Cobro de Ticket
                                 </h4>
-                                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#60A5FA', fontWeight: 700, fontFamily: 'monospace' }}>
+                                <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#60A5FA', fontWeight: 800, fontFamily: 'monospace' }}>
                                     Ticket: {cobranzaModalTicket.ticketNum}
                                 </p>
                             </div>
                             <button
                                 onClick={() => setCobranzaModalTicket(null)}
-                                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '1.1rem' }}>
+                                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '1.2rem', padding: '4px' }}>
                                 ✕
                             </button>
                         </div>
 
+                        {/* Datos resumidos del cliente y sede */}
                         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '0.85rem 1rem', marginBottom: '1.25rem' }}>
-                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>Cliente: <strong style={{ color: 'white' }}>{cobranzaModalTicket.clientName}</strong></div>
-                            <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>Sede: <strong style={{ color: 'white' }}>{cobranzaModalTicket.agencia || 'No especificada'}</strong></div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10B981', marginTop: '6px' }}>
-                                Monto por cobrar: S/ {fmt(cobranzaModalTicket.monto)}
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 700 }}>Cliente</div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'white' }}>{cobranzaModalTicket.clientName}</div>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 700 }}>Sede</div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'white' }}>{cobranzaModalTicket.agencia || 'Sede Principal'}</div>
+                                </div>
                             </div>
                         </div>
 
+                        {/* Selector de Modalidad */}
                         <div style={{ marginBottom: '1.25rem' }}>
-                            <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'rgba(255,255,255,0.8)', display: 'block', marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
                                 Modalidad de Cobro:
                             </label>
 
@@ -2916,67 +3164,217 @@ export default function AdminDashboard() {
                                     type="button"
                                     onClick={() => setCobranzaType('oc')}
                                     style={{
-                                        background: cobranzaType === 'oc' ? 'rgba(37,99,235,0.2)' : 'rgba(255,255,255,0.03)',
-                                        border: `1px solid ${cobranzaType === 'oc' ? '#2563EB' : 'rgba(255,255,255,0.1)'}`,
-                                        color: cobranzaType === 'oc' ? '#60A5FA' : 'rgba(255,255,255,0.6)',
-                                        padding: '0.6rem 0.5rem', borderRadius: '10px', fontSize: '0.78rem',
+                                        background: cobranzaType === 'oc' ? 'rgba(37,99,235,0.25)' : 'rgba(255,255,255,0.03)',
+                                        border: `1.5px solid ${cobranzaType === 'oc' ? '#3B82F6' : 'rgba(255,255,255,0.1)'}`,
+                                        color: cobranzaType === 'oc' ? '#93C5FD' : 'rgba(255,255,255,0.6)',
+                                        padding: '0.65rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem',
                                         fontWeight: 800, cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
                                     }}>
-                                    📄 Con OC (Número)
+                                    📄 Con Orden de Compra (OC)
                                 </button>
 
                                 <button
                                     type="button"
                                     onClick={() => setCobranzaType('evento_perdida')}
                                     style={{
-                                        background: cobranzaType === 'evento_perdida' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.03)',
-                                        border: `1px solid ${cobranzaType === 'evento_perdida' ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
-                                        color: cobranzaType === 'evento_perdida' ? '#F87171' : 'rgba(255,255,255,0.6)',
-                                        padding: '0.6rem 0.5rem', borderRadius: '10px', fontSize: '0.78rem',
+                                        background: cobranzaType === 'evento_perdida' ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.03)',
+                                        border: `1.5px solid ${cobranzaType === 'evento_perdida' ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
+                                        color: cobranzaType === 'evento_perdida' ? '#FCA5A5' : 'rgba(255,255,255,0.6)',
+                                        padding: '0.65rem 0.5rem', borderRadius: '10px', fontSize: '0.8rem',
                                         fontWeight: 800, cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s'
                                     }}>
-                                    ⚠️ Evento de Pérdida
+                                    ⚠️ Evento de Pérdida (Sin OC)
                                 </button>
                             </div>
 
                             {cobranzaType === 'oc' ? (
-                                <div>
-                                    <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '0.35rem' }}>
-                                        Número de Orden de Compra (OC): <span style={{ color: '#EF4444' }}>*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ej. OC-45001234"
-                                        value={cobranzaOcInput}
-                                        onChange={e => setCobranzaOcInput(e.target.value)}
-                                        style={{
-                                            width: '100%', background: 'rgba(0,0,0,0.5)',
-                                            border: '1px solid rgba(255,255,255,0.2)',
-                                            borderRadius: '8px', color: 'white', padding: '0.6rem 0.8rem',
-                                            fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box'
-                                        }}
-                                        autoFocus
-                                    />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                                    {/* N° OC y Fecha OC */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                                                N° Orden de Compra (OC): <span style={{ color: '#EF4444' }}>*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="Ej. 0046267 u OC-0046267"
+                                                value={cobranzaOcInput}
+                                                onChange={e => setCobranzaOcInput(e.target.value)}
+                                                style={{
+                                                    width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                    border: '1px solid rgba(59,130,246,0.4)',
+                                                    borderRadius: '8px', color: 'white', padding: '0.55rem 0.75rem',
+                                                    fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box',
+                                                    fontWeight: 700, fontFamily: 'monospace'
+                                                }}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                                                Fecha en la OC:
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={cobranzaFechaOC}
+                                                onChange={e => setCobranzaFechaOC(e.target.value)}
+                                                style={{
+                                                    width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                    border: '1px solid rgba(255,255,255,0.15)',
+                                                    borderRadius: '8px', color: 'white', padding: '0.55rem 0.75rem',
+                                                    fontSize: '0.82rem', outline: 'none', boxSizing: 'border-box'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* N° Comprobante y Fecha Real de Cobro */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                                                N° Comprobante (Factura/Boleta):
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="Ej. F001-0004521"
+                                                value={cobranzaDocNumber}
+                                                onChange={e => setCobranzaDocNumber(e.target.value)}
+                                                style={{
+                                                    width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                    border: '1px solid rgba(255,255,255,0.15)',
+                                                    borderRadius: '8px', color: 'white', padding: '0.55rem 0.75rem',
+                                                    fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box',
+                                                    fontFamily: 'monospace'
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)', display: 'block', marginBottom: '0.3rem', fontWeight: 700 }}>
+                                                Fecha Real de Cobro: <span style={{ color: '#EF4444' }}>*</span>
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={cobranzaFechaCobro}
+                                                onChange={e => setCobranzaFechaCobro(e.target.value)}
+                                                style={{
+                                                    width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                    border: '1px solid rgba(16,185,129,0.4)',
+                                                    borderRadius: '8px', color: 'white', padding: '0.55rem 0.75rem',
+                                                    fontSize: '0.82rem', outline: 'none', boxSizing: 'border-box',
+                                                    fontWeight: 700
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Desglose de Montos (Base, IGV 18%, Total) */}
+                                    <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#10B981', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
+                                            Importes de la Orden de Compra (Soles S/)
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '0.75rem', alignItems: 'flex-end' }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '0.25rem' }}>
+                                                    Subtotal (Sin IGV)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    placeholder="0.00"
+                                                    value={cobranzaMontoBase}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setCobranzaMontoBase(val);
+                                                        const num = parseFloat(val);
+                                                        if (!isNaN(num) && num >= 0) {
+                                                            setCobranzaMontoTotal((num * 1.18).toFixed(2));
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%', background: 'rgba(255,255,255,0.05)',
+                                                        border: '1px solid rgba(255,255,255,0.15)',
+                                                        borderRadius: '6px', color: 'white', padding: '0.45rem 0.6rem',
+                                                        fontSize: '0.82rem', outline: 'none', boxSizing: 'border-box', fontWeight: 700
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '0.25rem' }}>
+                                                    IGV (18%)
+                                                </label>
+                                                <div style={{
+                                                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)',
+                                                    borderRadius: '6px', padding: '0.45rem 0.6rem', fontSize: '0.82rem',
+                                                    color: 'rgba(255,255,255,0.8)', fontWeight: 700
+                                                }}>
+                                                    S/ {fmt(cobranzaMontoBase && !isNaN(parseFloat(cobranzaMontoBase)) ? parseFloat(cobranzaMontoBase) * 0.18 : 0)}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', color: '#10B981', display: 'block', marginBottom: '0.25rem', fontWeight: 800 }}>
+                                                    Total Facturado (Con IGV)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    placeholder="0.00"
+                                                    value={cobranzaMontoTotal}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setCobranzaMontoTotal(val);
+                                                        const num = parseFloat(val);
+                                                        if (!isNaN(num) && num >= 0) {
+                                                            setCobranzaMontoBase((num / 1.18).toFixed(2));
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%', background: 'rgba(16,185,129,0.15)',
+                                                        border: '1.5px solid #10B981',
+                                                        borderRadius: '6px', color: '#34D399', padding: '0.45rem 0.6rem',
+                                                        fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box', fontWeight: 900
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Observaciones */}
+                                    <div>
+                                        <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '0.3rem' }}>
+                                            Observaciones / Glosa (Opcional):
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ej. SINFIMAC CAPEX SEP26 - Ingreso regularizado"
+                                            value={cobranzaObservaciones}
+                                            onChange={e => setCobranzaObservaciones(e.target.value)}
+                                            style={{
+                                                width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                border: '1px solid rgba(255,255,255,0.15)',
+                                                borderRadius: '8px', color: 'white', padding: '0.5rem 0.75rem',
+                                                fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             ) : (
-                                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.72rem', color: '#FCA5A5' }}>
-                                    📌 Este ticket se registrará como cobrado bajo la modalidad de <strong>Evento de Pérdida</strong> sin número de OC.
+                                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', padding: '0.85rem', fontSize: '0.78rem', color: '#FCA5A5', lineHeight: 1.5 }}>
+                                    📌 <strong>Modalidad Evento de Pérdida:</strong> Este ticket se registrará como cobrado bajo evento de pérdida sin número de OC. El monto total liquidado será <strong>S/ {fmt(cobranzaModalTicket.monto)}</strong>.
                                 </div>
                             )}
                         </div>
 
-                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginBottom: '1.25rem' }}>
-                            📅 <strong>Fecha de cobro:</strong> Se asignará automáticamente el momento actual ({new Date().toLocaleDateString('es-PE')}).
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                        {/* Botones de acción del Modal */}
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                             <button
                                 type="button"
                                 onClick={() => setCobranzaModalTicket(null)}
                                 style={{
                                     background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                                    color: 'white', padding: '0.55rem 1.1rem', borderRadius: '8px',
-                                    fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer'
+                                    color: 'white', padding: '0.6rem 1.25rem', borderRadius: '8px',
+                                    fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
                                 }}>
                                 Cancelar
                             </button>
@@ -2984,14 +3382,25 @@ export default function AdminDashboard() {
                             <button
                                 type="button"
                                 disabled={invoiceProcessing === cobranzaModalTicket.id}
-                                onClick={() => handleRegisterCobroSubmit(cobranzaModalTicket, cobranzaType, cobranzaOcInput)}
+                                onClick={() => handleRegisterCobroSubmit(
+                                    cobranzaModalTicket,
+                                    cobranzaType,
+                                    cobranzaOcInput,
+                                    cobranzaDocNumber,
+                                    cobranzaFechaCobro,
+                                    cobranzaMontoBase,
+                                    cobranzaMontoTotal,
+                                    cobranzaFechaOC,
+                                    cobranzaObservaciones
+                                )}
                                 style={{
                                     background: '#10B981', border: 'none', color: 'white',
-                                    padding: '0.55rem 1.25rem', borderRadius: '8px',
-                                    fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer',
-                                    opacity: invoiceProcessing === cobranzaModalTicket.id ? 0.6 : 1
+                                    padding: '0.6rem 1.5rem', borderRadius: '8px',
+                                    fontSize: '0.82rem', fontWeight: 900, cursor: 'pointer',
+                                    opacity: invoiceProcessing === cobranzaModalTicket.id ? 0.6 : 1,
+                                    boxShadow: '0 4px 12px rgba(16,185,129,0.35)'
                                 }}>
-                                {invoiceProcessing === cobranzaModalTicket.id ? 'Guardando...' : 'Confirmar Cobro'}
+                                {invoiceProcessing === cobranzaModalTicket.id ? 'Guardando...' : '✓ Confirmar y Registrar Cobro'}
                             </button>
                         </div>
                     </div>
@@ -3384,12 +3793,26 @@ export default function AdminDashboard() {
                     {/* Contenido del TicketWindow */}
                     {!isMinimized && (
                         <div style={{ flex: 1, overflow: 'hidden' }}>
-                            <TicketWindow
-                                ticket={floatingTicket}
-                                index={floatingIndex}
-                                onClose={() => { setShowFloatingTicket(false); setFloatingTicket(null); }}
-                                onUpdate={handleUpdateTicket}
-                            />
+                            <ErrorBoundary fallback={
+                                <div style={{ padding: '2rem', textAlign: 'center', color: '#EF4444' }}>
+                                    <h4 style={{ margin: '0 0 0.5rem', fontSize: '1rem', fontWeight: 800 }}>No se pudo cargar la vista extendida del ticket</h4>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>
+                                        Puede ver y gestionar los datos de este ticket en el módulo de Tickets o desde el detalle de Cobranzas.
+                                    </p>
+                                    <button 
+                                        onClick={() => { setShowFloatingTicket(false); setFloatingTicket(null); }}
+                                        style={{ marginTop: '1rem', background: '#3B82F6', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>
+                                        Cerrar Ventana
+                                    </button>
+                                </div>
+                            }>
+                                <TicketWindow
+                                    ticket={floatingTicket}
+                                    index={floatingIndex}
+                                    onClose={() => { setShowFloatingTicket(false); setFloatingTicket(null); }}
+                                    onUpdate={handleUpdateTicket}
+                                />
+                            </ErrorBoundary>
                         </div>
                     )}
                 </div>
