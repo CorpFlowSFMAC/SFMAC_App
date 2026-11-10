@@ -22,6 +22,7 @@ import { normalizeStateId } from "@/lib/ticketStates";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { supabase } from "@/lib/supabase";
 import TicketWindow from "./tickets/TicketWindow";
+import CobranzaMasivaModal from "@/components/CobranzaMasivaModal";
 import { calculateTicketFinances, calculateAccountsReceivable, calculateWIP, calculateEBITDA } from "@/lib/calculations";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -190,6 +191,7 @@ export default function AdminDashboard() {
     const [invoiceOcNumber, setInvoiceOcNumber] = useState<Record<string, string>>({});
 
     // Módulo de Administración de Cobranzas (Estado Unificado & Sincronización)
+    const [showBatchCobranzaModal, setShowBatchCobranzaModal] = useState(false);
     const [cobranzasTab, setCobranzasTab] = useState<'pendientes' | 'historial'>('pendientes');
     const [cobranzasSearch, setCobranzasSearch] = useState('');
     const [cobranzaModalTicket, setCobranzaModalTicket] = useState<any | null>(null);
@@ -2929,6 +2931,18 @@ export default function AdminDashboard() {
                                 </button>
 
                                 <button
+                                    onClick={() => setShowBatchCobranzaModal(true)}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                        border: 'none', color: '#FFFFFF', padding: '0.4rem 0.9rem', borderRadius: '8px',
+                                        fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                        boxShadow: '0 2px 10px rgba(16,185,129,0.35)'
+                                    }}>
+                                    ⚡ Cobro Masivo por OC
+                                </button>
+
+                                <button
                                     onClick={() => setShowInvoicesModal(false)}
                                     style={{
                                         background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
@@ -3505,6 +3519,21 @@ export default function AdminDashboard() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ── MODAL DE COBRO MASIVO POR OC ── */}
+            {showBatchCobranzaModal && (
+                <CobranzaMasivaModal
+                    isOpen={showBatchCobranzaModal}
+                    onClose={() => setShowBatchCobranzaModal(false)}
+                    pendingItems={cobranzaItems.filter(i => i.status !== 'cobrada')}
+                    triggerToast={triggerToast}
+                    handleUpdateTicket={handleUpdateTicket}
+                    refreshTickets={refreshTickets}
+                    setInvoices={setInvoices}
+                    setRealtimeOverrides={setRealtimeOverrides}
+                    onSuccess={() => setShowInvoicesModal(false)}
+                />
             )}
 
             <SectionHeader icon={<Zap size={16} />} title="Acceso Rápido a Módulos" color="#FF6600" />
