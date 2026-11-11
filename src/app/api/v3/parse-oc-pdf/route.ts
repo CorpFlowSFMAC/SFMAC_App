@@ -1,7 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFParse } from "pdf-parse";
+import zlib from "zlib";
 
 export const dynamic = "force-dynamic";
+
+function extractTextFromPdfBuffer(buffer: Buffer): string {
+    const raw = buffer.toString('latin1');
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let match: RegExpExecArray | null;
+    let fullText = '';
+
+    while ((match = streamRegex.exec(raw)) !== null) {
+        const streamData = Buffer.from(match[1], 'latin1');
+        let decompressed: Buffer | null = null;
+        try {
+            decompressed = zlib.inflateSync(streamData);
+        } catch {
+            try {
+                decompressed = zlib.inflateRawSync(streamData);
+            } catch {
+                decompressed = streamData;
+            }
+        }
+
+        if (!decompressed) continue;
+
+        const streamText = decompressed.toString('latin1');
+        const textParts: string[] = [];
+
+        // Operadores de texto Tj: (texto) Tj
+        const tjRegex = /\(([\s\S]*?)\)\s*(?:Tj|'|")/g;
+        let tMatch: RegExpExecArray | null;
+        while ((tMatch = tjRegex.exec(streamText)) !== null) {
+            textParts.push(tMatch[1]);
+        }
+
+        // Operadores de arreglo TJ: [(texto1) 120 (texto2)] TJ
+        const arrayTjRegex = /\[([\s\S]*?)\]\s*TJ/gi;
+        let arrMatch: RegExpExecArray | null;
+        while ((arrMatch = arrayTjRegex.exec(streamText)) !== null) {
+            const inner = arrMatch[1];
+            const partRegex = /\(([\s\S]*?)\)/g;
+            let pMatch: RegExpExecArray | null;
+            while ((pMatch = partRegex.exec(inner)) !== null) {
+                textParts.push(pMatch[1]);
+            }
+        }
+
+        if (textParts.length > 0) {
+            fullText += ' ' + textParts.join(' ');
+        }
+    }
+    return fullText;
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -13,10 +63,7 @@ export async function POST(req: NextRequest) {
 
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-
-        const parser = new PDFParse({ data: buffer });
-        const textResult = await parser.getText();
-        const text = typeof textResult === 'string' ? textResult : (textResult.text || "");
+        const text = extractTextFromPdfBuffer(buffer);
 
         // 1. Extraer N° OC (preferir números de 4 a 10 dígitos o alfanumérico limpio)
         let ocNumber = "";

@@ -246,9 +246,16 @@ export default function CobranzaMasivaModal({
                     body: formData
                 });
 
-                const data = await response.json();
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error || "No se pudo procesar el archivo PDF.");
+                let data: any = null;
+                const rawResp = await response.text();
+                try {
+                    data = JSON.parse(rawResp);
+                } catch {
+                    throw new Error(`Respuesta inválida del servidor (${response.status}): ${rawResp.substring(0, 120)}`);
+                }
+
+                if (!response.ok || !data?.success) {
+                    throw new Error(data?.error || "No se pudo procesar el archivo PDF.");
                 }
 
                 // 1. Auto-completar datos de la OC desde el PDF
