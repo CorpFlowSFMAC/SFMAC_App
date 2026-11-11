@@ -6,7 +6,7 @@ import {
     AlertCircle, X, Sparkles, RefreshCw, Layers, DollarSign,
     Calendar, ArrowRight, ShieldCheck, Filter, UploadCloud,
     Paperclip, Trash2, Check, FileCheck, MinusCircle, PlusCircle,
-    Eye, HelpCircle
+    Eye, HelpCircle, AlertTriangle, Zap, CheckCircle
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -23,7 +23,7 @@ interface CobranzaMasivaModalProps {
 }
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-const fmt = (n: number) => n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n: number) => (Number(n) || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Extrae el núcleo numérico principal de un código de ticket para comparación robusta */
 function extractCoreNumber(s: string): string {
@@ -35,6 +35,7 @@ function extractCoreNumber(s: string): string {
 
 /** Compara de forma tolerante y segura el código del PDF con los identificadores del ticket */
 function matchTicket(candidateCode: string, item: any): boolean {
+    if (!candidateCode || !item) return false;
     const cleanCandidate = candidateCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
     const candidateCore = extractCoreNumber(candidateCode);
 
@@ -79,7 +80,7 @@ export default function CobranzaMasivaModal({
 }: CobranzaMasivaModalProps) {
     if (!isOpen) return null;
 
-    // ── Formulario de Cabecera de la OC ─────────────────────────────
+    // ── Formulario de Cabecera de la OC ──────────────────────────────
     const [ocNumber, setOcNumber] = useState("");
     const [fechaOc, setFechaOc] = useState(() => new Date().toISOString().split("T")[0]);
     const [docNumber, setDocNumber] = useState(""); // N° Factura / Boleta
@@ -87,18 +88,23 @@ export default function CobranzaMasivaModal({
     const [expectedTotal, setExpectedTotal] = useState(""); // Total OC del PDF para cuadre
     const [observaciones, setObservaciones] = useState("");
 
-    // ── Búsqueda y Selección de Tickets ─────────────────────────────
+    // ── Búsqueda y Selección de Tickets ──────────────────────────────
     const [searchTerm, setSearchTerm] = useState("");
     const [clientFilter, setClientFilter] = useState("all");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     // ── Modo de Visualización de Tickets ────────────────────────────
-    // 'detected': Muestra únicamente los tickets identificados en la OC
-    // 'all': Muestra todos los tickets cerrados pendientes
     const [viewMode, setViewMode] = useState<'detected' | 'all'>('all');
     const [detectedTicketIds, setDetectedTicketIds] = useState<Set<string>>(new Set());
     const [detectedTicketCodes, setDetectedTicketCodes] = useState<string[]>([]);
-    const tableSectionRef = useRef<HTMLDivElement>(null);
+    
+    // Detalles extraídos de cada línea del PDF: { [ticketCode]: { subtotal: number, total: number } }
+    const [pdfLineDetails, setPdfLineDetails] = useState<Record<string, { subtotal: number; total: number }>>({});
+    
+    // Montos ajustados por el usuario para cuadre exacto con la OC: { [itemId]: { base: number, total: number } }
+    const [adjustedAmounts, setAdjustedAmounts] = useState<Record<string, { base: number; total: number }>>({});
+
+    const tableContainerRef = useRef<HTMLDivElement>(null);
 
     // ── Adjuntar Archivo PDF de la OC ───────────────────────────────
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +122,7 @@ export default function CobranzaMasivaModal({
         source: 'pdf' | 'text';
     } | null>(null);
 
-    // ── Estado de Procesamiento en Lote ─────────────────────────────
+    // ── Estado de Procesamiento en Lote ──────────────────────────────
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState({ current: 0, total: 0 });
 
@@ -129,12 +135,23 @@ export default function CobranzaMasivaModal({
         return Array.from(set);
     }, [pendingItems]);
 
+    // Busca los detalles de la línea en la OC correspondiente a este ticket
+    const getPdfInfoForItem = useCallback((item: any) => {
+        if (!pdfLineDetails || Object.keys(pdfLineDetails).length === 0) return null;
+        for (const [code, val] of Object.entries(pdfLineDetails)) {
+            if (matchTicket(code, item)) {
+                return { code, ...val };
+            }
+        }
+        return null;
+    }, [pdfLineDetails]);
+
     // ── Filtrado interactivo de tickets según vista y buscador ──────
     const filteredItems = useMemo(() => {
         return pendingItems.filter(item => {
             // Si el modo es 'detected', solo mostrar los que pertenecen a la detección (o los que estén seleccionados)
             if (viewMode === 'detected') {
-                const isDetected = detectedTicketIds.has(item.id);
+                const isDetected = detectedTicketIds.has(item.id) || (item.ticketId && detectedTicketIds.has(item.ticketId));
                 const isSelected = selectedIds.has(item.id);
                 if (!isDetected && !isSelected) return false;
             }
@@ -157,7 +174,7 @@ export default function CobranzaMasivaModal({
         });
     }, [pendingItems, viewMode, detectedTicketIds, selectedIds, clientFilter, searchTerm]);
 
-    // ── Totales de los Tickets Seleccionados ─────────────────────────
+    // ── Totales de los Tickets Seleccionados ────────────────────────
     const selectedItems = useMemo(() => {
         return pendingItems.filter(item => selectedIds.has(item.id));
     }, [pendingItems, selectedIds]);
@@ -166,8 +183,16 @@ export default function CobranzaMasivaModal({
         let total = 0;
         let base = 0;
         selectedItems.forEach(i => {
-            total += Number(i.monto || 0);
-            base += Number(i.montoSinIGV || (i.monto ? i.monto / 1.18 : 0));
+            const adj = adjustedAmounts[i.id];
+            if (adj) {
+                total += adj.total;
+                base += adj.base;
+            } else {
+                const itemTotal = Number(i.monto || 0);
+                const itemBase = Number(i.montoSinIGV || (itemTotal > 0 ? itemTotal / 1.18 : 0));
+                total += itemTotal;
+                base += itemBase;
+            }
         });
         total = round2(total);
         base = round2(base);
@@ -178,9 +203,31 @@ export default function CobranzaMasivaModal({
         const isBalanced = diff !== null ? Math.abs(diff) < 0.05 : null;
 
         return { count: selectedItems.length, base, igv, total, expNum, diff, isBalanced };
-    }, [selectedItems, expectedTotal]);
+    }, [selectedItems, adjustedAmounts, expectedTotal]);
 
-    // ── Toggle selección individual (con opción a deseleccionar) ─────
+    // Tickets seleccionados que presentan discrepancia con la OC del PDF
+    const discrepantItems = useMemo(() => {
+        const list: Array<{ item: any; pdfSubtotal: number; pdfTotal: number; systemTotal: number; diff: number }> = [];
+        selectedItems.forEach(item => {
+            const pdfInfo = getPdfInfoForItem(item);
+            if (pdfInfo) {
+                const currentTotal = adjustedAmounts[item.id]?.total ?? round2(item.monto || 0);
+                const diff = round2(currentTotal - pdfInfo.total);
+                if (Math.abs(diff) >= 0.05) {
+                    list.push({
+                        item,
+                        pdfSubtotal: pdfInfo.subtotal,
+                        pdfTotal: pdfInfo.total,
+                        systemTotal: currentTotal,
+                        diff
+                    });
+                }
+            }
+        });
+        return list;
+    }, [selectedItems, adjustedAmounts, getPdfInfoForItem]);
+
+    // ── Toggle selección individual ──────────────────────────────────
     const toggleSelect = useCallback((id: string) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
@@ -208,6 +255,37 @@ export default function CobranzaMasivaModal({
         });
     }, []);
 
+    // ── Ajustar monto de un ticket individual al monto de la OC ──────
+    const handleAdjustSingleToOc = useCallback((item: any, pdfSubtotal: number, pdfTotal: number, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setAdjustedAmounts(prev => ({
+            ...prev,
+            [item.id]: {
+                base: pdfSubtotal,
+                total: pdfTotal
+            }
+        }));
+        triggerToast("Monto Ajustado", `Ticket ${item.ticketNum} ajustado a S/ ${fmt(pdfTotal)} para cuadre exacto con la OC.`);
+    }, [triggerToast]);
+
+    // ── Ajustar automáticamente todos los tickets seleccionados a la OC ─
+    const handleAdjustAllToOc = useCallback(() => {
+        const nextAdjusted = { ...adjustedAmounts };
+        let count = 0;
+        selectedItems.forEach(item => {
+            const pdfInfo = getPdfInfoForItem(item);
+            if (pdfInfo) {
+                nextAdjusted[item.id] = {
+                    base: pdfInfo.subtotal,
+                    total: pdfInfo.total
+                };
+                count++;
+            }
+        });
+        setAdjustedAmounts(nextAdjusted);
+        triggerToast("Lote Ajustado a la OC", `Se ajustaron los montos de ${count} tickets al valor aprobado en la Orden de Compra.`);
+    }, [adjustedAmounts, selectedItems, getPdfInfoForItem, triggerToast]);
+
     // ── Seleccionar todos los visibles ──────────────────────────────
     const handleSelectAllVisible = () => {
         setSelectedIds(prev => {
@@ -217,7 +295,7 @@ export default function CobranzaMasivaModal({
         });
     };
 
-    // ── Deseleccionar todos ─────────────────────────────────────────
+    // ── Deseleccionar todos ──────────────────────────────────────────
     const handleClearSelection = () => {
         setSelectedIds(new Set());
     };
@@ -234,7 +312,6 @@ export default function CobranzaMasivaModal({
 
     // ── Algoritmo Principal: Extraer, Desplegar y Marcar Tickets ────
     const handleDetectAndSelectTickets = async () => {
-        // Caso 1: Se adjuntó un archivo PDF
         if (pdfFile) {
             setIsParsingPdf(true);
             try {
@@ -267,12 +344,17 @@ export default function CobranzaMasivaModal({
                 const detectedCodes: string[] = data.tickets || [];
                 setDetectedTicketCodes(detectedCodes);
 
+                // 3. Guardar detalles de líneas individuales (subtotales y totales de la OC)
+                if (data.ticketDetails) {
+                    setPdfLineDetails(data.ticketDetails);
+                }
+
                 if (detectedCodes.length === 0) {
                     triggerToast("Aviso", "El PDF fue leído pero no se detectaron códigos de ticket en su contenido.");
                     return;
                 }
 
-                // 3. Buscar y marcar los tickets en la lista de pendientes usando matchTicket robusto
+                // 4. Buscar y marcar los tickets en la lista de pendientes usando matchTicket robusto
                 const newSelection = new Set<string>();
                 let matchedCount = 0;
                 const notFoundCodes: string[] = [];
@@ -289,7 +371,8 @@ export default function CobranzaMasivaModal({
 
                 setSelectedIds(newSelection);
                 setDetectedTicketIds(newSelection);
-                // ¡DESPLEGAR Y VISUALIZAR LA LISTA DE TICKETS DE LA OC!
+                
+                // DESPLEGAR Y VISUALIZAR LA LISTA DE TICKETS DE LA OC INMEDIATAMENTE
                 setViewMode('detected');
 
                 setDetectionReport({
@@ -303,14 +386,14 @@ export default function CobranzaMasivaModal({
                     setPastedText(data.rawText);
                 }
 
-                // Scroll automático suave hacia la lista desplegada
+                // Foco suave hacia la tabla visible
                 setTimeout(() => {
-                    tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
+                    tableContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 150);
 
                 triggerToast(
                     "¡Tickets Desplegados con Éxito!",
-                    `OC ${data.ocNumber || ''}: Se desplegaron y marcaron ${matchedCount} tickets encontrados en el sistema (${detectedCodes.length} en el PDF).`
+                    `OC ${data.ocNumber || ''}: Se desplegaron y marcaron ${matchedCount} tickets encontrados (${detectedCodes.length} en el PDF).`
                 );
 
             } catch (err: any) {
@@ -322,7 +405,7 @@ export default function CobranzaMasivaModal({
             return;
         }
 
-        // Caso 2: No hay archivo PDF, pero el usuario pegó texto en la caja manual
+        // Caso 2: Pegado manual
         if (pastedText.trim()) {
             const regex = /([A-Z]{2,4}\d{4,8}(?:\.\d{2})?)/gi;
             const matches = pastedText.match(regex) || [];
@@ -360,8 +443,8 @@ export default function CobranzaMasivaModal({
             });
 
             setTimeout(() => {
-                tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
+                tableContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 150);
 
             triggerToast(
                 "Tickets Desplegados",
@@ -370,7 +453,6 @@ export default function CobranzaMasivaModal({
             return;
         }
 
-        // Caso 3: Ni archivo ni texto
         triggerToast("Acción Requerida", "Por favor adjunte un archivo PDF de la Orden de Compra o pegue la lista de tickets.");
     };
 
@@ -404,8 +486,10 @@ export default function CobranzaMasivaModal({
                 const item = selectedItems[i];
                 setProgress({ current: i + 1, total: totalToProcess });
 
-                const itemTotal = round2(item.monto || 0);
-                const itemBase = round2(item.montoSinIGV || (itemTotal > 0 ? itemTotal / 1.18 : 0));
+                // Tomar el monto ajustado si existe, o el monto original
+                const adj = adjustedAmounts[item.id];
+                const itemTotal = adj ? adj.total : round2(item.monto || 0);
+                const itemBase = adj ? adj.base : round2(item.montoSinIGV || (itemTotal > 0 ? itemTotal / 1.18 : 0));
                 const itemIgv = round2(itemTotal - itemBase);
 
                 try {
@@ -538,37 +622,37 @@ export default function CobranzaMasivaModal({
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(12px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 11000, padding: '1rem'
+            zIndex: 11000, padding: '0.75rem'
         }} onClick={onClose}>
             <div style={{
-                background: '#0B0D14', border: '1px solid rgba(16,185,129,0.3)',
-                width: '100%', maxWidth: '1200px', maxHeight: '94vh',
-                borderRadius: '24px', display: 'flex', flexDirection: 'column',
-                overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.85)',
+                background: '#0B0D14', border: '1px solid rgba(16,185,129,0.35)',
+                width: '100%', maxWidth: '1280px', maxHeight: '96vh',
+                borderRadius: '20px', display: 'flex', flexDirection: 'column',
+                overflow: 'hidden', boxShadow: '0 25px 60px -12px rgba(0,0,0,0.95)',
                 position: 'relative'
             }} onClick={e => e.stopPropagation()}>
 
                 {/* ── HEADER MODAL ── */}
                 <div style={{
-                    padding: '1.25rem 1.75rem',
+                    padding: '0.9rem 1.5rem',
                     borderBottom: '1px solid rgba(255,255,255,0.08)',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    background: 'linear-gradient(90deg, rgba(16,185,129,0.12) 0%, rgba(59,130,246,0.06) 100%)'
+                    background: 'linear-gradient(90deg, rgba(16,185,129,0.15) 0%, rgba(59,130,246,0.08) 100%)'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <div style={{
-                            width: '42px', height: '42px', borderRadius: '12px',
-                            background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)',
+                            width: '38px', height: '38px', borderRadius: '10px',
+                            background: 'rgba(16,185,129,0.25)', border: '1px solid rgba(16,185,129,0.4)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981'
                         }}>
-                            <Layers size={22} />
+                            <Layers size={20} />
                         </div>
                         <div>
-                            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#FFF' }}>
+                            <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#FFF' }}>
                                 Registro de Cobro Masivo por Orden de Compra
                             </h2>
-                            <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
-                                Adjunta el PDF de la OC para extraer, visualizar y verificar automáticamente todos los tickets asociados.
+                            <p style={{ margin: '1px 0 0', fontSize: '0.74rem', color: 'rgba(255,255,255,0.55)' }}>
+                                Vincula una misma OC a múltiples tickets cerrados, verifica montos contra el PDF y sincroniza en un solo clic.
                             </p>
                         </div>
                     </div>
@@ -578,29 +662,28 @@ export default function CobranzaMasivaModal({
                         disabled={isProcessing}
                         style={{
                             background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                            color: 'white', width: '36px', height: '36px', borderRadius: '10px',
+                            color: 'white', width: '34px', height: '34px', borderRadius: '8px',
                             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
-                        <X size={18} />
+                        <X size={17} />
                     </button>
                 </div>
 
-                {/* ── BODY SCROLLABLE ── */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* ── BODY SCROLLABLE PRINCIPAL ── */}
+                <div style={{
+                    flex: 1, overflowY: 'auto', padding: '1rem 1.5rem',
+                    display: 'flex', flexDirection: 'column', gap: '0.85rem'
+                }}>
 
-                    {/* SECCIÓN 1: DATOS GENERALES DE LA ORDEN DE COMPRA */}
+                    {/* SECCIÓN 1: DATOS CABECERA DE LA ORDEN DE COMPRA (COMPACTA) */}
                     <div style={{
-                        background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)',
-                        borderRadius: '16px', padding: '1.25rem'
+                        background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '14px', padding: '0.85rem 1rem'
                     }}>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 900, color: '#10B981', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <FileText size={16} /> DATOS DE LA ORDEN DE COMPRA (APLICAN A TODO EL LOTE)
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
                             {/* N° OC */}
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px', fontWeight: 700 }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#10B981', marginBottom: '3px', fontWeight: 800 }}>
                                     N° Orden de Compra (OC): *
                                 </label>
                                 <input
@@ -609,8 +692,8 @@ export default function CobranzaMasivaModal({
                                     value={ocNumber}
                                     onChange={e => setOcNumber(e.target.value)}
                                     style={{
-                                        width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(16,185,129,0.3)',
-                                        borderRadius: '8px', padding: '0.55rem 0.75rem', color: '#FFF', fontSize: '0.85rem',
+                                        width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(16,185,129,0.4)',
+                                        borderRadius: '7px', padding: '0.45rem 0.65rem', color: '#FFF', fontSize: '0.82rem',
                                         fontWeight: 800, outline: 'none'
                                     }}
                                 />
@@ -618,7 +701,7 @@ export default function CobranzaMasivaModal({
 
                             {/* Fecha en la OC */}
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px', fontWeight: 700 }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', marginBottom: '3px', fontWeight: 700 }}>
                                     Fecha en la OC:
                                 </label>
                                 <input
@@ -627,14 +710,14 @@ export default function CobranzaMasivaModal({
                                     onChange={e => setFechaOc(e.target.value)}
                                     style={{
                                         width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px', padding: '0.55rem 0.75rem', color: '#FFF', fontSize: '0.85rem', outline: 'none'
+                                        borderRadius: '7px', padding: '0.45rem 0.65rem', color: '#FFF', fontSize: '0.82rem', outline: 'none'
                                     }}
                                 />
                             </div>
 
                             {/* N° Comprobante */}
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px', fontWeight: 700 }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', marginBottom: '3px', fontWeight: 700 }}>
                                     N° Comprobante (Factura/Boleta):
                                 </label>
                                 <input
@@ -644,14 +727,14 @@ export default function CobranzaMasivaModal({
                                     onChange={e => setDocNumber(e.target.value)}
                                     style={{
                                         width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px', padding: '0.55rem 0.75rem', color: '#FFF', fontSize: '0.85rem', outline: 'none'
+                                        borderRadius: '7px', padding: '0.45rem 0.65rem', color: '#FFF', fontSize: '0.82rem', outline: 'none'
                                     }}
                                 />
                             </div>
 
                             {/* Fecha Real de Cobro */}
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px', fontWeight: 700 }}>
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#10B981', marginBottom: '3px', fontWeight: 800 }}>
                                     Fecha Real de Cobro: *
                                 </label>
                                 <input
@@ -659,16 +742,16 @@ export default function CobranzaMasivaModal({
                                     value={fechaCobro}
                                     onChange={e => setFechaCobro(e.target.value)}
                                     style={{
-                                        width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(16,185,129,0.3)',
-                                        borderRadius: '8px', padding: '0.55rem 0.75rem', color: '#FFF', fontSize: '0.85rem', outline: 'none'
+                                        width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(16,185,129,0.4)',
+                                        borderRadius: '7px', padding: '0.45rem 0.65rem', color: '#FFF', fontSize: '0.82rem', outline: 'none'
                                     }}
                                 />
                             </div>
 
-                            {/* Total Esperado de la OC (Para verificación y cuadre) */}
+                            {/* Total Esperado de la OC */}
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.72rem', color: '#38BDF8', marginBottom: '4px', fontWeight: 800 }}>
-                                    Total de la OC en PDF (S/ con IGV):
+                                <label style={{ display: 'block', fontSize: '0.7rem', color: '#38BDF8', marginBottom: '3px', fontWeight: 800 }}>
+                                    Total en OC PDF (S/ con IGV):
                                 </label>
                                 <input
                                     type="number"
@@ -677,39 +760,35 @@ export default function CobranzaMasivaModal({
                                     value={expectedTotal}
                                     onChange={e => setExpectedTotal(e.target.value)}
                                     style={{
-                                        width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(56,189,248,0.4)',
-                                        borderRadius: '8px', padding: '0.55rem 0.75rem', color: '#38BDF8', fontSize: '0.85rem',
+                                        width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(56,189,248,0.4)',
+                                        borderRadius: '7px', padding: '0.45rem 0.65rem', color: '#38BDF8', fontSize: '0.82rem',
                                         fontWeight: 900, outline: 'none'
                                     }}
                                 />
                             </div>
                         </div>
 
-                        {/* Observaciones */}
-                        <div style={{ marginTop: '0.75rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', marginBottom: '4px', fontWeight: 700 }}>
-                                Glosa / Observaciones del Lote:
-                            </label>
+                        {/* Glosa / Observaciones */}
+                        <div style={{ marginTop: '0.5rem' }}>
                             <input
                                 type="text"
-                                placeholder="Ej. MiBanco OPEX - Facturación Mantenimiento Sedes (16 tickets)"
+                                placeholder="Glosa / Observaciones del Lote (Ej. MiBanco OPEX - Facturación Mantenimiento Sedes)"
                                 value={observaciones}
                                 onChange={e => setObservaciones(e.target.value)}
                                 style={{
-                                    width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
-                                    borderRadius: '8px', padding: '0.55rem 0.75rem', color: '#FFF', fontSize: '0.85rem', outline: 'none'
+                                    width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: '7px', padding: '0.4rem 0.65rem', color: '#FFF', fontSize: '0.78rem', outline: 'none'
                                 }}
                             />
                         </div>
                     </div>
 
-                    {/* SECCIÓN 2: ADJUNTAR ARCHIVO PDF DE LA OC */}
+                    {/* SECCIÓN 2: BARRA DE ADJUNTAR PDF Y DETECCIÓN AUTOMÁTICA */}
                     <div style={{
                         background: 'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(139,92,246,0.04) 100%)',
-                        border: '1px solid rgba(16,185,129,0.3)',
-                        borderRadius: '16px', padding: '1.25rem'
+                        border: '1px solid rgba(16,185,129,0.25)',
+                        borderRadius: '14px', padding: '0.85rem 1rem'
                     }}>
-                        {/* Hidden File Input */}
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -721,80 +800,80 @@ export default function CobranzaMasivaModal({
                             }}
                         />
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <FileCheck size={18} color="#10B981" />
-                                <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#10B981', letterSpacing: '0.3px' }}>
-                                    ADJUNTAR ARCHIVO PDF DE LA ORDEN DE COMPRA
-                                </span>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    style={{
-                                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                                        border: 'none', color: '#FFF', padding: '0.45rem 1rem', borderRadius: '8px',
-                                        fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer',
-                                        display: 'flex', alignItems: 'center', gap: '6px',
-                                        boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
-                                    }}>
-                                    <Paperclip size={14} />
-                                    {pdfFile ? 'Cambiar Archivo PDF' : 'Adjuntar Archivo PDF'}
-                                </button>
-
-                                <button
-                                    onClick={() => setShowManualPaste(!showManualPaste)}
-                                    style={{
-                                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-                                        color: 'rgba(255,255,255,0.7)', padding: '0.45rem 0.8rem', borderRadius: '8px',
-                                        fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer'
-                                    }}>
-                                    {showManualPaste ? 'Ocultar Texto' : 'O pegar texto manual'}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Tarjeta de Archivo PDF Adjunto o Zona de Arrastrar */}
                         {pdfFile ? (
-                            <div style={{
-                                background: 'rgba(16,185,129,0.1)', border: '1px dashed rgba(16,185,129,0.4)',
-                                borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex',
-                                justifyContent: 'space-between', alignItems: 'center', gap: '1rem'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                            /* Vista compacta cuando hay archivo adjunto */
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                     <div style={{
-                                        width: '42px', height: '42px', borderRadius: '10px',
+                                        width: '36px', height: '36px', borderRadius: '8px',
                                         background: 'rgba(16,185,129,0.2)', display: 'flex',
                                         alignItems: 'center', justifyContent: 'center', color: '#10B981'
                                     }}>
-                                        <FileText size={22} />
+                                        <FileCheck size={20} />
                                     </div>
                                     <div>
-                                        <div style={{ color: 'white', fontWeight: 800, fontSize: '0.88rem' }}>
-                                            {pdfFile.name}
+                                        <div style={{ color: 'white', fontWeight: 800, fontSize: '0.84rem' }}>
+                                            {pdfFile.name} <span style={{ color: '#10B981', fontSize: '0.72rem', fontWeight: 600 }}>({(pdfFile.size / 1024).toFixed(1)} KB)</span>
                                         </div>
-                                        <div style={{ color: '#10B981', fontSize: '0.72rem', fontWeight: 700, marginTop: '2px' }}>
-                                            ✓ Archivo PDF cargado ({(pdfFile.size / 1024).toFixed(1)} KB) — Haz clic en "Detectar y Marcar Tickets Automáticamente"
+                                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem' }}>
+                                            Archivo listo para extracción de tickets y validación de montos
                                         </div>
                                     </div>
                                 </div>
 
-                                <button
-                                    onClick={() => {
-                                        setPdfFile(null);
-                                        if (fileInputRef.current) fileInputRef.current.value = "";
-                                    }}
-                                    title="Quitar archivo"
-                                    style={{
-                                        background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
-                                        color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px',
-                                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>
-                                    <Trash2 size={15} />
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <button
+                                        onClick={handleDetectAndSelectTickets}
+                                        disabled={isParsingPdf}
+                                        style={{
+                                            background: isParsingPdf
+                                                ? 'rgba(139,92,246,0.3)'
+                                                : 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)',
+                                            border: 'none', color: '#FFF', padding: '0.5rem 1.15rem', borderRadius: '8px',
+                                            fontSize: '0.8rem', fontWeight: 900, cursor: isParsingPdf ? 'wait' : 'pointer',
+                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                            boxShadow: '0 3px 12px rgba(139,92,246,0.4)'
+                                        }}>
+                                        {isParsingPdf ? (
+                                            <>
+                                                <RefreshCw size={15} className="animate-spin" />
+                                                <span>Leyendo PDF y tickets...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles size={15} />
+                                                <span>Detectar y Marcar Tickets Automáticamente</span>
+                                            </>
+                                        )}
+                                    </button>
+
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        style={{
+                                            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                                            color: '#FFF', padding: '0.5rem 0.85rem', borderRadius: '8px',
+                                            fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer'
+                                        }}>
+                                        Cambiar PDF
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setPdfFile(null);
+                                            if (fileInputRef.current) fileInputRef.current.value = "";
+                                        }}
+                                        title="Quitar archivo"
+                                        style={{
+                                            background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                                            color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
                             </div>
                         ) : (
+                            /* Dropzone cuando no hay archivo */
                             <div
                                 onClick={() => fileInputRef.current?.click()}
                                 onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
@@ -806,86 +885,65 @@ export default function CobranzaMasivaModal({
                                     if (file) handleFileSelect(file);
                                 }}
                                 style={{
-                                    background: isDragging ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0.3)',
+                                    background: isDragging ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0.25)',
                                     border: `2px dashed ${isDragging ? '#10B981' : 'rgba(255,255,255,0.15)'}`,
-                                    borderRadius: '12px', padding: '1.25rem', textAlign: 'center',
-                                    cursor: 'pointer', transition: 'all 0.2s'
+                                    borderRadius: '10px', padding: '0.85rem', textAlign: 'center',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    gap: '0.85rem'
                                 }}>
-                                <UploadCloud size={32} color={isDragging ? '#10B981' : 'rgba(255,255,255,0.35)'} style={{ margin: '0 auto 0.5rem' }} />
-                                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>
-                                    Haz clic aquí o arrastra tu archivo PDF de la Orden de Compra
-                                </div>
-                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '3px' }}>
-                                    Soporta órdenes de compra de MiBanco (formatos estándar de 1 o más páginas)
+                                <UploadCloud size={24} color="#10B981" />
+                                <div>
+                                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'white' }}>
+                                        Adjuntar PDF de la Orden de Compra:
+                                    </span>
+                                    <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.5)', marginLeft: '6px' }}>
+                                        Haz clic aquí o arrastra tu archivo (ej. MiBanco OPEX/CAPEX)
+                                    </span>
                                 </div>
                             </div>
                         )}
-
-                        {/* Caja de Pegado Manual (Opcional si se despliega) */}
-                        {showManualPaste && (
-                            <div style={{ marginTop: '0.85rem' }}>
-                                <textarea
-                                    rows={3}
-                                    placeholder="O pega aquí texto copiado de la OC (ej. MB015411.26, MB015146.26...)"
-                                    value={pastedText}
-                                    onChange={e => setPastedText(e.target.value)}
-                                    style={{
-                                        width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px', padding: '0.65rem', color: '#FFF', fontSize: '0.78rem',
-                                        outline: 'none', fontFamily: 'monospace', resize: 'vertical'
-                                    }}
-                                />
-                            </div>
-                        )}
-
-                        {/* Botón de Detección, Despliegue y Marcado Automático */}
-                        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                            <button
-                                onClick={handleDetectAndSelectTickets}
-                                disabled={isParsingPdf}
-                                style={{
-                                    background: isParsingPdf
-                                        ? 'rgba(139,92,246,0.3)'
-                                        : 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)',
-                                    border: 'none', color: '#FFF', padding: '0.65rem 1.5rem', borderRadius: '10px',
-                                    fontSize: '0.84rem', fontWeight: 900, cursor: isParsingPdf ? 'wait' : 'pointer',
-                                    display: 'flex', alignItems: 'center', gap: '8px',
-                                    boxShadow: '0 4px 14px rgba(139,92,246,0.45)',
-                                    transition: 'all 0.2s'
-                                }}>
-                                {isParsingPdf ? (
-                                    <>
-                                        <RefreshCw size={16} className="animate-spin" />
-                                        <span>Leyendo PDF y extrayendo tickets...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles size={17} />
-                                        <span>✨ Detectar y Marcar Tickets Automáticamente</span>
-                                    </>
-                                )}
-                            </button>
-
-                            {detectionReport && (
-                                <div style={{
-                                    padding: '0.45rem 0.95rem', borderRadius: '8px',
-                                    background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)',
-                                    fontSize: '0.76rem', color: '#A7F3D0', fontWeight: 700
-                                }}>
-                                    🎯 {detectionReport.matched} de {detectionReport.detected} tickets de la OC desplegados y marcados.
-                                    {detectionReport.notFound.length > 0 && (
-                                        <span style={{ color: '#FCA5A5', marginLeft: '6px' }}>
-                                            ({detectionReport.notFound.length} no encontrados en pendientes)
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                        </div>
                     </div>
 
-                    {/* SECCIÓN 3: CONTROL DE VISTA, SELECCIÓN Y BÚSQUEDA */}
-                    <div ref={tableSectionRef} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {/* SELECTOR DE VISTAS (PESTAÑAS) */}
+                    {/* ALERTA DE DISCREPANCIA FINANCIERA (SI EXISTE DIFERENCIA CON LA OC) */}
+                    {discrepantItems.length > 0 && (
+                        <div style={{
+                            background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.35)',
+                            borderRadius: '12px', padding: '0.75rem 1rem', display: 'flex',
+                            alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <AlertTriangle size={20} color="#F59E0B" />
+                                <div>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 900, color: '#FCD34D' }}>
+                                        Discrepancia detectada entre montos del sistema y la Orden de Compra:
+                                    </div>
+                                    <div style={{ fontSize: '0.73rem', color: 'rgba(255,255,255,0.8)', marginTop: '2px' }}>
+                                        {discrepantItems.map(d => (
+                                            <span key={d.item.id} style={{ marginRight: '10px' }}>
+                                                Ticket <strong>{d.item.ticketNum}</strong>: En OC <strong>S/ {fmt(d.pdfTotal)}</strong> (Sistema: S/ {fmt(d.systemTotal)}, Dif: {d.diff > 0 ? `+S/ ${fmt(d.diff)}` : `-S/ ${fmt(Math.abs(d.diff))}`})
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleAdjustAllToOc}
+                                style={{
+                                    background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                                    border: 'none', color: '#000', padding: '0.45rem 1rem', borderRadius: '8px',
+                                    fontSize: '0.76rem', fontWeight: 900, cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    boxShadow: '0 2px 8px rgba(245,158,11,0.3)'
+                                }}>
+                                <Zap size={14} />
+                                <span>Ajustar tickets a la OC para cuadre exacto (S/ {expectedTotal})</span>
+                            </button>
+                        </div>
+                    )}
+
+                    {/* SECCIÓN 3: PESTAÑAS DE VISTA Y CONTROLES DE BÚSQUEDA */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 {detectedTicketIds.size > 0 && (
@@ -896,13 +954,13 @@ export default function CobranzaMasivaModal({
                                                 ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
                                                 : 'rgba(255,255,255,0.05)',
                                             border: `1px solid ${viewMode === 'detected' ? '#10B981' : 'rgba(255,255,255,0.12)'}`,
-                                            color: '#FFF', padding: '0.45rem 1rem', borderRadius: '10px',
-                                            fontSize: '0.8rem', fontWeight: 900, cursor: 'pointer',
+                                            color: '#FFF', padding: '0.45rem 0.95rem', borderRadius: '8px',
+                                            fontSize: '0.78rem', fontWeight: 900, cursor: 'pointer',
                                             display: 'flex', alignItems: 'center', gap: '6px',
                                             boxShadow: viewMode === 'detected' ? '0 2px 8px rgba(16,185,129,0.3)' : 'none'
                                         }}>
                                         <Sparkles size={14} />
-                                        🎯 Tickets Detectados en la OC ({detectedTicketIds.size})
+                                        <span>Tickets Detectados en la OC ({detectedTicketIds.size})</span>
                                     </button>
                                 )}
 
@@ -913,11 +971,12 @@ export default function CobranzaMasivaModal({
                                             ? 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)'
                                             : 'rgba(255,255,255,0.05)',
                                         border: `1px solid ${viewMode === 'all' ? '#3B82F6' : 'rgba(255,255,255,0.12)'}`,
-                                        color: '#FFF', padding: '0.45rem 1rem', borderRadius: '10px',
-                                        fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer',
+                                        color: '#FFF', padding: '0.45rem 0.95rem', borderRadius: '8px',
+                                        fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer',
                                         display: 'flex', alignItems: 'center', gap: '6px'
                                     }}>
-                                    📋 Todos los Pendientes ({pendingItems.length})
+                                    <FileText size={14} />
+                                    <span>Todos los Pendientes ({pendingItems.length})</span>
                                 </button>
                             </div>
 
@@ -926,28 +985,28 @@ export default function CobranzaMasivaModal({
                                     onClick={handleSelectAllVisible}
                                     style={{
                                         background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
-                                        color: '#60A5FA', padding: '0.4rem 0.85rem', borderRadius: '8px',
-                                        fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer'
+                                        color: '#60A5FA', padding: '0.35rem 0.75rem', borderRadius: '7px',
+                                        fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer'
                                     }}>
-                                    ☑️ Seleccionar Visibles ({filteredItems.length})
+                                    Seleccionar Visibles ({filteredItems.length})
                                 </button>
 
                                 <button
                                     onClick={handleClearSelection}
                                     style={{
                                         background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
-                                        color: '#F87171', padding: '0.4rem 0.85rem', borderRadius: '8px',
-                                        fontSize: '0.74rem', fontWeight: 800, cursor: 'pointer'
+                                        color: '#F87171', padding: '0.35rem 0.75rem', borderRadius: '7px',
+                                        fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer'
                                     }}>
-                                    ⬜ Deseleccionar Todos
+                                    Deseleccionar Todos
                                 </button>
                             </div>
                         </div>
 
-                        {/* FILTROS SECUNDARIOS: BUSCADOR Y CLIENTE */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <div style={{ position: 'relative' }}>
+                        {/* Buscador & Selector de Cliente */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.6rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1 }}>
+                                <div style={{ position: 'relative', width: '240px' }}>
                                     <Search size={14} color="rgba(255,255,255,0.4)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                                     <input
                                         type="text"
@@ -956,8 +1015,8 @@ export default function CobranzaMasivaModal({
                                         onChange={e => setSearchTerm(e.target.value)}
                                         style={{
                                             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                                            borderRadius: '8px', color: 'white', padding: '0.45rem 0.75rem 0.45rem 2rem',
-                                            fontSize: '0.78rem', outline: 'none', width: '220px'
+                                            borderRadius: '7px', color: 'white', padding: '0.4rem 0.65rem 0.4rem 2rem',
+                                            fontSize: '0.76rem', outline: 'none', width: '100%'
                                         }}
                                     />
                                 </div>
@@ -968,58 +1027,52 @@ export default function CobranzaMasivaModal({
                                         onChange={e => setClientFilter(e.target.value)}
                                         style={{
                                             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
-                                            borderRadius: '8px', color: 'white', padding: '0.45rem 0.75rem',
-                                            fontSize: '0.78rem', outline: 'none'
+                                            borderRadius: '7px', color: 'white', padding: '0.4rem 0.65rem',
+                                            fontSize: '0.76rem', outline: 'none'
                                         }}>
                                         <option value="all">Todos los Clientes</option>
                                         {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 )}
 
-                                <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+                                <span style={{ fontSize: '0.73rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
                                     {viewMode === 'detected'
-                                        ? `Mostrando ${filteredItems.length} tickets de la Orden de Compra (puedes deseleccionar cualquiera en la tabla)`
+                                        ? `Mostrando ${filteredItems.length} tickets de la Orden de Compra (puedes deseleccionar o ajustar cualquiera en la tabla)`
                                         : `Mostrando ${filteredItems.length} de ${pendingItems.length} tickets cerrados`
                                     }
                                 </span>
                             </div>
                         </div>
-
-                        {/* AVISO DE TICKETS NO ENCONTRADOS SI HUBIESE */}
-                        {detectionReport && detectionReport.notFound.length > 0 && (
-                            <div style={{
-                                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-                                borderRadius: '10px', padding: '0.6rem 0.9rem', fontSize: '0.74rem', color: '#FCA5A5'
-                            }}>
-                                ⚠️ <strong>Atención:</strong> {detectionReport.notFound.length} tickets encontrados en el PDF no figuran en la lista de tickets cerrados pendientes:
-                                <span style={{ fontFamily: 'monospace', fontWeight: 700, marginLeft: '6px' }}>
-                                    {detectionReport.notFound.join(', ')}
-                                </span>
-                            </div>
-                        )}
                     </div>
 
-                    {/* SECCIÓN 4: TABLA DE TICKETS (CON OPCIÓN A DESELECCIONAR) */}
-                    <div style={{
-                        maxHeight: '340px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: '14px', background: 'rgba(0,0,0,0.25)'
-                    }}>
+                    {/* SECCIÓN 4: TABLA DE TICKETS (EL CUADRO PRINCIPAL) */}
+                    <div
+                        ref={tableContainerRef}
+                        style={{
+                            minHeight: '280px', maxHeight: '420px', overflowY: 'auto',
+                            border: '1px solid rgba(16,185,129,0.25)', borderRadius: '12px',
+                            background: 'rgba(0,0,0,0.4)', position: 'relative'
+                        }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                             <thead>
-                                <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'sticky', top: 0, zIndex: 1, backdropFilter: 'blur(8px)' }}>
-                                    <th style={{ padding: '10px 12px', width: '42px', textAlign: 'center' }}></th>
-                                    <th style={{ padding: '10px 12px', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>N° TICKET</th>
-                                    <th style={{ padding: '10px 12px', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>CLIENTE / SEDE</th>
-                                    <th style={{ padding: '10px 12px', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>SERVICIO</th>
-                                    <th style={{ padding: '10px 12px', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, textAlign: 'right' }}>SUBTOTAL (S/)</th>
-                                    <th style={{ padding: '10px 12px', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, textAlign: 'right' }}>TOTAL CON IGV (S/)</th>
-                                    <th style={{ padding: '10px 12px', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, textAlign: 'center', width: '140px' }}>ACCIÓN</th>
+                                <tr style={{
+                                    background: '#0D111A', borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                    position: 'sticky', top: 0, zIndex: 10
+                                }}>
+                                    <th style={{ padding: '9px 12px', width: '38px', textAlign: 'center' }}></th>
+                                    <th style={{ padding: '9px 12px', fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>N° TICKET</th>
+                                    <th style={{ padding: '9px 12px', fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>CLIENTE / SEDE</th>
+                                    <th style={{ padding: '9px 12px', fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>SERVICIO</th>
+                                    <th style={{ padding: '9px 12px', fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, textAlign: 'right' }}>MONTO SISTEMA</th>
+                                    <th style={{ padding: '9px 12px', fontSize: '0.67rem', color: '#38BDF8', textTransform: 'uppercase', fontWeight: 800, textAlign: 'right' }}>MONTO EN OC (PDF)</th>
+                                    <th style={{ padding: '9px 12px', fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, textAlign: 'center' }}>ESTADO / CUADRE</th>
+                                    <th style={{ padding: '9px 12px', fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, textAlign: 'center', width: '140px' }}>ACCIÓN</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredItems.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} style={{ padding: '2.5rem', textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem' }}>
+                                        <td colSpan={8} style={{ padding: '3rem 1.5rem', textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem' }}>
                                             {viewMode === 'detected'
                                                 ? 'No hay tickets detectados en la OC actualmente seleccionados. Puedes cambiar a la pestaña "Todos los Pendientes" para seleccionar manualmente.'
                                                 : 'No se encontraron tickets cerrados que coincidan con la búsqueda.'}
@@ -1028,38 +1081,56 @@ export default function CobranzaMasivaModal({
                                 ) : (
                                     filteredItems.map(item => {
                                         const isSelected = selectedIds.has(item.id);
-                                        const isDetected = detectedTicketIds.has(item.id);
+                                        const isDetected = detectedTicketIds.has(item.id) || (item.ticketId && detectedTicketIds.has(item.ticketId));
+                                        
+                                        // Detalles extraídos de la OC del PDF si existen
+                                        const pdfInfo = getPdfInfoForItem(item);
+                                        
+                                        // Monto actual aplicado (ajustado u original)
+                                        const adj = adjustedAmounts[item.id];
+                                        const currentTotal = adj ? adj.total : round2(item.monto || 0);
+                                        const currentBase = adj ? adj.base : round2(item.montoSinIGV || (currentTotal > 0 ? currentTotal / 1.18 : 0));
+                                        
+                                        // Comparación contra PDF
+                                        let diffWithPdf = 0;
+                                        let hasDiscrepancy = false;
+                                        if (pdfInfo) {
+                                            diffWithPdf = round2(currentTotal - pdfInfo.total);
+                                            hasDiscrepancy = Math.abs(diffWithPdf) >= 0.05;
+                                        }
 
                                         return (
                                             <tr
                                                 key={item.id}
                                                 onClick={() => toggleSelect(item.id)}
                                                 style={{
-                                                    borderBottom: '1px solid rgba(255,255,255,0.03)',
-                                                    background: isSelected ? 'rgba(16,185,129,0.08)' : 'transparent',
+                                                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                                    background: isSelected
+                                                        ? (hasDiscrepancy ? 'rgba(245, 158, 11, 0.08)' : 'rgba(16,185,129,0.08)')
+                                                        : 'transparent',
                                                     cursor: 'pointer', transition: 'background 0.15s'
                                                 }}>
                                                 {/* CHECKBOX */}
-                                                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                                <td style={{ padding: '9px 12px', textAlign: 'center' }}>
                                                     {isSelected ? (
-                                                        <CheckSquare size={18} color="#10B981" />
+                                                        <CheckSquare size={17} color={hasDiscrepancy ? "#F59E0B" : "#10B981"} />
                                                     ) : (
-                                                        <Square size={18} color="rgba(255,255,255,0.3)" />
+                                                        <Square size={17} color="rgba(255,255,255,0.25)" />
                                                     )}
                                                 </td>
 
                                                 {/* N° TICKET */}
-                                                <td style={{ padding: '10px 12px' }}>
+                                                <td style={{ padding: '9px 12px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <span style={{
-                                                            color: isSelected ? '#10B981' : '#60A5FA',
-                                                            fontFamily: 'monospace', fontWeight: 800, fontSize: '0.84rem'
+                                                            color: isSelected ? (hasDiscrepancy ? '#FCD34D' : '#10B981') : '#60A5FA',
+                                                            fontFamily: 'monospace', fontWeight: 800, fontSize: '0.82rem'
                                                         }}>
                                                             {item.ticketNum}
                                                         </span>
                                                         {isDetected && (
                                                             <span style={{
-                                                                fontSize: '0.62rem', fontWeight: 900,
+                                                                fontSize: '0.6rem', fontWeight: 900,
                                                                 background: 'rgba(16,185,129,0.2)', color: '#10B981',
                                                                 padding: '1px 5px', borderRadius: '4px', border: '1px solid rgba(16,185,129,0.3)'
                                                             }}>
@@ -1070,51 +1141,100 @@ export default function CobranzaMasivaModal({
                                                 </td>
 
                                                 {/* CLIENTE Y SEDE */}
-                                                <td style={{ padding: '10px 12px' }}>
-                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                <td style={{ padding: '9px 12px' }}>
+                                                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.76rem', fontWeight: 600 }}>
                                                         {item.clientName}
                                                     </div>
                                                     {item.agencia && (
-                                                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem' }}>
+                                                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.67rem' }}>
                                                             📍 {item.agencia}
                                                         </div>
                                                     )}
                                                 </td>
 
                                                 {/* SERVICIO */}
-                                                <td style={{ padding: '10px 12px' }}>
+                                                <td style={{ padding: '9px 12px' }}>
                                                     <span style={{
-                                                        padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 800,
+                                                        padding: '2px 6px', borderRadius: '4px', fontSize: '0.64rem', fontWeight: 700,
                                                         background: 'rgba(139,92,246,0.15)', color: '#A78BFA'
                                                     }}>
                                                         {item.servicio}
                                                     </span>
                                                 </td>
 
-                                                {/* SUBTOTAL */}
-                                                <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                                                    <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', fontWeight: 600 }}>
-                                                        S/ {fmt(item.montoSinIGV)}
-                                                    </span>
+                                                {/* MONTO SISTEMA */}
+                                                <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                                                    <div style={{ color: isSelected ? 'white' : 'rgba(255,255,255,0.65)', fontSize: '0.82rem', fontWeight: 800 }}>
+                                                        S/ {fmt(currentTotal)}
+                                                    </div>
+                                                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.66rem' }}>
+                                                        Sub: S/ {fmt(currentBase)}
+                                                    </div>
                                                 </td>
 
-                                                {/* TOTAL CON IGV */}
-                                                <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                                                    <span style={{ color: isSelected ? '#10B981' : '#EF4444', fontSize: '0.84rem', fontWeight: 800 }}>
-                                                        S/ {fmt(item.monto)}
-                                                    </span>
+                                                {/* MONTO EN OC (PDF) */}
+                                                <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                                                    {pdfInfo ? (
+                                                        <div>
+                                                            <div style={{ color: '#38BDF8', fontSize: '0.82rem', fontWeight: 900 }}>
+                                                                S/ {fmt(pdfInfo.total)}
+                                                            </div>
+                                                            <div style={{ color: 'rgba(56,189,248,0.6)', fontSize: '0.66rem' }}>
+                                                                Sub: S/ {fmt(pdfInfo.subtotal)}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem' }}>—</span>
+                                                    )}
                                                 </td>
 
-                                                {/* ACCIÓN DIRECTA (DESELECCIONAR / INCLUIR) */}
-                                                <td style={{ padding: '10px 12px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                                                {/* ESTADO / CUADRE */}
+                                                <td style={{ padding: '9px 12px', textAlign: 'center' }}>
+                                                    {pdfInfo ? (
+                                                        hasDiscrepancy ? (
+                                                            <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                                                <span style={{
+                                                                    fontSize: '0.68rem', fontWeight: 900, color: '#F59E0B',
+                                                                    background: 'rgba(245,158,11,0.15)', padding: '2px 6px', borderRadius: '4px',
+                                                                    border: '1px solid rgba(245,158,11,0.3)'
+                                                                }}>
+                                                                    ⚠️ {diffWithPdf > 0 ? `+S/ ${fmt(diffWithPdf)}` : `-S/ ${fmt(Math.abs(diffWithPdf))}`}
+                                                                </span>
+                                                                <button
+                                                                    onClick={e => handleAdjustSingleToOc(item, pdfInfo.subtotal, pdfInfo.total, e)}
+                                                                    style={{
+                                                                        background: 'rgba(245,158,11,0.2)', border: '1px solid rgba(245,158,11,0.4)',
+                                                                        color: '#FCD34D', padding: '1px 6px', borderRadius: '4px',
+                                                                        fontSize: '0.62rem', fontWeight: 800, cursor: 'pointer'
+                                                                    }}>
+                                                                    Ajustar a OC
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{
+                                                                fontSize: '0.7rem', fontWeight: 800, color: '#10B981',
+                                                                display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                                            }}>
+                                                                <Check size={13} /> Cuadra
+                                                            </span>
+                                                        )
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)' }}>
+                                                            {isSelected ? 'Marcado' : 'Pendiente'}
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* ACCIÓN (DESELECCIONAR / INCLUIR) */}
+                                                <td style={{ padding: '9px 12px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                                                     {isSelected ? (
                                                         <button
                                                             onClick={e => deselectTicket(item.id, e)}
-                                                            title="Deseleccionar este ticket de la OC"
+                                                            title="Deseleccionar este ticket del cobro"
                                                             style={{
                                                                 background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
-                                                                color: '#F87171', padding: '0.3rem 0.65rem', borderRadius: '6px',
-                                                                fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer',
+                                                                color: '#F87171', padding: '0.28rem 0.6rem', borderRadius: '6px',
+                                                                fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer',
                                                                 display: 'inline-flex', alignItems: 'center', gap: '4px'
                                                             }}>
                                                             <MinusCircle size={13} />
@@ -1123,11 +1243,11 @@ export default function CobranzaMasivaModal({
                                                     ) : (
                                                         <button
                                                             onClick={e => selectTicket(item.id, e)}
-                                                            title="Incluir este ticket en la OC"
+                                                            title="Incluir este ticket en el cobro"
                                                             style={{
                                                                 background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)',
-                                                                color: '#34D399', padding: '0.3rem 0.65rem', borderRadius: '6px',
-                                                                fontSize: '0.72rem', fontWeight: 800, cursor: 'pointer',
+                                                                color: '#34D399', padding: '0.28rem 0.6rem', borderRadius: '6px',
+                                                                fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer',
                                                                 display: 'inline-flex', alignItems: 'center', gap: '4px'
                                                             }}>
                                                             <PlusCircle size={13} />
@@ -1143,160 +1263,115 @@ export default function CobranzaMasivaModal({
                         </table>
                     </div>
 
-                    {/* SECCIÓN 5: VISUALIZACIÓN DETALLADA DE MONTOS: SUBTOTAL, IGV Y TOTAL (AL FINAL DE LA LISTA) */}
+                    {/* SECCIÓN 5: RESUMEN FINANCIERO Y CUADRE DEL LOTE (COMPACTA) */}
                     <div style={{
                         background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(59,130,246,0.04) 100%)',
-                        border: '1px solid rgba(16,185,129,0.35)',
-                        borderRadius: '16px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem'
+                        border: '1px solid rgba(16,185,129,0.3)',
+                        borderRadius: '12px', padding: '0.75rem 1rem', display: 'flex',
+                        justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                            <div style={{ fontSize: '0.82rem', fontWeight: 900, color: '#10B981', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <DollarSign size={16} /> RESUMEN DE MONTOS DEL LOTE SELECCIONADO
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                            <div>
+                                <span style={{ fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>
+                                    TICKETS SELECCIONADOS
+                                </span>
+                                <span style={{ fontSize: '1.15rem', fontWeight: 900, color: batchTotals.count > 0 ? '#10B981' : 'white' }}>
+                                    {batchTotals.count} {detectedTicketIds.size > 0 && <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>/ {detectedTicketIds.size} en OC</span>}
+                                </span>
                             </div>
 
-                            {batchTotals.expNum !== null && (
-                                <div style={{
-                                    padding: '0.35rem 0.85rem', borderRadius: '8px',
-                                    background: batchTotals.isBalanced ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                                    border: `1px solid ${batchTotals.isBalanced ? '#10B981' : '#EF4444'}`,
-                                    fontSize: '0.78rem', fontWeight: 900,
-                                    color: batchTotals.isBalanced ? '#A7F3D0' : '#FCA5A5'
-                                }}>
-                                    {batchTotals.isBalanced
-                                        ? '✓ CUADRADO EXACTO AL 100% CON LA ORDEN DE COMPRA'
-                                        : `⚠️ DIFERENCIA CON OC: S/ ${fmt(Math.abs(batchTotals.diff || 0))} ${batchTotals.diff! > 0 ? '(Sobra)' : '(Falta)'}`
-                                    }
-                                </div>
-                            )}
-                        </div>
+                            <div style={{ height: '30px', width: '1px', background: 'rgba(255,255,255,0.1)' }} />
 
-                        {/* TARJETAS DE MONTOS CLARAMENTE VISUALIZADAS */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                            {/* Tickets Seleccionados */}
-                            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>
-                                    TICKETS MARCADOS
-                                </div>
-                                <div style={{ fontSize: '1.4rem', fontWeight: 900, color: batchTotals.count > 0 ? '#10B981' : 'white', marginTop: '2px' }}>
-                                    {batchTotals.count} {detectedTicketIds.size > 0 && <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>/ {detectedTicketIds.size} en OC</span>}
-                                </div>
-                            </div>
-
-                            {/* Subtotal Sin IGV */}
-                            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800 }}>
-                                    SUMA SUBTOTAL (SIN IGV)
-                                </div>
-                                <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'rgba(255,255,255,0.9)', marginTop: '2px' }}>
+                            <div>
+                                <span style={{ fontSize: '0.67rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>
+                                    SUBTOTAL (SIN IGV)
+                                </span>
+                                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'rgba(255,255,255,0.9)' }}>
                                     S/ {fmt(batchTotals.base)}
-                                </div>
+                                </span>
                             </div>
 
-                            {/* IGV 18% */}
-                            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                                <div style={{ fontSize: '0.68rem', color: '#A78BFA', textTransform: 'uppercase', fontWeight: 800 }}>
+                            <div style={{ height: '30px', width: '1px', background: 'rgba(255,255,255,0.1)' }} />
+
+                            <div>
+                                <span style={{ fontSize: '0.67rem', color: '#A78BFA', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>
                                     IGV (18%)
-                                </div>
-                                <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#A78BFA', marginTop: '2px' }}>
+                                </span>
+                                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#A78BFA' }}>
                                     S/ {fmt(batchTotals.igv)}
-                                </div>
+                                </span>
                             </div>
 
-                            {/* Total Con IGV */}
-                            <div style={{
-                                background: 'rgba(16,185,129,0.12)', padding: '0.85rem 1rem', borderRadius: '12px',
-                                border: '1px solid rgba(16,185,129,0.4)', boxShadow: '0 4px 14px rgba(16,185,129,0.15)'
-                            }}>
-                                <div style={{ fontSize: '0.68rem', color: '#10B981', textTransform: 'uppercase', fontWeight: 900 }}>
+                            <div style={{ height: '30px', width: '1px', background: 'rgba(255,255,255,0.1)' }} />
+
+                            <div>
+                                <span style={{ fontSize: '0.67rem', color: '#10B981', textTransform: 'uppercase', fontWeight: 900, display: 'block' }}>
                                     TOTAL FACTURADO (CON IGV)
-                                </div>
-                                <div style={{ fontSize: '1.45rem', fontWeight: 900, color: '#10B981', marginTop: '2px', fontFamily: 'system-ui' }}>
+                                </span>
+                                <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#10B981' }}>
                                     S/ {fmt(batchTotals.total)}
-                                </div>
+                                </span>
                             </div>
                         </div>
 
-                        {/* DETALLE COMPARATIVO CON LA ORDEN DE COMPRA DEL PDF */}
+                        {/* ESTADO DE CUADRE CON LA OC */}
                         {batchTotals.expNum !== null && (
                             <div style={{
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap',
-                                gap: '0.75rem', padding: '0.65rem 0.9rem', borderRadius: '10px',
-                                background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.06)',
-                                fontSize: '0.76rem'
+                                padding: '0.4rem 0.85rem', borderRadius: '8px',
+                                background: batchTotals.isBalanced ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                                border: `1px solid ${batchTotals.isBalanced ? 'rgba(16,185,129,0.4)' : 'rgba(245,158,11,0.4)'}`,
+                                display: 'flex', alignItems: 'center', gap: '8px'
                             }}>
-                                <span style={{ color: 'rgba(255,255,255,0.7)' }}>
-                                    📄 Total registrado en la Orden de Compra: <strong style={{ color: '#38BDF8' }}>S/ {fmt(batchTotals.expNum)}</strong>
-                                </span>
-                                <span style={{ color: 'rgba(255,255,255,0.7)' }}>
-                                    📊 Suma de tickets seleccionados: <strong style={{ color: '#10B981' }}>S/ {fmt(batchTotals.total)}</strong>
-                                </span>
-                                <span style={{ color: batchTotals.isBalanced ? '#10B981' : '#EF4444', fontWeight: 800 }}>
-                                    {batchTotals.isBalanced
-                                        ? '✓ Coincidencia exacta (Diferencia S/ 0.00)'
-                                        : `Diferencia: S/ ${fmt(batchTotals.diff || 0)}`}
-                                </span>
+                                {batchTotals.isBalanced ? (
+                                    <>
+                                        <CheckCircle2 size={16} color="#10B981" />
+                                        <div style={{ fontSize: '0.76rem', fontWeight: 900, color: '#A7F3D0' }}>
+                                            CUADRADO AL 100% CON LA OC (S/ {fmt(batchTotals.expNum)})
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <AlertCircle size={16} color="#F59E0B" />
+                                        <div>
+                                            <div style={{ fontSize: '0.74rem', fontWeight: 900, color: '#FCD34D' }}>
+                                                DIFERENCIA CON OC: S/ {fmt(Math.abs(batchTotals.diff || 0))} {batchTotals.diff! > 0 ? '(Sobra)' : '(Falta)'}
+                                            </div>
+                                            <div style={{ fontSize: '0.66rem', color: 'rgba(255,255,255,0.6)' }}>
+                                                OC: S/ {fmt(batchTotals.expNum)} vs Lote: S/ {fmt(batchTotals.total)}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
 
                 </div>
 
-                {/* ── FOOTER RESUMEN & ACCIONES ── */}
+                {/* ── FOOTER RESUMEN & BOTONES DE ACCIÓN ── */}
                 <div style={{
-                    padding: '1.25rem 1.75rem', borderTop: '1px solid rgba(255,255,255,0.08)',
+                    padding: '0.85rem 1.5rem', borderTop: '1px solid rgba(255,255,255,0.08)',
                     background: '#07090F', display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', flexWrap: 'wrap', gap: '1rem'
+                    alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem'
                 }}>
-                    {/* PANEL DE CUADRE FINANCIERO PIE */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-                        <div>
-                            <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 800 }}>
-                                TICKETS SELECCIONADOS
-                            </div>
-                            <div style={{ fontSize: '1.3rem', fontWeight: 900, color: batchTotals.count > 0 ? '#10B981' : 'white' }}>
-                                {batchTotals.count}
-                            </div>
-                        </div>
-
-                        <div style={{ height: '36px', width: '1px', background: 'rgba(255,255,255,0.1)' }} />
-
-                        <div>
-                            <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 800 }}>
-                                SUBTOTAL (SIN IGV)
-                            </div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'rgba(255,255,255,0.85)' }}>
-                                S/ {fmt(batchTotals.base)}
-                            </div>
-                        </div>
-
-                        <div>
-                            <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', fontWeight: 800 }}>
-                                IGV 18%
-                            </div>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#A78BFA' }}>
-                                S/ {fmt(batchTotals.igv)}
-                            </div>
-                        </div>
-
-                        <div>
-                            <div style={{ fontSize: '0.68rem', color: '#10B981', textTransform: 'uppercase', fontWeight: 900 }}>
-                                TOTAL CON IGV
-                            </div>
-                            <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#10B981', fontFamily: 'system-ui' }}>
-                                S/ {fmt(batchTotals.total)}
-                            </div>
-                        </div>
+                    <div style={{ fontSize: '0.76rem', color: 'rgba(255,255,255,0.6)' }}>
+                        {batchTotals.count === 0 ? (
+                            <span>Ningún ticket seleccionado para cobro.</span>
+                        ) : (
+                            <span>
+                                Confirmando cobro de <strong style={{ color: '#10B981' }}>{batchTotals.count} tickets</strong> por un total de <strong style={{ color: '#10B981' }}>S/ {fmt(batchTotals.total)}</strong> con la OC <strong>{ocNumber || 'N/A'}</strong>.
+                            </span>
+                        )}
                     </div>
 
-                    {/* BOTONES DE ACCIÓN */}
-                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', gap: '0.65rem' }}>
                         <button
                             onClick={onClose}
                             disabled={isProcessing}
                             style={{
                                 background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
-                                color: 'rgba(255,255,255,0.7)', padding: '0.6rem 1.25rem', borderRadius: '10px',
-                                fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer'
+                                color: 'rgba(255,255,255,0.7)', padding: '0.55rem 1.15rem', borderRadius: '8px',
+                                fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
                             }}>
                             Cancelar
                         </button>
@@ -1310,22 +1385,22 @@ export default function CobranzaMasivaModal({
                                     : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                                 border: 'none',
                                 color: isProcessing || batchTotals.count === 0 || !ocNumber.trim() ? 'rgba(255,255,255,0.3)' : '#FFF',
-                                padding: '0.65rem 1.6rem', borderRadius: '10px',
-                                fontSize: '0.88rem', fontWeight: 900,
+                                padding: '0.55rem 1.5rem', borderRadius: '8px',
+                                fontSize: '0.84rem', fontWeight: 900,
                                 cursor: isProcessing || batchTotals.count === 0 || !ocNumber.trim() ? 'not-allowed' : 'pointer',
                                 display: 'flex', alignItems: 'center', gap: '8px',
-                                boxShadow: isProcessing || batchTotals.count === 0 || !ocNumber.trim() ? 'none' : '0 4px 16px rgba(16,185,129,0.4)',
+                                boxShadow: isProcessing || batchTotals.count === 0 || !ocNumber.trim() ? 'none' : '0 4px 14px rgba(16,185,129,0.4)',
                                 transition: 'all 0.2s'
                             }}>
                             {isProcessing ? (
                                 <>
-                                    <RefreshCw size={16} className="animate-spin" />
+                                    <RefreshCw size={15} className="animate-spin" />
                                     <span>Registrando {progress.current} de {progress.total}...</span>
                                 </>
                             ) : (
                                 <>
-                                    <ShieldCheck size={18} />
-                                    <span>Confirmar y Cobrar Lote ({batchTotals.count} Tickets)</span>
+                                    <ShieldCheck size={16} />
+                                    <span>Confirmar y Registrar Cobro ({batchTotals.count} Tickets)</span>
                                 </>
                             )}
                         </button>

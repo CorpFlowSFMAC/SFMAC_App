@@ -67,11 +67,11 @@ export async function POST(req: NextRequest) {
 
         // 1. Extraer N° OC (preferir números de 4 a 10 dígitos o alfanumérico limpio)
         let ocNumber = "";
-        const numOcMatch = text.match(/ORDEN\s+DE\s+COMPRA\s+(?:N[°º\.]*)?\s*([0-9]{4,10})/i);
+        const numOcMatch = text.match(/ORDEN\s+DE\s+COMPRA\s+(?:N[°\.]*)?\s*([0-9]{4,10})/i);
         if (numOcMatch) {
             ocNumber = numOcMatch[1];
         } else {
-            const rawMatch = text.match(/ORDEN\s+DE\s+COMPRA\s+(?:N[°º\.]*)?\s*([A-Z0-9_-]+)/i);
+            const rawMatch = text.match(/ORDEN\s+DE\s+COMPRA\s+(?:N[°\.]*)?\s*([A-Z0-9_-]+)/i);
             if (rawMatch) {
                 ocNumber = rawMatch[1].replace(/P[aá]gina.*$/i, '').trim();
             }
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
             fechaOc = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
         }
 
-        // 3. Extraer Totales
+        // 3. Extraer Totales generales
         const totalMatches = Array.from(text.matchAll(/TOTAL\s+([0-9,]+\.[0-9]{2})/gi));
         let total = 0;
         if (totalMatches.length > 0) {
@@ -100,13 +100,43 @@ export async function POST(req: NextRequest) {
             subtotal = parseFloat(lastSub.replace(/,/g, ''));
         }
 
-        // 4. Extraer códigos de tickets únicos
+        // 4. Extraer códigos de tickets y sus montos individuales de las líneas de la OC
         const ticketRegex = /([A-Z]{2,4}\d{4,8}(?:\.\d{2})?)/g;
         const matches = text.match(ticketRegex) || [];
-        const excludedPrefixes = ["ORDEN", "TOTAL", "PAGINA", "SERIE", "COMPRA", "SRV", "RUC", "TELF"];
+        const excludedPrefixes = ["ORDEN", "TOTAL", "PAGINA", "SERIE", "COMPRA", "SRV", "RUC", "TELF", "SIS"];
         const uniqueTickets = Array.from(new Set(matches))
             .map(t => t.trim().toUpperCase())
             .filter(t => !excludedPrefixes.some(p => t.startsWith(p)));
+
+        // Extraer detalles de cada línea de la OC (subtotal y total con IGV)
+        const ticketDetails: Record<string, { subtotal: number; total: number }> = {};
+        let lineMatch: RegExpExecArray | null;
+        ticketRegex.lastIndex = 0;
+
+        while ((lineMatch = ticketRegex.exec(text)) !== null) {
+            const tCode = lineMatch[1].toUpperCase();
+            if (excludedPrefixes.some(p => tCode.startsWith(p))) continue;
+
+            const snippet = text.substring(lineMatch.index, lineMatch.index + 250);
+            const igvMatch = snippet.match(/IGV\s+18\s+([0-9,]+\.[0-9]{2,4})/i);
+            let itemSubtotal = 0;
+            if (igvMatch) {
+                itemSubtotal = parseFloat(igvMatch[1].replace(/,/g, ''));
+            } else {
+                const numMatches = Array.from(snippet.matchAll(/([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2,4})/g));
+                if (numMatches.length > 0) {
+                    itemSubtotal = parseFloat(numMatches[numMatches.length - 1][1].replace(/,/g, ''));
+                }
+            }
+
+            const itemTotal = Math.round((itemSubtotal * 1.18 + Number.EPSILON) * 100) / 100;
+            if (itemSubtotal > 0) {
+                ticketDetails[tCode] = {
+                    subtotal: itemSubtotal,
+                    total: itemTotal
+                };
+            }
+        }
 
         return NextResponse.json({
             success: true,
@@ -117,6 +147,7 @@ export async function POST(req: NextRequest) {
             total,
             ticketCount: uniqueTickets.length,
             tickets: uniqueTickets,
+            ticketDetails,
             rawText: text
         });
 
