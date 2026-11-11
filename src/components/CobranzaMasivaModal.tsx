@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
     CheckSquare, Square, Search, FileText, CheckCircle2,
     AlertCircle, X, Sparkles, RefreshCw, Layers, DollarSign,
-    Calendar, ArrowRight, ShieldCheck, Filter
+    Calendar, ArrowRight, ShieldCheck, Filter, UploadCloud,
+    Paperclip, Trash2, Check, FileCheck
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -49,10 +50,21 @@ export default function CobranzaMasivaModal({
     const [clientFilter, setClientFilter] = useState("all");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // ── Caja de Pegado Rápido de Texto del PDF / OCR ────────────────
-    const [showPasteBox, setShowPasteBox] = useState(false);
+    // ── Adjuntar Archivo PDF de la OC ───────────────────────────────
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [pdfFile, setPdfFile] = useState<File | null>(null);
+    const [isParsingPdf, setIsParsingPdf] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+
+    // ── Caja de Pegado Rápido Alternativa (Manual) ──────────────────
+    const [showManualPaste, setShowManualPaste] = useState(false);
     const [pastedText, setPastedText] = useState("");
-    const [pasteReport, setPasteReport] = useState<{ detected: number; matched: number; notFound: string[] } | null>(null);
+    const [detectionReport, setDetectionReport] = useState<{
+        detected: number;
+        matched: number;
+        notFound: string[];
+        source: 'pdf' | 'text';
+    } | null>(null);
 
     // ── Estado de Procesamiento en Lote ─────────────────────────────
     const [isProcessing, setIsProcessing] = useState(false);
@@ -128,51 +140,147 @@ export default function CobranzaMasivaModal({
         setSelectedIds(new Set());
     };
 
-    // ── Algoritmo de Detección Automática por Pegado ────────────────
-    const handleDetectFromText = () => {
-        if (!pastedText.trim()) return;
+    // ── Manejo de Archivo PDF Seleccionado ──────────────────────────
+    const handleFileSelect = (file: File) => {
+        if (!file.name.toLowerCase().endsWith(".pdf")) {
+            triggerToast("Error", "El archivo debe ser un documento PDF.");
+            return;
+        }
+        setPdfFile(file);
+        // Sugerir ejecutar la extracción automática
+        triggerToast("PDF Adjunto", `Archivo "${file.name}" cargado. Haz clic en "Detectar y Marcar Tickets Automáticamente".`);
+    };
 
-        // Detectar códigos de ticket como MB015411.26, MB015146, STD0011, etc.
-        const regex = /([A-Z]{2,4}\d{4,8}(?:\.\d{2})?)/gi;
-        const matches = pastedText.match(regex) || [];
-        const detectedCodes = Array.from(new Set(matches.map(m => m.trim().toUpperCase())));
+    // ── Algoritmo Principal: Extraer y Marcar Tickets desde PDF o Texto ─
+    const handleDetectAndSelectTickets = async () => {
+        // Caso 1: Se adjuntó un archivo PDF
+        if (pdfFile) {
+            setIsParsingPdf(true);
+            try {
+                const formData = new FormData();
+                formData.append("file", pdfFile);
 
-        if (detectedCodes.length === 0) {
-            triggerToast("Aviso", "No se encontraron códigos de ticket válidos en el texto pegado.");
+                const response = await fetch("/api/v3/parse-oc-pdf", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || "No se pudo procesar el archivo PDF.");
+                }
+
+                // 1. Auto-completar datos de la OC si no estaban llenos o desde el PDF
+                if (data.ocNumber) {
+                    setOcNumber(data.ocNumber);
+                }
+                if (data.fechaOc) {
+                    setFechaOc(data.fechaOc);
+                }
+                if (data.total && data.total > 0) {
+                    setExpectedTotal(data.total.toFixed(2));
+                }
+
+                // 2. Extraer lista de códigos de ticket encontrados en el PDF
+                const detectedCodes: string[] = data.tickets || [];
+                if (detectedCodes.length === 0) {
+                    triggerToast("Aviso", "El PDF fue leído pero no se detectaron códigos de ticket en su contenido.");
+                    return;
+                }
+
+                // 3. Buscar y marcar los tickets en la lista de pendientes
+                const newSelection = new Set<string>();
+                let matchedCount = 0;
+                const notFoundCodes: string[] = [];
+
+                detectedCodes.forEach(code => {
+                    const cleanCode = code.replace(/[^A-Z0-9]/g, '');
+                    const found = pendingItems.find(item => {
+                        const itemCode = (item.ticketNum || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                        return itemCode === cleanCode || itemCode.includes(cleanCode) || cleanCode.includes(itemCode);
+                    });
+
+                    if (found) {
+                        newSelection.add(found.id);
+                        matchedCount++;
+                    } else {
+                        notFoundCodes.push(code);
+                    }
+                });
+
+                setSelectedIds(newSelection);
+                setDetectionReport({
+                    detected: detectedCodes.length,
+                    matched: matchedCount,
+                    notFound: notFoundCodes,
+                    source: 'pdf'
+                });
+
+                if (data.rawText) {
+                    setPastedText(data.rawText);
+                }
+
+                triggerToast(
+                    "¡PDF Analizado con Éxito!",
+                    `OC ${data.ocNumber || ''}: Se detectaron ${detectedCodes.length} tickets en el PDF. ${matchedCount} marcados automáticamente.`
+                );
+
+            } catch (err: any) {
+                console.error("Error al procesar PDF:", err);
+                triggerToast("Error al leer PDF", err?.message || "No se pudo leer el archivo PDF.");
+            } finally {
+                setIsParsingPdf(false);
+            }
             return;
         }
 
-        const newSelection = new Set(selectedIds);
-        let matchedCount = 0;
-        const notFoundCodes: string[] = [];
+        // Caso 2: No hay archivo PDF, pero el usuario pegó texto en la caja manual
+        if (pastedText.trim()) {
+            const regex = /([A-Z]{2,4}\d{4,8}(?:\.\d{2})?)/gi;
+            const matches = pastedText.match(regex) || [];
+            const detectedCodes = Array.from(new Set(matches.map(m => m.trim().toUpperCase())));
 
-        detectedCodes.forEach(code => {
-            // Buscar por coincidencia exacta o por subcadena numérica
-            const cleanCode = code.replace(/[^A-Z0-9]/g, '');
-            const found = pendingItems.find(item => {
-                const itemCode = (item.ticketNum || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-                return itemCode === cleanCode || itemCode.includes(cleanCode) || cleanCode.includes(itemCode);
+            if (detectedCodes.length === 0) {
+                triggerToast("Aviso", "No se encontraron códigos de ticket válidos en el texto.");
+                return;
+            }
+
+            const newSelection = new Set(selectedIds);
+            let matchedCount = 0;
+            const notFoundCodes: string[] = [];
+
+            detectedCodes.forEach(code => {
+                const cleanCode = code.replace(/[^A-Z0-9]/g, '');
+                const found = pendingItems.find(item => {
+                    const itemCode = (item.ticketNum || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    return itemCode === cleanCode || itemCode.includes(cleanCode) || cleanCode.includes(itemCode);
+                });
+
+                if (found) {
+                    newSelection.add(found.id);
+                    matchedCount++;
+                } else {
+                    notFoundCodes.push(code);
+                }
             });
 
-            if (found) {
-                newSelection.add(found.id);
-                matchedCount++;
-            } else {
-                notFoundCodes.push(code);
-            }
-        });
+            setSelectedIds(newSelection);
+            setDetectionReport({
+                detected: detectedCodes.length,
+                matched: matchedCount,
+                notFound: notFoundCodes,
+                source: 'text'
+            });
 
-        setSelectedIds(newSelection);
-        setPasteReport({
-            detected: detectedCodes.length,
-            matched: matchedCount,
-            notFound: notFoundCodes
-        });
+            triggerToast(
+                "Detección Completada",
+                `Se detectaron ${detectedCodes.length} tickets en el texto. ${matchedCount} encontrados y marcados.`
+            );
+            return;
+        }
 
-        triggerToast(
-            "Detección Completada",
-            `Se detectaron ${detectedCodes.length} tickets en el texto. ${matchedCount} encontrados y marcados.`
-        );
+        // Caso 3: Ni archivo ni texto
+        triggerToast("Acción Requerida", "Por favor adjunte un archivo PDF de la Orden de Compra o pegue la lista de tickets.");
     };
 
     // ── Ejecución del Cobro Masivo ──────────────────────────────────
@@ -378,7 +486,7 @@ export default function CobranzaMasivaModal({
                                 Registro de Cobro Masivo por Orden de Compra
                             </h2>
                             <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
-                                Asocia una misma OC a múltiples tickets cerrados y actualiza todas las métricas en un solo clic.
+                                Adjunta el PDF de la OC para extraer y marcar automáticamente todos los tickets asociados en un solo paso.
                             </p>
                         </div>
                     </div>
@@ -513,74 +621,184 @@ export default function CobranzaMasivaModal({
                         </div>
                     </div>
 
-                    {/* SECCIÓN 2: HERRAMIENTA DE DETECCIÓN INTELIGENTE POR PEGADO */}
+                    {/* SECCIÓN 2: ADJUNTAR ARCHIVO PDF DE LA OC CON DETECCIÓN INTELIGENTE */}
                     <div style={{
-                        background: 'rgba(139,92,246,0.04)', border: '1px solid rgba(139,92,246,0.2)',
-                        borderRadius: '16px', padding: '1rem 1.25rem'
+                        background: 'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(139,92,246,0.04) 100%)',
+                        border: '1px solid rgba(16,185,129,0.3)',
+                        borderRadius: '16px', padding: '1.25rem'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        {/* Hidden File Input */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            style={{ display: 'none' }}
+                            onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) handleFileSelect(file);
+                            }}
+                        />
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Sparkles size={16} color="#A78BFA" />
-                                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#A78BFA' }}>
-                                    Pegado Rápido de Tickets desde PDF o Excel
-                                </span>
-                                <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: '6px' }}>
-                                    (Copia y pega el texto de la OC para marcar todos los tickets en 1 segundo)
+                                <FileCheck size={18} color="#10B981" />
+                                <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#10B981', letterSpacing: '0.3px' }}>
+                                    ADJUNTAR ARCHIVO PDF DE LA ORDEN DE COMPRA
                                 </span>
                             </div>
 
-                            <button
-                                onClick={() => setShowPasteBox(!showPasteBox)}
-                                style={{
-                                    background: showPasteBox ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.15)',
-                                    border: '1px solid rgba(139,92,246,0.4)', color: '#C4B5FD',
-                                    padding: '0.3rem 0.8rem', borderRadius: '8px', fontSize: '0.75rem',
-                                    fontWeight: 800, cursor: 'pointer'
-                                }}>
-                                {showPasteBox ? 'Ocultar Caja de Pegado' : '📋 Abrir Caja de Pegado'}
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                        border: 'none', color: '#FFF', padding: '0.45rem 1rem', borderRadius: '8px',
+                                        fontSize: '0.78rem', fontWeight: 800, cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                        boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
+                                    }}>
+                                    <Paperclip size={14} />
+                                    {pdfFile ? 'Cambiar Archivo PDF' : 'Adjuntar Archivo PDF'}
+                                </button>
+
+                                <button
+                                    onClick={() => setShowManualPaste(!showManualPaste)}
+                                    style={{
+                                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
+                                        color: 'rgba(255,255,255,0.7)', padding: '0.45rem 0.8rem', borderRadius: '8px',
+                                        fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer'
+                                    }}>
+                                    {showManualPaste ? 'Ocultar Texto' : 'O pegar texto manual'}
+                                </button>
+                            </div>
                         </div>
 
-                        {showPasteBox && (
-                            <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                                <textarea
-                                    rows={4}
-                                    placeholder="Pega aquí el contenido copiado de la Orden de Compra o los números de ticket (ej. MB015411.26, MB015146.26, MB014765.26...)"
-                                    value={pastedText}
-                                    onChange={e => setPastedText(e.target.value)}
-                                    style={{
-                                        width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(139,92,246,0.3)',
-                                        borderRadius: '8px', padding: '0.75rem', color: '#FFF', fontSize: '0.8rem',
-                                        outline: 'none', fontFamily: 'monospace', resize: 'vertical'
-                                    }}
-                                />
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <button
-                                        onClick={handleDetectFromText}
-                                        style={{
-                                            background: 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)',
-                                            border: 'none', color: '#FFF', padding: '0.5rem 1.25rem', borderRadius: '8px',
-                                            fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: '6px',
-                                            boxShadow: '0 4px 12px rgba(139,92,246,0.3)'
-                                        }}>
-                                        <Sparkles size={14} /> Detectar y Marcar Tickets Automáticamente
-                                    </button>
-
-                                    {pasteReport && (
-                                        <div style={{ fontSize: '0.75rem', color: '#A78BFA', fontWeight: 700 }}>
-                                            🎯 {pasteReport.matched} de {pasteReport.detected} encontrados en pendientes.
-                                            {pasteReport.notFound.length > 0 && (
-                                                <span style={{ color: '#F87171', marginLeft: '6px' }}>
-                                                    ({pasteReport.notFound.length} no encontrados en pendientes)
-                                                </span>
-                                            )}
+                        {/* Tarjeta de Archivo PDF Adjunto o Zona de Arrastrar */}
+                        {pdfFile ? (
+                            <div style={{
+                                background: 'rgba(16,185,129,0.1)', border: '1px dashed rgba(16,185,129,0.4)',
+                                borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex',
+                                justifyContent: 'space-between', alignItems: 'center', gap: '1rem'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                                    <div style={{
+                                        width: '42px', height: '42px', borderRadius: '10px',
+                                        background: 'rgba(16,185,129,0.2)', display: 'flex',
+                                        alignItems: 'center', justifyContent: 'center', color: '#10B981'
+                                    }}>
+                                        <FileText size={22} />
+                                    </div>
+                                    <div>
+                                        <div style={{ color: 'white', fontWeight: 800, fontSize: '0.88rem' }}>
+                                            {pdfFile.name}
                                         </div>
-                                    )}
+                                        <div style={{ color: '#10B981', fontSize: '0.72rem', fontWeight: 700, marginTop: '2px' }}>
+                                            ✓ Archivo PDF listo para extracción ({(pdfFile.size / 1024).toFixed(1)} KB)
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setPdfFile(null);
+                                        if (fileInputRef.current) fileInputRef.current.value = "";
+                                    }}
+                                    title="Quitar archivo"
+                                    style={{
+                                        background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                                        color: '#EF4444', width: '32px', height: '32px', borderRadius: '8px',
+                                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                    }}>
+                                    <Trash2 size={15} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={e => {
+                                    e.preventDefault();
+                                    setIsDragging(false);
+                                    const file = e.dataTransfer.files?.[0];
+                                    if (file) handleFileSelect(file);
+                                }}
+                                style={{
+                                    background: isDragging ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0.3)',
+                                    border: `2px dashed ${isDragging ? '#10B981' : 'rgba(255,255,255,0.15)'}`,
+                                    borderRadius: '12px', padding: '1.25rem', textAlign: 'center',
+                                    cursor: 'pointer', transition: 'all 0.2s'
+                                }}>
+                                <UploadCloud size={32} color={isDragging ? '#10B981' : 'rgba(255,255,255,0.35)'} style={{ margin: '0 auto 0.5rem' }} />
+                                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>
+                                    Haz clic aquí o arrastra tu archivo PDF de la Orden de Compra
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '3px' }}>
+                                    Soporta órdenes de compra de MiBanco (formatos PDF estándar de 1 o más páginas)
                                 </div>
                             </div>
                         )}
+
+                        {/* Caja de Pegado Manual (Opcional si se despliega) */}
+                        {showManualPaste && (
+                            <div style={{ marginTop: '0.85rem' }}>
+                                <textarea
+                                    rows={3}
+                                    placeholder="O pega aquí texto copiado de la OC (ej. MB015411.26, MB015146.26...)"
+                                    value={pastedText}
+                                    onChange={e => setPastedText(e.target.value)}
+                                    style={{
+                                        width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)',
+                                        borderRadius: '8px', padding: '0.65rem', color: '#FFF', fontSize: '0.78rem',
+                                        outline: 'none', fontFamily: 'monospace', resize: 'vertical'
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        {/* Botón de Detección y Marcado Automático */}
+                        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                            <button
+                                onClick={handleDetectAndSelectTickets}
+                                disabled={isParsingPdf}
+                                style={{
+                                    background: isParsingPdf
+                                        ? 'rgba(139,92,246,0.3)'
+                                        : 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)',
+                                    border: 'none', color: '#FFF', padding: '0.6rem 1.4rem', borderRadius: '10px',
+                                    fontSize: '0.82rem', fontWeight: 900, cursor: isParsingPdf ? 'wait' : 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    boxShadow: '0 4px 14px rgba(139,92,246,0.4)',
+                                    transition: 'all 0.2s'
+                                }}>
+                                {isParsingPdf ? (
+                                    <>
+                                        <RefreshCw size={15} className="animate-spin" />
+                                        <span>Leyendo y extrayendo tickets del PDF...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={16} />
+                                        <span>✨ Detectar y Marcar Tickets Automáticamente</span>
+                                    </>
+                                )}
+                            </button>
+
+                            {detectionReport && (
+                                <div style={{
+                                    padding: '0.4rem 0.85rem', borderRadius: '8px',
+                                    background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)',
+                                    fontSize: '0.75rem', color: '#A7F3D0', fontWeight: 700
+                                }}>
+                                    🎯 {detectionReport.matched} de {detectionReport.detected} tickets encontrados y marcados en pendientes.
+                                    {detectionReport.notFound.length > 0 && (
+                                        <span style={{ color: '#FCA5A5', marginLeft: '6px' }}>
+                                            ({detectionReport.notFound.length} no encontrados en pendientes)
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* SECCIÓN 3: CONTROL DE SELECCIÓN Y BÚSQUEDA */}
@@ -648,7 +866,7 @@ export default function CobranzaMasivaModal({
 
                     {/* SECCIÓN 4: TABLA DE TICKETS PENDIENTES */}
                     <div style={{
-                        maxHeight: '340px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)',
+                        maxHeight: '320px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.08)',
                         borderRadius: '14px', background: 'rgba(0,0,0,0.2)'
                     }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
