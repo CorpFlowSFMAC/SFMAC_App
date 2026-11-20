@@ -81,10 +81,15 @@ export default function CobranzaMasivaModal({
     if (!isOpen) return null;
 
     // ── Formulario de Cabecera de la OC ──────────────────────────────
+    const getTodayLocalDate = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
     const [ocNumber, setOcNumber] = useState("");
-    const [fechaOc, setFechaOc] = useState(() => new Date().toISOString().split("T")[0]);
+    const [fechaOc, setFechaOc] = useState(getTodayLocalDate);
     const [docNumber, setDocNumber] = useState(""); // N° Factura / Boleta
-    const [fechaCobro, setFechaCobro] = useState(() => new Date().toISOString().split("T")[0]);
+    const [fechaCobro, setFechaCobro] = useState(getTodayLocalDate);
     const [expectedTotal, setExpectedTotal] = useState(""); // Total OC del PDF para cuadre
     const [observaciones, setObservaciones] = useState("");
 

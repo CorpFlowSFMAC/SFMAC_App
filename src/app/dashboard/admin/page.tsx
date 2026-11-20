@@ -197,10 +197,23 @@ export default function AdminDashboard() {
     const [cobranzaModalTicket, setCobranzaModalTicket] = useState<any | null>(null);
     const [cobranzaType, setCobranzaType] = useState<'oc' | 'evento_perdida'>('oc');
     const [cobranzaOcInput, setCobranzaOcInput] = useState('');
+    const getTodayLocalDate = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    const formatCobranzaDate = (dateVal: any): string => {
+        if (!dateVal) return 'N/A';
+        const str = String(dateVal);
+        const d = /^\d{4}-\d{2}-\d{2}$/.test(str) ? new Date(`${str}T12:00:00.000Z`) : new Date(dateVal);
+        if (isNaN(d.getTime())) return 'N/A';
+        return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
     // Campos extendidos modelo Orden de Compra (MiBanco CAPEX / SINFIMAC)
     const [cobranzaDocNumber, setCobranzaDocNumber] = useState('');          // N° Factura / Boleta
     const [cobranzaFechaOC, setCobranzaFechaOC] = useState('');              // Fecha emisión de la OC
-    const [cobranzaFechaCobro, setCobranzaFechaCobro] = useState(() => new Date().toISOString().split('T')[0]); // Fecha real de cobro
+    const [cobranzaFechaCobro, setCobranzaFechaCobro] = useState(getTodayLocalDate); // Fecha real de cobro
     const [cobranzaMontoBase, setCobranzaMontoBase] = useState('');          // Monto Base S/ sin IGV
     const [cobranzaMontoTotal, setCobranzaMontoTotal] = useState('');        // Monto Total S/ con IGV
     const [cobranzaObservaciones, setCobranzaObservaciones] = useState('');  // Observaciones / Glosa
@@ -1002,7 +1015,10 @@ export default function AdminDashboard() {
                 const montoBase = Number(inv.amount_base > 0 ? inv.amount_base : (montoTotal / 1.18));
 
                 const ocNumber = inv.invoice_number || tk?.metadata?.oc_number || '';
-                const paidDate = inv.payment_date || inv.paid_date || tk?.metadata?.fecha_cobro || null;
+                const rawPaidDate = inv.payment_date || inv.paid_date || tk?.metadata?.fecha_cobro || null;
+                const paidDate = (rawPaidDate && typeof rawPaidDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawPaidDate))
+                    ? `${rawPaidDate}T12:00:00.000Z`
+                    : rawPaidDate;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk?.metadata?.tipo_cobro === 'evento_perdida';
 
                 const item = {
@@ -1073,7 +1089,10 @@ export default function AdminDashboard() {
 
                 const isCobrado = tk.estado_cobranza === 'cobrado' || tk.metadata?.estado_cobranza === 'cobrado' || Boolean(tk.is_cobrado || tk.status === 'cobrado' || tk.metadata?.is_cobrado);
                 const ocNumber = tk.oc_number || tk.metadata?.oc_number || '';
-                const paidDate = tk.paid_date || tk.metadata?.fecha_cobro || null;
+                const rawPaidDate = tk.paid_date || tk.metadata?.fecha_cobro || null;
+                const paidDate = (rawPaidDate && typeof rawPaidDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawPaidDate))
+                    ? `${rawPaidDate}T12:00:00.000Z`
+                    : rawPaidDate;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk.metadata?.tipo_cobro === 'evento_perdida';
 
                 const item = {
@@ -2904,7 +2923,7 @@ export default function AdminDashboard() {
                                             'Monto (S/)': i.monto,
                                             'Estado': i.status === 'cobrada' ? 'COBRADO' : 'PENDIENTE',
                                             'OC / Ref': i.isEventoPerdida ? 'Evento de Pérdida' : (i.ocNumber || 'N/A'),
-                                            'Fecha Cobro': i.paidDate ? new Date(i.paidDate).toLocaleDateString('es-PE') : 'N/A'
+                                            'Fecha Cobro': formatCobranzaDate(i.paidDate)
                                         }));
 
                                         const headers = Object.keys(csvData[0] || {});
@@ -3030,8 +3049,8 @@ export default function AdminDashboard() {
                                                                     setCobranzaMontoBase(rawBase > 0 ? rawBase.toFixed(2) : '');
                                                                     setCobranzaMontoTotal(rawTot > 0 ? rawTot.toFixed(2) : '');
                                                                     setCobranzaDocNumber(item.rawInvoice?.doc_number || item.rawTicket?.metadata?.doc_number || '');
-                                                                    setCobranzaFechaOC(item.rawTicket?.metadata?.fecha_oc || new Date().toISOString().split('T')[0]);
-                                                                    setCobranzaFechaCobro(item.paidDate ? item.paidDate.split('T')[0] : new Date().toISOString().split('T')[0]);
+                                                                    setCobranzaFechaOC(item.rawTicket?.metadata?.fecha_oc || getTodayLocalDate());
+                                                                    setCobranzaFechaCobro(item.paidDate ? item.paidDate.split('T')[0] : getTodayLocalDate());
                                                                     setCobranzaObservaciones(item.rawTicket?.metadata?.observaciones_cobranza || '');
                                                                 }}
                                                                 disabled={invoiceProcessing === item.id}
@@ -3058,7 +3077,7 @@ export default function AdminDashboard() {
                                                                 </span>
                                                                 {item.paidDate && (
                                                                     <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)' }}>
-                                                                        {new Date(item.paidDate).toLocaleDateString('es-PE')}
+                                                                        {formatCobranzaDate(item.paidDate)}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -3159,7 +3178,7 @@ export default function AdminDashboard() {
                                     <div>N° OC: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.ocNumber || 'N/A'}</strong></div>
                                     <div>Modalidad: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.isEventoPerdida ? 'Evento de Pérdida' : 'Con OC'}</strong></div>
                                     {cobranzaDetailTicket.paidDate && (
-                                        <div>Fecha Cobro: <strong style={{ color: 'white' }}>{new Date(cobranzaDetailTicket.paidDate).toLocaleDateString('es-PE')}</strong></div>
+                                        <div>Fecha Cobro: <strong style={{ color: 'white' }}>{formatCobranzaDate(cobranzaDetailTicket.paidDate)}</strong></div>
                                     )}
                                     {cobranzaDetailTicket.rawInvoice?.doc_number && (
                                         <div>Comprobante: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.rawInvoice.doc_number}</strong></div>
@@ -3183,8 +3202,8 @@ export default function AdminDashboard() {
                                         setCobranzaMontoBase(rawBase > 0 ? rawBase.toFixed(2) : '');
                                         setCobranzaMontoTotal(rawTot > 0 ? rawTot.toFixed(2) : '');
                                         setCobranzaDocNumber('');
-                                        setCobranzaFechaOC(new Date().toISOString().split('T')[0]);
-                                        setCobranzaFechaCobro(new Date().toISOString().split('T')[0]);
+                                        setCobranzaFechaOC(getTodayLocalDate());
+                                        setCobranzaFechaCobro(getTodayLocalDate());
                                     }}
                                     style={{
                                         background: '#10B981', color: 'white', border: 'none',
