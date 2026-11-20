@@ -670,8 +670,8 @@
 /* ─────────────────────────────────────────────────────────── */
 
 /* Contenedor con scroll horizontal táctil para tablas */
-:global(.tableScrollWrapper),
-:global(.mobileScrollX) {
+.adminContainer :global(.tableScrollWrapper),
+.adminContainer :global(.mobileScrollX) {
     width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -680,34 +680,34 @@
     scrollbar-color: rgba(255,102,0,0.3) transparent;
 }
 
-:global(.tableScrollWrapper::-webkit-scrollbar) {
+.adminContainer :global(.tableScrollWrapper::-webkit-scrollbar) {
     height: 4px;
 }
-:global(.tableScrollWrapper::-webkit-scrollbar-track) {
+.adminContainer :global(.tableScrollWrapper::-webkit-scrollbar-track) {
     background: transparent;
 }
-:global(.tableScrollWrapper::-webkit-scrollbar-thumb) {
+.adminContainer :global(.tableScrollWrapper::-webkit-scrollbar-thumb) {
     background: rgba(255,102,0,0.35);
     border-radius: 4px;
 }
 
 @media (max-width: 768px) {
     /* Cualquier tabla dentro del dashboard que no tenga wrapper explícito */
-    :global(.mainContent table),
-    :global(main table) {
+    .adminContainer :global(.mainContent table),
+    .adminContainer :global(main table) {
         min-width: 600px; /* Obliga al scroll si es necesario */
     }
 
     /* Contenedor padre con overflow para dichas tablas */
-    :global(.mainContent .tableContainer),
-    :global(main .tableContainer) {
+    .adminContainer :global(.mainContent .tableContainer),
+    .adminContainer :global(main .tableContainer) {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
 
     /* Info bars (FinancialLiquidationBar, etc.) → scroll horizontal */
-    :global(.infoBar),
-    :global([class*="infoBar"]) {
+    .adminContainer :global(.infoBar),
+    .adminContainer :global([class*="infoBar"]) {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         flex-wrap: nowrap;
@@ -716,27 +716,27 @@
     }
 
     /* Ocultar dividers verticales en pantallas muy pequeñas */
-    :global([class*="verticalDivider"]) {
+    .adminContainer :global([class*="verticalDivider"]) {
         display: none;
     }
 
     /* GestorTurnoWidget → columna en móvil */
-    :global([class*="turnoWidget"]),
-    :global([class*="attendanceBanner"]) {
+    .adminContainer :global([class*="turnoWidget"]),
+    .adminContainer :global([class*="attendanceBanner"]) {
         flex-direction: column !important;
         gap: 12px !important;
         padding: 1rem !important;
         text-align: center;
     }
 
-    :global([class*="turnoWidget"] button) {
+    .adminContainer :global([class*="turnoWidget"] button) {
         width: 100% !important;
         justify-content: center !important;
     }
 
     /* Ocultar columnas menos prioritarias en tablas de tickets */
-    :global(th.hideMobile),
-    :global(td.hideMobile) {
+    .adminContainer :global(th.hideMobile),
+    .adminContainer :global(td.hideMobile) {
         display: none !important;
     }
 }
