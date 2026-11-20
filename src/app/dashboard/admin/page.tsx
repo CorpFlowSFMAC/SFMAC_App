@@ -10,7 +10,8 @@ import {
     DollarSign, TrendingUp, AlertTriangle, Users, CheckCircle2,
     Zap, ArrowRight, BarChart3, Target, Activity, Shield,
     ChevronRight, AlertCircle, Star, Layers,
-    BanknoteIcon, Award, Download, X, FileText, Check
+    BanknoteIcon, Award, Download, X, FileText, Check,
+    UploadCloud, Paperclip, CheckSquare, Square, FileCheck, Eye, RefreshCw, Trash2
 } from "lucide-react";
 import {
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -32,6 +33,46 @@ function hoursAgo(d: string) { return (Date.now() - new Date(d).getTime()) / 3_6
 function fmt(n: number) { return n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtInt(n: number) { return n.toLocaleString("es-PE"); }
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+function extractCoreNumber(s: string): string {
+    if (!s) return "";
+    const clean = String(s).toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const m = clean.match(/\d{4,8}/);
+    return m ? m[0].replace(/^0+/, "") : "";
+}
+
+function matchTicket(candidateCode: string, item: any): boolean {
+    if (!candidateCode || !item) return false;
+    const cleanCandidate = candidateCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const candidateCore = extractCoreNumber(candidateCode);
+
+    const identifiers = [
+        item.ticketNum,
+        item.rawTicket?.client_ticket_number,
+        item.rawTicket?.metadata?.numeroTicketCliente,
+        item.rawTicket?.metadata?.client_ticket_number,
+        String(item.rawTicket?.ticket_number || ""),
+        item.ticketId,
+        item.id
+    ].filter(Boolean);
+
+    for (const id of identifiers) {
+        const cleanId = String(id).toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (cleanId === cleanCandidate) return true;
+
+        const idCore = extractCoreNumber(id);
+        if (candidateCore && idCore && candidateCore === idCore && candidateCore.length >= 4) {
+            return true;
+        }
+
+        if (cleanCandidate.length >= 6 && cleanId.length >= 6) {
+            if (cleanCandidate.includes(cleanId) || cleanId.includes(cleanCandidate)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 // Estado de semáforo global
 type Light = "VERDE" | "AMBAR" | "ROJO";
@@ -217,6 +258,15 @@ export default function AdminDashboard() {
     const [cobranzaMontoBase, setCobranzaMontoBase] = useState('');          // Monto Base S/ sin IGV
     const [cobranzaMontoTotal, setCobranzaMontoTotal] = useState('');        // Monto Total S/ con IGV
     const [cobranzaObservaciones, setCobranzaObservaciones] = useState('');  // Observaciones / Glosa
+
+    // Estados para Factura / Evento de Pérdida
+    const [cobranzaInvoiceFile, setCobranzaInvoiceFile] = useState<File | null>(null);
+    const [isParsingInvoice, setIsParsingInvoice] = useState(false);
+    const [detectedInvoiceTicketCodes, setDetectedInvoiceTicketCodes] = useState<string[]>([]);
+    const [selectedInvoiceTicketIds, setSelectedInvoiceTicketIds] = useState<Set<string>>(new Set());
+    const [invoiceDetectedTicketsList, setInvoiceDetectedTicketsList] = useState<any[]>([]);
+    const [invoiceAdjustedAmounts, setInvoiceAdjustedAmounts] = useState<Record<string, { base: number; total: number }>>({});
+    const invoiceFileInputRef = useRef<HTMLInputElement>(null);
     // Modal de Detalle Rápido de Ticket para Cobranzas (previene pantalla negra)
     const [cobranzaDetailTicket, setCobranzaDetailTicket] = useState<any | null>(null);
 
@@ -1020,6 +1070,8 @@ export default function AdminDashboard() {
                     ? `${rawPaidDate}T12:00:00.000Z`
                     : rawPaidDate;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk?.metadata?.tipo_cobro === 'evento_perdida';
+                const docNumber = inv.doc_number || tk?.metadata?.doc_number || tk?.metadata?.factura_numero || null;
+                const facturaUrl = tk?.metadata?.factura_url || tk?.metadata?.url_factura || null;
 
                 const item = {
                     id: inv.id,
@@ -1034,6 +1086,8 @@ export default function AdminDashboard() {
                     montoSinIGV: round2(montoBase),
                     status: isCobrado ? 'cobrada' : 'pendiente',
                     ocNumber: isEventoPerdida ? '' : ocNumber,
+                    docNumber,
+                    facturaUrl,
                     isEventoPerdida,
                     paidDate,
                     rawTicket: tk,
@@ -1094,6 +1148,8 @@ export default function AdminDashboard() {
                     ? `${rawPaidDate}T12:00:00.000Z`
                     : rawPaidDate;
                 const isEventoPerdida = ocNumber === 'EVENTO_PERDIDA' || tk.metadata?.tipo_cobro === 'evento_perdida';
+                const docNumber = tk.doc_number || tk.metadata?.doc_number || tk.metadata?.factura_numero || null;
+                const facturaUrl = tk.metadata?.factura_url || tk.metadata?.url_factura || null;
 
                 const item = {
                     id: `tk-${tk.id}`,
@@ -1108,6 +1164,8 @@ export default function AdminDashboard() {
                     montoSinIGV: round2(montoSinIGV),
                     status: isCobrado ? 'cobrada' : 'pendiente',
                     ocNumber: isEventoPerdida ? '' : ocNumber,
+                    docNumber,
+                    facturaUrl,
                     isEventoPerdida,
                     paidDate,
                     rawTicket: tk,
@@ -1162,6 +1220,137 @@ export default function AdminDashboard() {
         );
     }, [cobranzaItems, cobranzasTab, cobranzasSearch]);
 
+    const handleInvoiceFileSelect = async (file: File) => {
+        setCobranzaInvoiceFile(file);
+        setIsParsingInvoice(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await fetch("/api/v3/parse-oc-pdf", {
+                method: "POST",
+                body: formData
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || "No se pudo leer el archivo de la factura");
+            }
+
+            // 1. Auto-completar N° Factura si se detectó
+            if (data.docNumber) {
+                setCobranzaDocNumber(data.docNumber);
+            }
+
+            // 2. Auto-completar Fecha de Emisión si se detectó
+            if (data.fechaEmision || data.fechaOc) {
+                setCobranzaFechaCobro(data.fechaEmision || data.fechaOc);
+            }
+
+            // 3. Auto-completar Montos si se detectó
+            if (data.total && data.total > 0) {
+                setCobranzaMontoTotal(data.total.toFixed(2));
+                if (data.subtotal && data.subtotal > 0) {
+                    setCobranzaMontoBase(data.subtotal.toFixed(2));
+                } else {
+                    setCobranzaMontoBase((data.total / 1.18).toFixed(2));
+                }
+            }
+
+            // 4. Códigos de tickets detectados en la factura
+            const detectedCodes: string[] = data.tickets || [];
+            setDetectedInvoiceTicketCodes(detectedCodes);
+
+            // 5. Buscar en cobranzaItems (tickets pendientes) los que coincidan con los códigos detectados
+            const pendingItemsList = cobranzaItems.filter(i => i.status !== 'cobrada');
+            const matchedItems: any[] = [];
+            const newSelected = new Set<string>();
+
+            // Siempre incluir el ticket actual si existe
+            if (cobranzaModalTicket) {
+                newSelected.add(cobranzaModalTicket.id);
+                matchedItems.push(cobranzaModalTicket);
+            }
+
+            detectedCodes.forEach(code => {
+                const found = pendingItemsList.find(pi => matchTicket(code, pi));
+                if (found && !matchedItems.some(m => m.id === found.id)) {
+                    newSelected.add(found.id);
+                    matchedItems.push(found);
+                }
+            });
+
+            setSelectedInvoiceTicketIds(newSelected);
+            setInvoiceDetectedTicketsList(matchedItems);
+
+            // Guardar detalles de montos si la factura traía líneas individuales
+            if (data.ticketDetails) {
+                const adjMap: Record<string, { base: number; total: number }> = {};
+                matchedItems.forEach(item => {
+                    for (const [code, val] of Object.entries(data.ticketDetails as Record<string, any>)) {
+                        if (matchTicket(code, item)) {
+                            adjMap[item.id] = { base: val.subtotal, total: val.total };
+                            break;
+                        }
+                    }
+                });
+                setInvoiceAdjustedAmounts(adjMap);
+            }
+
+            triggerToast(
+                "Factura Leída con Éxito",
+                `Se extrajo ${data.docNumber ? `Factura ${data.docNumber}` : 'el documento'} y se detectaron ${matchedItems.length} ticket(s) coincidentes.`
+            );
+        } catch (err: any) {
+            console.error("Error al analizar factura:", err);
+            triggerToast("Aviso al leer Factura", err?.message || "No se pudo extraer texto automático. Puede ingresar los datos manualmente.");
+        } finally {
+            setIsParsingInvoice(false);
+        }
+    };
+
+    const invoiceBatchSummary = useMemo(() => {
+        if (cobranzaType !== 'evento_perdida') return null;
+
+        // Lista de items a evaluar: si hay lista detectada, los que estén seleccionados; sino, el ticket actual
+        const itemsToSum = invoiceDetectedTicketsList.length > 0
+            ? invoiceDetectedTicketsList.filter(item => selectedInvoiceTicketIds.has(item.id))
+            : (cobranzaModalTicket ? [cobranzaModalTicket] : []);
+
+        let total = 0;
+        let base = 0;
+        itemsToSum.forEach(item => {
+            const adj = invoiceAdjustedAmounts[item.id];
+            if (adj) {
+                total += adj.total;
+                base += adj.base;
+            } else {
+                const itemTot = Number(item.monto || 0);
+                const itemBase = Number(item.montoSinIGV || (itemTot > 0 ? itemTot / 1.18 : 0));
+                total += itemTot;
+                base += itemBase;
+            }
+        });
+
+        total = round2(total);
+        base = round2(base);
+        const igv = round2(total - base);
+
+        const factTotalNum = cobranzaMontoTotal && !isNaN(parseFloat(cobranzaMontoTotal)) ? parseFloat(cobranzaMontoTotal) : null;
+        const diff = factTotalNum !== null ? round2(total - factTotalNum) : null;
+        const isBalanced = diff !== null ? Math.abs(diff) < 0.05 : null;
+
+        return {
+            count: itemsToSum.length,
+            items: itemsToSum,
+            total,
+            base,
+            igv,
+            factTotalNum,
+            diff,
+            isBalanced
+        };
+    }, [cobranzaType, invoiceDetectedTicketsList, selectedInvoiceTicketIds, invoiceAdjustedAmounts, cobranzaModalTicket, cobranzaMontoTotal]);
+
     const handleRegisterCobroSubmit = async (
         item: any,
         type: 'oc' | 'evento_perdida',
@@ -1171,7 +1360,9 @@ export default function AdminDashboard() {
         montoBaseInput?: string,
         montoTotalInput?: string,
         fechaOcInput?: string,
-        observacionesInput?: string
+        observacionesInput?: string,
+        fileToUpload?: File | null,
+        batchTickets?: any[]
     ) => {
         if (!item) return;
 
@@ -1180,83 +1371,167 @@ export default function AdminDashboard() {
             return;
         }
 
+        if (type === 'evento_perdida' && (!docNumInput || !docNumInput.trim())) {
+            triggerToast("Factura Requerida", "Debe ingresar o adjuntar el número de Factura / Comprobante para registrar el evento de pérdida.");
+            return;
+        }
+
         setInvoiceProcessing(item.id);
         const paidDate = fechaCobroInput ? new Date(fechaCobroInput + 'T12:00:00Z').toISOString() : new Date().toISOString();
         const finalOcNumber = type === 'evento_perdida' ? 'EVENTO_PERDIDA' : ocNumInput.trim();
         const finalDocNumber = docNumInput && docNumInput.trim() ? docNumInput.trim() : null;
-        
-        const finalTotal = montoTotalInput && !isNaN(parseFloat(montoTotalInput)) && parseFloat(montoTotalInput) > 0
-            ? round2(parseFloat(montoTotalInput))
-            : round2(item.monto || 0);
-        const finalBase = montoBaseInput && !isNaN(parseFloat(montoBaseInput)) && parseFloat(montoBaseInput) > 0
-            ? round2(parseFloat(montoBaseInput))
-            : round2(finalTotal / 1.18);
-        const finalIgv = round2(finalTotal - finalBase);
 
         try {
-            // 1. Guardar factura en 'invoices' usando columna real 'payment_date'
-            if (item.rawInvoice) {
-                const { error: invErr } = await supabase
-                    .from('invoices')
-                    .update({
-                        status: 'cobrada',
-                        payment_date: paidDate,
-                        invoice_number: finalOcNumber,
-                        doc_number: finalDocNumber,
-                        amount_base: finalBase,
-                        amount_total: finalTotal,
-                        amount_igv: finalIgv
-                    })
-                    .eq('id', item.rawInvoice.id);
-
-                if (invErr) throw invErr;
-            } else {
-                const invoicePayload = {
-                    ticket_id: item.ticketId,
-                    client_id: item.rawTicket?.client_id || item.rawTicket?.cliente_id || null,
-                    amount_base: finalBase,
-                    amount_total: finalTotal,
-                    amount_igv: finalIgv,
-                    status: 'cobrada',
-                    payment_date: paidDate,
-                    issued_date: fechaOcInput || item.fechaCreacion || paidDate,
-                    invoice_number: finalOcNumber,
-                    doc_number: finalDocNumber
-                };
-
-                const { data: invData, error: invErr } = await supabase
-                    .from('invoices')
-                    .insert([invoicePayload])
-                    .select('*');
-
-                if (invErr) throw invErr;
+            // 1. Subir archivo de factura a Supabase Storage bucket 'vouchers' si se adjuntó
+            let uploadedFileUrl: string | null = null;
+            if (fileToUpload) {
+                try {
+                    const ext = fileToUpload.name.split('.').pop() || 'pdf';
+                    const cleanName = `factura_ep_${item.ticketId || item.id || Date.now()}_${Date.now()}.${ext}`;
+                    const { data: upData, error: upErr } = await supabase.storage
+                        .from('vouchers')
+                        .upload(cleanName, fileToUpload, {
+                            contentType: fileToUpload.type || 'application/pdf',
+                            upsert: true
+                        });
+                    if (!upErr && upData) {
+                        const { data: urlData } = supabase.storage.from('vouchers').getPublicUrl(cleanName);
+                        uploadedFileUrl = urlData?.publicUrl || null;
+                    } else if (upErr) {
+                        console.warn("[Storage Upload Warning]:", upErr.message);
+                    }
+                } catch (upEx) {
+                    console.error("[Storage Upload Exception]:", upEx);
+                }
             }
 
-            // 2. Actualizar ticket en la base de datos (solo columnas válidas de la tabla tickets)
-            if (item.ticketId) {
-                const ticketMeta = item.rawTicket?.metadata || {};
-                await handleUpdateTicket(item.ticketId, {
-                    total_quoted_amount: finalTotal,
-                    ...(item.rawTicket?.closure_date ? {} : { closure_date: paidDate }),
-                    metadata: {
-                        ...ticketMeta,
-                        is_cobrado: true,
-                        estado_cobranza: 'cobrado',
-                        fecha_cobro: paidDate,
-                        fecha_oc: fechaOcInput || null,
-                        oc_number: finalOcNumber,
-                        doc_number: finalDocNumber,
-                        tipo_cobro: type,
-                        monto_cobrado: finalTotal,
-                        monto_base_cobrado: finalBase,
-                        monto_igv_cobrado: finalIgv,
-                        montoFinal: finalTotal,
-                        montoSubtotal: finalBase,
-                        montoIGV: finalIgv,
-                        ingresos_reales: finalBase,
-                        observaciones_cobranza: observacionesInput || null
+            // 2. Determinar la lista de tickets a procesar (lote o individual)
+            const targets = (type === 'evento_perdida' && batchTickets && batchTickets.length > 0)
+                ? batchTickets
+                : [item];
+
+            const overridesToApply: Record<string, any> = {};
+
+            for (const targetItem of targets) {
+                const isSinglePrimary = targets.length === 1 && targetItem.id === item.id;
+                
+                // Montos
+                let targetTotal = round2(targetItem.monto || 0);
+                let targetBase = round2(targetItem.montoSinIGV || (targetTotal > 0 ? targetTotal / 1.18 : 0));
+                
+                if (isSinglePrimary) {
+                    if (montoTotalInput && !isNaN(parseFloat(montoTotalInput)) && parseFloat(montoTotalInput) > 0) {
+                        targetTotal = round2(parseFloat(montoTotalInput));
                     }
-                });
+                    if (montoBaseInput && !isNaN(parseFloat(montoBaseInput)) && parseFloat(montoBaseInput) > 0) {
+                        targetBase = round2(parseFloat(montoBaseInput));
+                    } else {
+                        targetBase = round2(targetTotal / 1.18);
+                    }
+                } else if (invoiceAdjustedAmounts[targetItem.id]) {
+                    targetTotal = invoiceAdjustedAmounts[targetItem.id].total;
+                    targetBase = invoiceAdjustedAmounts[targetItem.id].base;
+                }
+                const targetIgv = round2(targetTotal - targetBase);
+
+                // A. Guardar factura en 'invoices'
+                if (targetItem.rawInvoice) {
+                    const { error: invErr } = await supabase
+                        .from('invoices')
+                        .update({
+                            status: 'cobrada',
+                            payment_date: paidDate,
+                            invoice_number: finalOcNumber,
+                            doc_number: finalDocNumber,
+                            amount_base: targetBase,
+                            amount_total: targetTotal,
+                            amount_igv: targetIgv
+                        })
+                        .eq('id', targetItem.rawInvoice.id);
+
+                    if (invErr) throw invErr;
+                } else {
+                    const invoicePayload = {
+                        ticket_id: targetItem.ticketId,
+                        client_id: targetItem.rawTicket?.client_id || targetItem.rawTicket?.cliente_id || null,
+                        amount_base: targetBase,
+                        amount_total: targetTotal,
+                        amount_igv: targetIgv,
+                        status: 'cobrada',
+                        payment_date: paidDate,
+                        issued_date: fechaOcInput || targetItem.fechaCreacion || paidDate,
+                        invoice_number: finalOcNumber,
+                        doc_number: finalDocNumber
+                    };
+
+                    const { error: invErr } = await supabase
+                        .from('invoices')
+                        .insert([invoicePayload]);
+
+                    if (invErr) throw invErr;
+                }
+
+                // B. Actualizar ticket en la base de datos
+                if (targetItem.ticketId) {
+                    const ticketMeta = targetItem.rawTicket?.metadata || {};
+                    const finalFacturaUrl = uploadedFileUrl || ticketMeta.factura_url || null;
+
+                    await handleUpdateTicket(targetItem.ticketId, {
+                        total_quoted_amount: targetTotal,
+                        ...(targetItem.rawTicket?.closure_date ? {} : { closure_date: paidDate }),
+                        metadata: {
+                            ...ticketMeta,
+                            is_cobrado: true,
+                            estado_cobranza: 'cobrado',
+                            fecha_cobro: paidDate,
+                            fecha_oc: fechaOcInput || null,
+                            oc_number: finalOcNumber,
+                            doc_number: finalDocNumber,
+                            tipo_cobro: type,
+                            factura_url: finalFacturaUrl,
+                            monto_cobrado: targetTotal,
+                            monto_base_cobrado: targetBase,
+                            monto_igv_cobrado: targetIgv,
+                            montoFinal: targetTotal,
+                            montoSubtotal: targetBase,
+                            montoIGV: targetIgv,
+                            ingresos_reales: targetBase,
+                            observaciones_cobranza: observacionesInput || null
+                        }
+                    });
+
+                    // C. Acumular realtime override
+                    overridesToApply[targetItem.ticketId] = {
+                        total_quoted_amount: targetTotal,
+                        montoFinal: targetTotal,
+                        ingresos_reales: targetBase,
+                        status_id: 'ticket_cerrado',
+                        estadoId: 'ticket_cerrado',
+                        closure_date: targetItem.rawTicket?.closure_date || paidDate,
+                        fechaCierre: targetItem.rawTicket?.closure_date || paidDate,
+                        estado_cobranza: 'cobrado',
+                        is_cobrado: true,
+                        metadata: {
+                            ...ticketMeta,
+                            is_cobrado: true,
+                            estado_cobranza: 'cobrado',
+                            fecha_cobro: paidDate,
+                            fecha_oc: fechaOcInput || null,
+                            oc_number: finalOcNumber,
+                            doc_number: finalDocNumber,
+                            tipo_cobro: type,
+                            factura_url: finalFacturaUrl,
+                            monto_cobrado: targetTotal,
+                            monto_base_cobrado: targetBase,
+                            monto_igv_cobrado: targetIgv,
+                            montoFinal: targetTotal,
+                            montoSubtotal: targetBase,
+                            montoIGV: targetIgv,
+                            ingresos_reales: targetBase,
+                            observaciones_cobranza: observacionesInput || null
+                        }
+                    };
+                }
             }
 
             // 3. Recargar inmediatamente las facturas frescas de la base de datos
@@ -1268,45 +1543,17 @@ export default function AdminDashboard() {
                 })));
             }
 
-            // 4. Sincronizar activeTickets de forma reactiva instantánea para que las métricas de gestores recalculen de inmediato
+            // 4. Sincronizar activeTickets de forma reactiva instantánea
             setRealtimeOverrides(prev => ({
                 ...prev,
-                [item.ticketId]: {
-                    total_quoted_amount: finalTotal,
-                    montoFinal: finalTotal,
-                    ingresos_reales: finalBase,
-                    status_id: 'ticket_cerrado',
-                    estadoId: 'ticket_cerrado',
-                    closure_date: item.rawTicket?.closure_date || paidDate,
-                    fechaCierre: item.rawTicket?.closure_date || paidDate,
-                    estado_cobranza: 'cobrado',
-                    is_cobrado: true,
-                    metadata: {
-                        ...(item.rawTicket?.metadata || {}),
-                        is_cobrado: true,
-                        estado_cobranza: 'cobrado',
-                        fecha_cobro: paidDate,
-                        fecha_oc: fechaOcInput || null,
-                        oc_number: finalOcNumber,
-                        doc_number: finalDocNumber,
-                        tipo_cobro: type,
-                        monto_cobrado: finalTotal,
-                        monto_base_cobrado: finalBase,
-                        monto_igv_cobrado: finalIgv,
-                        montoFinal: finalTotal,
-                        montoSubtotal: finalBase,
-                        montoIGV: finalIgv,
-                        ingresos_reales: finalBase,
-                        observaciones_cobranza: observacionesInput || null
-                    }
-                }
+                ...overridesToApply
             }));
 
             // 5. Refrescar tickets en el contexto global
             await refreshTickets();
             setLastRefresh(new Date());
 
-            // 6. Cerrar AMBOS modales: el modal de registro y la ventana completa de cobranzas
+            // 6. Cerrar modales
             setCobranzaModalTicket(null);
             setShowInvoicesModal(false);
 
@@ -1317,14 +1564,22 @@ export default function AdminDashboard() {
             setCobranzaMontoBase('');
             setCobranzaMontoTotal('');
             setCobranzaObservaciones('');
+            setCobranzaInvoiceFile(null);
+            setIsParsingInvoice(false);
+            setDetectedInvoiceTicketCodes([]);
+            setSelectedInvoiceTicketIds(new Set());
+            setInvoiceDetectedTicketsList([]);
+            setInvoiceAdjustedAmounts({});
 
             triggerToast(
-                "Cobro Registrado y Métricas Actualizadas",
-                `Ticket ${item.ticketNum} cobrado exitosamente (S/ ${finalTotal.toFixed(2)}). Métricas financieras y de gestores sincronizadas.`
+                "Cobro Registrado Exitosamente",
+                type === 'evento_perdida'
+                    ? `Factura ${finalDocNumber || 'S/N'} vinculada a ${targets.length} ticket(s) por Evento de Pérdida.`
+                    : `Ticket ${item.ticketNum} cobrado exitosamente con la OC ${finalOcNumber}.`
             );
         } catch (err: any) {
             console.error("Error al registrar cobro:", err);
-            triggerToast("Error", `No se pudo registrar el cobro: ${err?.message || 'Error del servidor'}`);
+            triggerToast("Error al Registrar Cobro", err?.message || "Ocurrió un error inesperado.");
         } finally {
             setInvoiceProcessing(null);
         }
@@ -3180,8 +3435,24 @@ export default function AdminDashboard() {
                                     {cobranzaDetailTicket.paidDate && (
                                         <div>Fecha Cobro: <strong style={{ color: 'white' }}>{formatCobranzaDate(cobranzaDetailTicket.paidDate)}</strong></div>
                                     )}
-                                    {cobranzaDetailTicket.rawInvoice?.doc_number && (
-                                        <div>Comprobante: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.rawInvoice.doc_number}</strong></div>
+                                    {(cobranzaDetailTicket.docNumber || cobranzaDetailTicket.rawInvoice?.doc_number) && (
+                                        <div>Comprobante: <strong style={{ color: 'white' }}>{cobranzaDetailTicket.docNumber || cobranzaDetailTicket.rawInvoice?.doc_number}</strong></div>
+                                    )}
+                                    {cobranzaDetailTicket.facturaUrl && (
+                                        <div style={{ gridColumn: 'span 2', marginTop: '6px' }}>
+                                            <a
+                                                href={cobranzaDetailTicket.facturaUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                                    color: '#34D399', fontSize: '0.78rem', fontWeight: 800,
+                                                    textDecoration: 'none', background: 'rgba(16,185,129,0.15)',
+                                                    padding: '5px 12px', borderRadius: '6px', border: '1px solid rgba(16,185,129,0.3)'
+                                                }}>
+                                                <Paperclip size={14} /> Ver Documento de Factura Adjunta
+                                            </a>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -3201,9 +3472,15 @@ export default function AdminDashboard() {
                                         const rawBase = Number(t.montoSinIGV || (rawTot > 0 ? round2(rawTot / 1.18) : 0));
                                         setCobranzaMontoBase(rawBase > 0 ? rawBase.toFixed(2) : '');
                                         setCobranzaMontoTotal(rawTot > 0 ? rawTot.toFixed(2) : '');
-                                        setCobranzaDocNumber('');
+                                        setCobranzaDocNumber(t.docNumber || t.rawInvoice?.doc_number || '');
                                         setCobranzaFechaOC(getTodayLocalDate());
                                         setCobranzaFechaCobro(getTodayLocalDate());
+                                        setCobranzaInvoiceFile(null);
+                                        setIsParsingInvoice(false);
+                                        setDetectedInvoiceTicketCodes([]);
+                                        setSelectedInvoiceTicketIds(new Set([t.id]));
+                                        setInvoiceDetectedTicketsList([t]);
+                                        setInvoiceAdjustedAmounts({});
                                     }}
                                     style={{
                                         background: '#10B981', color: 'white', border: 'none',
@@ -3252,9 +3529,10 @@ export default function AdminDashboard() {
                 }} onClick={() => setCobranzaModalTicket(null)}>
                     <div style={{
                         background: '#13141F', border: '1px solid rgba(255,255,255,0.15)',
-                        width: '100%', maxWidth: '540px', borderRadius: '18px',
+                        width: '100%', maxWidth: cobranzaType === 'evento_perdida' ? '680px' : '540px', borderRadius: '18px',
                         padding: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.8)',
-                        color: 'white', maxHeight: '92vh', overflowY: 'auto'
+                        color: 'white', maxHeight: '92vh', overflowY: 'auto',
+                        transition: 'max-width 0.25s ease'
                     }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                             <div>
@@ -3308,7 +3586,15 @@ export default function AdminDashboard() {
 
                                 <button
                                     type="button"
-                                    onClick={() => setCobranzaType('evento_perdida')}
+                                    onClick={() => {
+                                        setCobranzaType('evento_perdida');
+                                        if (cobranzaModalTicket) {
+                                            setSelectedInvoiceTicketIds(new Set([cobranzaModalTicket.id]));
+                                            if (!invoiceDetectedTicketsList.some(m => m.id === cobranzaModalTicket.id)) {
+                                                setInvoiceDetectedTicketsList([cobranzaModalTicket]);
+                                            }
+                                        }
+                                    }}
                                     style={{
                                         background: cobranzaType === 'evento_perdida' ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.03)',
                                         border: `1.5px solid ${cobranzaType === 'evento_perdida' ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
@@ -3493,8 +3779,418 @@ export default function AdminDashboard() {
                                     </div>
                                 </div>
                             ) : (
-                                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', padding: '0.85rem', fontSize: '0.78rem', color: '#FCA5A5', lineHeight: 1.5 }}>
-                                    📌 <strong>Modalidad Evento de Pérdida:</strong> Este ticket se registrará como cobrado bajo evento de pérdida sin número de OC. El monto total liquidado será <strong>S/ {fmt(cobranzaModalTicket.monto)}</strong>.
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    {/* Banner explicativo Evento de Pérdida */}
+                                    <div style={{
+                                        background: 'linear-gradient(135deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)',
+                                        border: '1px solid rgba(239,68,68,0.3)',
+                                        borderRadius: '12px', padding: '0.85rem 1rem', fontSize: '0.8rem', color: '#FCA5A5', lineHeight: 1.5
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                            <AlertTriangle size={15} color="#EF4444" />
+                                            <span style={{ fontWeight: 800, color: '#FFFFFF', fontSize: '0.85rem' }}>
+                                                Servicio por Evento de Pérdida (Sin OC)
+                                            </span>
+                                        </div>
+                                        Los eventos de pérdida no cuentan con Orden de Compra pero se liquidan adjuntando la <strong>Factura de Venta</strong>. Sube el comprobante (PDF o XML) para que el sistema lea y coteje los tickets automáticamente.
+                                    </div>
+
+                                    {/* Carga y Lectura de Factura (Dropzone / File Input) */}
+                                    <div>
+                                        <input
+                                            type="file"
+                                            ref={invoiceFileInputRef}
+                                            accept=".pdf,.xml,application/pdf,text/xml"
+                                            style={{ display: 'none' }}
+                                            onChange={e => {
+                                                const f = e.target.files?.[0];
+                                                if (f) handleInvoiceFileSelect(f);
+                                            }}
+                                        />
+
+                                        {!cobranzaInvoiceFile ? (
+                                            <div
+                                                onClick={() => invoiceFileInputRef.current?.click()}
+                                                style={{
+                                                    border: '2px dashed rgba(239,68,68,0.4)',
+                                                    background: 'rgba(239,68,68,0.04)',
+                                                    borderRadius: '12px',
+                                                    padding: '1.25rem 1rem',
+                                                    textAlign: 'center',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.borderColor = '#EF4444')}
+                                                onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)')}
+                                            >
+                                                <UploadCloud size={28} color="#EF4444" style={{ margin: '0 auto 6px' }} />
+                                                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'white' }}>
+                                                    Adjuntar Factura Electrónica (PDF o XML)
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                                                    Haz clic o arrastra el archivo aquí. El sistema leerá el N° Factura, importes y tickets asociados.
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div style={{
+                                                background: 'rgba(255,255,255,0.03)',
+                                                border: '1px solid rgba(16,185,129,0.3)',
+                                                borderRadius: '12px',
+                                                padding: '0.75rem 1rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                gap: '12px'
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                                    <div style={{
+                                                        width: '36px', height: '36px', borderRadius: '8px',
+                                                        background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                                                    }}>
+                                                        <FileCheck size={20} color="#10B981" />
+                                                    </div>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {cobranzaInvoiceFile.name}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                                                            {(cobranzaInvoiceFile.size / 1024).toFixed(1)} KB &bull; Factura adjunta
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                                                    {isParsingInvoice ? (
+                                                        <span style={{ fontSize: '0.75rem', color: '#60A5FA', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <RefreshCw size={13} className="animate-spin" /> Leyendo...
+                                                        </span>
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleInvoiceFileSelect(cobranzaInvoiceFile)}
+                                                                title="Reanalizar Factura"
+                                                                style={{
+                                                                    background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
+                                                                    color: '#93C5FD', padding: '5px 8px', borderRadius: '6px', fontSize: '0.72rem',
+                                                                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                                                                }}>
+                                                                <RefreshCw size={12} /> Releer
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setCobranzaInvoiceFile(null);
+                                                                    setDetectedInvoiceTicketCodes([]);
+                                                                    if (cobranzaModalTicket) {
+                                                                        setInvoiceDetectedTicketsList([cobranzaModalTicket]);
+                                                                        setSelectedInvoiceTicketIds(new Set([cobranzaModalTicket.id]));
+                                                                    }
+                                                                }}
+                                                                title="Quitar archivo"
+                                                                style={{
+                                                                    background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                                                                    color: '#FCA5A5', padding: '5px 8px', borderRadius: '6px', fontSize: '0.72rem',
+                                                                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                                                                }}>
+                                                                <Trash2 size={12} />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Campos de la Factura: N° Comprobante y Fecha */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '0.3rem', fontWeight: 800 }}>
+                                                N° Factura / Comprobante: <span style={{ color: '#EF4444' }}>*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                placeholder="Ej. F001-0004521"
+                                                value={cobranzaDocNumber}
+                                                onChange={e => setCobranzaDocNumber(e.target.value)}
+                                                style={{
+                                                    width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                    border: '1.5px solid rgba(239,68,68,0.5)',
+                                                    borderRadius: '8px', color: 'white', padding: '0.55rem 0.75rem',
+                                                    fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box',
+                                                    fontFamily: 'monospace', fontWeight: 800
+                                                }}
+                                                autoFocus
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '0.3rem', fontWeight: 800 }}>
+                                                Fecha Real de Cobro: <span style={{ color: '#EF4444' }}>*</span>
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={cobranzaFechaCobro}
+                                                onChange={e => setCobranzaFechaCobro(e.target.value)}
+                                                style={{
+                                                    width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                    border: '1px solid rgba(16,185,129,0.4)',
+                                                    borderRadius: '8px', color: 'white', padding: '0.55rem 0.75rem',
+                                                    fontSize: '0.82rem', outline: 'none', boxSizing: 'border-box',
+                                                    fontWeight: 700
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Desglose de Montos de la Factura (Subtotal, IGV 18%, Total) */}
+                                    <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                                        <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#EF4444', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.5px' }}>
+                                            Importes de la Factura (Soles S/)
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '0.75rem', alignItems: 'flex-end' }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '0.25rem' }}>
+                                                    Subtotal (Sin IGV)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    placeholder="0.00"
+                                                    value={cobranzaMontoBase}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setCobranzaMontoBase(val);
+                                                        const num = parseFloat(val);
+                                                        if (!isNaN(num) && num >= 0) {
+                                                            setCobranzaMontoTotal((num * 1.18).toFixed(2));
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%', background: 'rgba(255,255,255,0.05)',
+                                                        border: '1px solid rgba(255,255,255,0.15)',
+                                                        borderRadius: '6px', color: 'white', padding: '0.45rem 0.6rem',
+                                                        fontSize: '0.82rem', outline: 'none', boxSizing: 'border-box', fontWeight: 700
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '0.25rem' }}>
+                                                    IGV (18%)
+                                                </label>
+                                                <div style={{
+                                                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)',
+                                                    borderRadius: '6px', padding: '0.45rem 0.6rem', fontSize: '0.82rem',
+                                                    color: 'rgba(255,255,255,0.8)', fontWeight: 700
+                                                }}>
+                                                    S/ {fmt(cobranzaMontoBase && !isNaN(parseFloat(cobranzaMontoBase)) ? parseFloat(cobranzaMontoBase) * 0.18 : 0)}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ fontSize: '0.68rem', color: '#EF4444', display: 'block', marginBottom: '0.25rem', fontWeight: 800 }}>
+                                                    Total Factura (Con IGV)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    placeholder="0.00"
+                                                    value={cobranzaMontoTotal}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        setCobranzaMontoTotal(val);
+                                                        const num = parseFloat(val);
+                                                        if (!isNaN(num) && num >= 0) {
+                                                            setCobranzaMontoBase((num / 1.18).toFixed(2));
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%', background: 'rgba(239,68,68,0.12)',
+                                                        border: '1.5px solid #EF4444',
+                                                        borderRadius: '6px', color: '#FCA5A5', padding: '0.45rem 0.6rem',
+                                                        fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box', fontWeight: 900
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Visualización y Selección de Tickets (Similar al Cobro Masivo) */}
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '0.85rem 1rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'white', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Layers size={13} color="#60A5FA" />
+                                                <span>Tickets Detectados en la Factura ({selectedInvoiceTicketIds.size} seleccionados)</span>
+                                            </div>
+                                            {invoiceDetectedTicketsList.length > 1 && (
+                                                <div style={{ display: 'flex', gap: '6px' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const allIds = new Set(invoiceDetectedTicketsList.map(i => i.id));
+                                                            setSelectedInvoiceTicketIds(allIds);
+                                                        }}
+                                                        style={{
+                                                            background: 'transparent', border: 'none', color: '#60A5FA',
+                                                            fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', padding: '2px 4px'
+                                                        }}>
+                                                        Seleccionar Todos
+                                                    </button>
+                                                    <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedInvoiceTicketIds(new Set([cobranzaModalTicket.id]));
+                                                        }}
+                                                        style={{
+                                                            background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)',
+                                                            fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', padding: '2px 4px'
+                                                        }}>
+                                                        Solo Actual
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Lista de Tickets en la Factura */}
+                                        <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '2px' }}>
+                                            {(invoiceDetectedTicketsList.length > 0 ? invoiceDetectedTicketsList : [cobranzaModalTicket]).map((tItem: any) => {
+                                                const isSelected = selectedInvoiceTicketIds.has(tItem.id);
+                                                const isPrimary = tItem.id === cobranzaModalTicket.id;
+                                                const itemMonto = tItem.monto || 0;
+
+                                                return (
+                                                    <div
+                                                        key={tItem.id}
+                                                        onClick={() => {
+                                                            if (isPrimary && selectedInvoiceTicketIds.size === 1) return;
+                                                            setSelectedInvoiceTicketIds(prev => {
+                                                                const next = new Set(prev);
+                                                                if (next.has(tItem.id)) next.delete(tItem.id);
+                                                                else next.add(tItem.id);
+                                                                return next;
+                                                            });
+                                                        }}
+                                                        style={{
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                            background: isSelected ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.02)',
+                                                            border: `1px solid ${isSelected ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.06)'}`,
+                                                            borderRadius: '8px', padding: '0.55rem 0.75rem', cursor: 'pointer', transition: 'all 0.15s'
+                                                        }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                                            <div style={{ color: isSelected ? '#60A5FA' : 'rgba(255,255,255,0.3)' }}>
+                                                                {isSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'white', fontFamily: 'monospace' }}>
+                                                                        {tItem.ticketNum}
+                                                                    </span>
+                                                                    {isPrimary && (
+                                                                        <span style={{ background: 'rgba(239,68,68,0.2)', color: '#FCA5A5', fontSize: '0.62rem', fontWeight: 800, padding: '1px 5px', borderRadius: '4px' }}>
+                                                                            Ticket Actual
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', marginTop: '1px' }}>
+                                                                    {tItem.clientName} &bull; {tItem.agencia || 'Sede Principal'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                                            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#10B981' }}>
+                                                                S/ {fmt(itemMonto)}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>
+                                                                Base S/ {fmt(tItem.montoSinIGV || (itemMonto / 1.18))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Barra de Cuadre Financiero */}
+                                        {invoiceBatchSummary && (
+                                            <div style={{
+                                                marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px solid rgba(255,255,255,0.08)',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px'
+                                            }}>
+                                                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)' }}>
+                                                    Total Tickets: <strong style={{ color: 'white' }}>S/ {fmt(invoiceBatchSummary.total)}</strong>
+                                                    {invoiceBatchSummary.factTotalNum !== null && (
+                                                        <>
+                                                            <span style={{ margin: '0 4px', color: 'rgba(255,255,255,0.2)' }}>|</span>
+                                                            Total Factura: <strong style={{ color: '#EF4444' }}>S/ {fmt(invoiceBatchSummary.factTotalNum)}</strong>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                <div>
+                                                    {invoiceBatchSummary.isBalanced ? (
+                                                        <span style={{
+                                                            background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)',
+                                                            color: '#10B981', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 800
+                                                        }}>
+                                                            ✓ Total Cuadrado
+                                                        </span>
+                                                    ) : invoiceBatchSummary.diff !== null && (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{
+                                                                background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)',
+                                                                color: '#F59E0B', padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 800
+                                                            }}>
+                                                                Dif: S/ {fmt(Math.abs(invoiceBatchSummary.diff))}
+                                                            </span>
+                                                            {invoiceBatchSummary.count === 1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (invoiceBatchSummary.factTotalNum && invoiceBatchSummary.factTotalNum > 0) {
+                                                                            setInvoiceAdjustedAmounts(prev => ({
+                                                                                ...prev,
+                                                                                [cobranzaModalTicket.id]: {
+                                                                                    base: round2(invoiceBatchSummary.factTotalNum! / 1.18),
+                                                                                    total: invoiceBatchSummary.factTotalNum!
+                                                                                }
+                                                                            }));
+                                                                            triggerToast("Monto Ajustado", `Ticket ajustado a S/ ${fmt(invoiceBatchSummary.factTotalNum)} para cuadre con la factura.`);
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
+                                                                        color: '#60A5FA', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem',
+                                                                        fontWeight: 700, cursor: 'pointer'
+                                                                    }}>
+                                                                    Ajustar al Total Factura
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Observaciones / Glosa */}
+                                    <div>
+                                        <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)', display: 'block', marginBottom: '0.3rem' }}>
+                                            Observaciones / Glosa (Opcional):
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ej. Liquidación por Evento de Pérdida Factura F001-0004521"
+                                            value={cobranzaObservaciones}
+                                            onChange={e => setCobranzaObservaciones(e.target.value)}
+                                            style={{
+                                                width: '100%', background: 'rgba(0,0,0,0.5)',
+                                                border: '1px solid rgba(255,255,255,0.15)',
+                                                borderRadius: '8px', color: 'white', padding: '0.5rem 0.75rem',
+                                                fontSize: '0.8rem', outline: 'none', boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -3524,7 +4220,9 @@ export default function AdminDashboard() {
                                     cobranzaMontoBase,
                                     cobranzaMontoTotal,
                                     cobranzaFechaOC,
-                                    cobranzaObservaciones
+                                    cobranzaObservaciones,
+                                    cobranzaInvoiceFile,
+                                    invoiceBatchSummary?.items
                                 )}
                                 style={{
                                     background: '#10B981', border: 'none', color: 'white',
@@ -3533,7 +4231,9 @@ export default function AdminDashboard() {
                                     opacity: invoiceProcessing === cobranzaModalTicket.id ? 0.6 : 1,
                                     boxShadow: '0 4px 12px rgba(16,185,129,0.35)'
                                 }}>
-                                {invoiceProcessing === cobranzaModalTicket.id ? 'Guardando...' : '✓ Confirmar y Registrar Cobro'}
+                                {invoiceProcessing === cobranzaModalTicket.id
+                                    ? 'Guardando...'
+                                    : `✓ Confirmar y Registrar Cobro (${cobranzaType === 'evento_perdida' ? (invoiceBatchSummary?.count || 1) : 1} Ticket${(cobranzaType === 'evento_perdida' ? (invoiceBatchSummary?.count || 1) : 1) > 1 ? 's' : ''})`}
                             </button>
                         </div>
                     </div>
