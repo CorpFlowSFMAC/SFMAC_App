@@ -3813,21 +3813,65 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                                 <button
                                                                     className={styles.saveChangesBtn}
                                                                     onClick={async () => {
+                                                                        const currentPartidas = partidasCotización && partidasCotización.length > 0 ? partidasCotización : [];
+                                                                        const calcSubtotal = round2(currentPartidas.reduce((s: number, it: any) => s + (Number(it.total) || 0), 0));
+                                                                        const calcIGV = round2(calcSubtotal * 0.18);
+                                                                        const calcGrandTotal = round2(calcSubtotal + calcIGV);
+                                                                        const finalTotal = calcGrandTotal > 0 ? calcGrandTotal : totalQuotedAmount;
+                                                                        const finalSubtotal = calcSubtotal > 0 ? calcSubtotal : round2(finalTotal / 1.18);
+                                                                        const finalIGV = round2(finalTotal - finalSubtotal);
+
+                                                                        // Recalcular métricas financieras completas
+                                                                        const finances = calculateTicketFinances({
+                                                                            ...ticketData,
+                                                                            total_quoted_amount: finalTotal,
+                                                                            montoFinal: finalTotal,
+                                                                            labor_cost: parseFloat(laborCost) || 0,
+                                                                            materials_cost: parseFloat(materialsCost) || 0,
+                                                                        }, ticketCosts || []);
+
                                                                         const updatedEdits = {
                                                                             ...ticketData,
                                                                             modificacionAutorizada: false,
-                                                                            montoFinal: totalQuotedAmount,
-                                                                            total_quoted_amount: totalQuotedAmount,
+                                                                            solicitudModificacion: false,
+                                                                            montoFinal: finalTotal,
+                                                                            total_quoted_amount: finalTotal,
+                                                                            montoSubtotal: finalSubtotal,
+                                                                            montoIGV: finalIGV,
+                                                                            ingresos_reales: finances.netIncome,
+                                                                            utilidad_neta: finances.realProfitability,
+                                                                            margen_real: finances.margenReal,
+                                                                            inversion_ejecutada: finances.totalExpenses,
+                                                                            total_costs_agg: finances.totalExpenses,
+                                                                            saldo_tecnico: finances.netLaborBalance,
+                                                                            monto_pactado_mo: finances.pactedMO,
                                                                             labor_cost: parseFloat(laborCost) || 0,
                                                                             materials_cost: parseFloat(materialsCost) || 0,
-                                                                            partidas: partidasCotización,
+                                                                            partidas: currentPartidas,
                                                                             fechaUltimaModificacion: new Date().toISOString()
                                                                         };
                                                                         setTicketData(updatedEdits);
                                                                         await syncToSupabase(updatedEdits);
+
+                                                                        // Sincronizar factura asociada si existe
+                                                                        try {
+                                                                            await supabase
+                                                                                .from('invoices')
+                                                                                .update({
+                                                                                    amount_base: finalSubtotal,
+                                                                                    amount_igv: finalIGV,
+                                                                                    amount_total: finalTotal,
+                                                                                    updated_at: new Date().toISOString()
+                                                                                })
+                                                                                .eq('ticket_id', ticketData.id);
+                                                                        } catch (eInv) {
+                                                                            console.warn("Could not sync invoice on quote edit:", eInv);
+                                                                        }
+
                                                                         await queryClient.invalidateQueries({ queryKey: ['tickets'] });
                                                                         await queryClient.invalidateQueries({ queryKey: ['payments'] });
-                                                                        showToast("Cotización Guardada", "Cambios guardados y cotización bloqueada nuevamente.", "success");
+                                                                        await queryClient.invalidateQueries({ queryKey: ['eficiencia-v2'] });
+                                                                        showToast("Cotización Guardada", "Métricas de presupuesto y utilidad recalculadas correctamente.", "success");
                                                                     }}
                                                                 >
                                                                     <CheckCircle size={18} />
