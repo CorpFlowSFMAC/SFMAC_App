@@ -11,7 +11,7 @@ import {
     Zap, ArrowRight, BarChart3, Target, Activity, Shield,
     ChevronRight, AlertCircle, Star, Layers,
     BanknoteIcon, Award, Download, X, FileText, Check,
-    UploadCloud, Paperclip, CheckSquare, Square, FileCheck, Eye, RefreshCw, Trash2
+    UploadCloud, Paperclip, CheckSquare, Square, FileCheck, Eye, RefreshCw, Trash2, Plus
 } from "lucide-react";
 import {
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -266,6 +266,8 @@ export default function AdminDashboard() {
     const [selectedInvoiceTicketIds, setSelectedInvoiceTicketIds] = useState<Set<string>>(new Set());
     const [invoiceDetectedTicketsList, setInvoiceDetectedTicketsList] = useState<any[]>([]);
     const [invoiceAdjustedAmounts, setInvoiceAdjustedAmounts] = useState<Record<string, { base: number; total: number }>>({});
+    const [invoiceLineItems, setInvoiceLineItems] = useState<Array<{ cantidad: number; descripcion: string; subtotal: number; total: number }>>([]);
+    const [showAddTicketSelector, setShowAddTicketSelector] = useState(false);
     const invoiceFileInputRef = useRef<HTMLInputElement>(null);
     // Modal de Detalle Rápido de Ticket para Cobranzas (previene pantalla negra)
     const [cobranzaDetailTicket, setCobranzaDetailTicket] = useState<any | null>(null);
@@ -1256,11 +1258,13 @@ export default function AdminDashboard() {
                 }
             }
 
-            // 4. Códigos de tickets detectados en la factura
+            // 4. Códigos de tickets detectados en la factura y líneas de servicios
             const detectedCodes: string[] = data.tickets || [];
             setDetectedInvoiceTicketCodes(detectedCodes);
+            const detectedLines = Array.isArray(data.lineItems) ? data.lineItems : [];
+            setInvoiceLineItems(detectedLines);
 
-            // 5. Buscar en cobranzaItems (tickets pendientes) los que coincidan con los códigos detectados
+            // 5. Buscar en cobranzaItems (tickets pendientes) los que coincidan con los códigos o con los montos de los servicios
             const pendingItemsList = cobranzaItems.filter(i => i.status !== 'cobrada');
             const matchedItems: any[] = [];
             const newSelected = new Set<string>();
@@ -1278,6 +1282,33 @@ export default function AdminDashboard() {
                     matchedItems.push(found);
                 }
             });
+
+            // Si hay líneas de servicios detectadas (ej. SUNAT E001-16 con múltiples servicios del cliente)
+            // Emparejar automáticamente tickets pendientes del mismo cliente/agencia por montos
+            if (detectedLines.length > 0) {
+                detectedLines.forEach((li: any) => {
+                    const foundByAmount = pendingItemsList.find(pi => {
+                        if (matchedItems.some(m => m.id === pi.id)) return false;
+                        const isSameClient = cobranzaModalTicket
+                            ? (pi.clientName?.toLowerCase() === cobranzaModalTicket.clientName?.toLowerCase() ||
+                               pi.clientId === cobranzaModalTicket.clientId ||
+                               (pi.clientName && cobranzaModalTicket.clientName &&
+                                (pi.clientName.toLowerCase().includes(cobranzaModalTicket.clientName.toLowerCase().split(' ')[0]) ||
+                                 cobranzaModalTicket.clientName.toLowerCase().includes(pi.clientName.toLowerCase().split(' ')[0]))))
+                            : true;
+                        if (!isSameClient) return false;
+
+                        const piTot = round2(Number(pi.monto || 0));
+                        const piBase = round2(Number(pi.montoSinIGV || (piTot / 1.18)));
+                        return Math.abs(piTot - li.total) < 0.1 || Math.abs(piBase - li.subtotal) < 0.1;
+                    });
+
+                    if (foundByAmount) {
+                        newSelected.add(foundByAmount.id);
+                        matchedItems.push(foundByAmount);
+                    }
+                });
+            }
 
             setSelectedInvoiceTicketIds(newSelected);
             setInvoiceDetectedTicketsList(matchedItems);
@@ -4052,6 +4083,22 @@ export default function AdminDashboard() {
                                             )}
                                         </div>
 
+                                        {/* Servicios detectados en la Factura PDF */}
+                                        {invoiceLineItems.length > 0 && (
+                                            <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '8px', padding: '0.5rem 0.75rem', marginBottom: '0.6rem' }}>
+                                                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#93C5FD', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                                                    <FileText size={12} />
+                                                    <span>{invoiceLineItems.length} servicio(s) detectados en la Factura PDF:</span>
+                                                </div>
+                                                {invoiceLineItems.map((li, idx) => (
+                                                    <div key={idx} style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)', display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '1px 0' }}>
+                                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>• {li.descripcion}</span>
+                                                        <span style={{ fontWeight: 700, color: '#10B981', flexShrink: 0 }}>S/ {fmt(li.total)} <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>(Base S/ {fmt(li.subtotal)})</span></span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
                                         {/* Lista de Tickets en la Factura */}
                                         <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', paddingRight: '2px' }}>
                                             {(invoiceDetectedTicketsList.length > 0 ? invoiceDetectedTicketsList : [cobranzaModalTicket]).map((tItem: any) => {
@@ -4098,17 +4145,97 @@ export default function AdminDashboard() {
                                                             </div>
                                                         </div>
 
-                                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                                            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#10B981' }}>
-                                                                S/ {fmt(itemMonto)}
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                                            <div style={{ textAlign: 'right' }}>
+                                                                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#10B981' }}>
+                                                                    S/ {fmt(itemMonto)}
+                                                                </div>
+                                                                <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>
+                                                                    Base S/ {fmt(tItem.montoSinIGV || (itemMonto / 1.18))}
+                                                                </div>
                                                             </div>
-                                                            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.4)' }}>
-                                                                Base S/ {fmt(tItem.montoSinIGV || (itemMonto / 1.18))}
-                                                            </div>
+                                                            {!isPrimary && (
+                                                                <button
+                                                                    type="button"
+                                                                    title="Quitar ticket de este cobro"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setInvoiceDetectedTicketsList(prev => prev.filter(m => m.id !== tItem.id));
+                                                                        setSelectedInvoiceTicketIds(prev => {
+                                                                            const next = new Set(prev);
+                                                                            next.delete(tItem.id);
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                    style={{
+                                                                        background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                                                                        borderRadius: '4px', color: '#FCA5A5', padding: '3px',
+                                                                        cursor: 'pointer', display: 'flex', alignItems: 'center'
+                                                                    }}>
+                                                                    <X size={12} />
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
                                             })}
+                                        </div>
+
+                                        {/* Botón y selector para vincular tickets adicionales manualmente */}
+                                        <div style={{ marginTop: '0.5rem' }}>
+                                            {!showAddTicketSelector ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowAddTicketSelector(true)}
+                                                    style={{
+                                                        background: 'rgba(59,130,246,0.12)', border: '1px dashed rgba(59,130,246,0.4)',
+                                                        borderRadius: '6px', color: '#60A5FA', padding: '0.4rem 0.6rem',
+                                                        fontSize: '0.7rem', fontWeight: 700, width: '100%', cursor: 'pointer',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                                                    }}>
+                                                    <Plus size={13} />
+                                                    <span>+ Vincular / Agregar otro Ticket a esta Factura</span>
+                                                </button>
+                                            ) : (
+                                                <div style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: '8px', padding: '0.55rem' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#93C5FD', fontWeight: 800 }}>Selecciona un ticket pendiente para vincular:</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowAddTicketSelector(false)}
+                                                            style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '2px' }}>
+                                                            <X size={13} />
+                                                        </button>
+                                                    </div>
+                                                    <select
+                                                        onChange={e => {
+                                                            const selId = e.target.value;
+                                                            if (!selId) return;
+                                                            const tToAdd = cobranzaItems.find(i => i.id === selId);
+                                                            if (tToAdd && !invoiceDetectedTicketsList.some(m => m.id === tToAdd.id)) {
+                                                                setInvoiceDetectedTicketsList(prev => [...prev, tToAdd]);
+                                                                setSelectedInvoiceTicketIds(prev => new Set([...prev, tToAdd.id]));
+                                                                triggerToast("Ticket Vinculado", `Se agregó el ticket ${tToAdd.ticketNum} al cobro.`);
+                                                            }
+                                                            setShowAddTicketSelector(false);
+                                                        }}
+                                                        defaultValue=""
+                                                        style={{
+                                                            width: '100%', background: '#0F172A', border: '1.5px solid #3B82F6',
+                                                            borderRadius: '6px', color: 'white', padding: '0.45rem 0.6rem',
+                                                            fontSize: '0.72rem', outline: 'none'
+                                                        }}>
+                                                        <option value="" disabled>-- Selecciona un ticket pendiente --</option>
+                                                        {cobranzaItems
+                                                            .filter(i => i.status !== 'cobrada' && !invoiceDetectedTicketsList.some(m => m.id === i.id))
+                                                            .map(i => (
+                                                                <option key={i.id} value={i.id}>
+                                                                    {i.ticketNum} • {i.clientName} • {i.agencia || 'Sede'} — S/ {fmt(i.monto)}
+                                                                </option>
+                                                            ))}
+                                                    </select>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Barra de Cuadre Financiero */}
@@ -4143,29 +4270,50 @@ export default function AdminDashboard() {
                                                             }}>
                                                                 Dif: S/ {fmt(Math.abs(invoiceBatchSummary.diff))}
                                                             </span>
-                                                            {invoiceBatchSummary.count === 1 && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        if (invoiceBatchSummary.factTotalNum && invoiceBatchSummary.factTotalNum > 0) {
-                                                                            setInvoiceAdjustedAmounts(prev => ({
-                                                                                ...prev,
-                                                                                [cobranzaModalTicket.id]: {
-                                                                                    base: round2(invoiceBatchSummary.factTotalNum! / 1.18),
-                                                                                    total: invoiceBatchSummary.factTotalNum!
-                                                                                }
-                                                                            }));
-                                                                            triggerToast("Monto Ajustado", `Ticket ajustado a S/ ${fmt(invoiceBatchSummary.factTotalNum)} para cuadre con la factura.`);
-                                                                        }
-                                                                    }}
-                                                                    style={{
-                                                                        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
-                                                                        color: '#60A5FA', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem',
-                                                                        fontWeight: 700, cursor: 'pointer'
-                                                                    }}>
-                                                                    Ajustar al Total Factura
-                                                                </button>
-                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (!invoiceBatchSummary.factTotalNum || invoiceBatchSummary.factTotalNum <= 0) return;
+                                                                    const factTotal = invoiceBatchSummary.factTotalNum;
+                                                                    if (invoiceBatchSummary.count === 1) {
+                                                                        setInvoiceAdjustedAmounts(prev => ({
+                                                                            ...prev,
+                                                                            [cobranzaModalTicket.id]: {
+                                                                                base: round2(factTotal / 1.18),
+                                                                                total: factTotal
+                                                                            }
+                                                                        }));
+                                                                        triggerToast("Monto Ajustado", `Ticket ajustado a S/ ${fmt(factTotal)} para cuadre con la factura.`);
+                                                                    } else if (invoiceBatchSummary.items.length > 0) {
+                                                                        const currentSum = invoiceBatchSummary.total;
+                                                                        const factor = currentSum > 0 ? factTotal / currentSum : 1;
+                                                                        const newAdj: Record<string, { base: number; total: number }> = {};
+                                                                        let runningTotal = 0;
+                                                                        const items = invoiceBatchSummary.items;
+                                                                        items.forEach((it: any, idx: number) => {
+                                                                            let itTot: number;
+                                                                            if (idx === items.length - 1) {
+                                                                                itTot = round2(factTotal - runningTotal);
+                                                                            } else {
+                                                                                itTot = round2((it.monto || 0) * factor);
+                                                                                runningTotal = round2(runningTotal + itTot);
+                                                                            }
+                                                                            newAdj[it.id] = {
+                                                                                base: round2(itTot / 1.18),
+                                                                                total: itTot
+                                                                            };
+                                                                        });
+                                                                        setInvoiceAdjustedAmounts(prev => ({ ...prev, ...newAdj }));
+                                                                        triggerToast("Montos Cuadrados", `Se balancearon los ${items.length} tickets para totalizar exactamente S/ ${fmt(factTotal)}.`);
+                                                                    }
+                                                                }}
+                                                                style={{
+                                                                    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
+                                                                    color: '#60A5FA', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem',
+                                                                    fontWeight: 700, cursor: 'pointer'
+                                                                }}>
+                                                                Ajustar al Total Factura
+                                                            </button>
                                                         </div>
                                                     )}
                                                 </div>

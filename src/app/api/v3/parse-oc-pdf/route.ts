@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
                 text = rawUtf8.replace(/[^\x20-\x7E\xA0-\xFF\n\r\t]/g, " ");
             }
         }
+        text = text.replace(/\xA0/g, ' ');
 
         // 1. Extraer N° OC si existe
         let ocNumber = "";
@@ -176,7 +177,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (total === 0) {
-            const totalMatches = Array.from(text.matchAll(/(?:IMPORTE\s+TOTAL|TOTAL\s+A\s+PAGAR|TOTAL\s+VENTA|TOTAL)\s*[:\s]*S?\/?\.?\s*([0-9,]+\.[0-9]{2})/gi));
+            const totalMatches = Array.from(text.matchAll(/(?:IMPORTE\s+TOTAL|TOTAL\s+A\s+PAGAR|TOTAL\s+VENTA|TOTAL|IMPORTE)\s*[:\s]*S?\/?\.?\s*([0-9,]+\.[0-9]{2})/gi));
             if (totalMatches.length > 0) {
                 const lastTotal = totalMatches[totalMatches.length - 1][1];
                 total = parseFloat(lastTotal.replace(/,/g, ''));
@@ -184,7 +185,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (subtotal === 0) {
-            const subtotalMatches = Array.from(text.matchAll(/(?:OP(?:ERACIONES)?\.?\s*GRAVADA[S]?|VALOR\s+VENTA|Subtotal)\s*[:\s]*S?\/?\.?\s*([0-9,]+\.[0-9]{2})/gi));
+            const subtotalMatches = Array.from(text.matchAll(/(?:SUB\s*TOTAL\s*VENTAS|OP(?:ERACIONES)?\.?\s*GRAVADA[S]?|VALOR\s+VENTA|Subtotal)\s*[:\s]*S?\/?\.?\s*([0-9,]+\.[0-9]{2})/gi));
             if (subtotalMatches.length > 0) {
                 const lastSub = subtotalMatches[subtotalMatches.length - 1][1];
                 subtotal = parseFloat(lastSub.replace(/,/g, ''));
@@ -209,7 +210,25 @@ export async function POST(req: NextRequest) {
             igv = Math.round((total - subtotal + Number.EPSILON) * 100) / 100;
         }
 
-        // 5. Extraer códigos de tickets y sus montos individuales
+        // 5. Extraer líneas de detalle de servicios (facturas SUNAT o boletas con múltiples items)
+        const lineItems: Array<{ cantidad: number; descripcion: string; subtotal: number; total: number }> = [];
+        const lineItemRegex = /(\d+(?:\.\d{2})?)\s+(?:UNIDAD|NIU|ZZ|SERV|UND|KGM|MTR|GLN|BX|PZA)\s+(.+?)\s+([0-9,]+\.[0-9]{2})\s+([0-9,]+\.[0-9]{2})/gi;
+        let lMatch: RegExpExecArray | null;
+        while ((lMatch = lineItemRegex.exec(text)) !== null) {
+            const qty = parseFloat(lMatch[1]) || 1;
+            const desc = lMatch[2].replace(/\s+/g, ' ').trim();
+            const unitVal = parseFloat(lMatch[3].replace(/,/g, ''));
+            const itemSub = Math.round(qty * unitVal * 100) / 100;
+            const itemTot = Math.round(itemSub * 1.18 * 100) / 100;
+            lineItems.push({
+                cantidad: qty,
+                descripcion: desc,
+                subtotal: itemSub,
+                total: itemTot
+            });
+        }
+
+        // 6. Extraer códigos de tickets y sus montos individuales
         const ticketRegex = /([A-Z]{2,4}\d{4,8}(?:\.\d{2})?)/g;
         const matches = text.match(ticketRegex) || [];
         const excludedPrefixes = [
@@ -264,6 +283,7 @@ export async function POST(req: NextRequest) {
             ticketCount: uniqueTickets.length,
             tickets: uniqueTickets,
             ticketDetails,
+            lineItems,
             rawText: text.substring(0, 5000)
         });
 
