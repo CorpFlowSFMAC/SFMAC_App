@@ -268,6 +268,7 @@ export default function AdminDashboard() {
     const [invoiceAdjustedAmounts, setInvoiceAdjustedAmounts] = useState<Record<string, { base: number; total: number }>>({});
     const [invoiceLineItems, setInvoiceLineItems] = useState<Array<{ cantidad: number; descripcion: string; subtotal: number; total: number }>>([]);
     const [showAddTicketSelector, setShowAddTicketSelector] = useState(false);
+    const [productivityScope, setProductivityScope] = useState<"closed" | "approved">("closed");
     const invoiceFileInputRef = useRef<HTMLInputElement>(null);
     // Modal de Detalle Rápido de Ticket para Cobranzas (previene pantalla negra)
     const [cobranzaDetailTicket, setCobranzaDetailTicket] = useState<any | null>(null);
@@ -1624,24 +1625,50 @@ export default function AdminDashboard() {
         return calculateEBITDA(totalGrossProfit, expenses);
     }, [activeTickets, expenses, periodInfo, dateRange]);
 
-    // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets ────────
-    const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "asignado_a_tecnico", "borrador"];
-    const EN_PROCESO_STATES_RRHH = ["en_inspeccion", "en_cotizacion", "cotizacion_enviada", "cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "liquidado", "visitado", "requiere_revision_admin"];
+    // ── MÓDULO 3: RRHH / Productividad — Alineado con Módulo de Tickets y Contabilidad ────────
+    const NUEVOS_STATES_RRHH = ["nuevo", "pendiente", "borrador", "tecnico_asignado", "asignado_a_tecnico", "esperando_pago_visita"];
+    const APPROVED_EXECUTION_STATES_RRHH = ["cotizacion_aprobada", "en_ejecucion", "documentacion_enviada", "por_liquidar", "requiere_revision_admin", "pago_realizado"];
+
+    const resolveTicketGestoraName = (t: any): string | null => {
+        const gestoraId = t.gestora_id || t.metadata?.gestora_id;
+        let gestoraName = "";
+        if (gestoraId) {
+            const g = gestorasMap.get(gestoraId);
+            if (g) gestoraName = g.name || g.nombre || g.full_name || "Gestora";
+        }
+        if (!gestoraName) {
+            gestoraName = t.gestora?.name || t.gestora?.nombre || t.gestora?.full_name || "";
+        }
+        if (!gestoraName || gestoraName === "Sin asignar" || gestoraName === "Sin Gestora") {
+            return null;
+        }
+        return gestoraName;
+    };
+
+    const resolveTicketAmounts = (t: any) => {
+        const raw = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? t.metadata?.montoFinal ?? 0) || 0;
+        const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
+        const ingDirect = parseFloat(t.ingresos_reales ?? t.metadata?.ingresos_reales ?? 0) || 0;
+        const neto = ingDirect > 0 ? ingDirect : (esMasIGV ? raw : (raw > 0 ? raw / 1.18 : 0));
+        const total = esMasIGV ? raw * 1.18 : (raw > 0 ? raw : neto * 1.18);
+        const igv = Math.max(0, total - neto);
+        return { neto: round2(neto), igv: round2(igv), total: round2(total) };
+    };
 
     const rrhh = useMemo(() => {
         const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
         const active = inPeriod.filter((t: any) =>
-            !["ticket_cerrado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId))
+            !["ticket_cerrado", "liquidado", "ticket_rechazado", "ticket_cancelado"].includes(normalizeStateId(t.estadoId ?? t.status_id))
         );
 
-        const closed = inPeriod.filter((t: any) => normalizeStateId(t.estadoId) === "ticket_cerrado");
+        const closed = inPeriod.filter((t: any) => isRealClosureState(t));
         const total = inPeriod.length || 1;
 
         // SLA global
         const expired = active.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS);
         const slaGlobal = ((total - expired.length) / total) * 100;
 
-        // FCR: tickets cerrados que nunca fueron reabiertos (sin campo de reopen, 100% si hay cerrados)
+        // FCR: tickets cerrados que nunca fueron reabiertos
         const fcrPct = closed.length > 0
             ? (closed.filter((t: any) => !t.reopen_count || t.reopen_count === 0).length / closed.length) * 100
             : 0;
@@ -1652,6 +1679,16 @@ export default function AdminDashboard() {
             ? Math.round(withRating.reduce((s: number, t: any) => s + t.client_rating, 0) / withRating.length)
             : 0;
 
+        const classifyActiveTickets = (list: any[]) => {
+            const enriched = list.map((t: any) => ({ ...t, _monto: resolveTicketAmounts(t).neto }));
+            const ticketsNuevos = enriched.filter((t: any) => NUEVOS_STATES_RRHH.includes(normalizeStateId(t.estadoId ?? t.status_id)));
+            // Todos los demás estados activos (en_inspeccion, visita_programada, visita_realizada, en_cotizacion,
+            // cotizacion_enviada, cotizacion_aprobada, en_ejecucion, documentacion_enviada, por_liquidar, etc.)
+            const ticketsEnProceso = enriched.filter((t: any) => !NUEVOS_STATES_RRHH.includes(normalizeStateId(t.estadoId ?? t.status_id)));
+            const vencidos = enriched.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS).length;
+            return { tickets: enriched, ticketsNuevos, ticketsEnProceso, nuevos: ticketsNuevos.length, enProceso: ticketsEnProceso.length, vencidos };
+        };
+
         // Distribución por gestora REAL (matching por gestora_id)
         const gestorasData = safeGestoras.map((g: any) => {
             const nombre = g.name || g.nombre || g.full_name || "Gestora";
@@ -1659,12 +1696,8 @@ export default function AdminDashboard() {
                 const tGestoraId = t.gestora_id || t.metadata?.gestora_id;
                 return tGestoraId === g.id;
             });
-
-            const nuevos = ticketsGestora.filter((t: any) => NUEVOS_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
-            const enProceso = ticketsGestora.filter((t: any) => EN_PROCESO_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
-            const vencidos = ticketsGestora.filter((t: any) => hoursAgo(t.createdAt || t.created_at || "") >= SLA_HOURS).length;
-
-            return { id: g.id, nombre, count: ticketsGestora.length, nuevos, enProceso, vencidos, tickets: ticketsGestora };
+            const stats = classifyActiveTickets(ticketsGestora);
+            return { id: g.id, nombre, count: ticketsGestora.length, ...stats };
         }).sort((a: any, b: any) => b.count - a.count);
 
         // Tickets SIN gestora asignada
@@ -1673,124 +1706,102 @@ export default function AdminDashboard() {
             return !tGestoraId || !safeGestoras.find((g: any) => g.id === tGestoraId);
         });
         if (sinGestora.length > 0) {
-            const sinGestoraEnProceso = sinGestora.filter((t: any) => EN_PROCESO_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
-            const sinGestoraNuevos = sinGestora.filter((t: any) => NUEVOS_STATES_RRHH.includes(normalizeStateId(t.estadoId))).length;
-            gestorasData.push({ id: 'sin_asignar', nombre: 'Sin Gestora', count: sinGestora.length, nuevos: sinGestoraNuevos, enProceso: sinGestoraEnProceso, vencidos: 0, tickets: sinGestora });
+            const stats = classifyActiveTickets(sinGestora);
+            gestorasData.push({ id: 'sin_asignar', nombre: 'Sin Gestora', count: sinGestora.length, ...stats });
         }
 
         const maxLoad = Math.max(...gestorasData.map((g: any) => g.count), 1);
 
         return { slaGlobal, fcrPct, npsPct, gestoras: gestorasData, maxLoad, expired: expired.length };
-    }, [activeTickets, gestoras]);
+    }, [activeTickets, gestoras, dateRange, now]);
 
 
     // ── PRODUCTIVIDAD EN SOLES POR GESTOR DESDE BASE DE DATOS ─────────
     const PRODUCTIVITY_COLORS = ["#8B5CF6", "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#EC4899", "#14B8A6"];
-    const productivityData = useMemo(() => {
-        const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
-        const validTickets = inPeriod.filter((t: any) => {
-            const state = normalizeStateId(t.estadoId ?? t.status_id);
-            return state !== "ticket_cancelado" && state !== "ticket_rechazado";
-        });
-
-        const totalsMap: { [key: string]: { name: string; value: number } } = {};
-
-        validTickets.forEach((t: any) => {
-            const gestoraId = t.gestora_id || t.metadata?.gestora_id;
-            let gestoraName = "Sin asignar";
-
-            if (gestoraId) {
-                const g = gestorasMap.get(gestoraId);
-                if (g) {
-                    gestoraName = g.name || g.nombre || g.full_name || "Gestora";
-                }
-            }
-
-            if (gestoraName === "Sin asignar") {
-                const directName = t.gestora?.name || t.gestora?.nombre || t.gestora?.full_name;
-                if (directName) {
-                    gestoraName = directName;
-                }
-            }
-
-            if (gestoraName === "Sin asignar" || gestoraName === "Sin Gestora") {
-                return;
-            }
-
-            // FIX H4: Usar base sin IGV consistente con roi.ingresos para evitar inflación del 18%
-            const amount = parseFloat(t.ingresos_reales ?? t.metadata?.ingresos_reales ?? 0) || (parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? t.metadata?.montoFinal ?? 0) / 1.18);
-            if (amount > 0) {
-                if (!totalsMap[gestoraName]) {
-                    totalsMap[gestoraName] = { name: gestoraName, value: 0 };
-                }
-                totalsMap[gestoraName].value += amount;
-            }
-        });
-
-        return Object.values(totalsMap).map((item: any) => ({
-            name: item.name,
-            value: round2(item.value)
-        })).filter((item: any) => item.value > 0);
-    }, [activeTickets, gestoras, dateRange]);
-
     const stackedProductivityData = useMemo(() => {
         const inPeriod = activeTickets.filter((t: any) => isTicketInPeriod(t));
-        const gestoresMapData: { [key: string]: { gestor: string; netoCerrado: number; igvCerrado: number; montoActivos: number } } = {};
+        const gestoresMapData: {
+            [key: string]: {
+                gestor: string;
+                netoCerrado: number;
+                igvCerrado: number;
+                montoEnEjecucion: number;
+                montoCotizado: number;
+                closedTickets: any[];
+                closedIgvTickets: any[];
+                executionTickets: any[];
+                quotedTickets: any[];
+            }
+        } = {};
 
         inPeriod.forEach((t: any) => {
             const state = normalizeStateId(t.estadoId ?? t.status_id);
-            if (state === "ticket_cancelado" || state === "ticket_rechazado") {
-                return;
-            }
+            if (state === "ticket_cancelado" || state === "ticket_rechazado") return;
 
-            const gestoraId = t.gestora_id || t.metadata?.gestora_id;
-            let gestoraName = "Sin asignar";
+            const gestoraName = resolveTicketGestoraName(t);
+            if (!gestoraName) return;
 
-            if (gestoraId) {
-                const g = gestorasMap.get(gestoraId);
-                if (g) {
-                    gestoraName = g.name || g.nombre || g.full_name || "Gestora";
-                }
-            }
-
-            if (gestoraName === "Sin asignar") {
-                const directName = t.gestora?.name || t.gestora?.nombre || t.gestora?.full_name;
-                if (directName) {
-                    gestoraName = directName;
-                }
-            }
-
-            if (gestoraName === "Sin asignar" || gestoraName === "Sin Gestora") {
-                return;
-            }
-
-            const raw = parseFloat(t.total_quoted_amount ?? t.montoFinal ?? t.monto_presupuesto ?? t.metadata?.montoFinal ?? 0);
-            const esMasIGV = t.mas_igv === true || t.incluye_igv === false;
-            // FIX H4/H5: Normalización de base e IGV consistente
-            const neto = parseFloat(t.ingresos_reales ?? t.metadata?.ingresos_reales ?? 0) || (esMasIGV ? raw : (raw > 0 ? raw / 1.18 : 0));
-            const total = esMasIGV ? raw * 1.18 : (raw || neto * 1.18);
-            const igv = total - neto;
+            const { neto, igv, total } = resolveTicketAmounts(t);
             if (total <= 0) return;
 
             if (!gestoresMapData[gestoraName]) {
-                gestoresMapData[gestoraName] = { gestor: gestoraName, netoCerrado: 0, igvCerrado: 0, montoActivos: 0 };
+                gestoresMapData[gestoraName] = {
+                    gestor: gestoraName,
+                    netoCerrado: 0,
+                    igvCerrado: 0,
+                    montoEnEjecucion: 0,
+                    montoCotizado: 0,
+                    closedTickets: [],
+                    closedIgvTickets: [],
+                    executionTickets: [],
+                    quotedTickets: []
+                };
             }
 
-            if (state === "ticket_cerrado") {
+            if (isRealClosureState(t)) {
                 gestoresMapData[gestoraName].netoCerrado += neto;
                 gestoresMapData[gestoraName].igvCerrado += igv;
+                gestoresMapData[gestoraName].closedTickets.push({ ...t, _monto: neto });
+                gestoresMapData[gestoraName].closedIgvTickets.push({ ...t, _monto: igv });
+            } else if (APPROVED_EXECUTION_STATES_RRHH.includes(state)) {
+                gestoresMapData[gestoraName].montoEnEjecucion += neto;
+                gestoresMapData[gestoraName].executionTickets.push({ ...t, _monto: neto });
             } else {
-                gestoresMapData[gestoraName].montoActivos += neto;
+                // Cotizaciones enviadas / en cotización aún NO aprobadas por el cliente
+                gestoresMapData[gestoraName].montoCotizado += neto;
+                gestoresMapData[gestoraName].quotedTickets.push({ ...t, _monto: neto });
             }
         });
 
-        return Object.values(gestoresMapData).map((g: any) => ({
-            gestor: g.gestor,
-            netoCerrado: round2(g.netoCerrado),
-            igvCerrado: round2(g.igvCerrado),
-            montoActivos: round2(g.montoActivos)
-        })).filter((g: any) => (g.netoCerrado + g.igvCerrado + g.montoActivos) > 0);
-    }, [activeTickets, gestoras, dateRange]);
+        return Object.values(gestoresMapData)
+            .map((g: any) => ({
+                ...g,
+                netoCerrado: round2(g.netoCerrado),
+                igvCerrado: round2(g.igvCerrado),
+                montoEnEjecucion: round2(g.montoEnEjecucion),
+                montoCotizado: round2(g.montoCotizado),
+            }))
+            .filter((g: any) => (g.netoCerrado + g.igvCerrado + g.montoEnEjecucion + g.montoCotizado) > 0)
+            .sort((a: any, b: any) => (b.netoCerrado + b.montoEnEjecucion) - (a.netoCerrado + a.montoEnEjecucion));
+    }, [activeTickets, gestoras, dateRange, now]);
+
+    const productivityData = useMemo(() => {
+        return stackedProductivityData
+            .map((g: any) => {
+                const isClosedOnly = productivityScope === "closed";
+                const value = isClosedOnly ? g.netoCerrado : round2(g.netoCerrado + g.montoEnEjecucion);
+                const scopeTickets = isClosedOnly ? g.closedTickets : [...g.closedTickets, ...g.executionTickets];
+                return {
+                    name: g.gestor,
+                    value,
+                    tickets: scopeTickets,
+                    closedCount: g.closedTickets.length,
+                    execCount: g.executionTickets.length,
+                };
+            })
+            .filter((item: any) => item.value > 0)
+            .sort((a: any, b: any) => b.value - a.value);
+    }, [stackedProductivityData, productivityScope]);
 
     // ── SEMÁFORO GLOBAL ─────────────────────
     const globalLight = useMemo(() => semaforo([
@@ -2510,9 +2521,34 @@ export default function AdminDashboard() {
 
                 {/* Gráfico de Pastel de Productividad por Gestor */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "0.8rem" }}>
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Productividad por Gestor</div>
-                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Soles Acumulados</div>
+                        <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", padding: "2px", gap: "2px" }}>
+                            <button
+                                type="button"
+                                onClick={() => setProductivityScope("closed")}
+                                style={{
+                                    border: "none", cursor: "pointer", borderRadius: "6px", padding: "3px 7px",
+                                    fontSize: "0.6rem", fontWeight: 800,
+                                    background: productivityScope === "closed" ? "rgba(16,185,129,0.22)" : "transparent",
+                                    color: productivityScope === "closed" ? "#10B981" : "rgba(255,255,255,0.45)"
+                                }}
+                                title="Solo ingresos netos cerrados en el período (igual al ROI)">
+                                Cerrado Real
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setProductivityScope("approved")}
+                                style={{
+                                    border: "none", cursor: "pointer", borderRadius: "6px", padding: "3px 7px",
+                                    fontSize: "0.6rem", fontWeight: 800,
+                                    background: productivityScope === "approved" ? "rgba(245,158,11,0.22)" : "transparent",
+                                    color: productivityScope === "approved" ? "#F59E0B" : "rgba(255,255,255,0.45)"
+                                }}
+                                title="Cerrado + Trabajos Aprobados/En Ejecución (sin cotizaciones pendientes)">
+                                + En Ejecución
+                            </button>
+                        </div>
                     </div>
                     {productivityData.length === 0 ? (
                         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)", minHeight: "200px" }}>
@@ -2534,7 +2570,16 @@ export default function AdminDashboard() {
                                             dataKey="value"
                                         >
                                             {productivityData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={PRODUCTIVITY_COLORS[index % PRODUCTIVITY_COLORS.length]} />
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={PRODUCTIVITY_COLORS[index % PRODUCTIVITY_COLORS.length]}
+                                                    style={{ cursor: "pointer" }}
+                                                    onClick={() => {
+                                                        setModalTitle(`${productivityScope === "closed" ? "Cerrado Real (Neto)" : "Cerrado + En Ejecución (Neto)"} — ${entry.name}`);
+                                                        setModalTickets(entry.tickets || []);
+                                                        setShowListModal(true);
+                                                    }}
+                                                />
                                             ))}
                                         </Pie>
                                         <Tooltip
@@ -2546,26 +2591,38 @@ export default function AdminDashboard() {
                                                 color: "#fff"
                                             }}
                                             itemStyle={{ color: "#fff" }}
-                                            formatter={(value: any) => [`S/. ${fmt(value)}`, "Productividad"]}
+                                            formatter={(value: any) => [`S/. ${fmt(value)}`, productivityScope === "closed" ? "Cerrado Neto" : "Cerrado + Ejecución"]}
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>
                                 <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center", pointerEvents: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                                    <span style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Total</span>
-                                    <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "white", marginTop: "1px" }}>
+                                    <span style={{ fontSize: "0.55rem", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>
+                                        {productivityScope === "closed" ? "Neto Cerrado" : "Neto Comprom."}
+                                    </span>
+                                    <div style={{ fontSize: "1.02rem", fontWeight: 900, color: "white", marginTop: "1px" }}>
                                         S/. {fmt(productivityData.reduce((sum, item) => sum + item.value, 0))}
                                     </div>
                                 </div>
                             </div>
-                            {/* Nombres posicionados abajo */}
+                            {/* Nombres posicionados abajo (clicables para auditar detalle) */}
                             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "0.5rem", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "0.8rem" }}>
                                 {productivityData.map((item, index) => {
                                     const color = PRODUCTIVITY_COLORS[index % PRODUCTIVITY_COLORS.length];
                                     return (
-                                        <div key={item.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0 }}>
+                                        <div
+                                            key={item.name}
+                                            onClick={() => {
+                                                setModalTitle(`${productivityScope === "closed" ? "Cerrado Real (Neto)" : "Cerrado + En Ejecución (Neto)"} — ${item.name}`);
+                                                setModalTickets(item.tickets || []);
+                                                setShowListModal(true);
+                                            }}
+                                            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minWidth: 0, cursor: "pointer", padding: "2px 4px", borderRadius: "6px" }}
+                                            title="Clic para ver el detalle de tickets">
                                             <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
                                                 <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
-                                                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,0.65)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
+                                                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "rgba(255,255,255,0.65)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                    {item.name} ({productivityScope === "closed" ? item.closedCount : item.closedCount + item.execCount})
+                                                </span>
                                             </div>
                                             <span style={{ fontSize: "0.85rem", fontWeight: 900, color: "white", flexShrink: 0 }}>S/. {fmt(item.value)}</span>
                                         </div>
@@ -2578,9 +2635,9 @@ export default function AdminDashboard() {
 
                 {/* Gráfico de Barras Horizontales Agrupadas (Vigilancia de Productividad & Flujo) */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "0.8rem" }}>
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Vigilancia de Productividad</div>
-                        <div style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Detalle Neto, IGV & Activos (Clic para ver)</div>
+                        <div style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Cerrado vs En Ejecución vs Cotizado (Clic para ver)</div>
                     </div>
                     {stackedProductivityData.length === 0 ? (
                         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.76rem", color: "rgba(255,255,255,0.3)", minHeight: "200px" }}>
@@ -2588,9 +2645,9 @@ export default function AdminDashboard() {
                         </div>
                     ) : (
                         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                            <div style={{ width: "100%", height: "265px" }}>
+                            <div style={{ width: "100%", height: "285px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={stackedProductivityData} layout="vertical" margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                                    <BarChart data={stackedProductivityData} layout="vertical" margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#222" horizontal={false} />
                                         <XAxis 
                                             type="number" 
@@ -2613,11 +2670,11 @@ export default function AdminDashboard() {
                                             content={({ active, payload, label }: any) => {
                                                 if (active && payload && payload.length) {
                                                     const data = payload[0].payload;
-                                                    const total = (data.netoCerrado || 0) + (data.igvCerrado || 0) + (data.montoActivos || 0);
+                                                    const totalCerradoBruto = (data.netoCerrado || 0) + (data.igvCerrado || 0);
                                                     return (
                                                         <div style={{
-                                                            background: "rgba(17, 24, 39, 0.95)",
-                                                            border: "1px solid rgba(255, 255, 255, 0.1)",
+                                                            background: "rgba(17, 24, 39, 0.96)",
+                                                            border: "1px solid rgba(255, 255, 255, 0.12)",
                                                             borderRadius: "8px",
                                                             padding: "0.8rem",
                                                             fontSize: "0.72rem",
@@ -2627,7 +2684,7 @@ export default function AdminDashboard() {
                                                             <div style={{ fontWeight: 800, marginBottom: "0.4rem", color: "#8B5CF6", textTransform: "uppercase" }}>{label}</div>
                                                             <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                                                                 <div style={{ display: "flex", justifyContent: "space-between", gap: "1.5rem" }}>
-                                                                    <span style={{ color: "rgba(255,255,255,0.6)" }}>Neto Cerrado:</span>
+                                                                    <span style={{ color: "rgba(255,255,255,0.6)" }}>Neto Cerrado ({data.closedTickets?.length || 0}):</span>
                                                                     <span style={{ fontWeight: 700, color: "#10B981" }}>S/. {fmt(data.netoCerrado || 0)}</span>
                                                                 </div>
                                                                 <div style={{ display: "flex", justifyContent: "space-between", gap: "1.5rem" }}>
@@ -2635,12 +2692,16 @@ export default function AdminDashboard() {
                                                                     <span style={{ fontWeight: 700, color: "#3B82F6" }}>S/. {fmt(data.igvCerrado || 0)}</span>
                                                                 </div>
                                                                 <div style={{ display: "flex", justifyContent: "space-between", gap: "1.5rem" }}>
-                                                                    <span style={{ color: "rgba(255,255,255,0.6)" }}>Activos / Ejecución:</span>
-                                                                    <span style={{ fontWeight: 700, color: "#F59E0B" }}>S/. {fmt(data.montoActivos || 0)}</span>
+                                                                    <span style={{ color: "rgba(255,255,255,0.6)" }}>Aprobado / Ejecución ({data.executionTickets?.length || 0}):</span>
+                                                                    <span style={{ fontWeight: 700, color: "#F59E0B" }}>S/. {fmt(data.montoEnEjecucion || 0)}</span>
+                                                                </div>
+                                                                <div style={{ display: "flex", justifyContent: "space-between", gap: "1.5rem" }}>
+                                                                    <span style={{ color: "rgba(255,255,255,0.6)" }}>Cotizado Sin Aprobar ({data.quotedTickets?.length || 0}):</span>
+                                                                    <span style={{ fontWeight: 700, color: "#A78BFA" }}>S/. {fmt(data.montoCotizado || 0)}</span>
                                                                 </div>
                                                                 <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: "0.4rem", paddingTop: "0.4rem", display: "flex", justifyContent: "space-between", gap: "1.5rem" }}>
-                                                                    <span style={{ fontWeight: 800, color: "#fff" }}>Total Bruto:</span>
-                                                                    <span style={{ fontWeight: 900, color: "#fff" }}>S/. {fmt(total)}</span>
+                                                                    <span style={{ fontWeight: 800, color: "#fff" }}>Total Cerrado (c/IGV):</span>
+                                                                    <span style={{ fontWeight: 900, color: "#10B981" }}>S/. {fmt(totalCerradoBruto)}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2656,12 +2717,9 @@ export default function AdminDashboard() {
                                                     key={`cell-${index}`} 
                                                     style={{ cursor: 'pointer' }}
                                                     onClick={() => {
-                                                        const matchingGestora = rrhh.gestoras.find((x: any) => x.nombre === entry.gestor);
-                                                        if (matchingGestora) {
-                                                            setModalTitle(`Tickets de ${matchingGestora.nombre}`);
-                                                            setModalTickets(matchingGestora.tickets || []);
-                                                            setShowListModal(true);
-                                                        }
+                                                        setModalTitle(`Tickets Cerrados (Neto) — ${entry.gestor}`);
+                                                        setModalTickets(entry.closedTickets || []);
+                                                        setShowListModal(true);
                                                     }} 
                                                 />
                                             ))}
@@ -2673,33 +2731,41 @@ export default function AdminDashboard() {
                                                     key={`cell-${index}`} 
                                                     style={{ cursor: 'pointer' }}
                                                     onClick={() => {
-                                                        const matchingGestora = rrhh.gestoras.find((x: any) => x.nombre === entry.gestor);
-                                                        if (matchingGestora) {
-                                                            setModalTitle(`Tickets de ${matchingGestora.nombre}`);
-                                                            setModalTickets(matchingGestora.tickets || []);
-                                                            setShowListModal(true);
-                                                        }
+                                                        setModalTitle(`IGV de Tickets Cerrados — ${entry.gestor}`);
+                                                        setModalTickets(entry.closedIgvTickets || []);
+                                                        setShowListModal(true);
                                                     }} 
                                                 />
                                             ))}
                                             <LabelList dataKey="igvCerrado" position="insideLeft" fill="#fff" formatter={(v: any) => v > 0 ? `S/. ${fmt(v)}` : ''} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
-                                        <Bar dataKey="montoActivos" fill="#F59E0B" name="En Ejecución / Activos (S/.)">
+                                        <Bar dataKey="montoEnEjecucion" fill="#F59E0B" name="En Ejecución / Aprobado (S/.)">
                                             {stackedProductivityData.map((entry: any, index: number) => (
                                                 <Cell 
                                                     key={`cell-${index}`} 
                                                     style={{ cursor: 'pointer' }}
                                                     onClick={() => {
-                                                        const matchingGestora = rrhh.gestoras.find((x: any) => x.nombre === entry.gestor);
-                                                        if (matchingGestora) {
-                                                            setModalTitle(`Tickets de ${matchingGestora.nombre}`);
-                                                            setModalTickets(matchingGestora.tickets || []);
-                                                            setShowListModal(true);
-                                                        }
+                                                        setModalTitle(`Aprobados / En Ejecución — ${entry.gestor}`);
+                                                        setModalTickets(entry.executionTickets || []);
+                                                        setShowListModal(true);
                                                     }} 
                                                 />
                                             ))}
-                                            <LabelList dataKey="montoActivos" position="insideLeft" fill="#fff" formatter={(v: any) => v > 0 ? `S/. ${fmt(v)}` : ''} style={{ fontSize: '9px', fontWeight: 900 }} />
+                                            <LabelList dataKey="montoEnEjecucion" position="insideLeft" fill="#fff" formatter={(v: any) => v > 0 ? `S/. ${fmt(v)}` : ''} style={{ fontSize: '9px', fontWeight: 900 }} />
+                                        </Bar>
+                                        <Bar dataKey="montoCotizado" fill="#8B5CF6" name="Cotizado Sin Aprobar (S/.)">
+                                            {stackedProductivityData.map((entry: any, index: number) => (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    style={{ cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        setModalTitle(`Cotizaciones Sin Aprobar — ${entry.gestor}`);
+                                                        setModalTickets(entry.quotedTickets || []);
+                                                        setShowListModal(true);
+                                                    }} 
+                                                />
+                                            ))}
+                                            <LabelList dataKey="montoCotizado" position="insideLeft" fill="#fff" formatter={(v: any) => v > 0 ? `S/. ${fmt(v)}` : ''} style={{ fontSize: '9px', fontWeight: 900 }} />
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -2710,7 +2776,7 @@ export default function AdminDashboard() {
 
                 {/* Gráfico de Distribución de Carga */}
                 <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "14px", padding: "1.4rem", display: "flex", flexDirection: "column" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.8rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "0.8rem" }}>
                         <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Distribución de Carga</div>
                         <div style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.25)", fontWeight: 600 }}>Clic en barras</div>
                     </div>
@@ -2743,7 +2809,7 @@ export default function AdminDashboard() {
                                                 <Cell 
                                                     key={`cell-${index}`} 
                                                     style={{ cursor: 'pointer' }}
-                                                    onClick={() => { setModalTitle(`Tickets de ${entry.nombre}`); setModalTickets(entry.tickets || []); setShowListModal(true); }} 
+                                                    onClick={() => { setModalTitle(`Tickets Nuevos / Asignación — ${entry.nombre}`); setModalTickets(entry.ticketsNuevos || entry.tickets || []); setShowListModal(true); }} 
                                                 />
                                             ))}
                                             <LabelList dataKey="nuevos" position="center" fill="#fff" formatter={(v: any) => v > 0 ? String(v) : ''} style={{ fontSize: '11px', fontWeight: 900 }} />
@@ -2753,7 +2819,7 @@ export default function AdminDashboard() {
                                                 <Cell 
                                                     key={`cell-${index}`} 
                                                     style={{ cursor: 'pointer' }}
-                                                    onClick={() => { setModalTitle(`Tickets de ${entry.nombre}`); setModalTickets(entry.tickets || []); setShowListModal(true); }} 
+                                                    onClick={() => { setModalTitle(`Tickets En Proceso — ${entry.nombre}`); setModalTickets(entry.ticketsEnProceso || entry.tickets || []); setShowListModal(true); }} 
                                                 />
                                             ))}
                                             <LabelList dataKey="enProceso" position="center" fill="#fff" formatter={(v: any) => v > 0 ? String(v) : ''} style={{ fontSize: '11px', fontWeight: 900 }} />
