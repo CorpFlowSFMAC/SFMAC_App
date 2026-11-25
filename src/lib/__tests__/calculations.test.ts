@@ -1,6 +1,27 @@
 import { calculateTicketFinances } from '../calculations';
 
 describe('calculateTicketFinances', () => {
+  test('prioritizes partidas sum over stale montoIGV (cotización fiel al desglose)', () => {
+    // Caso real MB010828.26: partidas = 38 + 182 = 220, con stale montoIGV = 21.24
+    const ticket: any = {
+      labor_cost: 60,
+      total_quoted_amount: 259.60,
+      montoIGV: 21.24, // stale
+      partidas: [
+        { item: '01', descripcion: 'Partida 1', total: 38 },
+        { item: '02', descripcion: 'Partida 2', total: 182 }
+      ]
+    };
+
+    const res = calculateTicketFinances(ticket, []);
+    // Debe respetar las partidas reales
+    expect(res.totalVenta).toBe(220);
+    expect(res.igv).toBe(39.60);
+    expect(res.totalGeneral).toBe(259.60);
+    // Rentabilidad real = 220 - 60 = 160
+    expect(res.realProfitability).toBe(160);
+    expect(res.margenReal).toBe(72.73);
+  });
   test('excludes IGV from net profit when montoIGV present', () => {
     const ticket: any = {
       labor_cost: 1000,

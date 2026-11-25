@@ -144,12 +144,26 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         const meta = ticket.metadata || {};
         return parseFloat(ticket.total_quoted_amount || meta.total_quoted_amount || 0);
     });
-    const [montoSubtotal, setMontoSubtotal] = useState(ticket.montoSubtotal || ticket.metadata?.montoSubtotal || 0);
-    const [montoIGV, setMontoIGV] = useState(ticket.montoIGV || ticket.metadata?.montoIGV || 0);
-    const quotationEditorRef = useRef<any>(null);
     const [partidasCotización, setPartidasCotización] = useState<any[]>(() => {
         return ticket.partidas || ticket.metadata?.partidas || [];
     });
+    const [montoSubtotal, setMontoSubtotal] = useState(() => {
+        const parts = ticket.partidas || ticket.metadata?.partidas || [];
+        if (Array.isArray(parts) && parts.length > 0) {
+            const sumP = round2(parts.reduce((s: number, p: any) => s + (Number(p.total) || 0), 0));
+            if (sumP > 0) return sumP;
+        }
+        return ticket.montoSubtotal || ticket.metadata?.montoSubtotal || 0;
+    });
+    const [montoIGV, setMontoIGV] = useState(() => {
+        const parts = ticket.partidas || ticket.metadata?.partidas || [];
+        if (Array.isArray(parts) && parts.length > 0) {
+            const sumP = round2(parts.reduce((s: number, p: any) => s + (Number(p.total) || 0), 0));
+            if (sumP > 0) return round2(sumP * 0.18);
+        }
+        return ticket.montoIGV || ticket.metadata?.montoIGV || 0;
+    });
+    const quotationEditorRef = useRef<any>(null);
     const [isQuotationCollapsed, setIsQuotationCollapsed] = useState(true);
     const [isSavingCost, setIsSavingCost] = useState(false);
     const [isSendingQuote, setIsSendingQuote] = useState(false);
@@ -993,6 +1007,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 diagnosis: businessData.diagnosis || sourceMetadata.diagnosis || serverMeta.diagnosis,
                 partidas: businessData.partidas || sourceMetadata.partidas || serverMeta.partidas,
                 montoFinal: businessData.total_quoted_amount ?? sourceMetadata.total_quoted_amount ?? serverMeta.total_quoted_amount,
+                montoSubtotal: businessData.montoSubtotal ?? sourceMetadata.montoSubtotal ?? serverMeta.montoSubtotal,
+                montoIGV: businessData.montoIGV ?? sourceMetadata.montoIGV ?? serverMeta.montoIGV,
                 documentosChecklist: businessData.documentosChecklist || sourceMetadata.documentosChecklist || serverMeta.documentosChecklist,
                 pagoRechazado: (sourceMetadata.pagoRechazado === null) ? null : serverMeta.pagoRechazado,
                 estadoId: resolvedStatusId,
@@ -1403,17 +1419,21 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         }
         setIsSendingQuote(true);
         try {
+            const calcSubtotal = !isBCP && editorTotal > 0 ? editorTotal : (montoSubtotal || round2(currentMontoTotal / 1.18));
+            const calcIGV = !isBCP && editorTotal > 0 ? round2(editorTotal * 0.18) : (montoIGV || round2(currentMontoTotal - calcSubtotal));
+            const calcTotal = !isBCP && editorTotal > 0 ? round2(calcSubtotal + calcIGV) : currentMontoTotal;
+
             const updated = {
                 ...ticketData,
                 status_id: "cotizacion_enviada",
                 fechaCotización: new Date().toISOString(),
                 partidas: currentPartidas,
-                total_quoted_amount: currentMontoTotal,
+                total_quoted_amount: calcTotal,
                 labor_cost: parseFloat(laborCost) || 0,
                 materials_cost: parseFloat(materialsCost) || 0,
-                montoFinal: currentMontoTotal,
-                montoSubtotal: round2(currentMontoTotal / 1.18),
-                montoIGV: round2(currentMontoTotal - round2(currentMontoTotal / 1.18)),
+                montoFinal: calcTotal,
+                montoSubtotal: calcSubtotal,
+                montoIGV: calcIGV,
                 pausadoSLA: true,
                 fechaPausa: new Date().toISOString(),
                 archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
@@ -1423,7 +1443,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 try {
                     const directUpdates = {
                         status_id: "cotizacion_enviada",
-                        total_quoted_amount: currentMontoTotal,
+                        total_quoted_amount: calcTotal,
                         labor_cost: parseFloat(laborCost) || 0,
                         materials_cost: parseFloat(materialsCost) || 0,
                         quotation_date: new Date().toISOString(),
@@ -1433,9 +1453,9 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                             ...ticketData.metadata,
                             status_id: "cotizacion_enviada",
                             partidas: currentPartidas,
-                            montoFinal: currentMontoTotal,
-                            montoSubtotal: round2(currentMontoTotal / 1.18),
-                            montoIGV: round2(currentMontoTotal - round2(currentMontoTotal / 1.18)),
+                            montoFinal: calcTotal,
+                            montoSubtotal: calcSubtotal,
+                            montoIGV: calcIGV,
                             archivoCotizaciónBCP: isBCP ? bcpQuotationFile : null
                         }
                     };
@@ -1461,7 +1481,10 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
     const handleApproveQuote = async () => {
         const currentDraft = quotationDraftRef.current;
         const currentPartidas = currentDraft?.items || partidasCotización;
-        const currentMontoTotal = currentDraft?.total ?? totalQuotedAmount;
+        const editorTotal = round2(currentPartidas.reduce((s: any, i: any) => s + (Number(i.total) || 0), 0));
+        const calcSubtotal = !isBCP && editorTotal > 0 ? editorTotal : (montoSubtotal || round2(totalQuotedAmount / 1.18));
+        const calcIGV = !isBCP && editorTotal > 0 ? round2(editorTotal * 0.18) : (montoIGV || round2(totalQuotedAmount - calcSubtotal));
+        const currentMontoTotal = !isBCP && editorTotal > 0 ? round2(calcSubtotal + calcIGV) : (currentDraft?.total ?? totalQuotedAmount);
         const previousTicketData = { ...ticketData };
         const approved = {
             ...ticketData,
@@ -1474,6 +1497,8 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
             omitirAjusteTécnico: false,
             montoFinal: currentMontoTotal,
             total_quoted_amount: currentMontoTotal,
+            montoSubtotal: calcSubtotal,
+            montoIGV: calcIGV,
             labor_cost: parseFloat(laborCost) || 0,
             materials_cost: parseFloat(materialsCost) || 0,
             partidas: currentPartidas
@@ -3793,8 +3818,12 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                                                 initialItems={partidasCotización}
                                                                 suggestedTotal={round2((round2(ticketData.labor_cost || 0) + round2(ticketData.materials_cost || 0) + round2(ticketData.visit_cost || 0)) / 0.45)}
                                                                 onUpdate={(items: any[], total: number) => {
+                                                                    const calcSub = round2(items.reduce((s: number, it: any) => s + (Number(it.total) || 0), 0));
+                                                                    const calcIgv = round2(calcSub * 0.18);
                                                                     quotationDraftRef.current = { items, total };
                                                                     setTotalQuotedAmount(prev => prev === total ? prev : total);
+                                                                    setMontoSubtotal(calcSub);
+                                                                    setMontoIGV(calcIgv);
                                                                     setPartidasCotización(items);
                                                                 }}
                                                             />

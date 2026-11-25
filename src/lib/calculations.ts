@@ -171,11 +171,23 @@ export function calculateTicketFinances(ticket: any, costs: any[] = []) {
     const explicitIGV = extractIGV(ticket);
     const esMasIGV = ticket.mas_igv === true || ticket.incluye_igv === false;
 
+    // Partidas canónicas de cotización (fuente de verdad del desglose si existen)
+    const partidasList = ticket.partidas || ticket.metadata?.partidas;
+    const hasPartidas = Array.isArray(partidasList) && partidasList.length > 0;
+    const sumPartidas = hasPartidas
+        ? commercialRound(partidasList.reduce((acc: number, p: any) => acc + (toNum(p.total) || (toNum(p.cantidad) * toNum(p.precioUnitario))), 0))
+        : 0;
+
     let montoBase = 0;
     let igvCalculado = 0;
     let totalGeneral = 0;
 
-    if (explicitIGV > 0 && explicitIGV < rawAmount) {
+    if (sumPartidas > 0) {
+        // SI TIENE PARTIDAS DETALLADAS EN LA COTIZACIÓN, SON LA FUENTE DE VERDAD
+        montoBase = sumPartidas;
+        igvCalculado = commercialRound(sumPartidas * 0.18);
+        totalGeneral = commercialRound(sumPartidas + igvCalculado);
+    } else if (explicitIGV > 0 && explicitIGV < rawAmount) {
         montoBase = commercialRound(rawAmount - explicitIGV);
         igvCalculado = explicitIGV;
         totalGeneral = rawAmount;
