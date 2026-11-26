@@ -12,7 +12,7 @@ import OnlineQuotationEditor from "./OnlineQuotationEditor";
 import { normalizeStateId, TICKET_STATE_ORDER } from "@/lib/ticketStates";
 import { calculateTicketFinances, toNum, generateTransactionToken, sanitizeTicketMetadata } from "@/lib/calculations";
 import { supabase } from "@/lib/supabase";
-import { DuplicateTicketCostError, ticketsAPI, branchesAPI, ticketCostsAPI, techniciansAPI } from "@/lib/supabase-api";
+import { DuplicateTicketCostError, ticketsAPI, branchesAPI, ticketCostsAPI, paymentsAPI, techniciansAPI } from "@/lib/supabase-api";
 import { SERVICE_TYPES } from "@/lib/serviceTypes";
 import { round2, formatSoles } from "@/lib/formatters";
 import { compressImage } from "@/lib/imageCompression";
@@ -201,37 +201,53 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
         if (!ticketData?.id) return;
         setIsDeleting(true);
         try {
-            const costs = await ticketCostsAPI.getByTicket(ticketData.id);
-            if (costs && ticket_costs ?.length > 0) {
-                const pendingCount = ticket_costs ?.filter((c: any) => c.estado_pago === 'pendiente').length;
-                const paidCount = ticket_costs ?.filter((c: any) => c.estado_pago === 'pagado').length;
+            // Validar si el ticket tiene costos o depósitos/pagos registrados
+            const [costs, payments] = await Promise.all([
+                ticketCostsAPI.getByTicket(ticketData.id).catch(() => []),
+                paymentsAPI.getByTicket(ticketData.id).catch(() => [])
+            ]);
+
+            const hasCosts = Array.isArray(costs) && costs.length > 0;
+            const hasPayments = Array.isArray(payments) && payments.length > 0;
+
+            if (hasCosts || hasPayments) {
+                const costsCount = hasCosts ? costs.length : 0;
+                const paymentsCount = hasPayments ? payments.length : 0;
                 setShowDeleteModal(false);
                 setShowTransferModal(true);
                 showToast(
                     "Bloqueo de Seguridad", 
-                    `Este ticket tiene ${ticket_costs ?.length} registros en costos (${paidCount} pagados, ${pendingCount} pendientes). Debe eliminarlos o trasladarlos antes de borrar el ticket.`, 
+                    `Este ticket tiene registros financieros activos (${costsCount} gasto(s), ${paymentsCount} depósito(s)). Debe eliminarlos o trasladarlos antes de borrar el ticket.`, 
                     "info"
                 );
                 return;
             }
+
             if (!confirm(`¿FINALMENTE SEGURO? Esta acción es irreversible y eliminará el ticket ${ticketData.client_ticket_number || ticketData.id} de TODO el sistema (incluyendo fotos y chat).`)) {
                 return;
             }
+
             await ticketsAPI.delete(ticketData.id);
-            // Actualización optimista en RAM: basta con setQueryData para ambas variantes de la key.
-            // NO usar invalidateQueries aquí: dispararía refetch de TicketWindow ya desmontada
-            // causando errores PGRST116 (0 rows) y bloqueos HTTP 406.
             const deletedId = ticketData.id;
+
+            // Actualización optimista en RAM para todas las claves de consulta de tickets
+            queryClient.setQueriesData(
+                { queryKey: queryKeys.tickets.all },
+                (old: any) => Array.isArray(old) ? old.filter((t: any) => t.id !== deletedId) : old
+            );
             queryClient.setQueryData(
                 queryKeys.tickets.summary(),
                 (old: any[] | undefined) => old ? old.filter((t: any) => t.id !== deletedId) : old
             );
             queryClient.removeQueries({ queryKey: queryKeys.tickets.detail(deletedId) });
+            ticketsCache.remove(deletedId);
+            ticketsCache.invalidate();
+
             showToast("Ticket Eliminado", "El registro ha sido borrado definitivamente.", "success");
             onClose();
         } catch (err: any) {
             console.error("Error in hard delete:", err);
-            showToast("Error", "No se pudo eliminar el ticket.", "error");
+            showToast("Error", err?.message || "No se pudo eliminar el ticket.", "error");
         } finally {
             setIsDeleting(false);
         }
@@ -272,26 +288,33 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                 movedPaymentsCount = transferResult?.movedPayments?.length || 0;
             }
             showToast(
-                "Gastos Trasladados",
-                `Se trasladaron ${movedCostsCount} costos y ${movedPaymentsCount} pagos al ticket ${selectedTargetTicket.client_ticket_number || selectedTargetTicket.id}.`,
+                "Registros Trasladados",
+                `Se trasladaron ${movedCostsCount} gastos y ${movedPaymentsCount} depósitos al ticket ${selectedTargetTicket.client_ticket_number || selectedTargetTicket.id}.`,
                 "success"
             );
             // Eliminar el ticket automáticamente tras el traslado exitoso.
             setShowTransferModal(false);
             await ticketsAPI.delete(ticketData.id);
-            // Actualización optimista en RAM. Sin invalidateQueries: evita bucle de red
-            // y errores PGRST116 en TicketWindow que aún está en el árbol de React.
             const deletedId = ticketData.id;
+
+            // Actualización optimista en RAM
+            queryClient.setQueriesData(
+                { queryKey: queryKeys.tickets.all },
+                (old: any) => Array.isArray(old) ? old.filter((t: any) => t.id !== deletedId) : old
+            );
             queryClient.setQueryData(
                 queryKeys.tickets.summary(),
                 (old: any[] | undefined) => old ? old.filter((t: any) => t.id !== deletedId) : old
             );
             queryClient.removeQueries({ queryKey: queryKeys.tickets.detail(deletedId) });
-            showToast("Ticket Eliminado", `El ticket y sus ${movedCostsCount} gasto(s) han sido trasladados y el ticket ha sido eliminado.`, "success");
+            ticketsCache.remove(deletedId);
+            ticketsCache.invalidate();
+
+            showToast("Ticket Eliminado", `El ticket ha sido eliminado y sus registros trasladados con éxito.`, "success");
             onClose();
-        } catch (err) {
+        } catch (err: any) {
             console.error("Transfer error:", err);
-            showToast("Error", "No se pudo trasladar los gastos.", "error");
+            showToast("Error", err?.message || "No se pudo trasladar los registros.", "error");
         } finally {
             setIsTransferring(false);
         }
@@ -5232,7 +5255,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                 </ul>
                                 <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', padding: '12px', borderRadius: '12px', marginTop: '15px' }}>
                                     <p style={{ color: '#dc2626', fontSize: '12px', fontWeight: 700, margin: 0 }}>
-                                        ⚠️ EL SISTEMA SOLO PERMITIRÁ ELIMINAR SI EL TICKET NO TIENE GASTOS REGISTRADOS.
+                                        ⚠️ EL SISTEMA SOLO PERMITIRÁ ELIMINAR SI EL TICKET NO TIENE DEPÓSITOS O GASTOS REGISTRADOS.
                                     </p>
                                 </div>
                             </div>
@@ -5253,7 +5276,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                         </div>
                     </div>
                 )}
-                {/* --- MODAL: TRASLADO DE GASTOS (Fallo de Deletión por Gastos) --- */}
+                {/* --- MODAL: TRASLADO DE GASTOS Y DEPÓSITOS --- */}
                 {showTransferModal && (
                     <div className={styles.negotiationModal}>
                         <div className={styles.negotiationModalCard} style={{ maxWidth: '550px' }}>
@@ -5261,7 +5284,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                 <div className={styles.negoHeaderTitle}>
                                     <Split size={24} color="#f59e0b" />
                                     <div>
-                                        <h3>Transferencia de Gastos</h3>
+                                        <h3>Transferencia de Depósitos y Gastos</h3>
                                         <p>Blindaje Financiero Activo</p>
                                     </div>
                                 </div>
@@ -5274,7 +5297,7 @@ function TicketWindow({ ticket, onClose, onUpdate, index = 0, children, gestoraM
                                     <AlertTriangle className={styles.blockerIcon} size={24} />
                                     <div className={styles.blockerText}>
                                         <h4>Ticket con Carga Financiera</h4>
-                                        <p>No se puede eliminar un ticket que tiene gastos o adelantos pagados. Debe trasladar estos registros a un ticket activo para no perder la trazabilidad de Tesorería.</p>
+                                        <p>No se puede eliminar un ticket que tiene depósitos o gastos registrados. Debe trasladar estos registros a un ticket activo para no perder la trazabilidad de Tesorería.</p>
                                     </div>
                                 </div>
                                 <div className={styles.transferSearchContainer}>

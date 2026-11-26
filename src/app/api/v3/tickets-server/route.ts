@@ -200,6 +200,49 @@ export async function POST(request: NextRequest) {
             if (error) throw error;
             return NextResponse.json({ success: true, data });
         }
+
+        if (accion === 'trasladar_movimientos') {
+            const client = getClient() as any;
+            if (!client) throw new Error('Supabase server client no configurado');
+
+            const { sourceTicketId, targetTicketId } = await request.json() as {
+                sourceTicketId?: string;
+                targetTicketId?: string;
+            };
+
+            if (!sourceTicketId || !targetTicketId) {
+                return NextResponse.json({
+                    success: false,
+                    error: 'sourceTicketId y targetTicketId son requeridos'
+                }, { status: 400 });
+            }
+
+            // 1. Mover ticket_costs
+            const { data: movedCosts, error: errCosts } = await client
+                .from('ticket_costs')
+                .update({ ticket_id: targetTicketId })
+                .eq('ticket_id', sourceTicketId)
+                .select();
+
+            if (errCosts) throw errCosts;
+
+            // 2. Mover ticket_payments
+            const { data: movedPayments, error: errPayments } = await client
+                .from('ticket_payments')
+                .update({ ticket_id: targetTicketId })
+                .eq('ticket_id', sourceTicketId)
+                .select();
+
+            if (errPayments) throw errPayments;
+
+            return NextResponse.json({
+                success: true,
+                data: {
+                    movedCosts: movedCosts || [],
+                    movedPayments: movedPayments || []
+                }
+            });
+        }
         
         return NextResponse.json({
             success: false,
@@ -208,6 +251,83 @@ export async function POST(request: NextRequest) {
         
     } catch (err: unknown) {
         console.error('[Tickets Server API] POST Error:', err);
+        return NextResponse.json({
+            success: false,
+            error: getErrorMessage(err)
+        }, { status: 500 });
+    }
+}
+
+/**
+ * DELETE: Eliminar ticket definitivamente
+ * Regla de negocio estricta: Solo se puede eliminar un ticket si NO tiene
+ * depósitos (ticket_payments) ni gastos (ticket_costs) registrados.
+ */
+export async function DELETE(request: NextRequest) {
+    try {
+        const client = getClient() as any;
+        if (!client) {
+            return NextResponse.json({ success: false, error: 'Supabase server client no configurado' }, { status: 503 });
+        }
+
+        const id = new URL(request.url).searchParams.get('id');
+        if (!id) {
+            return NextResponse.json({ success: false, error: 'id es requerido' }, { status: 400 });
+        }
+
+        // 1. Verificar si existen gastos registrados
+        const { data: costs, error: errCosts } = await client
+            .from('ticket_costs')
+            .select('id, concepto, monto')
+            .eq('ticket_id', id);
+
+        if (errCosts) throw errCosts;
+
+        // 2. Verificar si existen depósitos o pagos registrados
+        const { data: payments, error: errPayments } = await client
+            .from('ticket_payments')
+            .select('id, amount, payment_type')
+            .eq('ticket_id', id);
+
+        if (errPayments) throw errPayments;
+
+        const hasCosts = Array.isArray(costs) && costs.length > 0;
+        const hasPayments = Array.isArray(payments) && payments.length > 0;
+
+        if (hasCosts || hasPayments) {
+            const costsCount = costs?.length || 0;
+            const paymentsCount = payments?.length || 0;
+            return NextResponse.json({
+                success: false,
+                code: 'HAS_FINANCIAL_RECORDS',
+                error: `No se puede eliminar el ticket porque tiene ${costsCount} gasto(s) y ${paymentsCount} depósito(s) registrado(s). Debe eliminarlos o trasladarlos antes de borrar el ticket.`,
+                costsCount,
+                paymentsCount,
+            }, { status: 400 });
+        }
+
+        // 3. Eliminar evidencias fotográficas y adjuntos asociados
+        const { error: errEvidences } = await client
+            .from('ticket_evidences')
+            .delete()
+            .eq('ticket_id', id);
+
+        if (errEvidences) throw errEvidences;
+
+        // 4. Eliminar el ticket principal
+        const { error: errDelete } = await client
+            .from('tickets')
+            .delete()
+            .eq('id', id);
+
+        if (errDelete) throw errDelete;
+
+        return NextResponse.json({
+            success: true,
+            message: 'Ticket eliminado definitivamente'
+        });
+    } catch (err: unknown) {
+        console.error('[Tickets Server API] DELETE Error:', err);
         return NextResponse.json({
             success: false,
             error: getErrorMessage(err)

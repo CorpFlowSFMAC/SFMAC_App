@@ -1280,35 +1280,18 @@ export const ticketsAPI = {
         throw new Error(result.error || 'Error al actualizar metadata (Server Patch)');
     },
 
-    // Eliminación completa de ticket con todas sus ramificaciones reales
+    // Eliminación segura de ticket: valida que NO tenga depósitos ni gastos registrados
     async delete(id: string) {
-        // 1. Eliminar ticket_evidences (evidencias/fotos del ticket)
-        const { error: eEvidences } = await supabase
-            .from('ticket_evidences')
-            .delete()
-            .eq('ticket_id', id);
-        if (eEvidences) throw eEvidences;
+        const response = await fetch(`/api/v3/tickets-server?id=${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+        });
+        const result = await response.json();
 
-        // 2. Eliminar ticket_costs (costos del ticket)
-        const { error: eCosts } = await supabase
-            .from('ticket_costs')
-            .delete()
-            .eq('ticket_id', id);
-        if (eCosts) throw eCosts;
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Error al eliminar el ticket');
+        }
 
-        // 3. Eliminar ticket_payments (pagos del ticket)
-        const { error: ePayments } = await supabase
-            .from('ticket_payments')
-            .delete()
-            .eq('ticket_id', id);
-        if (ePayments) throw ePayments;
-
-        // 4. Finalmente eliminar el ticket principal
-        const { error: errorTicket } = await supabase
-            .from('tickets')
-            .delete()
-            .eq('id', id);
-        if (errorTicket) throw errorTicket;
+        return result;
     },
 
     async updatePaymentSafe(ticketId: string, nuevoPago: any, additionalUpdates?: any) {
@@ -1672,7 +1655,21 @@ export const ticketCostsAPI = {
 
     // Trasladar todos los costos y pagos de un ticket a otro (Blindaje Financiero)
     async transferAllToTicket(sourceTicketId: string, targetTicketId: string) {
-        // 1) Mover ticket_costs
+        try {
+            const response = await fetch('/api/v3/tickets-server?accion=trasladar_movimientos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sourceTicketId, targetTicketId }),
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                return result.data;
+            }
+        } catch (serverErr) {
+            console.warn('[transferAllToTicket] Server route failed, falling back to client:', serverErr);
+        }
+
+        // 1) Fallback: Mover ticket_costs
         const { data: movedCosts, error: errCosts } = await supabase
             .from('ticket_costs')
             .update({ ticket_id: targetTicketId })
@@ -1681,7 +1678,7 @@ export const ticketCostsAPI = {
 
         if (errCosts) throw errCosts;
 
-        // 2) Mover ticket_payments (si existen) para mantener trazabilidad financiera
+        // 2) Fallback: Mover ticket_payments (si existen) para mantener trazabilidad financiera
         const { data: movedPayments, error: errPayments } = await supabase
             .from('ticket_payments')
             .update({ ticket_id: targetTicketId })
